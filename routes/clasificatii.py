@@ -299,11 +299,122 @@ def save_rectificari():
         logger.error(f"Eroare Generala Rectificari: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+# ==============================================================================
+# 6.1. UPSERT RECTIFICARI
+# ==============================================================================
+@clasificatii_bp.route('/api/clasificatii/rectificari_upsert', methods=['POST'])
+@require_api_key
+def upsert_rectificari():
+
+    try:
+        req_data = request.json
+        db_name = _validate_db_name(req_data.get('db_name'))
+        data_list = req_data.get('data')
+
+        logger.info(
+            f"UPSERT RECTIFICARI in {db_name}. "
+            f"Count: {len(data_list) if data_list else 0}"
+        )
+
+        if not db_name or not data_list:
+            return jsonify({"error": "Date invalide"}), 400
+
+        conn = None
+
+        try:
+            conn = get_db_connection(db_name)
+            cursor = conn.cursor()
+
+            conn.start_transaction()
+
+            sql = """
+                INSERT INTO Clasificatii_Rectificari
+                (
+                    IdClsf,
+                    Capitol,
+                    Subcapitol,
+                    Articol,
+                    Alineat,
+                    Data,
+                    Document,
+                    Trim1,
+                    Trim2,
+                    Trim3,
+                    Trim4
+                )
+                VALUES
+                (
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s
+                )
+                ON DUPLICATE KEY UPDATE
+                    Capitol    = VALUES(Capitol),
+                    Subcapitol = VALUES(Subcapitol),
+                    Articol    = VALUES(Articol),
+                    Alineat    = VALUES(Alineat),
+                    Trim1      = VALUES(Trim1),
+                    Trim2      = VALUES(Trim2),
+                    Trim3      = VALUES(Trim3),
+                    Trim4      = VALUES(Trim4)
+            """
+
+            values = [
+                (
+                    x['IdClsf'],
+                    x['Capitol'],
+                    x['Subcapitol'],
+                    x['Articol'],
+                    x['Alineat'],
+                    x['Data'],
+                    x['Document'],
+                    x['Trim1'],
+                    x['Trim2'],
+                    x['Trim3'],
+                    x['Trim4']
+                )
+                for x in data_list
+            ]
+
+            cursor.executemany(sql, values)
+
+            conn.commit()
+
+            logger.info(
+                f"UPSERT RECTIFICARI Succes. Rows: {cursor.rowcount}"
+            )
+
+            return jsonify({
+                "status": "success",
+                "count": len(data_list),
+                "affected_rows": cursor.rowcount
+            }), 200
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+
+            logger.error(
+                f"Eroare UPSERT Rectificari: {str(e)}",
+                exc_info=True
+            )
+
+            return jsonify({"error": str(e)}), 500
+
+        finally:
+            if conn:
+                conn.close()
+
+    except Exception as e:
+        logger.error(
+            f"Eroare Generala UPSERT Rectificari: {str(e)}"
+        )
+
+        return jsonify({"error": str(e)}), 500
 
 # ============================================================
 # ENDPOINT - UPSERT CLASIFICATII COMPLETE
 # ============================================================
-
 @clasificatii_bp.route('/api/clasificatii/clasificatii_complete_upsert', methods=['POST'])
 @require_api_key
 def save_clasificatii_complete_upsert():
