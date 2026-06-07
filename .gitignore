@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Cache
+cache/
+
+# Project specific
+DDF/
+FX_AN.accdb
+FX_AN.accdb
+defa_bz.accdb
+defa_ef.accdb
+defa.sql
+full_dump.txt
+requirements.txt
+token.zip
+avacont_mylsq_monolit.py
+avacont_mylsq_old.py
+config.py

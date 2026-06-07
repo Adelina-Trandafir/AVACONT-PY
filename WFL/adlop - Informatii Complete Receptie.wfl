@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="Informații complete pentru {{COD_ANGAJAMENT}} / reviziile din {{DATA_RECEPTIE}}" startUrl="current" expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+  <!-- V.4
+    1. Caută un Angajament dupa COD.
+    2. Apasă Modificare
+    3. Apasă pe tab-receptii
+    4. Caută în tabelul 'AN CURENT' data recepției
+    5. Dacă o gasește
+    5.1. Apasa pe 'ochi'
+    5.2. Descarca lista cu recepțiile detaliate (xls)
+  -->
+  <!-- OBLIGATORIU LA INCEPUT !-->
+  <IfExists selector="#select2-drop-mask">
+      <Click selector="#select2-drop-mask" force="true" waitNavigation="true" timeOut="5" LogValue="Resetare interfață (închid ferestre)" />
+  </IfExists>
+  <Click selector="#statlogo" waitNavigation="true" timeout="10"/>    
+  <!-- PANA AICI -->
+
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="false" timeout="30" LogValue="Apas pe 'Listă angajamente'"/> <!--MAI APAS O DATA PE ELEMENT SA MA ASIGUR. DACA TRECE PREA MULT TIMP, CHIAR DACA NAVIGHEZ LA O PAGINA, PRIMA ACTIUNE MA DUCE LA HOME IMPLICIT-->
+  <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true" timeout="30"/>
+
+  <Click selector="button:has-text('Caută')" waitNavigation="false" timeout="30"/>
+
+  <WaitFor selector="a[href*='exportToXLS']" timeout="30"/>
+
+ <Click selector="a.haction i.glyphicon-list:visible" timeout="10"/>
+
+  <WaitFor selector=".divaction" state="visible" timeout="10"/>
+
+  <Click selector=".divaction a:has-text('Modificare')" waitNavigation="true" timeout="30"/>
+
+  <WaitFor selector="li.tab1" timeout="30"/>
+
+  <Click selector="li.tab1 a" timeout="10"/>
+
+  <WaitFor selector="li.tab1.active" state="visible" timeout="10"/>
+
+  <FindInTable 
+      selector="div:has(.glyphicon-eye-open) table >> nth=0" 
+      fieldName="Data" 
+      value="{{DATA_RECEPTIE}}" 
+      clickSelector=".glyphicon-eye-open"
+      timeout="30"
+  />
+
+  <WaitFor selector="button[name='downloadXLSX']" timeout="30"/>
+
+  <Download 
+      selector="button[name='downloadXLSX']" 
+      saveTo="Receptie_Detaliu" 
+      parseExcel="true" 
+      HeaderRows="1"
+      skipFirstNRows="2"
+      timeout="60"
+  />
+
+  <Log message="Flux finalizat cu succes." level="success"/>
+
+</Workflow>

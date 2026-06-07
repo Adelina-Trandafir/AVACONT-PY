@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="FOREXEBUG - Căutare și Preluare Angajament"
+    startUrl="https://forexe.mfinante.gov.ro/CABWeb/contracte">
+    <!-- V.1 -->
+    <WaitFor selector="h3.heading:has-text('Listă angajamente')" timeout="5"
+        LogValue="Astept sa apara 'Listă angajamente'" />
+    <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true"
+        LogValue="Completez codul de căutare.." />
+
+    <Click selector="button:has-text('Caută')" waitNavigation="true" timeout="5"
+        LogValue="Execut căutarea..." />
+
+    <WaitFor selector="table.table-striped" timeout="5" />
+
+    <IfUnique selector="table.table-striped tbody tr" timeout="5">
+
+        <WaitFor selector="table.table-striped tbody tr:first-child .haction i" state="visible"
+            timeout="5" />
+
+        <Click selector="table.table-striped tbody tr:first-child .haction i" timeout="2"
+            LogValue="Deschid meniu (click icon)" />
+
+        <WaitFor selector="table.table-striped tbody tr:first-child .haction + .divaction"
+            state="visible" timeout="2" LogValue="Astept vizibilitate meniu" />
+
+        <Click
+            selector="table.table-striped tbody tr:first-child .divaction a:has-text('Informații complete')"
+            timeout="2" LogValue="Click final" />
+
+        <WaitFor selector="h3:has-text('Informații complete contract')" timeout="10" />
+        <ScrapeTable selector="table.table-striped" saveTo="DateTabelXML" timeout="10" />
+
+        <Else>
+            <Log message="EROARE: Nu s-a gasit randul unic!" level="error" />
+        </Else>
+    </IfUnique>
+</Workflow>

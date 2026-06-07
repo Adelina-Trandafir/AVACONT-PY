@@ -1,0 +1,38 @@
+[
+  {
+    "FileName": "adlop - Angajamente Active.wfl",
+    "Version": 2
+  },
+  {
+    "FileName": "adlop - Detalii Angajament.wfl",
+    "Version": 1
+  },
+  {
+    "FileName": "adlop - Informatii Complete Angajament.wfl",
+    "Version": 1
+  },
+  {
+    "FileName": "adlop - Informatii Complete Angajament Scrape.wfl",
+    "Version": 1
+  },
+  {
+    "FileName": "adlop - Informatii Complete Buget.wfl",
+    "Version": 2
+  },
+  {
+    "FileName": "adlop - Informatii Complete Plati.wfl",
+    "Version": 4
+  },
+  {
+    "FileName": "adlop - Informatii Complete Receptii.wfl",
+    "Version": 5
+  },
+  {
+    "FileName": "adlop - Lista Angajamente Curente.wfl",
+    "Version": 4
+  },
+  {
+    "FileName": "adlop - TOT.wfl",
+    "Version": 1
+  }
+]

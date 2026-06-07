@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="FOREXEBUG - Listă angajamente curente" startUrl="https://forexe.mfinante.gov.ro/CABWeb/contracte">
+  <Log message="Navighez către Lista de angajamente..." level="info"/>
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="false" timeout="30" LogValue="Apas pe 'Listă angajamente'"/>
+  <WaitFor selector="h3.heading:has-text('Listă angajamente')" timeout="30" LogValue="Astept sa apara 'Listă angajamente'"/>
+  
+  <IfVar value="{{CodProgram}}">
+    <Log message="Selectez Programul..." level="info" isCheckpoint="true"/>
+    <Click selector=".select2-container:has(+ input[name='program:sel']) a.select2-choice"/>
+    <WaitFor selector=".select2-results li:has-text('{{CodProgram}}')" timeout="5"/>
+    <Click selector="#select2-drop ul.select2-results li:has-text('{{CodProgram}}')" />
+  </IfVar>
+
+  <IfVar value="{{Sursa}}">
+    <Log message="Selectez Sursa de finanțare..." level="info" isCheckpoint="true"/>
+    <Select selector="select[name='sursa']" value="{{Sursa}}"/>
+  </IfVar>
+
+  <IfVar value="{{Clasificatia}}">
+    <Log message="Selectez Indicatorul..." level="info" isCheckpoint="true"/>
+    <Click selector="*:has(> input[name='indicator:indicator']) a.select2-choice" />
+    <WaitFor selector="#select2-drop input.select2-input" timeout="5"/>
+    <Fill selector="#select2-drop input.select2-input" value="{{Clasificatia}}" />
+    <WaitFor selector="#select2-drop li.select2-result-selectable" timeout="5"/>
+    <Click selector="#select2-drop li.select2-result-selectable:nth-child(1)" />
+  </IfVar>
+
+  <Click selector="button:has-text('Caută')" timeout="30" LogValue="Execut căutarea..."/>
+  <Log message="Extrag tot conținutul tabelului..." level="action"/>
+
+  <ScrapeTable selector="table.table-striped" saveTo="DateTabelXML" timeout="10"/>
+
+  <Log message="Finalizat. Datele sunt în memoria aplicației." level="success"/>
+</Workflow>

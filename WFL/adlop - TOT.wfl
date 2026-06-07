@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="Prelucrare toate informatiile pentru un Cod Angajament" startUrl="current"  expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+  <!-- V.1
+    1. Cauta un Angajament dupa COD.
+    2. Apasa Modificare
+    3. Apasa pe tab-receptii
+    4. Apas pe fiecare ochi disponibil
+    5. Salvez date din form-control-name=receptie in TipReceptie
+    6. Salvez date din form-control-name=data in DataReceptie
+    7. Salvez date din textarea-name=descriere in DescriereReceptie
+    8. Fac scrape la tabelul cu clasa 'table table-striped table-bordered table-hover table-condensed' in Receptii
+    9. BACK
+    5. Apasa pe tab-plati
+    6. Fac scrape la tabelul cu clasa 'table table-striped table-bordered table-condensed' in Plati
+  -->
+    <!-- OBLIGATORIU LA INCEPUT !-->
+  <IfExists selector="#select2-drop-mask">
+      <Click selector="#select2-drop-mask" force="true" LogValue="Resetare interfață (închid ferestre)" />
+  </IfExists>
+  <Click selector="#statlogo" waitNavigation="true" timeout="2"/>    
+
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="false" timeout="1" LogValue="Apas pe 'Listă angajamente'"/>
+  <IfVar value="{{DATA_INCEPUT}}">
+    <Log message="Introduc dată început {{DATA_INCEPUT}}" level="info" isCheckpoint="true"/>
+    <Fill Selector="input[name='dataStart']" Value="{{DATA_INCEPUT}}" />
+  </IfVar>
+
+  <IfVar value="{{COD_PROGRAM}}">
+    <Log message="Selectez Programul {{COD_PROGRAM}}" level="info" isCheckpoint="true"/>
+    <Click selector=".select2-container:has(+ input[name='program:sel']) a.select2-choice"/>
+    <WaitFor selector=".select2-results li:has-text('{{COD_PROGRAM}}')" timeout="1"/>
+    <Click selector="#select2-drop ul.select2-results li:has-text('{{COD_PROGRAM}}')" />
+  </IfVar>
+
+  <IfVar value="{{SECTOR_SURSA}}">
+    <Log message="Selectez Sursa de finanțare {{SECTOR_SURSA}}" level="info" isCheckpoint="true"/>
+    <Select selector="select[name='sursa']" value="{{SECTOR_SURSA}}"/>
+  </IfVar>
+
+  <IfVar value="{{CLASIFICATIA}}">
+    <Log message="Selectez Indicatorul {{CLASIFICATIA}}" level="info" isCheckpoint="true"/>
+    <Click selector="*:has(> input[name='indicator:indicator']) a.select2-choice" />
+    <WaitFor selector="#select2-drop input.select2-input" timeout="1"/>
+    <Fill selector="#select2-drop input.select2-input" value="{{CLASIFICATIA}}" />
+    <WaitFor selector="#select2-drop li.select2-result-selectable" timeout="1"/>
+    <Click selector="#select2-drop li.select2-result-selectable:nth-child(1)" />
+  </IfVar>
+
+  <IfVar value="{{COD_ANGAJAMENT}}">
+    <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true" timeout="1"/>
+  </IfVar>
+
+  <Click selector="button:has-text('Caută')" waitNavigation="false" timeout="1"/>
+  <WaitFor selector="table.table-striped.table-bordered.table-hover.table-condensed" timeout="1"/>
+  
+  <While selector=".btn-next" condition="Visible" runFirstTime="true" indexVariable="pageIdx">
+    <ForEach selector="table.table-striped tbody tr" 
+             clickElement="a.haction i.glyphicon-list:Visible" 
+             indexVariable="angIdx">
+      <Log message="Procesez Angajamentul [[angIdx]] de pe pagina [[pageIdx]]" level="info"/>
+
+      <WaitFor selector=".divaction:Visible" state="visible" timeout="1"/>
+      <Click selector=".divaction:Visible a:has-text('Modificare')" state="visible" waitNavigation="true" timeout="1"/>
+      
+      <WaitFor selector="li.tab1" timeout="1"/>
+      <Click selector="li.tab1 a" timeout="1"/>
+      <WaitFor selector="li.tab1.active" state="visible" timeout="1"/>
+      
+      <ForEach selector="table tbody tr" clickElement=".glyphicon-eye-open" indexVariable="recIdx">
+        
+        <WaitFor selector="h3.heading:has-text('Modifică recepție'):Visible" timeout="1" />
+        
+        <Read selector="select[name='receptie']" saveTo="Receptie_[[pageIdx]]_[[angIdx]]_[[recIdx]]" />
+        <Read selector="input[name='data']" saveTo="Data_[[pageIdx]]_[[angIdx]]_[[recIdx]]" />
+        <Read selector="textarea[name='descriere']" saveTo="Descriere_[[pageIdx]]_[[angIdx]]_[[recIdx]]" />
+        
+        <ScrapeTable selector="table.table-striped" saveTo="TabelReceptie_[[pageIdx]]_[[angIdx]]_[[recIdx]]" timeout="1" />
+        
+        <GoBack />
+        <WaitFor selector="h3.heading:has-text('Modifică recepție')" state="hidden" timeout="1"/>
+        
+      </ForEach>
+
+      <Click selector="li.tab2 a" timeout="1"/>
+      <WaitFor selector="li.tab2.active" state="visible" timeout="1"/>
+      
+      <ScrapeTable selector="table.table-striped" saveTo="Plati_[[pageIdx]]_[[angIdx]]" timeout="1" />
+      
+      <Click selector="button:has-text('Înapoi')" waitNavigation="true" timeOut="10" />
+      
+      <!-- <WaitFor selector="table.table-striped.table-bordered.table-hover.table-condensed" timeout="1"/> -->
+    </ForEach>
+
+    <IfExists selector=".btn-next">
+        <Click selector=".btn-next" LogValue="Trec la pagina următoare..." />
+        <Wait seconds="2" /> 
+      <Else>
+        <Log message="Nu mai exista Next. Ies!"/>
+      </Else>
+    </IfExists>
+
+  </While>
+</Workflow>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="FOREXEBUG - Căutare și Preluare Angajament" startUrl="CURRENT">
+  <Log message="Navighez către Lista de angajamente..." level="info"/>
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="false" timeout="30" LogValue="Apas pe 'Listă angajamente'"/>
+  <WaitFor selector="h3.heading:has-text('Listă angajamente')" timeout="30"  LogValue="Astept sa apara 'Listă angajamente'"/>
+  <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true" LogValue="Completez codul de căutare.."/>
+  <Click selector="button:has-text('Caută')" timeout="30" LogValue="Execut căutarea..."/>
+  <Wait seconds="1"/>
+  <WaitFor selector="table.table-striped" timeout="30"/>
+
+  <Log message="Verific dacă există un singur rezultat..." level="info"/>
+  
+  <IfUnique selector="table.table-striped tbody tr" timeout="5">
+    
+    <Log message="Rezultat unic găsit. Continui procedura." level="success"/>
+    
+    <Click selector="table.table-striped tbody tr:first-child .haction" force="true" timeout="10"/>
+
+    <WaitFor selector=".divaction" state="visible" timeout="10"/>
+
+    <Click selector=".divaction a:has-text('Informații complete')" timeout="10"/>
+
+    <WaitFor selector="h3:has-text('Informații complete contract')" timeout="30"/>
+
+    <Log message="Extrag datele din tabel..." level="info"/>
+
+    <Log message="Extrag tot conținutul tabelului..." level="action"/>
+  
+    <ScrapeTable selector="table.table-striped" saveTo="DateTabelXML" timeout="10" />
+
+    <Log message="Finalizat. Datele sunt în memoria aplicației." level="success"/>
+
+    <Screenshot path="C:\AVACONT\Logs\info_angajament.png"/>
+
+    <Exit />
+    <Else>
+        <Log message="EROARE: Căutarea a returnat 0 rezultate sau mai multe rânduri!" level="error"/>
+        <Screenshot path="C:\AVACONT\Logs\eroare_unicitate.png"/>
+    </Else>
+
+  </IfUnique>
+</Workflow>

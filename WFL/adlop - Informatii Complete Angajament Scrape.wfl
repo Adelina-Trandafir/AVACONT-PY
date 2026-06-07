@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="Prelucrare toate informatiile pentru un Cod Angajament" startUrl="current">
+  <!-- V.1
+    1. Cauta un Angajament dupa COD.
+    2. Apasa Modificare
+    3. Apasa pe tab-receptii
+    4. Apas pe fiecare ochi disponibil
+    5. Salvez date din form-control-name=receptie in TipReceptie
+    6. Salvez date din form-control-name=data in DataReceptie
+    7. Salvez date din textarea-name=descriere in DescriereReceptie
+    8. Fac scrape la tabelul cu clasa 'table table-striped table-bordered table-hover table-condensed'
+  in Receptii
+    9. BACK
+    5. Apasa pe tab-plati
+    6. Fac scrape la tabelul cu clasa 'table table-striped table-bordered table-condensed' in Plati
+  -->
+  <!-- OBLIGATORIU LA INCEPUT !-->
+  <IfExists selector="#select2-drop-mask">
+    <Click selector="#select2-drop-mask" force="true"
+      LogValue="Resetare interfață (închid ferestre)" />
+  </IfExists>
+  <Click selector="#statlogo" waitNavigation="true" timeout="10" />
+  <!-- PANA AICI -->
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="false" timeout="5"
+    LogValue="Apas pe 'Listă angajamente'" />
+  <Log message="Încep procesul. Completez codul contractului..." level="info" />
+  <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true" timeout="5" />
+  <Click selector="button:has-text('Caută')" waitNavigation="false" timeout="5" />
+  <WaitFor selector="table.table-striped.table-bordered.table-hover.table-condensed" timeout="5" />
+  <Click selector="a.haction i.glyphicon-list:visible" timeout="10" />
+  <WaitFor selector=".divaction" state="visible" timeout="5" />
+  <Click selector=".divaction a:has-text('Modificare')" waitNavigation="true" timeout="5" />
+  <WaitFor selector="li.tab1" timeout="5" />
+  <Click selector="li.tab1 a" timeout="5" />
+  <WaitFor selector="li.tab1.active" state="visible" timeout="10" />
+  <ForEach selector="table tbody tr" clickElement=".glyphicon-eye-open">
+    <WaitFor selector="h3.heading:has-text('Modifică recepție')" timeout="5" />
+    <Read selector="select[name='receptie']" saveTo="ReceptieSelectata" />
+    <Read selector="input[name='data']" saveTo="DataDocument" />
+    <Read selector="textarea[name='descriere']" saveTo="DescriereDocument" />
+    <ScrapeTable selector="table.table-striped" saveTo="Receptii" timeout="10" />
+    <GoBack />
+  </ForEach>
+  <Click selector="li.tab2 a" timeout="10" />
+  <WaitFor selector="li.tab2.active" state="visible" timeout="10" />
+  <ScrapeTable selector="table.table-striped" saveTo="Plati" timeout="10" />
+  <Log message="Extragere finalizată cu succes." level="success" />
+</Workflow>

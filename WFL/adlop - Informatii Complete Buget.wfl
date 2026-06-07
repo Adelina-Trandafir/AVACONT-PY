@@ -1,0 +1,48 @@
+<Workflow name="Descarcare Buget Detaliat" startUrl="current" expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+<!-- V.2
+    1. Apasă pe elementul 'Utilizare buget' din meniu
+    2. Completează {{COD_PROGRAM}}
+    3. Completează {{SURSA}}
+    4. De un număr de ori {{NUMAR_REPETARI}} dat:
+    4.1. Completază cu fiecare element din {{LISTA_INDICATORI}} separate prin tildă (~)
+    4.2. Apasă 'Afișează'
+    4.4. Descarcă fișierul excel cu filtru pe coloana Rezervari initiale > Credit angajament rezervat > Total
+-->
+    <!-- OBLIGATORIU LA INCEPUT !-->
+    <IfExists selector="#select2-drop-mask">
+        <Click selector="#select2-drop-mask" force="true" LogValue="Resetare interfață (închid ferestre)" />
+    </IfExists>
+    <Click selector="#statlogo" waitNavigation="true" timeout="10"/>    
+    <!-- PANA AICI -->
+    <Click selector="a:has-text('Utilizare buget')" waitNavigation="true" LogValue="Click pe Utilizare Buget" />
+    <WaitFor selector="h3.heading:has-text('Informații indicator bugetar')" />
+    <Click selector=".select2-choice >> nth=0" LogValue="Deschid selector Program" />
+    <WaitFor selector="#select2-drop" state="visible" />
+    <Fill selector="#select2-drop input.select2-input" value="{{COD_PROGRAM}}" LogValue="Caut programul {{COD_PROGRAM}}" />
+    <WaitFor selector="#select2-drop .select2-match >> nth=0" timeout="2" />
+    <Click selector="#select2-drop .select2-match >> nth=0" />
+    <WaitFor selector="label:has-text('Sector - Sursa')" />
+    <Select selector="select[name='sursa']" value="{{SURSA}}" LogValue="Selectez Sursa: {{SURSA}}" />
+    <WaitFor selector="label:has-text('Indicator')" />
+
+    <Repeat iterations="{{NUMAR_REPETARI}}" LogValue="Procesez lista de indicatori">
+        <Click selector=".select2-choice >> nth=1" LogValue="Deschid selector Indicator" />
+        <WaitFor selector="#select2-drop" state="visible" />
+        <Fill selector="#select2-drop input.select2-input" value="{{LISTA_INDICATORI}}" pickFromList="true" LogValue="Selectez indicatorul curent" />
+        <WaitFor selector="#select2-drop .select2-match >> nth=0" timeout="2" />
+        <Click selector="#select2-drop .select2-match >> nth=0" />
+
+        <WaitFor selector="button:has-text('Afișează')" timeout="5"/>
+        <Click selector="button:has-text('Afișează')" waitNavigation="false" LogValue="Click Afișează" />
+        <WaitFor selector="a:has-text('Export Excel')" timeout="5" />
+
+        <Download selector="a:has-text('Export Excel')" 
+                parseExcel="true" 
+                saveTo="UtilBuget_[[RepeatIndex]]" 
+                description="Descarc Excel si il parsez" 
+                HeaderRows="3"
+                filterColumn="Rezervari_initiale!Credit_angajament_rezervat!Total"
+                filter="\d+" />
+
+    </Repeat>
+</Workflow>

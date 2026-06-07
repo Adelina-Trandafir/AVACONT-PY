@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="FOREXEBUG - Listă angajamente curente" startUrl="current" expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+  <!-- V.4
+    1. Cauta Angajamente dupa (opțional) 'Data Început', 'Cod Program', 'Sursa', 'Cod Indicator'.
+    2. Citește datele din tabelul generat (table.table-striped)
+    3. Apasă butonul 'Next' (a[rel='next']) cât timp există
+    4. Așteaptă să se încarce tabelul generat (table.table-striped) 
+    4. Merge la 2.
+  -->
+  <!-- OBLIGATORIU LA INCEPUT !-->
+  <IfExists selector="#select2-drop-mask">
+      <Click selector="#select2-drop-mask" force="true" waitNavigation="true" timeOut="5" LogValue="Resetare interfață (închid ferestre)" />
+  </IfExists>
+  <Click selector="#statlogo" waitNavigation="true" timeout="10"/>    
+  <!-- PANA AICI -->
+
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="true" timeout="5" LogValue="Apas pe 'Listă angajamente'"/>
+  <WaitFor selector="h3.heading:has-text('Listă angajamente')" timeout="5" />
+  
+  <IfVar value="{{DATA_INCEPUT}}">
+    <Log message="Introduc dată început {{DATA_INCEPUT}}" level="info" isCheckpoint="true"/>
+    <Fill Selector="input[name='dataStart']" Value="{{DATA_INCEPUT}}" /> <!--ATENTIE! DATA TREBUIE SA FIE dd.mm.yyyy !-->
+  </IfVar>
+
+  <IfVar value="{{COD_PROGRAM}}">
+    <Log message="Selectez Programul {{COD_PROGRAM}}" level="info" isCheckpoint="true"/>
+    <Click selector=".select2-container:has(+ input[name='program:sel']) a.select2-choice"/>
+    <WaitFor selector=".select2-results li:has-text('{{COD_PROGRAM}}')" timeout="5"/>
+    <Click selector="#select2-drop ul.select2-results li:has-text('{{COD_PROGRAM}}')" />
+  </IfVar>
+
+  <IfVar value="{{SURSA}}">
+    <Log message="Selectez Sursa de finanțare {{SURSA}}" level="info" isCheckpoint="true"/>
+    <Select selector="select[name='sursa']" value="{{SURSA}}"/>
+  </IfVar>
+
+  <IfVar value="{{CLASIFICATIA}}">
+    <Log message="Selectez Indicatorul {{CLASIFICATIA}}" level="info" isCheckpoint="true"/>
+    <Click selector="*:has(> input[name='indicator:indicator']) a.select2-choice" />
+    <WaitFor selector="#select2-drop input.select2-input" timeout="5"/>
+    <Fill selector="#select2-drop input.select2-input" value="{{CLASIFICATIA}}" />
+    <WaitFor selector="#select2-drop li.select2-result-selectable" timeout="5"/>
+    <Click selector="#select2-drop li.select2-result-selectable:nth-child(1)" />
+  </IfVar>
+
+  <Click selector="button:has-text('Caută')" timeout="5" LogValue="Execut căutarea..."/>
+  <Log message="Extrag tot conținutul tabelului..." level="action"/>
+
+  <ScrapeTable selector="table.table-striped" 
+    saveTo="ListaAngajamente" 
+    timeout="10" 
+    nextPageSelector="a[rel='next']" 
+    waitSelector="table.table-striped"/>
+
+  <Log message="Finalizat. Datele sunt în memoria aplicației." level="success"/>
+</Workflow>

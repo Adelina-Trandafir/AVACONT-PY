@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="FOREXEBUG - Căutare și Preluare Angajament" startUrl="https://mfinante.gov.ro/web/forexepublic">
+  <Log message="Încep workflow FOREXEBUG" level="info"/>
+  <WaitFor selector="body" timeout="30" LogValue="_"/>
+
+ <IfExists selector="button.navaplwebbar-toggle >> visible=true" timeout="1"/>
+    <Click selector="button.navaplwebbar-toggle >> visible=true" LogValue="_"/>
+  </IfExists>
+  
+  <AuthClick selector="a[href*='forexe.mfinante'] >> visible=true" authTimeout="120" timeout="30" waitNavigation="true" LogValue="Deschid fereastra de autentificare" />
+  <Click selector="a[href*='forexe.mfinante.gov.ro/CABWeb'] >> visible=true" timeout="30" waitNavigation="true" isCheckpoint="true"/>
+
+  <Log message="Verific dacă pagina s-a încărcat corect sau s-a blocat..." level="info"/>
+  
+  <WaitFor selector="img[alt='Loading...']" state="detached" timeout="15" refreshOnFail="true" maxRetries="5" LogValue="Astept refresh pagina"/>
+</Workflow>

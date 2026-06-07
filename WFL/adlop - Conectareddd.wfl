@@ -1,0 +1,13 @@
+{
+  "certificat": "Elvira Soare",
+  "pin": "",
+  "outputFile": "C:\\Avacont\\RES\\Conectare.json",
+  "showBrowser": false,
+  "showLogs": true,
+  "logToFolder": "",
+  "CloseOnFinish": "false",
+  "AccessHwnd": "0",
+  "tasks": [
+
+  ]
+}

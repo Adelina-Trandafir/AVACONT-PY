@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="Prelucrare Plăți pentru {{COD_ANGAJAMENT}}" startUrl="current" expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+  <!-- V.4
+    1. Cauta un Angajament dupa COD.
+    2. Apasa Modificare
+    3. Apasa pe tab-plati
+    4. Descarca lista cu platile detaliate (xls)
+  -->
+  <!-- OBLIGATORIU LA INCEPUT !-->
+  <IfExists selector="#select2-drop-mask">
+      <Click selector="#select2-drop-mask" force="true" waitNavigation="true" timeOut="5" LogValue="Resetare interfață (închid ferestre)" />
+  </IfExists>
+  <Click selector="#statlogo" waitNavigation="true" timeout="10"/>    
+  <!-- PANA AICI -->
+
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="false"  timeout="5" LogValue="Apas pe 'Listă angajamente'"/> <!--MAI APAS O DATA PE ELEMENT SA MA ASIGUR. DACA TRECE PREA MULT TIMP, CHIAR DACA NAVIGHEZ LA O PAGINA, PRIMA ACTIUNE MA DUCE LA HOME IMPLICIT-->
+
+  <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true"  timeout="5" LogValue="Caut angajamentul {{COD_ANGAJAMENT}}" />
+  <Click selector="button:has-text('Caută')" waitNavigation="false"  timeout="5"/>
+
+  <IfExists selector=".alert.alert-warning:has-text('Căutarea nu a întors niciun rezultat!')" timeOut="1">
+    <Exit LogValue="Nu există codul căutat! Se iese."/>
+  </IfExists>
+
+  <WaitFor selector="a[href*='exportToXLS']"  timeout="5"/>
+  
+  <Click selector="a.haction i.glyphicon-list:visible" timeout="10"/>
+  <WaitFor selector=".divaction" state="visible" timeout="10"/>
+
+  <Click selector=".divaction a:has-text('Modificare')" waitNavigation="true"  timeout="5" LogValue="Apăs pe Modificare."/>
+
+  <WaitFor selector="li.tab1" timeout="30"/>
+  <Click selector="li.tab2 a" timeout="10"/>
+  <WaitFor selector="li.tab2.active" state="visible" timeout="10"/>
+
+  <IfExists selector="table.table-striped" timeOut="1">
+    <Else>
+      <Log message="Nu există plăți înregistrare pentru {{COD_ANGAJAMENT}}" />
+      <Exit />
+    </Else>
+  </IfExists>
+  <Download selector="a[href*='platiCurente-exportToXLS']" saveTo="Plati" ParseExcel="True" timeout="60"/>
+
+  <Log message="Plăți prelucrate cu succes." level="success"/>
+</Workflow>

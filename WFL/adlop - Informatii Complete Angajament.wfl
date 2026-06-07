@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="Extragere Receptii si Plati (Fara ID-uri)" startUrl="current" expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+  <!-- NU E BUN PENTRU CA EXCEL-UL cu RECEPTII NU SE POPULEAZA PANA NU APAS PE RAHATUL DE OCHI!!!!
+    1. Cauta un Angajament dupa COD.
+    2. Apasa Modificare
+    3. Apasa pe tab-receptii
+    4. Descarca list cu receptii generale (fara detalii) (xls)
+    5. Apasa pe tab-plati
+    6. Descarca lista cu platile detaliate (xls)
+  -->
+  <Log message="Încep procesul. Completez codul contractului..." level="info"/>
+
+  <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true" timeout="30"/>
+
+  <Click selector="button:has-text('Caută')" waitNavigation="false" timeout="30"/>
+
+  <WaitFor selector="a[href*='exportToXLS']" timeout="30"/>
+
+ <Click selector="a.haction i.glyphicon-list:visible" timeout="10"/>
+
+  <WaitFor selector=".divaction" state="visible" timeout="10"/>
+
+  <Click selector=".divaction a:has-text('Modificare')" waitNavigation="true" timeout="30"/>
+
+  <WaitFor selector="li.tab1" timeout="30"/>
+
+  <Click selector="li.tab1 a" timeout="10"/>
+
+  <WaitFor selector="li.tab1.active" state="visible" timeout="10"/>
+
+  <Download selector="a[href*='gridAnCurent-exportToXLS']" saveTo="Receptii" ParseExcel="True" timeout="60"/>
+
+  <Click selector="li.tab2 a" timeout="10"/>
+
+  <WaitFor selector="li.tab2.active" state="visible" timeout="10"/>
+
+  <Download selector="a[href*='platiCurente-exportToXLS']" saveTo="Plati" ParseExcel="True" timeout="60"/>
+
+  <Log message="Extragere finalizată cu succes." level="success"/>
+</Workflow>

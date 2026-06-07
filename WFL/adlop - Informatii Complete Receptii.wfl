@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="Prelucrare Receptii pentru {{COD_ANGAJAMENT}}" startUrl="current" expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+  <!-- V.5
+    1. Cauta un Angajament dupa COD.
+    2. Apasa Modificare
+    3. Apasa pe tab-receptii
+    4. Repetă pentru fiecare rând din tabelul 'An curent'
+    4.1. Apasa pe 'ochi'
+    4.2. Citește 'CodAngajament', 'Tip', 'Data', 'Descriere'
+    4.3. Descarca lista cu recepțiile detaliate (xls)
+  -->
+  <!-- OBLIGATORIU LA INCEPUT !-->
+  <IfExists selector="#select2-drop-mask">
+      <Click selector="#select2-drop-mask" force="true" waitNavigation="true" timeOut="5" LogValue="Resetare interfață (închid ferestre)" />
+  </IfExists>
+  <Click selector="#statlogo" waitNavigation="true" timeout="10"/>    
+  <!-- PANA AICI -->
+
+  <Click selector="a:has-text('Listă angajamente')" waitNavigation="false"  timeout="5" LogValue="Apas pe 'Listă angajamente'"/> <!--MAI APAS O DATA PE ELEMENT SA MA ASIGUR. DACA TRECE PREA MULT TIMP, CHIAR DACA NAVIGHEZ LA O PAGINA, PRIMA ACTIUNE MA DUCE LA HOME IMPLICIT-->
+
+  <Fill selector="input[name='cod']" value="{{COD_ANGAJAMENT}}" clear="true"  timeout="5" LogValue="Caut angajamentul {{COD_ANGAJAMENT}}" />
+  <Click selector="button:has-text('Caută')" waitNavigation="false"  timeout="5"/>
+
+  <IfExists selector=".alert.alert-warning:has-text('Căutarea nu a întors niciun rezultat!')" timeOut="1">
+    <Exit LogValue="Nu există codul căutat! Se iese."/>
+  </IfExists>
+
+  <WaitFor selector="a[href*='exportToXLS']"  timeout="5"/>
+  
+  <Click selector="a.haction i.glyphicon-list:visible" timeout="10"/>
+  <WaitFor selector=".divaction" state="visible" timeout="10"/>
+
+  <Click selector=".divaction a:has-text('Modificare')" waitNavigation="true"  timeout="5" LogValue="Apăs pe Modificare."/>
+
+  <WaitFor selector="li.tab1"  timeout="5"/>
+  <Click selector="li.tab1 a" timeout="10"/>
+  <WaitFor selector="li.tab1.active" state="visible" timeout="10"/>
+
+  <Log message="Încep iterarea prin toate recepțiile..." level="info"/>
+
+  <ForEach selector="div:has(.glyphicon-eye-open) table tbody tr" 
+           clickElement=".glyphicon-eye-open" 
+           indexVariable="recIdx">
+    
+    <Log message="Procesez recepția nr. [[recIdx]]..." level="info"/>
+
+    <WaitFor selector="button[name='downloadXLSX']" timeout="30"/>
+    
+    <Read selector="h4 span:nth-of-type(2)" saveTo="CodAngajament" />
+    <Read selector="select[name='receptie']" saveTo="Tip" />
+    <Read selector="input[name='data']" saveTo="Data" />
+    <Read selector="textarea[name='descriere']" saveTo="Descriere" />
+
+    <Download
+        selector="button[name='downloadXLSX']"
+        saveTo="Receptie_Detaliu"
+        parseExcel="true" 
+        HeaderRows="1"
+        SkipFirstNRows="2"
+        SkipLastNRows="1"
+        timeout="60"
+    />
+
+    <GoBack/>
+    <WaitFor selector="li.tab1.active" state="visible" timeout="10"/>
+
+  </ForEach>
+
+  <Log message="Flux finalizat cu succes." level="success"/>
+
+</Workflow>

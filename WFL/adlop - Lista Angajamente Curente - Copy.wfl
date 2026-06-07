@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="FOREXEBUG - Căutare și Preluare Angajament" startUrl="https://forexe.mfinante.gov.ro/CABWeb/angajamenteActive">
+<Download 
+    selector="button[name='download']" 
+    fileName="" 
+    parseExcel="true" 
+    saveTo="AngajamenteActive" 
+    description="Descarc Excel si il parsez" 
+/>
+</Workflow>

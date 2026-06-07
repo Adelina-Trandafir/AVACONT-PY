@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="FOREXEBUG - Autentificare" startUrl="https://mfinante.gov.ro/web/forexepublic">
+  <Log message="Încep workflow FOREXEBUG" level="info"/>
+  <WaitFor selector="body" timeout="30"/>
+
+ <IfExists selector="button.navaplwebbar-toggle >> visible=true" timeout="1">
+    <Click selector="button.navaplwebbar-toggle >> visible=true"/>
+  </IfExists>
+  
+  <AuthClick selector="a[href*='forexe.mfinante'] >> visible=true" authTimeout="120" timeout="30" waitNavigation="true"/>
+  <Click selector="a[href*='forexe.mfinante.gov.ro/CABWeb'] >> visible=true" timeout="30" waitNavigation="true" isCheckpoint="true"/>
+
+  <Log message="Verific dacă pagina s-a încărcat corect sau s-a blocat..." level="info"/>
+  
+  <WaitFor selector="img[alt='Loading...']" state="detached" timeout="15" refreshOnFail="true" maxRetries="5"/>
+
+  <Log message="Initiez adăugarea angajamentului..." level="success"/>
+  <Click selector="a:has-text('Angajament nou')" jsClick="true"/>
+
+  <WaitFor selector="textarea[name='descriere']"/>
+  <Fill selector="textarea[name='descriere']" value="{{CodAngajament|Descriere Angajament (Fix 11 caractere)|Mask=CCCCCCCCCCC}}" clear="true"/>
+
+  <Click selector="button:has-text('Adaugă angajament')" force="true" />
+
+  <Log message="Selectez Programul..." level="info" isCheckpoint="true"/>
+  <Click selector=".select2-container:has(+ input[name='program:sel']) a.select2-choice"/>
+  <WaitFor selector=".select2-results li:has-text('{{CodProgram|Codul Programului (10 cifre)|Mask=0000000000}}')" timeout="5"/>
+  <Click selector="#select2-drop ul.select2-results li:has-text('{{CodProgram}}')" />
+
+  <Log message="Selectez Sursa de finanțare..." level="info" isCheckpoint="true"/>
+  <Wait seconds="1"/>
+  <Select selector="select[name='sursa']" value="{{Sursa|Sursa de finanțare|Mask=CCC}}"/>
+
+  <Log message="Selectez Indicatorul..." level="info" isCheckpoint="true"/>
+  <Click selector="*:has(> input[name='indicator:indicator']) a.select2-choice" />
+  <WaitFor selector="#select2-drop input.select2-input" timeout="5"/>
+  <Wait seconds="1"/>
+  <Fill selector="#select2-drop input.select2-input" value="{{Clasificatia|Clasificația bugetară|Mask=00.00.00.00.00.00}}" />
+  <Wait seconds="1"/>
+  <WaitFor selector="#select2-drop li.select2-result-selectable" timeout="5"/>
+  <Click selector="#select2-drop li.select2-result-selectable:nth-child(1)" />
+
+  <Wait seconds="1"/>
+  <Log message="Completez suma..." level="info" isCheckpoint="true"/>
+  <WaitFor selector="input[name='tableContainer:creditBugRezervatInitialAnCurent']"/>
+  <Fill selector="input[name='tableContainer:creditBugRezervatInitialAnCurent']" value="{{Valoare|Valoare de angajat|Type=Numeric}}" /> 
+
+  <Log message="Salvez operatia (NU!)" level="Info" isCheckpoint="true"/>
+  <Screenshot path="C:\AVACONT\Logs\clasificatie_completa.png"/>
+
+  <Stop/>
+</Workflow>

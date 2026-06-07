@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Workflow name="Descărcare listă completă Angajamente" startUrl="current" expectedUrl="https://forexe.mfinante.gov.ro/CABWeb/home">
+  <!-- V.2
+    1. Apasă pe elementul 'Afisare informatii complete' din meniu
+    2. Descarcă excel-ul cu TOATE informațiile (pentru toți anii - așa face porcăria de CAB)
+    3. Trimite la server pentru prelucrare cu filtru pe Data Creeare Angajament
+  -->
+    <!-- OBLIGATORIU LA INCEPUT !-->
+    <IfExists selector="#select2-drop-mask">
+        <Click selector="#select2-drop-mask" force="true" LogValue="Resetare interfață (închid ferestre)" />
+    </IfExists>
+    <Click selector="#statlogo" waitNavigation="true" timeout="10"/>    
+    <!-- PANA AICI -->
+    
+    <Click selector="a:has-text('Afisare informatii complete')" waitNavigation="true" timeout="10" LogValue="Apas pe 'Afisare informatii complete angajamente active'"/>  
+    <Download 
+        selector="button[name='download']" 
+        fileName="" 
+        parseExcel="true" 
+        saveTo="AngajamenteActive" 
+        description="Descarc Excel si il parsez" 
+        HeaderRows="3"
+        complexFilter="Data_creare_angajament LIKE '{{AN_DATE}}' AND Cod_Angajament LIKE '{{COD_ANGAJAMENT}}'"
+    />
+        <!-- filterColumn="Data_creare_angajament"
+        filter="{{AN_DATE}}" -->
+
+    <!-- ATENȚIE! ColToFilter TREBUIE sa fie in formatul prelucrat in PY -->
+    <!-- EXEMPLU:   Data creare angajament -->
+    <!-- REZULTAT:  Data_creare_angajament -->
+    <!---->
+    <!-- EXEMPLU:   [        Prevedere bugetara        ]
+                    [Credit angajament]	[Credit bugetar]
+                    [                 ] [An curent     ]
+            REZULTAT:  Prevedere_bugetara!Credit_angajament,
+                    Prevedere_bugetara!Credit_bugetar!An_curent
+    -->
+</Workflow>
