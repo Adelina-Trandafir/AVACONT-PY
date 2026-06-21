@@ -133,8 +133,7 @@ def _validate_part(p: dict, idx: int, tip: str):
     _strict_str(p.get("CodFiscal"),         f"{pfx}.CodFiscal")
     _strict_str(p.get("ContIBAN"),          f"{pfx}.ContIBAN")
     _strict_str(p.get("Banca"),             f"{pfx}.Banca")
-    _opt_str(p.get("CodPartener"))
-    _opt_int(p.get("IdPartener"),           f"{pfx}.IdPartener")
+    # CodPartener / IdPartener: mutate pe TBL (v8) — nu se mai valideaza aici
 
 
 def _validate_tbl(t: dict, idx: int, valid_tmpid_set: set, tip: str):
@@ -143,6 +142,7 @@ def _validate_tbl(t: dict, idx: int, valid_tmpid_set: set, tip: str):
 
     TmpID_OrdPart: obligatoriu, trebuie sa corespunda unui TmpID din parts.
     IDRP (nullable):
+      Update v6: IDRP este eliminat din TBL (nu se mai trimite si nu se mai valideaza).
       Flux 1: IDRP > 0 (referinta read-only la FX_Receptii_Plati).
       Flux 2: IDRP = NULL.
       Serverul NU valideaza existenta IDRP in FX_Receptii_Plati —
@@ -179,8 +179,13 @@ def _validate_tbl(t: dict, idx: int, valid_tmpid_set: set, tip: str):
     _opt_int(t.get("IdClsf"),                   f"{pfx}.IdClsf")
     _opt_int(t.get("IdClsfAcc"),                f"{pfx}.IdClsfAcc")
     # IDRP: nullable — NULL flux 2, pozitiv flux 1
-    _opt_int(t.get("IDRP"),                     f"{pfx}.IDRP")
+    #_opt_int(t.get("IDRP"),                     f"{pfx}.IDRP")
     # IDRD: eliminat din v5 — nu se mai valideaza
+    # CodPartener / IdPartener: mutate de pe PART (v8) — nullable
+    _opt_str(t.get("CodPartener"))
+    _opt_int(t.get("IdPartener"),               f"{pfx}.IdPartener")
+    # IdUnitate: camp nou (v8) — OBLIGATORIU (> 0)
+    _strict_pos_int(t.get("IdUnitate"),         f"{pfx}.IdUnitate")
 
 
 def _validate_tbl_rec(r: dict, idx: int, valid_tbl_tmpid_set: set):
@@ -196,7 +201,7 @@ def _validate_tbl_rec(r: dict, idx: int, valid_tbl_tmpid_set: set):
 
     _strict_int(r.get("IDORDREC"),  f"{pfx}.IDORDREC")   # negativ=ADD, pozitiv=EDIT
     _strict_int(r.get("IDORDRECP"), f"{pfx}.IDORDRECP")   # negativ=ADD, pozitiv=EDIT
-    _strict_pos_int(r.get("IDRP"),  f"{pfx}.IDRP")
+    _strict_pos_int(r.get("IdPlataFX"),  f"{pfx}.IdPlataFX")
     _strict_float(r.get("Valoare"), f"{pfx}.Valoare")
 
 

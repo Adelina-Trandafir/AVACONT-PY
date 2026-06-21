@@ -80,12 +80,12 @@ def _sync_tbl_rec(cursor, token: str, tbl_to_real: dict) -> list:
                 counter  += 1
                 idordrec  = counter
             cursor.execute("""
-                INSERT INTO FX_ORD_TBL_REC (IDORDTBLP, IDORDREC, IDRP, Valoare)
+                INSERT INTO FX_ORD_TBL_REC (IDORDTBLP, IDORDREC, IdPlataFX, Valoare)
                 VALUES (%s, %s, %s, %s)
             """, (
                 idordtblp,
                 idordrec,
-                _strict_pos_int(r["IDRP"],  "IDRP"),
+                _strict_pos_int(r["IdPlataFX"],  "IdPlataFX"),
                 _strict_float(r["Valoare"], "Valoare"),
             ))
             rec_map.append({

@@ -16,8 +16,6 @@ from utils.parsing import (
     _strict_pos_int,
     _strict_str,
     _strict_str_nonempty,
-    _opt_int,
-    _opt_str,
 )
 
 from . import logger
@@ -43,15 +41,13 @@ def _add_part(cursor, idordp: int, token: str) -> Tuple[dict, list]:
         cursor.execute("""
             INSERT INTO FX_ORD_PART
                 (IDORDP, IDORDPART, Counter, DenBene,
-                 CodPartener, IdPartener, CodFiscal, ContIBAN, Banca)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 CodFiscal, ContIBAN, Banca)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             idordp,
             _strict_pos_int(p["IDORDPART"],    "IDORDPART"),
             _strict_str(p["Counter"],          "Counter"),
             _strict_str_nonempty(p["DenBene"], "DenBene"),
-            _opt_str(p.get("CodPartener")),
-            _opt_int(p.get("IdPartener"),      "IdPartener"),
             _strict_str(p["CodFiscal"],        "CodFiscal"),
             _strict_str(p["ContIBAN"],         "ContIBAN"),
             _strict_str(p["Banca"],            "Banca"),
@@ -95,7 +91,7 @@ def _sync_part(cursor, token: str, idordp: int) -> Tuple[dict, list]:
             cursor.execute("""
                 UPDATE FX_ORD_PART
                 SET IDORDPART=%s, Counter=%s, DenBene=%s, CodFiscal=%s,
-                    ContIBAN=%s, Banca=%s, CodPartener=%s, IdPartener=%s
+                    ContIBAN=%s, Banca=%s
                 WHERE IDORDPARTP=%s AND IDORDP=%s
             """, (
                 _strict_pos_int(p["IDORDPART"], "IDORDPART"),
@@ -104,8 +100,6 @@ def _sync_part(cursor, token: str, idordp: int) -> Tuple[dict, list]:
                 _strict_str(p["CodFiscal"],     "CodFiscal"),
                 _strict_str(p["ContIBAN"],      "ContIBAN"),
                 _strict_str(p["Banca"],         "Banca"),
-                _opt_str(p.get("CodPartener")),
-                _opt_int(p.get("IdPartener"),   "IdPartener"),
                 idordpartp, idordp,
             ))
             if cursor.rowcount == 0:
@@ -121,15 +115,13 @@ def _sync_part(cursor, token: str, idordp: int) -> Tuple[dict, list]:
             cursor.execute("""
                 INSERT INTO FX_ORD_PART
                     (IDORDP, IDORDPART, Counter, DenBene,
-                     CodPartener, IdPartener, CodFiscal, ContIBAN, Banca)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     CodFiscal, ContIBAN, Banca)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 idordp,
                 _strict_pos_int(p["IDORDPART"], "IDORDPART"),
                 _strict_str(p["Counter"],       "Counter"),
                 _strict_str_nonempty(p["DenBene"], "DenBene"),
-                _opt_str(p.get("CodPartener")),
-                _opt_int(p.get("IdPartener"),   "IdPartener"),
                 _strict_str(p["CodFiscal"],     "CodFiscal"),
                 _strict_str(p["ContIBAN"],      "ContIBAN"),
                 _strict_str(p["Banca"],         "Banca"),

@@ -20,6 +20,8 @@ logger = setup_logger()
 
 app = Flask(__name__)
 
+app.config['MAX_CONTENT_LENGTH'] = None  # Dezactiveaza limita globala de content-length (pentru imagini mari)
+
 # 2. Inregistram Blueprints
 # Aici practic ii spunem aplicatiei principale sa includa rutele din celelalte fisiere
 app.register_blueprint(admin_bp)

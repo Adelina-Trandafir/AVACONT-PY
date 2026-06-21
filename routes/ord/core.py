@@ -15,6 +15,7 @@ import uuid
 
 from flask import jsonify, request
 
+from utils.database import get_db_connection
 from utils.security import require_api_key
 from utils.db_retry import _run_with_retry
 from utils.parsing import _strict_pos_int, _strict_str_nonempty
@@ -292,3 +293,120 @@ def delete_ord():
     except Exception as e:
         logger.error(f"[delete] ERROR: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@ord_bp.route('/api/ord/update_id_plata_fx', methods=['POST'])
+@require_api_key
+def update_id_plata_fx():
+
+    data = request.json
+    
+    if not data:
+        return jsonify({'ok': False}), 400
+
+    items = data.get("items", [])
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection(data.get("db_name"))
+        cursor = conn.cursor()
+
+        updated = 0
+
+        for item in items:
+            cursor.execute("""
+                UPDATE FX_ORD_TBL_REC
+                SET IdPlataFX = %s
+                WHERE IDORDRECP = %s
+                  AND IdPlataFX IS NULL
+            """, (
+                item["IdPlataFX"],
+                item["IDORDRECP"]
+            ))
+
+            updated += cursor.rowcount
+
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "updated": updated,
+            "total": len(items)
+        }), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.error("update_id_plata_fx batch error", exc_info=True)
+
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@ord_bp.route('/api/ord/update_semnatura', methods=['POST'])
+@require_api_key
+def update_semnatura():
+
+    data = request.json
+    
+    if not data:
+        return jsonify({'ok': False}), 400
+
+    items = data.get("items", [])
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection(data.get("db_name"))
+        cursor = conn.cursor()
+
+        updated = 0
+
+        for item in items:
+            cursor.execute("""
+                UPDATE FX_ORD
+                SET Semnatura = %s
+                WHERE IDORDP = %s
+            """, (
+                item["Semnatura"],
+                item["IDORDP"]
+            ))
+
+            updated += cursor.rowcount
+
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "updated": updated,
+            "total": len(items)
+        }), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.error("update_semnatura batch error", exc_info=True)
+
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

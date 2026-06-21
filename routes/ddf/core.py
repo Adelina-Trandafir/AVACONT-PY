@@ -29,6 +29,8 @@ from .staging import (
     _commit_staging_upd_ang,
 )
 
+class NotFoundError(Exception):
+    pass
 
 # ===========================================================================
 # STAGING — SAVE / UPDATE
@@ -247,7 +249,7 @@ def ddf_patch():
         'CodAngajament', 'Cual', 'PartAng',
         'DataCreare', 'DataDef', 'ObiectDDF', 'Program',
         'Comp', 'Stare', 'Salarii',
-        'Incarcat', 'Preluat',
+        'Incarcat', 'Preluat', 'CodFiscal'
     }
 
     data = request.get_json(silent=True)
@@ -399,6 +401,9 @@ def cleanup_staging():
 # ===========================================================================
 # DELETE DDF / REVIZIE  (folosesc _run_with_retry)
 # ===========================================================================
+# ===========================================================================
+# DELETE DDF / REVIZIE  (folosesc _run_with_retry)
+# ===========================================================================
 @ddf_bp.route("/api/ddf/delete", methods=["POST"])
 @require_api_key
 def delete_ddf():
@@ -418,7 +423,7 @@ def delete_ddf():
                 (iddf,)
             )
             if not cursor.fetchone():
-                raise ValueError(f"FX_DDF cu IDDF={iddf} nu exista")
+                raise NotFoundError(f"FX_DDF cu IDDF={iddf} nu exista")
 
             cursor.execute("DELETE FROM FX_DDF WHERE IDDF=%s", (iddf,))
             if cursor.rowcount == 0:
@@ -429,6 +434,9 @@ def delete_ddf():
         result = _run_with_retry(operation, data)
         logger.info(f"[delete_ddf] OK IDDF={iddf}")
         return jsonify(result), 200
+
+    except NotFoundError as e:
+        return jsonify({"error": str(e)}), 404
 
     except Exception as e:
         logger.error(f"[delete_ddf] ERROR: {e}", exc_info=True)
@@ -472,6 +480,124 @@ def delete_ddf_rev():
         logger.info(f"[delete_ddf_rev] OK IDREV={idrev}")
         return jsonify(result), 200
 
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+
     except Exception as e:
         logger.error(f"[delete_ddf_rev] ERROR: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@ddf_bp.route('/api/ddf/update_cod_fiscal', methods=['POST'])
+@require_api_key
+def update_cod_fiscal():
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'ok': False}), 400
+
+    items = data.get("items", [])
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection(data.get("db_name"))
+        cursor = conn.cursor()
+
+        updated = 0
+
+        for item in items:
+            cursor.execute("""
+                UPDATE FX_DDF
+                SET CodFiscal = %s,
+                    NumePartener = %s
+                WHERE IDDF = %s
+                  AND CodFiscal IS NULL
+            """, (
+                item["CodFiscal"],
+                item["NumePartener"],
+                item["IDDF"]
+            ))
+
+            updated += cursor.rowcount
+
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "updated": updated,
+            "total": len(items)
+        }), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.exception(f"update_cod_fiscal exception={e}")
+
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@ddf_bp.route('/api/ddf/update_semnatura', methods=['POST'])
+@require_api_key
+def update_semnatura():
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'ok': False}), 400
+
+    items = data.get("items", [])
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection(data.get("db_name"))
+        cursor = conn.cursor()
+
+        updated = 0
+
+        for item in items:
+            cursor.execute(""" 
+                UPDATE FX_DDF_REV SET Semnatura = %s WHERE IDREV = %s
+            """, (
+                item["Semnatura"],
+                item["IDREV"]
+            ))
+
+            updated += cursor.rowcount
+
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "updated": updated,
+            "total": len(items)
+        }), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.exception(f"update_semnatura exception={e}")
+
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

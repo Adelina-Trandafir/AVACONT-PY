@@ -41,9 +41,9 @@ def _stg_insert_ord(cursor, token: str, tip: str, data: dict):
     cursor.execute("""
         INSERT INTO stg_Ord
             (Token, TipOperatie, IDORD, IDORDP, IDDF, IDRR, IDRH,
-             NrORD, DataORD, Comp, CUAL, IdUnitate,
+             NrORD, DataORD, Comp, CUAL,
              Incarcat, Preluat, CodAngajament)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         token, tip,
         _strict_pos_int(ord_["IDORD"],        "ord.IDORD"),
@@ -55,7 +55,6 @@ def _stg_insert_ord(cursor, token: str, tip: str, data: dict):
         _strict_str_nonempty(ord_["DataORD"], "ord.DataORD"),
         _strict_str_nonempty(ord_["Comp"],    "ord.Comp"),
         _opt_str(ord_.get("CUAL")),
-        _opt_int(ord_.get("IdUnitate"),       "ord.IdUnitate"),
         _strict_bool(ord_.get("Incarcat"),    "ord.Incarcat"),
         _strict_bool(ord_.get("Preluat"),     "ord.Preluat"),
         _strict_str_nonempty(ord_.get("CodAngajament"), "ord.CodAngajament"),
@@ -85,9 +84,8 @@ def _stg_insert_parts(cursor, token: str, parts: list) -> dict:
         cursor.execute("""
             INSERT INTO stg_OrdPart
                 (Token, TmpID, IDORDPART, IDORDPARTP,
-                 Counter, DenBene, CodFiscal, ContIBAN,
-                 Banca, CodPartener, IdPartener)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 Counter, DenBene, CodFiscal, ContIBAN, Banca)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             token,
             tmp_id,
@@ -98,8 +96,6 @@ def _stg_insert_parts(cursor, token: str, parts: list) -> dict:
             _strict_str(p["CodFiscal"],        "CodFiscal"),
             _strict_str(p["ContIBAN"],         "ContIBAN"),
             _strict_str(p["Banca"],            "Banca"),
-            _opt_str(p.get("CodPartener")),
-            _opt_int(p.get("IdPartener"),      "IdPartener"),
         ))
         tmpid_to_stgpartid[tmp_id] = cursor.lastrowid
 
@@ -119,9 +115,7 @@ def _stg_insert_tbls(cursor, token: str, tbls: list, tmpid_to_stgpartid: dict):
     pentru fiecare rand TBL. Raise daca TmpID_OrdPart lipseste din map
     (indica inconsistenta intre payload parts si tbls).
 
-    IDRP: nullable — FK read-only catre FX_Receptii_Plati.
-      NULL = flux 2 (receptia nu exista inca).
-      > 0  = flux 1 (randul RecPl existent, referinta de citire).
+    IDRP: eliminat din v6 — coloana stearsa din FX_ORD_TBL si stg_OrdTbl.
     IDRD: eliminat din v5 — coloana stearsa din FX_ORD_TBL si stg_OrdTbl.
     TmpID_OrdPart: obligatoriu in TBL (FK catre PART parinte din staging).
     """
@@ -139,9 +133,14 @@ def _stg_insert_tbls(cursor, token: str, tbls: list, tmpid_to_stgpartid: dict):
                  IDORDTBL, IDORDTBLP,
                  CodAI, CodAngajament, CodIndicator, CodSSI,
                  TotalReceptii, PlatiAnt, Valoare, Ramas,
-                 IdClsf, IdClsfAcc, Explicatie, IDRP)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s)
+                 IdClsf, IdClsfAcc, Explicatie, 
+                 CodPartener, IdPartener, IdUnitate)
+            VALUES (%s, %s, %s, %s, 
+                    %s, %s, 
+                    %s, %s, %s, %s, 
+                    %s, %s, %s, %s, 
+                    %s, %s, %s,
+                    %s, %s, %s)
         """, (
             token,
             _strict_pos_int(t["TmpID"],          "TmpID"),
@@ -160,7 +159,9 @@ def _stg_insert_tbls(cursor, token: str, tbls: list, tmpid_to_stgpartid: dict):
             _opt_int(t.get("IdClsf"),            "IdClsf"),
             _opt_int(t.get("IdClsfAcc"),         "IdClsfAcc"),
             _opt_str(t.get("Explicatie")),
-            _opt_int(t.get("IDRP"),              "IDRP"),    # v5: IDRP adaugat, IDRD eliminat
+            _opt_str(t.get("CodPartener")),                  # v8: mutat de pe PART
+            _opt_int(t.get("IdPartener"),        "IdPartener"),  # v8: mutat de pe PART
+            _strict_pos_int(t.get("IdUnitate"),  "IdUnitate"),   # v8: nou, obligatoriu
         ))
     logger.debug(f"[STG][TBL] token={token} count={len(tbls)}")
 
@@ -242,12 +243,12 @@ def _stg_insert_tbl_recs(cursor, token: str, tbl_recs: list):
     Insereaza randurile TBL_REC (plati individuale per TBL) in stg_OrdTblRec.
     TmpID_OrdTbl: FK catre tmpFX_ORD_TBL.ID (parintele TBL din Access).
     IDORDREC: Access PK (pozitiv = pre-calculat de VBA, negativ = generat de server).
-    IDRP: FK catre FX_Receptii_Plati (obligatoriu pozitiv).
+    IdPlataFX: FK catre FX_Plati (obligatoriu pozitiv).
     """
     for r in tbl_recs:
         cursor.execute("""
             INSERT INTO stg_OrdTblRec
-                (Token, TmpID, TmpID_OrdTbl, IDORDREC, IDORDRECP, IDRP, Valoare)
+                (Token, TmpID, TmpID_OrdTbl, IDORDREC, IDORDRECP, IdPlataFX, Valoare)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             token,
@@ -255,7 +256,7 @@ def _stg_insert_tbl_recs(cursor, token: str, tbl_recs: list):
             _strict_pos_int(r["TmpID_OrdTbl"],  "TmpID_OrdTbl"),
             _strict_int(r["IDORDREC"],          "IDORDREC"),
             _strict_int(r["IDORDRECP"],         "IDORDRECP"),
-            _strict_pos_int(r["IDRP"],          "IDRP"),
+            _strict_pos_int(r["IdPlataFX"],     "IdPlataFX"),
             _strict_float(r["Valoare"],         "Valoare"),
         ))
     logger.debug(f"[STG][REC] token={token} count={len(tbl_recs)}")

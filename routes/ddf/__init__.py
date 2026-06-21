@@ -46,3 +46,4 @@ ddf_bp = Blueprint("ddf", __name__)
 
 # Inregistrarea rutelor (la final, dupa ce ddf_bp/_dlog exista)
 from . import core, prt, att   # noqa: E402,F401
+from . import sync_acc_mdb, sync_mdb_acc  # noqa: E402,F401

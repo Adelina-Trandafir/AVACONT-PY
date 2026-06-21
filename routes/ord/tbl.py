@@ -52,9 +52,11 @@ def _add_tbl(cursor, idordp: int, token: str, tmp_to_real: dict) -> Tuple[dict, 
                 (IDORDP, IDORDPARTP, IDORDTBL,
                  CodAI, CodAngajament, CodIndicator, CodSSI,
                  TotalReceptii, PlatiAnt, Valoare, Ramas,
-                 IdClsf, IdClsfAcc, Explicatie, IDRP)
+                 IdClsf, IdClsfAcc, Explicatie, IDRP,
+                 CodPartener, IdPartener, IdUnitate)
             VALUES (%s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s)
         """, (
             idordp, idordpartp,
             _strict_pos_int(t["IDORDTBL"],    "IDORDTBL"),
@@ -70,6 +72,9 @@ def _add_tbl(cursor, idordp: int, token: str, tmp_to_real: dict) -> Tuple[dict, 
             _opt_int(t.get("IdClsfAcc"),      "IdClsfAcc"),
             _opt_str(t.get("Explicatie")),
             _opt_int(t.get("IDRP"),           "IDRP"),       # v5: IDRP, fara IDRD
+            _opt_str(t.get("CodPartener")),                  # v8: mutat de pe PART
+            _opt_int(t.get("IdPartener"),     "IdPartener"), # v8: mutat de pe PART
+            _strict_pos_int(t["IdUnitate"],   "IdUnitate"),  # v8: nou, obligatoriu
         ))
         tbl_map.append({
             "TmpID":     _strict_pos_int(t["TmpID"], "TmpID"),
@@ -127,6 +132,9 @@ def _sync_tbl(cursor, token: str, idordp: int, tmp_to_real: dict) -> Tuple[dict,
             _opt_int(t.get("IdClsfAcc"),      "IdClsfAcc"),
             _opt_str(t.get("Explicatie")),
             _opt_int(t.get("IDRP"),           "IDRP"),    # v5: IDRP, fara IDRD
+            _opt_str(t.get("CodPartener")),               # v8: mutat de pe PART
+            _opt_int(t.get("IdPartener"),     "IdPartener"),  # v8: mutat de pe PART
+            _strict_pos_int(t["IdUnitate"],   "IdUnitate"),   # v8: nou, obligatoriu
         )
 
         if idordtblp > 0:
@@ -136,7 +144,8 @@ def _sync_tbl(cursor, token: str, idordp: int, tmp_to_real: dict) -> Tuple[dict,
                 SET IDORDPARTP=%s, IDORDTBL=%s,
                     CodAI=%s, CodAngajament=%s, CodIndicator=%s, CodSSI=%s,
                     TotalReceptii=%s, PlatiAnt=%s, Valoare=%s, Ramas=%s,
-                    IdClsf=%s, IdClsfAcc=%s, Explicatie=%s, IDRP=%s
+                    IdClsf=%s, IdClsfAcc=%s, Explicatie=%s, IDRP=%s,
+                    CodPartener=%s, IdPartener=%s, IdUnitate=%s
                 WHERE IDORDTBLP=%s AND IDORDP=%s
             """, valori_date + (idordtblp, idordp))
             if cursor.rowcount == 0:
@@ -155,9 +164,11 @@ def _sync_tbl(cursor, token: str, idordp: int, tmp_to_real: dict) -> Tuple[dict,
                     (IDORDP, IDORDPARTP, IDORDTBL,
                      CodAI, CodAngajament, CodIndicator, CodSSI,
                      TotalReceptii, PlatiAnt, Valoare, Ramas,
-                     IdClsf, IdClsfAcc, Explicatie, IDRP)
+                     IdClsf, IdClsfAcc, Explicatie, IDRP,
+                     CodPartener, IdPartener, IdUnitate)
                 VALUES (%s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s)
+                        %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s)
             """, (idordp,) + valori_date)
             new_idordtblp = cursor.lastrowid
             tmp_id        = _strict_pos_int(t["TmpID"], "TmpID")

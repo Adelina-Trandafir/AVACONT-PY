@@ -36,13 +36,17 @@ def _insert_staging(cursor, token: str, tip: str, data: dict) -> None:
         INSERT INTO stg_DocFund (
             Token, TipOperatie,
             IDDF, CodAngajament, Cual,
-            DataCreare, DataDef, ObiectDDF, Program, Comp, Stare,
-            PartAng, DC, Incarcat, Preluat, Salarii
+            DataCreare, DataDef, ObiectDDF, 
+            Program, Comp, Stare,
+            PartAng, DC, Incarcat, 
+            Preluat, Salarii, CodFiscal, NumePartener
         ) VALUES (
             %s, %s,
+            %s, %s, %s, 
+            %s, %s, %s, 
             %s, %s, %s,
-            %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s
+            %s, %s, %s, 
+            %s, %s, %s, %s
         )
     """, (
         token, tip,
@@ -50,7 +54,8 @@ def _insert_staging(cursor, token: str, tip: str, data: dict) -> None:
         ddf.get('DataCreare'),  ddf.get('DataDef'),       ddf.get('ObiectDDF'),
         ddf.get('Program'),     ddf.get('Comp'),          ddf.get('Stare'),
         ddf.get('PartAng'),     ddf.get('DC'),            ddf.get('Incarcat'),
-        ddf.get('Preluat'),     ddf.get('Salarii'),
+        ddf.get('Preluat'),     ddf.get('Salarii'),       ddf.get('CodFiscal'),
+        ddf.get('NumePartener')
     ))
     _dlog(f"[insert_staging] stg_DocFund OK")
 
@@ -137,7 +142,7 @@ def _commit_staging_add(cursor, token: str) -> dict:
     cursor.execute("""
         SELECT CodAngajament, Cual,
                DataCreare, DataDef, ObiectDDF, Program, Comp, Stare,
-               PartAng, DC, Incarcat, Preluat, Salarii
+               PartAng, DC, Incarcat, Preluat, Salarii, CodFiscal, NumePartener
         FROM stg_DocFund WHERE Token = %s
     """, (token,))
     ddf_row = cursor.fetchone()
@@ -146,14 +151,14 @@ def _commit_staging_add(cursor, token: str) -> dict:
         INSERT INTO FX_DDF (
             CodAngajament, Cual,
             DataCreare, DataDef, ObiectDDF, Program, Comp, Stare,
-            PartAng, DC, Incarcat, Preluat, Salarii
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            PartAng, DC, Incarcat, Preluat, Salarii, CodFiscal, NumePartener
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         ddf_row['CodAngajament'], ddf_row['Cual'],
         ddf_row['DataCreare'], ddf_row['DataDef'], ddf_row['ObiectDDF'],
         ddf_row['Program'], ddf_row['Comp'], ddf_row['Stare'],
         ddf_row['PartAng'], ddf_row['DC'], ddf_row['Incarcat'],
-        ddf_row['Preluat'], ddf_row['Salarii'],
+        ddf_row['Preluat'], ddf_row['Salarii'], ddf_row['CodFiscal'], ddf_row['NumePartener']
     ))
     final_iddf = cursor.lastrowid
     _dlog(f"[commit_add] FX_DDF INSERT → IDDF={final_iddf}")
@@ -279,7 +284,7 @@ def _commit_staging_mod(cursor, token: str) -> dict:
     cursor.execute("""
         SELECT IDDF, CodAngajament, Cual,
                DataCreare, DataDef, ObiectDDF, Program, Comp, Stare,
-               PartAng, DC, Incarcat, Preluat, Salarii
+               PartAng, DC, Incarcat, Preluat, Salarii, CodFiscal, NumePartener
         FROM stg_DocFund WHERE Token = %s
     """, (token,))
     ddf_row = cursor.fetchone()
@@ -289,14 +294,14 @@ def _commit_staging_mod(cursor, token: str) -> dict:
         UPDATE FX_DDF
         SET CodAngajament=%s, Cual=%s,
             DataCreare=%s, DataDef=%s, ObiectDDF=%s, Program=%s, Comp=%s,
-            Stare=%s, PartAng=%s, DC=%s, Incarcat=%s, Preluat=%s, Salarii=%s
+            Stare=%s, PartAng=%s, DC=%s, Incarcat=%s, Preluat=%s, Salarii=%s, CodFiscal=%s, NumePartener=%s
         WHERE IDDF=%s
     """, (
         ddf_row['CodAngajament'], ddf_row['Cual'],
         ddf_row['DataCreare'], ddf_row['DataDef'], ddf_row['ObiectDDF'],
         ddf_row['Program'], ddf_row['Comp'], ddf_row['Stare'],
         ddf_row['PartAng'], ddf_row['DC'], ddf_row['Incarcat'],
-        ddf_row['Preluat'], ddf_row['Salarii'],
+        ddf_row['Preluat'], ddf_row['Salarii'], ddf_row['CodFiscal'], ddf_row['NumePartener'],
         final_iddf,
     ))
     _dlog(f"[commit_mod] FX_DDF UPDATE IDDF={final_iddf} rowcount={cursor.rowcount}")

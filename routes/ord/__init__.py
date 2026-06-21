@@ -101,3 +101,6 @@ ord_bp = Blueprint("ord", __name__)
 # core.py  -> save_staging, update_staging, confirm, cleanup_staging, delete
 # patch.py -> /api/ord/patch/{part,tbl,att,doc}
 from . import core, patch   # noqa: E402,F401
+
+# rute de sincronizare Access → MariaDB (DDF + ORD)
+from . import sync_acc_mdb, sync_mdb_acc # noqa: E402,F401
