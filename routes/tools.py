@@ -3,14 +3,25 @@ import base64
 import io
 import re
 import os
+import json
 import pandas as pd
 import numpy as np
+import threading
 from flask import Blueprint, request, jsonify, send_file
 from utils.security import require_api_key
 from utils.helpers import sanitize_header
 
 tools_bp = Blueprint('tools', __name__)
 logger = logging.getLogger(__name__)
+
+_manifest_lock = threading.Lock()
+
+MANIFEST_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '../cache/vbnet/manifest.json')
+)
+CACHE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '../cache/vbnet')
+)
 
 # ==============================================================================
 # PROTECȚIE REDOS
@@ -24,6 +35,27 @@ DANGEROUS_PATTERNS = [
 #     r'(\w+)+\w+',     # (.*)*x
 #     r'\(.*\)\*',      # (.*)* 
 # ]
+
+def _load_manifest():
+    """Încarcă manifestul {nume_fisier: versiune} din cache/vbnet/manifest.json."""
+    with open(MANIFEST_PATH, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def _write_manifest(manifest):
+    """Scriere atomică a manifestului (temp + rename)."""
+    tmp = MANIFEST_PATH + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(tmp, MANIFEST_PATH)
+
+def _safe_cache_path(filename):
+    """Cale absolută în CACHE_DIR dacă filename e basename curat; altfel None (anti path-traversal)."""
+    if not filename or filename != os.path.basename(filename):
+        return None
+    path = os.path.abspath(os.path.join(CACHE_DIR, filename))
+    if os.path.commonpath([path, CACHE_DIR]) != CACHE_DIR:
+        return None
+    return path
 
 def is_safe_regex(pattern):
     """Verifică dacă un pattern regex e sigur împotriva ReDoS."""
@@ -553,3 +585,134 @@ def download_pdfium_dll():
     except Exception as e:
         logger.error(f"Eroare la trimiterea pdfium.dll: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@tools_bp.route('/api/tools/check_update', methods=['GET'])
+@require_api_key
+def check_update():
+    filename = request.args.get('file', type=str)
+    client_version = request.args.get('version', type=int)
+
+    if not filename or client_version is None:
+        return jsonify({"error": "Parametrii 'file' și 'version' sunt obligatorii."}), 400
+
+    try:
+        manifest = _load_manifest()
+    except FileNotFoundError:
+        logger.error(f"Manifestul nu există la calea: {MANIFEST_PATH}")
+        return jsonify({"error": "Manifest indisponibil pe server."}), 500
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error(f"Eroare la citirea manifestului: {e}", exc_info=True)
+        return jsonify({"error": "Manifest invalid pe server."}), 500
+
+    if filename not in manifest:
+        return jsonify({"error": "Fișier necunoscut."}), 404
+
+    server_version = int(manifest[filename])
+
+    if server_version <= client_version:
+        return ('', 204)  # client la zi, nimic de trimis
+
+    dll_path = _safe_cache_path(filename)
+    if not dll_path or not os.path.exists(dll_path):
+        logger.error(f"Fișier listat în manifest dar absent pe disc: {filename}")
+        return jsonify({"error": "Fișierul nu a fost găsit pe server."}), 404
+
+    try:
+        response = send_file(
+            dll_path,
+            mimetype='application/octet-stream',
+            as_attachment=True,
+            download_name=filename
+        )
+        response.headers['X-File-Version'] = str(server_version)
+        return response
+    except Exception as e:
+        logger.error(f"Eroare la trimiterea fișierului {filename}: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@tools_bp.route('/api/tools/check_updates', methods=['POST'])
+@require_api_key
+def check_updates():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, list):
+        return jsonify({"error": "Corpul trebuie să fie o listă JSON de {name, version}."}), 400
+
+    try:
+        manifest = _load_manifest()
+    except FileNotFoundError:
+        logger.error(f"Manifestul nu există la calea: {MANIFEST_PATH}")
+        return jsonify({"error": "Manifest indisponibil pe server."}), 500
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error(f"Eroare la citirea manifestului: {e}", exc_info=True)
+        return jsonify({"error": "Manifest invalid pe server."}), 500
+
+    updates = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        name = item.get('name')
+        version = item.get('version')
+        if not name or name not in manifest:
+            continue
+        try:
+            client_version = int(version)
+        except (TypeError, ValueError):
+            continue
+        server_version = int(manifest[name])
+        if server_version > client_version:
+            path = _safe_cache_path(name)
+            if path and os.path.exists(path):
+                updates.append({"name": name, "version": server_version})
+
+    return jsonify({"updates": updates})
+
+@tools_bp.route('/api/tools/upload', methods=['POST'])
+@require_api_key
+def upload_file():
+    uploaded = request.files.get('file')
+    if uploaded is None or not uploaded.filename:
+        return jsonify({"error": "Lipsește fișierul ('file')."}), 400
+
+    raw_version = request.form.get('version')
+    try:
+        version = int(raw_version)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Câmpul 'version' (MAJOR, întreg) e obligatoriu."}), 400
+    if version < 0:
+        return jsonify({"error": "Versiunea trebuie să fie >= 0."}), 400
+
+    dest_path = _safe_cache_path(uploaded.filename)
+    if dest_path is None:
+        return jsonify({"error": "Nume de fișier invalid."}), 400
+
+    name = os.path.basename(uploaded.filename)
+
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with _manifest_lock:
+            try:
+                manifest = _load_manifest()
+            except FileNotFoundError:
+                manifest = {}
+            # manifest corupt (JSONDecodeError) -> se propagă la 500, nu-l stricăm
+            old_version = manifest.get(name)
+
+            tmp_path = dest_path + '.upload.tmp'
+            uploaded.save(tmp_path)
+            os.replace(tmp_path, dest_path)
+
+            manifest[name] = version
+            _write_manifest(manifest)
+    except Exception as e:
+        logger.error(f"Eroare la upload {uploaded.filename}: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+    logger.info(f"Upload reușit: {name} v{version} (anterior: {old_version})")
+    return jsonify({
+        "name": name,
+        "version": version,
+        "previous_version": old_version,
+        "status": "ok"
+    })
