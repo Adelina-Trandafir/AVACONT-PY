@@ -31,3 +31,4 @@ avacont_mylsq_monolit.py
 avacont_mylsq_old.py
 config.py
 temp_uploads/
+routes/*.old
