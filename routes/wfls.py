@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import json
 import base64
 from flask import Blueprint, request, jsonify, send_file
@@ -9,9 +10,38 @@ wfl_bp = Blueprint('wfls', __name__)
 logger = logging.getLogger(__name__)
 
 # Calea catre folderul parinte unde se afla folderul WFL si fisierul de versiuni
-def get_wfl_base_path():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(base_dir) # Folderul radacina al aplicatiei
+def get_wfl_dir():
+    base_dir = os.path.dirname(os.path.abspath(__file__))   # .../routes
+    app_root = os.path.dirname(base_dir)                    # radacina aplicatiei
+    return os.path.join(app_root, "cache", "wfl_templates")
+
+# ==============================================================================
+# HELPER: Extragere versiune din header-ul fisierului .wfl
+# ==============================================================================
+# Cauta primul comentariu de forma: <!-- V.4 - 26/03/2026
+_WFL_VERSION_RE = re.compile(r"<!--\s*[Vv]\.?\s*(\d+)")
+
+def parse_wfl_version(file_path):
+    """
+    Returneaza (version:int|None, reason:str, preview:str).
+    reason: 'ok' | 'no_match' | 'error: ...'
+    preview: primele caractere citite (pentru diagnostic).
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            raw = f.read(2048)
+        # Detectam encoding grosier: UTF-16 are multi byti nuli
+        if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+            head = raw.decode('utf-16', errors='replace')
+        else:
+            head = raw.decode('utf-8-sig', errors='replace')  # -sig scoate BOM-ul UTF-8
+        match = _WFL_VERSION_RE.search(head)
+        preview = head[:120].replace('\n', ' ').replace('\r', '')
+        if match:
+            return int(match.group(1)), 'ok', preview
+        return None, 'no_match', preview
+    except Exception as e:
+        return None, f'error: {e}', ''
 
 # ==============================================================================
 # HELPER: Parsare fisier versiuni custom
@@ -49,9 +79,9 @@ def load_server_versions(file_path):
 @wfl_bp.route('/api/wfls/versiuni', methods=['GET'])
 @require_api_key
 def versiuni():
-    base_path = get_wfl_base_path()
+    wfl_dir = get_wfl_dir()
     filename = "versiuni_wfl.txt"
-    file_path = os.path.join(base_path, "WFL", filename)
+    file_path = os.path.join(wfl_dir, filename)
 
     logger.info(f"Cerere download pentru: {filename}")
 
@@ -91,8 +121,7 @@ def check_updates():
         if not isinstance(client_data, list):
              return jsonify({"error": "Payload-ul trebuie sa fie o lista de obiecte JSON"}), 400
 
-        base_path = get_wfl_base_path()
-        wfl_dir = os.path.join(base_path, "WFL")
+        wfl_dir = get_wfl_dir()
         versions_file_path = os.path.join(wfl_dir, "versiuni_wfl.txt")
 
         # 1. Incarcam versiunile de pe server
@@ -143,4 +172,64 @@ def check_updates():
 
     except Exception as e:
         logger.error(f"Eroare la check_updates: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================================================================
+# ENDPOINT NOU: REBUILD versiuni_wfl.txt din header-ele fisierelor .wfl
+# ==============================================================================
+@wfl_bp.route('/api/wfls/rebuild_versions', methods=['GET'])
+@require_api_key
+def rebuild_versions():
+    """
+    Scaneaza folderul WFL, citeste versiunea din header-ul fiecarui .wfl
+    si (re)scrie versiuni_wfl.txt — regenerare completa (lista reflecta
+    exact ce exista pe disk acum).
+    Fisierele fara header de versiune sunt sarite.
+    """
+    try:
+        wfl_dir = get_wfl_dir()
+        logger.info(f"[REBUILD] Scanez folderul: {wfl_dir}")   # vezi exact ce cale rezolva
+        versions_file_path = os.path.join(wfl_dir, "versiuni_wfl.txt")
+
+        if not os.path.isdir(wfl_dir):
+            logger.error(f"Folderul WFL nu exista: {wfl_dir}")
+            return jsonify({"error": "Folderul WFL nu exista pe server"}), 404
+
+        detected = []
+        skipped = []
+
+        for fname in sorted(os.listdir(wfl_dir)):
+            if not fname.lower().endswith(".wfl"):
+                continue
+            full_path = os.path.join(wfl_dir, fname)
+            if not os.path.isfile(full_path):
+                continue
+
+            version, reason, preview = parse_wfl_version(full_path)
+            if version is None:
+                logger.warning(f"Sarit ({reason}): {fname} | preview='{preview}'")
+                skipped.append({"FileName": fname, "reason": reason, "preview": preview})
+                continue
+
+            detected.append({"FileName": fname, "Version": version})
+            logger.info(f"Detectat: {fname} -> V.{version}")
+
+        # Scriere atomica: temp-file -> rename (acelasi pattern ca in rest)
+        tmp_path = versions_file_path + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(detected, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, versions_file_path)
+
+        logger.info(f"versiuni_wfl.txt regenerat: {len(detected)} fisiere, {len(skipped)} sarite")
+
+        return jsonify({
+            "status": "success",
+            "count": len(detected),
+            "versions": detected,
+            "skipped": skipped
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Eroare la rebuild_versions: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500

@@ -626,6 +626,7 @@ def check_update():
             download_name=filename
         )
         response.headers['X-File-Version'] = str(server_version)
+        logger.info(f"Trimitere fișier {filename} v{server_version} către client (client v{client_version})")
         return response
     except Exception as e:
         logger.error(f"Eroare la trimiterea fișierului {filename}: {e}", exc_info=True)
@@ -680,8 +681,8 @@ def upload_file():
         version = int(raw_version)
     except (TypeError, ValueError):
         return jsonify({"error": "Câmpul 'version' (MAJOR, întreg) e obligatoriu."}), 400
-    if version < 0:
-        return jsonify({"error": "Versiunea trebuie să fie >= 0."}), 400
+    if version == 0:
+        return jsonify({"error": "Versiunea trebuie să fie <> 0."}), 400
 
     dest_path = _safe_cache_path(uploaded.filename)
     if dest_path is None:

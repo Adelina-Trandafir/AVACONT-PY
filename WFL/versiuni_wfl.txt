@@ -8,10 +8,6 @@
     "Version": 1
   },
   {
-    "FileName": "adlop - Informatii Complete Angajament.wfl",
-    "Version": 1
-  },
-  {
     "FileName": "adlop - Informatii Complete Angajament Scrape.wfl",
     "Version": 1
   },
@@ -21,6 +17,10 @@
   },
   {
     "FileName": "adlop - Informatii Complete Plati.wfl",
+    "Version": 4
+  },
+  {
+    "FileName": "adlop - Informatii Complete Receptie.wfl",
     "Version": 4
   },
   {

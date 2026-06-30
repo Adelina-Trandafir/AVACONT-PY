@@ -44,11 +44,11 @@ def _dlog(msg: str) -> None:
 # SECTIUNEA 1 — CONSTANTE (limite payload, specifice schemei ORD)
 # Referite in validation.py (_validate_payload / _check_content_length).
 # ---------------------------------------------------------------------------
-MAX_PAYLOAD_BYTES = 2 * 1024 * 1024   # 2 MB
+MAX_PAYLOAD_BYTES = 3 * 1024 * 1024   # 3 MB
 MAX_PARTS         = 50
 MAX_TBLS          = 500
-MAX_ATTS          = 100
-MAX_DOCS          = 100
+MAX_ATTS          = 150
+MAX_DOCS          = 150
 MAX_RECS          = 2000              # max randuri FX_ORD_TBL_REC per payload
 
 
