@@ -1,4 +1,5 @@
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 from utils.logger import setup_logger
 
 # Importam modulele (Blueprints) pe care le-am creat in folderul /routes
@@ -14,11 +15,27 @@ from routes.wfls import wfl_bp
 from routes.ftp import ftp_bp  # Importam Blueprint-ul de upload FTP 
 from routes.ddf import ddf_bp  # Importam Blueprint-ul pentru DDF
 from routes.ord import ord_bp
-from routes.forexe import forexe_bp  # Importam Blueprint-ul pentru forexe
+from routes.forexe import forexe_bp  # Importam Blueprint-ul FOREXE (ListaAngajamente)
+from routes.auth import auth_bp  # Importam Blueprint-ul de login al aplicatiei K-BOT
+
 # 1. Initializam logger-ul global (ca sa scrie in fisierul .log)
 logger = setup_logger()
 
 app = Flask(__name__)
+
+# Diacritice romanesti LITERALE (UTF-8) in raspunsurile JSON, nu escape-uri \uXXXX
+# (Flask >=2.2: app.json.ensure_ascii). Fara asta, mesajele de eroare pentru operator
+# ("Sesiune expirată", "Autentificați-vă") ajung ilizibile in corpul raspunsului.
+try:
+    app.json.ensure_ascii = False
+except Exception:
+    app.config["JSON_AS_ASCII"] = False   # fallback pentru Flask vechi
+
+# Rulam in spatele nginx (un singur proxy). ProxyFix face ca request.remote_addr sa
+# fie IP-ul REAL al clientului (din X-Forwarded-For), nu 127.0.0.1. De asta depinde
+# limita anti-forta-bruta din routes/auth/ratelimit.py: fara ea, toti clientii ar
+# imparti un singur bucket si s-ar bloca reciproc.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 
 app.config['MAX_CONTENT_LENGTH'] = None  # Dezactiveaza limita globala de content-length (pentru imagini mari)
 
@@ -36,7 +53,8 @@ app.register_blueprint(wfl_bp)
 app.register_blueprint(ftp_bp)  # Inregistram Blueprint-ul de upload FTP
 app.register_blueprint(ddf_bp)  # Inregistram Blueprint-ul pentru DDF
 app.register_blueprint(ord_bp)
-app.register_blueprint(forexe_bp)  # Inregistram Blueprint-ul pentru forexe
+app.register_blueprint(forexe_bp)  # Inregistram Blueprint-ul FOREXE
+app.register_blueprint(auth_bp)  # Inregistram Blueprint-ul de login
 
 logger.info("=== RUTE ÎNREGISTRATE ===")
 for rule in app.url_map.iter_rules():

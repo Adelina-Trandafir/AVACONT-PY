@@ -10,6 +10,7 @@ import threading
 from flask import Blueprint, request, jsonify, send_file
 from utils.security import require_api_key
 from utils.helpers import sanitize_header
+from routes.auth.guard import require_session_or_api_key
 
 tools_bp = Blueprint('tools', __name__)
 logger = logging.getLogger(__name__)
@@ -389,7 +390,7 @@ def apply_complex_filter(df, filter_string):
 # ENDPOINT
 # ==============================================================================
 @tools_bp.route('/api/tools/process_excel', methods=['POST'])
-@require_api_key
+@require_session_or_api_key   # K-BOT trimite bearer; X-Api-Key ramane doar pentru FOREXE legacy
 def process_excel_base64():
     try:
         data = request.json

@@ -27,6 +27,7 @@ from .staging import (
     _commit_staging_add,
     _commit_staging_mod,
     _commit_staging_upd_ang,
+    _parse_scan_dbs,
 )
 
 class NotFoundError(Exception):
@@ -168,9 +169,11 @@ def ddf_confirm():
     conn = None
     cursor = None
     try:
-        db_name = data.get("db_name")
-        conn    = get_db_connection(db_name)
-        cursor  = conn.cursor(dictionary=True)
+        db_name  = data.get("db_name")
+        db_asoc  = data.get("db_asoc")          # optional; older clients omit it
+        scan_dbs = _parse_scan_dbs(db_name, db_asoc)
+        conn     = get_db_connection(db_name)
+        cursor   = conn.cursor(dictionary=True)
 
         cursor.execute(
             "SELECT TipOperatie FROM stg_DocFund WHERE Token = %s AND Status = 'PENDING'",
@@ -186,9 +189,9 @@ def ddf_confirm():
         new_ids: dict = {}
         if status == 'OK':
             if tip_operatie == 'ADD':
-                new_ids = _commit_staging_add(cursor, token)
+                new_ids = _commit_staging_add(cursor, token, scan_dbs)
             elif tip_operatie == 'MOD':
-                new_ids = _commit_staging_mod(cursor, token)
+                new_ids = _commit_staging_mod(cursor, token, scan_dbs)
             elif tip_operatie == 'UPD_ANG':
                 new_ids = _commit_staging_upd_ang(cursor, token)
             else:

@@ -175,8 +175,8 @@ def insert():
             cursor = conn.cursor()
             conn.start_transaction()
             
-            sql_structura = """INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire) 
-                               VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+            sql_structura = """INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire, Sector, Sursa) 
+                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             
             sql_buget = """INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, Trim1, Trim2, Trim3, Trim4) 
                            VALUES (%s, %s, %s, %s, %s, %s, %s)"""
@@ -188,7 +188,7 @@ def insert():
                 s = item['structura']
                 b = item['buget']
                 
-                val_s = (s['IdClsfAcc'], s['IdUnitate'], s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'], s['Denumire'])
+                val_s = (s['IdClsfAcc'], s['IdUnitate'], s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'], s['Denumire'], s['Sector'], s['Sursa'])
                 cursor.execute(sql_structura, val_s)
                 
                 new_id = cursor.lastrowid
@@ -482,9 +482,11 @@ def save_clasificatii_complete_upsert():
                 Subcapitol,
                 Articol,
                 Alineat,
-                Denumire
+                Denumire,
+                Sector,
+                Sursa
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 IdClsfAcc = VALUES(IdClsfAcc),
                 IdUnitate = VALUES(IdUnitate),
@@ -492,7 +494,9 @@ def save_clasificatii_complete_upsert():
                 Subcapitol = VALUES(Subcapitol),
                 Articol = VALUES(Articol),
                 Alineat = VALUES(Alineat),
-                Denumire = VALUES(Denumire)
+                Denumire = VALUES(Denumire),
+                Sector = VALUES(Sector),
+                Sursa = VALUES(Sursa)
         """
 
         sql_insert_clsf_no_id = """
@@ -504,9 +508,11 @@ def save_clasificatii_complete_upsert():
                 Subcapitol,
                 Articol,
                 Alineat,
-                Denumire
+                Denumire,
+                Sector,
+                Sursa
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         sql_exists_buget = """
@@ -577,6 +583,8 @@ def save_clasificatii_complete_upsert():
                     "Articol": _to_str(s.get("Articol"), f"data[{idx}].structura.Articol", required=False),
                     "Alineat": _to_str(s.get("Alineat"), f"data[{idx}].structura.Alineat", required=False),
                     "Denumire": _to_str(s.get("Denumire"), f"data[{idx}].structura.Denumire", required=False, strip_value=False),
+                    "Sector": _to_str(s.get("Sector"), f"data[{idx}].structura.Sector", required=False),
+                    "Sursa": _to_str(s.get("Sursa"), f"data[{idx}].structura.Sursa", required=False)
                 }
 
                 # ----------------------------------------------------
@@ -626,7 +634,9 @@ def save_clasificatii_complete_upsert():
                             s_clean["Subcapitol"],
                             s_clean["Articol"],
                             s_clean["Alineat"],
-                            s_clean["Denumire"]
+                            s_clean["Denumire"],
+                            s_clean["Sector"],
+                            s_clean["Sursa"]
                         )
                     )
 
@@ -656,7 +666,9 @@ def save_clasificatii_complete_upsert():
                             s_clean["Subcapitol"],
                             s_clean["Articol"],
                             s_clean["Alineat"],
-                            s_clean["Denumire"]
+                            s_clean["Denumire"],
+                            s_clean["Sector"],
+                            s_clean["Sursa"]
                         )
                     )
 
