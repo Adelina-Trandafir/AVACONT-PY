@@ -33,5 +33,7 @@ def _dlog(msg: str) -> None:
 forexe_bp = Blueprint("forexe", __name__)
 
 # Inregistrarea rutelor (la final, dupa ce forexe_bp/logger/_dlog exista).
-# angajamente.py -> POST /api/forexe/angajamente/upsert
+# angajamente.py -> POST /api/forexe/angajamente/upsert, GET /api/forexe/angajamente
+# tree.py        -> GET /api/forexe/tree
 from . import angajamente  # noqa: E402,F401
+from . import tree  # noqa: E402,F401

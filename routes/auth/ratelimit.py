@@ -69,4 +69,14 @@ class RateLimiter:
             self._by_pair.pop((ip, username), None)
 
 
+# STARE IN-PROCESS (verificat 2026-07-15). Contoarele traiesc in dict-urile
+# _by_ip / _by_pair ale acestei instante, in memoria procesului. Consecinte:
+#   1) Blocarile se pierd la fiecare restart al serviciului — un atacator blocat
+#      isi recapata cele 5/30 incercari daca prinde o repornire.
+#   2) Al DOILEA lucru (dupa _upload_sessions din routes/ftp.py) care blocheaza
+#      multi-worker: cu >1 worker fiecare proces ar avea contoarele lui, deci
+#      pragul efectiv s-ar inmulti cu numarul de workeri. Vezi garda din
+#      gunicorn.conf.py (workers = 1) — NU o ridicati inainte de a muta pe Redis
+#      SI _upload_sessions, SI acest limitator.
+# Nu e un bug de reparat acum, e o limita cunoscuta si acceptata la un worker.
 LIMITER = RateLimiter()

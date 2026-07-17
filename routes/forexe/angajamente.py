@@ -43,22 +43,24 @@ _UPSERT_SQL = (
 #                 condition instead of the IdUnitate filter.
 #   cod_angajament : narrows BOTH branches to that code (single-row lookup).
 #   Final ORDER BY O, Descriere.
+# FA.Salarii is deliberately NOT selected: the column still exists on
+# FX_Angajamente (old system) but is deprecated and unused by the new one.
 _MAIN_SELECT = (
     "SELECT FA.CodAngajament AS Cod, FA.IDDF AS IDDF, FA.Descriere AS Descriere, "
     "FA.Stare AS Stare, FA.Incarcat AS Incarcat, FA.Preluat AS Preluat, "
-    "FA.Salarii AS Salarii, FA.ASCUNS AS Ascuns, FA.DataCreare AS DataCreare, "
+    "FA.ASCUNS AS Ascuns, FA.DataCreare AS DataCreare, "
     "GROUP_CONCAT(DISTINCT FI.SS ORDER BY FI.SS SEPARATOR ';') AS Surse, 0 AS O "
     "FROM FX_Angajamente FA "
     "LEFT JOIN FX_Indicatori FI ON FA.CodAngajament = FI.CodAngajament "
 )
 _MAIN_GROUP_BY = (
     " GROUP BY FA.CodAngajament, FA.IDDF, FA.Descriere, FA.Stare, FA.Incarcat, "
-    "FA.Preluat, FA.Salarii, FA.ASCUNS, FA.DataCreare "
+    "FA.Preluat, FA.ASCUNS, FA.DataCreare "
 )
 _ORPHAN_SELECT = (
     "SELECT FA.CodAngajament AS Cod, FA.IDDF AS IDDF, FA.Descriere AS Descriere, "
     "FA.Stare AS Stare, FA.Incarcat AS Incarcat, FA.Preluat AS Preluat, "
-    "FA.Salarii AS Salarii, FA.ASCUNS AS Ascuns, FA.DataCreare AS DataCreare, "
+    "FA.ASCUNS AS Ascuns, FA.DataCreare AS DataCreare, "
     "NULL AS Surse, 1 AS O "
     "FROM FX_Angajamente FA "
     "WHERE FA.CodAngajament NOT IN "
@@ -75,7 +77,7 @@ def get_angajamente():
     Query: db_name (required), id_unitate (required, int), doar_anulate (0/1,
     default 0), cod_angajament (optional single-row lookup).
     Returns { db_name, count, rows: [ {Cod, Descriere, Stare, IDDF, Surse,
-    Incarcat, Preluat, Salarii, Ascuns, DataCreare}, ... ] }; Surse is null for
+    Incarcat, Preluat, Ascuns, DataCreare}, ... ] }; Surse is null for
     orphans. Rows sort by O (main before orphans), then Descriere.
     """
     db_name = request.args.get("db_name")
@@ -140,7 +142,7 @@ def get_angajamente():
         cursor.execute(sql, params)
         rows = []
         for (cod, iddf, descriere, stare, incarcat, preluat,
-             salarii, ascuns, data_creare, surse, _o) in cursor.fetchall():
+             ascuns, data_creare, surse, _o) in cursor.fetchall():
             rows.append({
                 "Cod": cod,
                 "Descriere": descriere,
@@ -149,7 +151,6 @@ def get_angajamente():
                 "Surse": surse,
                 "Incarcat": bool(incarcat),
                 "Preluat": bool(preluat),
-                "Salarii": bool(salarii),
                 "Ascuns": bool(ascuns),
                 "DataCreare": data_creare.isoformat() if data_creare is not None else None,
             })

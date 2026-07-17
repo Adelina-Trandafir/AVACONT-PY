@@ -42,6 +42,7 @@ from config import DB_CONFIG
 from utils.database import get_db_connection, get_comun_reader_connection
 from routes.auth.session_store import STORE, REASON_CONTEXT_MISMATCH
 from routes.auth.guard import require_session, json_response
+from routes.auth.ratelimit import LIMITER
 
 auth_bp = Blueprint("auth", __name__)
 logger = logging.getLogger(__name__)
@@ -51,6 +52,11 @@ _ER_ACCESS_DENIED = 1045
 
 # Baza comuna care contine tabelele de login.
 COMMON_DB = "AVACONT_COMUN"
+
+# Mesaj (RO, diacritice literale) returnat cu 429 cand limita anti-forta-bruta
+# blocheaza IP-ul sau perechea (IP, utilizator). Durata blocarii = _LOCKOUT din
+# routes/auth/ratelimit.py (15 min).
+_RATE_LIMIT_MSG = "Prea multe încercări eșuate. Reîncercați peste 15 minute."
 
 # NOTA (fix split-brain): sesiunile traiesc ACUM intr-un singur registru,
 # routes.auth.session_store.STORE — acelasi pe care il valideaza guard.require_session
@@ -142,10 +148,22 @@ def auth_units():
     if not username or not password:
         return jsonify({"error": "Utilizator și parolă obligatorii."}), 400
 
+    # Anti-forta-bruta: blocam INAINTE de a atinge MariaDB (o incercare blocata nu
+    # consuma o conexiune de verificare). request.remote_addr = IP-ul real (ProxyFix).
+    ip = request.remote_addr
+    if LIMITER.is_blocked(ip, username):
+        _log_action(username, None, "AUTH_BLOCKED", detalii="units",
+                    rezultat="EROARE", ip=ip)
+        return jsonify({"error": _RATE_LIMIT_MSG}), 429
+
     if not _verify_operator(username, password):
+        LIMITER.record_failure(ip, username)
         _log_action(username, None, "AUTH_FAIL", detalii="units",
-                    rezultat="EROARE", ip=request.remote_addr)
+                    rezultat="EROARE", ip=ip)
         return jsonify({"error": "Utilizator sau parolă incorecte."}), 401
+
+    # Parola corecta: stergem contoarele (login reusit reseteaza ambele bucket-uri).
+    LIMITER.record_success(ip, username)
 
     conn = None
     try:
@@ -188,10 +206,23 @@ def auth_login():
     if not username or not password or not db_name:
         return jsonify({"error": "Date de autentificare incomplete."}), 400
 
+    # Anti-forta-bruta: acelasi LIMITER ca /units (aceeasi cheie IP + (IP,utilizator)),
+    # deci esecurile de pe cele doua rute se aduna spre acelasi prag.
+    ip = request.remote_addr
+    if LIMITER.is_blocked(ip, username):
+        _log_action(username, db_name, "AUTH_BLOCKED", detalii="login",
+                    rezultat="EROARE", masina=machine, ip=ip)
+        return jsonify({"error": _RATE_LIMIT_MSG}), 429
+
     if not _verify_operator(username, password):
+        LIMITER.record_failure(ip, username)
         _log_action(username, db_name, "AUTH_FAIL", detalii="login",
-                    rezultat="EROARE", masina=machine, ip=request.remote_addr)
+                    rezultat="EROARE", masina=machine, ip=ip)
         return jsonify({"error": "Utilizator sau parolă incorecte."}), 401
+
+    # Parola corecta: stergem contoarele (accesul refuzat pe unitate, 403 de mai jos,
+    # NU e esec de credentiale, deci nu conteaza la brute-force).
+    LIMITER.record_success(ip, username)
 
     conn = None
     try:
