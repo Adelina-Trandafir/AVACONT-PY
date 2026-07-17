@@ -25,9 +25,11 @@ import json
 
 from flask import Blueprint, request, Response
 
-# Mirror the imports used by routes/forexe/angajamente.py in this project:
-from db import get_db_connection            # context manager: with get_db_connection(db_name) as conn
-from auth import require_api_key            # same decorator the angajamente route uses
+# Seed-ul e condus de VBA (FOREXE legacy) — se autentifica cu X-Api-Key, NU cu tokenul
+# bearer (acela e DOAR pentru aplicatiile VB.NET / K-BOT). De aceea guard-ul e
+# require_api_key din utils/security.py, nu require_session.
+from utils.database import get_db_connection    # conn = get_db_connection(db_name); finally: conn.close()
+from utils.security import require_api_key      # X-Api-Key legacy (flota FOREXE veche)
 
 seed_bp = Blueprint("forexe_seed", __name__)
 
@@ -197,16 +199,20 @@ def seed_schema():
     )
     drop_sql = "DROP TABLE IF EXISTS `%s`;" % table
 
+    conn = None
     try:
-        with get_db_connection(db_name) as conn:
-            cur = conn.cursor()
-            cur.execute("SET FOREIGN_KEY_CHECKS=0;")
-            cur.execute(drop_sql)
-            cur.execute(create_sql)
-            cur.execute("SET FOREIGN_KEY_CHECKS=1;")
-            conn.commit()
+        conn = get_db_connection(db_name)
+        cur = conn.cursor()
+        cur.execute("SET FOREIGN_KEY_CHECKS=0;")
+        cur.execute(drop_sql)
+        cur.execute(create_sql)
+        cur.execute("SET FOREIGN_KEY_CHECKS=1;")
+        conn.commit()
     except Exception as exc:  # surface loudly, never swallow
         return _err("Eroare la crearea tabelului „%s”: %s" % (table, exc), 500)
+    finally:
+        if conn is not None:
+            conn.close()
 
     return _json({"ok": True, "table": table, "ddl": create_sql})
 
@@ -263,18 +269,21 @@ def seed_rows():
     )
 
     inserted = 0
+    conn = None
     try:
-        with get_db_connection(db_name) as conn:
-            cur = conn.cursor()
-            conn.start_transaction()
-            if truncate_first:
-                cur.execute("TRUNCATE TABLE `%s`;" % table)
-            if rows:
-                cur.executemany(insert_sql, [tuple(r) for r in rows])
-                inserted = cur.rowcount
-            conn.commit()
+        conn = get_db_connection(db_name)
+        cur = conn.cursor()
+        if truncate_first:
+            cur.execute("TRUNCATE TABLE `%s`;" % table)
+        if rows:
+            cur.executemany(insert_sql, [tuple(r) for r in rows])
+            inserted = cur.rowcount
+        conn.commit()
     except Exception as exc:  # surface loudly, never swallow
         return _err("Eroare la inserarea în „%s”: %s" % (table, exc), 500)
+    finally:
+        if conn is not None:
+            conn.close()
 
     return _json(
         {"ok": True, "table": table, "received": len(rows), "affected": inserted}
