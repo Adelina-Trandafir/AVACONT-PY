@@ -72,10 +72,12 @@ def demo_rows():
     TREEH : same but ASCUNS=1 -> hidden unless include_hidden=1.
     TREEA : same but Stare='Anulat' -> never visible.
     TREEN : DataCreare NULL -> always visible regardless of :an.
+    TREEO : DataCreare in AN, ZERO indicators (orphan) -> always visible (SS escape).
+    TREEX : DataCreare in AN, indicators ALL under a DIFFERENT SS -> hidden by SS.
     """
     conn = get_db_connection(DB_NAME)
     cur = conn.cursor()
-    codes = ("TREE1", "TREEH", "TREEA", "TREEN")
+    codes = ("TREE1", "TREEH", "TREEA", "TREEN", "TREEO", "TREEX")
     try:
         for cod in codes:
             _cleanup(cur, cod)
@@ -100,11 +102,31 @@ def demo_rows():
             "DataCreare, ASCUNS, Preluat) VALUES (%s,%s,%s,%s,NULL,%s,1)",
             ("TREEN", "Angajament fără dată", "În derulare", DB_NAME, 0),
         )
-        # Fiecare are un indicator pe SS-ul testat — altfel filtrul SS le-ar scoate.
-        for i, cod in enumerate(codes):
+        cur.execute(
+            "INSERT INTO FX_Angajamente (CodAngajament, Descriere, Stare, DC, "
+            "DataCreare, ASCUNS, Preluat) VALUES (%s,%s,%s,%s,%s,%s,1)",
+            ("TREEO", "Angajament orfan", "În derulare", DB_NAME, f"{AN}-03-04", 0),
+        )
+        cur.execute(
+            "INSERT INTO FX_Angajamente (CodAngajament, Descriere, Stare, DC, "
+            "DataCreare, ASCUNS, Preluat) VALUES (%s,%s,%s,%s,%s,%s,1)",
+            ("TREEX", "Angajament alt SS", "În derulare", DB_NAME, f"{AN}-03-05", 0),
+        )
+        # SS per angajament: TREE1..TREEN pe SS-ul testat; TREEX pe alt SS (deci filtrul
+        # SS îl scoate); TREEO NU primește niciun indicator (orfan -> escape-ul SS îl
+        # ține vizibil). Mapping-ul face intenția explicită și decuplată de ordine.
+        indicator_ss = {
+            "TREE1": SS,
+            "TREEH": SS,
+            "TREEA": SS,
+            "TREEN": SS,
+            "TREEX": "99Z",     # indicatori doar sub alt SS -> ascuns de filtrul SS
+            # TREEO: intenționat fără indicatori -> orfan, rămâne vizibil (escape SS)
+        }
+        for i, (cod, ind_ss) in enumerate(indicator_ss.items()):
             cur.execute(
                 "INSERT INTO FX_Indicatori (CodAI, CodAngajament, IdUnitate, SS) "
-                "VALUES (%s,%s,%s,%s)", (f"{cod}-AI{i}", cod, 0, SS),
+                "VALUES (%s,%s,%s,%s)", (f"{cod}-AI{i}", cod, 0, ind_ss),
             )
         conn.commit()
         yield conn
@@ -179,6 +201,20 @@ def test_ss_filter_narrows_rows(client, auth_headers, demo_rows):
     r = client.get(f"{URL}?an={AN}&ss=ZZZ-inexistent", headers=auth_headers)
     assert r.status_code == 200
     assert "TREE1" not in _codes(r)
+
+
+def test_orphan_no_indicators_is_shown(client, auth_headers, demo_rows):
+    """Escape orfani: un angajament FĂRĂ niciun indicator (creat de curând, „rânduri
+    doar în FX_Angajamente") rămâne vizibil — filtrul SS îngustează DOAR angajamentele
+    care chiar au indicatori. Oglindește ramura UNION ALL a orfanilor din legacy."""
+    assert "TREEO" in _codes(client.get(Q, headers=auth_headers))
+
+
+def test_indicators_all_other_ss_is_hidden(client, auth_headers, demo_rows):
+    """Contra-proba: un angajament ale cărui indicatori sunt TOȚI sub alt SS NU apare —
+    escape-ul orfanilor nu slăbește filtrul SS pentru cele care AU indicatori. Pinuit ca
+    nimeni să nu „repare" mai târziu escape-ul într-un OR care lasă totul să treacă."""
+    assert "TREEX" not in _codes(client.get(Q, headers=auth_headers))
 
 
 def test_flags_without_ddf_are_false(client, auth_headers, demo_rows):

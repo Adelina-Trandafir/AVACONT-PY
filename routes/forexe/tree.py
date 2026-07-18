@@ -68,6 +68,14 @@ _SELECT = (
 #   An     : randurile cu DataCreare NULL se arata INTOTDEAUNA — nu sunt inca
 #            descarcate din FOREXE, deci nu au an.
 #   SS     : ingusteaza CARE angajamente apar; Surse ramane lista completa (afisare).
+#            ESCAPE ORFANI: un angajament cu ZERO indicatori (creat de curand, „randuri
+#            doar in FX_Angajamente") NU are SS, deci un filtru SS strict l-ar ascunde.
+#            Legacy il pastra printr-o ramura UNION ALL separata in
+#            qFX_MAIN_TREE_DESCRIERE / qFX_MAIN_TREE_DATA (angajamentele fara indicatori).
+#            O oglindim cu „EXISTS(indicator pe SS) OR NOT EXISTS(niciun indicator)":
+#            filtrul SS ingusteaza DOAR angajamentele care CHIAR au indicatori; orfanii
+#            raman mereu vizibili. (Un singur %s in bloc -> tuplul de bind ramane
+#            (an, ss, include_hidden), neschimbat.)
 #   Ascuns : implicit exclude ASCUNS<>0; include_hidden=1 le readuce (btnOpt).
 #   Stare  : exclude Anulat/Suspendat. NU vine din qFX_MAIN_TREE (acela nu are WHERE
 #            deloc) — vine din qFX_MAIN_TREE_DATA:7 si mdl_FX_PopulareTree.md:253,
@@ -78,8 +86,12 @@ _SELECT = (
 #            oglindeste InStr() din Access fara functii suplimentare.
 _WHERE = (
     "WHERE (YEAR(a.DataCreare) = %s OR a.DataCreare IS NULL) "
-    "AND EXISTS (SELECT 1 FROM FX_Indicatori i "
+    "AND ( "
+    "    EXISTS (SELECT 1 FROM FX_Indicatori i "
     "            WHERE i.CodAngajament = a.CodAngajament AND i.SS = %s) "
+    "    OR NOT EXISTS (SELECT 1 FROM FX_Indicatori i "
+    "                   WHERE i.CodAngajament = a.CodAngajament) "
+    ") "
     "AND (%s = 1 OR a.ASCUNS = 0) "
     "AND COALESCE(a.Stare, '') NOT LIKE '%%Anulat%%' "
     "AND COALESCE(a.Stare, '') NOT LIKE '%%Suspendat%%' "

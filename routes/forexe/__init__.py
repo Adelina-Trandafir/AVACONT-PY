@@ -35,5 +35,7 @@ forexe_bp = Blueprint("forexe", __name__)
 # Inregistrarea rutelor (la final, dupa ce forexe_bp/logger/_dlog exista).
 # angajamente.py -> POST /api/forexe/angajamente/upsert, GET /api/forexe/angajamente
 # tree.py        -> GET /api/forexe/tree
+# sumar.py       -> GET /api/forexe/sumar
 from . import angajamente  # noqa: E402,F401
 from . import tree  # noqa: E402,F401
+from . import sumar  # noqa: E402,F401
