@@ -66,27 +66,27 @@ def auth_headers():
     STORE.revoke(token)
 
 
-def _id_unitate(cur):
-    """IdUnitate REAL al bazei conectate, citit din Unitati.
+def _unitati(cur, count):
+    """Primele `count` IdUnitate REALE ale bazei conectate, citite din Unitati.
 
-    Nu se hardcodeaza 0: Clasificatii are FOREIGN KEY (IdUnitate) -> Unitati, deci
-    un 0 inventat pica insertul din fixture cu o eroare de constrangere, nu cu una
-    de logica. Pe 000_DEMO valoarea e 48, dar se citeste, nu se presupune.
+    Nu se hardcodeaza 0: Clasificatii are FOREIGN KEY (IdUnitate) -> Unitati
+    (`Clasificatii_ibfk_6`), deci un 0 inventat pica insertul din fixture cu o eroare
+    de constrangere, nu cu una de logica. Pe 000_DEMO exista 8 unitati (48, 75, 76,
+    121, 123, 135, 136, 157) — dar se CITESC, nu se presupun.
     (Atentie: `Unitati` exista si in AVACONT_COMUN, cu alte coloane — aici se
     citeste cea din baza per-unitate, cea pe care e deschisa conexiunea.)
     """
-    cur.execute("SELECT IdUnitate FROM Unitati LIMIT 1")
-    row = cur.fetchone()
-    if row is None:
+    cur.execute("SELECT IdUnitate FROM Unitati ORDER BY IdUnitate LIMIT %s", (count,))
+    rows = [r[0] for r in cur.fetchall()]
+    if not rows:
         raise AssertionError("Unitati este gol — fixture-ul nu are IdUnitate valid.")
-    return row[0]
+    return rows
 
 
-def _cleanup_clsf(cur, id_unitate):
-    """Sterge clasificatia de test. Cheiata pe ACELASI IdUnitate cu care s-a inserat,
-    ca fixture-ul sa nu atinga niciodata randuri ale altei unitati."""
-    cur.execute("DELETE FROM Clasificatii WHERE IdClsfAcc = %s AND IdUnitate = %s",
-                (CLSF_ACC, id_unitate))
+def _cleanup_clsf(cur):
+    """Sterge clasificatiile de test. IdClsfAcc-ul de test e din afara plajei reale,
+    deci stergerea pe el nu poate atinge date de productie ale niciunei unitati."""
+    cur.execute("DELETE FROM Clasificatii WHERE IdClsfAcc = %s", (CLSF_ACC,))
 
 
 def _cleanup(cur, cod):
@@ -105,32 +105,54 @@ def demo_rows():
     SUM1 are DOI indicatori, alesi ca sa acopere exact deciziile feliei:
       IND-A : IdClsf -> o clasificatie REALA  -> Clsf populat;
               are rezervari (100+50) si receptii (DIF 7+3) -> totaluri non-zero.
-      IND-B : IdClsf = 0 (nicio clasificatie) -> trebuie sa APARA cu Clsf gol
-              (ramura LEFT JOIN, decizia 4 a planului — motivul intregii felii);
+      IND-B : IdClsf = 0 (nicio clasificatie) -> trebuie sa APARA cu Clsf gol;
               NU are rezervari/receptii/plati -> totalurile trebuie sa fie 0, nu null.
     SUM0 : angajament fara niciun indicator -> header null, rows [].
+
+    Nomenclatorul e insamantat DELIBERAT „murdar” (0011-03), ca fan-out-ul sa fie
+    reprodus, nu presupus:
+      - aceeasi (IdClsfAcc, IdUnitate) inserata de DOUA ori  -> duplicat real;
+      - acelasi IdClsfAcc sub ALTA IdUnitate                 -> vecin de alta unitate.
+    Cu un JOIN, IND-A ar aparea de 2 ori (sau de 3, fara predicatul IdUnitate).
+    Cu subinterogarea scalara + LIMIT 1, exact o data.
     """
     conn = get_db_connection(DB_NAME)
     cur = conn.cursor()
     codes = (COD, COD_GOL)
-    id_unitate = _id_unitate(cur)
+    unitati = _unitati(cur, 2)
+    id_unitate = unitati[0]
+    # A doua unitate (daca baza are una): serveste testul de izolare pe unitate.
+    id_unitate_alt = unitati[1] if len(unitati) > 1 else None
     try:
         for cod in codes:
             _cleanup(cur, cod)
-        _cleanup_clsf(cur, id_unitate)
+        _cleanup_clsf(cur)
 
-        # O clasificatie reala; Clsf/Titlu/SS sunt coloane GENERATED, deci NU se scriu.
+        # Clsf/Titlu/SS sunt coloane GENERATED, deci NU se scriu.
         # Valorile componente nu sunt arbitrare: Clasificatii are FK-uri catre
         # AVACONT_COMUN.Defa* pe coloanele GENERATE (Titlu, Articol, ClsfE, ClsfF, SS),
         # deci combinatia trebuie sa existe in nomenclatoare. S-a ales una reala,
         # luata din FX_System_Export/TABLES/FX_Receptii.md:54
         # (Clsf 65.02.04.02.20.01.03, CodSSI 02A650402200103).
-        cur.execute(
-            "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
-            "Articol, Alineat, Denumire) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (CLSF_ACC, id_unitate, "65.02", "04.02", "20.01", "03", "Clasificație test"),
-        )
-        id_clsf = cur.lastrowid
+        #
+        # Se insereaza de DOUA ORI pentru aceeasi unitate: nomenclatorul chiar are
+        # duplicate in productie ((75,79), (75,84), (75,90), (75,92), (75,93) — fiecare
+        # de doua ori), iar un JOIN ar multiplica randul-indicator. Fixtura reproduce
+        # defectul, ca testul sa demonstreze ca subinterogarea scalara il rezolva.
+        for _ in range(2):
+            cur.execute(
+                "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
+                "Articol, Alineat, Denumire) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (CLSF_ACC, id_unitate, "65.02", "04.02", "20.01", "03", "Clasificație test"),
+            )
+        # ACELASI IdClsfAcc sub ALTA unitate: nu are voie sa produca un rand in plus.
+        if id_unitate_alt is not None:
+            cur.execute(
+                "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
+                "Articol, Alineat, Denumire) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (CLSF_ACC, id_unitate_alt, "65.02", "04.02", "20.01", "03",
+                 "Clasificație altă unitate"),
+            )
 
         for cod, descriere in ((COD, "Angajament sumar"), (COD_GOL, "Angajament gol")):
             cur.execute(
@@ -148,7 +170,10 @@ def demo_rows():
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "
             "IdUnitate, SS) VALUES (%s,%s,%s,%s,%s,%s)",
-            (f"{COD}-AI-A", COD, "IND-A", id_clsf, id_unitate, "02A"),
+            # ATENTIE: FX_Indicatori.IdClsf tine ID-UL ACCESS, deci se umple cu
+            # IdClsfAcc, NU cu PK-ul MariaDB (lastrowid). Numele coloanei minte —
+            # asta a fost defectul 0011-03.
+            (f"{COD}-AI-A", COD, "IND-A", CLSF_ACC, id_unitate, "02A"),
         )
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "
@@ -182,8 +207,8 @@ def demo_rows():
         for cod in codes:
             _cleanup(cur, cod)
         # FX_Indicatori se sterge inaintea clasificatiei (deja facut de _cleanup),
-        # altfel un FK ar bloca stergerea randului din Clasificatii.
-        _cleanup_clsf(cur, id_unitate)
+        # altfel un FK ar bloca stergerea randurilor din Clasificatii.
+        _cleanup_clsf(cur)
         conn.commit()
         conn.close()
 
@@ -306,8 +331,55 @@ def test_receptii_sums_dif_not_valoare(client, auth_headers, demo_rows):
     assert a["total_receptii"] == 10.0
 
 
+def test_duplicate_classification_does_not_fan_out(client, auth_headers, demo_rows):
+    """0011-03: nomenclatorul are duplicate reale pe (IdClsfAcc, IdUnitate).
+
+    Fixtura insereaza clasificatia de DOUA ori. Cu `LEFT JOIN Clasificatii`, IND-A
+    ar aparea de doua ori si sumarul ar minti. Subinterogarea scalara cu LIMIT 1
+    garanteaza un rand per indicator — SI Clsf tot populat.
+    """
+    rows = client.get(f"{URL}?cod={COD}", headers=auth_headers).get_json()["rows"]
+    ind_a = [r for r in rows if r["cod_indicator"] == "IND-A"]
+    assert len(ind_a) == 1, f"IND-A a aparut de {len(ind_a)} ori (fan-out)"
+    assert ind_a[0]["clsf"] == "65.02.04.02.20.01.03"
+
+
+def test_other_unit_classification_does_not_add_a_row(client, auth_headers, demo_rows):
+    """0011-03: baza per-unitate tine nomenclatorul pentru MAI MULTE unitati.
+
+    Acelasi IdClsfAcc exista si sub alta IdUnitate. Fara predicatul
+    `C.IdUnitate = I.IdUnitate` ar aparea un rand in plus (fan-out multi-unitate).
+    Regula «drop IdUnitate» se aplica DOAR tabelelor FX_, nu nomenclatoarelor.
+    """
+    rows = client.get(f"{URL}?cod={COD}", headers=auth_headers).get_json()["rows"]
+    assert len(rows) == 2, f"asteptam exact 2 randuri (IND-A, IND-B), am primit {len(rows)}"
+    assert sorted(r["cod_indicator"] for r in rows) == ["IND-A", "IND-B"]
+
+
+def test_row_count_equals_indicator_count(client, auth_headers, demo_rows):
+    """Plasa generala impotriva fan-out-ului: sumarul nu poate avea mai multe randuri
+    decat are angajamentul indicatori. Prinde orice join viitor care multiplica."""
+    conn = demo_rows
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM FX_Indicatori WHERE CodAngajament = %s", (COD,))
+    expected = cur.fetchone()[0]
+
+    rows = client.get(f"{URL}?cod={COD}", headers=auth_headers).get_json()["rows"]
+    assert len(rows) == expected
+
+
 def test_rows_are_deterministically_ordered(client, auth_headers, demo_rows):
     """ORDER BY adaugat fata de Access, ca grila sa fie stabila intre refresh-uri."""
     first = client.get(f"{URL}?cod={COD}", headers=auth_headers).get_json()["rows"]
     second = client.get(f"{URL}?cod={COD}", headers=auth_headers).get_json()["rows"]
     assert [r["cod_indicator"] for r in first] == [r["cod_indicator"] for r in second]
+
+
+def test_debug_dump(client, auth_headers):
+    import json
+    resp = client.get("/api/forexe/sumar?cod=AAB2EF2MCP4", headers=auth_headers)
+    data = resp.get_json()
+    print("\nSTATUS:", resp.status_code)
+    print("HEADER:", json.dumps(data.get("header"), ensure_ascii=False, indent=2))
+    print("NR RANDURI:", len(data.get("rows") or []))
+    print(json.dumps(data.get("rows"), ensure_ascii=False, indent=2)[:1500])

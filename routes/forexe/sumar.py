@@ -18,11 +18,27 @@ ridicate o singura data in "header", ca sa nu calatoreasca duplicate pe fir.
 
 Traducere Access -> MariaDB (deciziile operatorului, felia 0011):
   ClasificatiiG -> Clasificatii, ParteneriG -> Parteneri (nu exista tabele „G”).
-  Se elimina TOATE predicatele de join pe IdUnitate (o baza = o unitate).
-  INNER JOIN ClasificatiiG -> LEFT JOIN Clasificatii: un indicator fara clasificatie
-  trebuie sa APARA in grila, cu Clsf gol — altfel dispare din sumar fara urma.
   TotalReceptii = SUM(FX_Receptii.DIF) — DELTA, nu Valoare. Portat fidel.
   Fara filtru SS: sumarul arata TOTI indicatorii angajamentului.
+  Un indicator FARA clasificatie trebuie sa APARA in grila, cu Clsf gol — altfel
+  dispare din sumar fara urma (de aceea nu se face INNER JOIN, ca in Access).
+
+IdUnitate — CORECTIE 0011-03, regula initiala era prea larga:
+  „Se elimina predicatele de join pe IdUnitate (o baza = o unitate)” se aplica DOAR
+  tabelelor FX_. NOMENCLATOARELE PARTAJATE (Clasificatii, Parteneri, s.a.) sunt
+  stocate in baza per-unitate pentru MAI MULTE unitati — pe 000_DEMO, Clasificatii
+  contine 8 (48, 75, 76, 121, 123, 135, 136, 157). Fara predicatul IdUnitate,
+  join-ul spre ele face fan-out. Deci: la nomenclatoare, IdUnitate RAMANE.
+
+Clsf / Partener — subinterogari scalare, nu join-uri (0011-03):
+  Chiar cu ambele predicate corecte, Clasificatii mai are duplicate reale
+  ((75,79), (75,84), (75,90), (75,92), (75,93) — fiecare de doua ori), deci un join
+  ar multiplica randurile-indicator. O subinterogare scalara cu LIMIT 1 garanteaza
+  UN rand per indicator indiferent de duplicate, si pastreaza „fara clasificatie
+  -> gol”.
+  La Partener defectul era mai grav decat afisajul: join-ul spre Parteneri statea
+  INAINTEA lui GROUP BY, deci un partener duplicat multiplica SUM(SA.ValCur) si
+  UMFLA TotalRevizii. Mutat si el in subinterogare scalara.
 
 Clsf (blocantul feliei, rezolvat 2026-07-18 pe DDL-ul real, nu prin ghicit):
   RAMURA A. `Clasificatii.Clsf` EXISTA ca o coloana GENERATED ALWAYS ... STORED:
@@ -77,21 +93,30 @@ logger = logging.getLogger(__name__)
 #                    numele fara „P” = id Access   -> FX_ORD_TBL.IDORDTBL
 #   Clasificatii   : IDClsf    = PK MariaDB („PY”)
 #                    IdClsfAcc = id Access
-#                    (dovada: routes/clasificatii.py:134 `SELECT IdClsf as
-#                     IdClsfPY, IdClsfAcc as IdClsf` + mdl_FX_DDF_Salvare.md:65
-#                     `rand("IdClsf") = Rs!IdClsfPY`)
 #
-# Capcana a costat deja DOUA rulari pe felia asta: intai jonctiunea aggOrd
-# (R.IDORDTBL = T.IDORDTBL, corectata in R.IDORDTBLP = T.IDORDTBLP), apoi cheia
-# spre Clasificatii. Vederea ORD, care urmeaza, lucreaza numai cu familia FX_ORD.
+# ...DAR tabelele FX_ NU respecta conventia: `FX_Indicatori.IdClsf` tine ID-UL
+# ACCESS, deci se potriveste cu `Clasificatii.IdClsfAcc`, NU cu `Clasificatii.IDClsf`.
+# Numele coloanei minte. Verificat pe 000_DEMO (felia 0011-03):
+#   FX_Indicatori                                          -> 29 randuri
+#   ... WHERE IdClsf <> 0                                  -> 25
+#   JOIN Clasificatii ON I.IdClsf = C.IDClsf               ->  0  (cheie gresita)
+#   JOIN Clasificatii ON I.IdClsf = C.IdClsfAcc            -> 67  (fan-out unitati)
+#   ... AND I.IdUnitate = C.IdUnitate                      -> 50  (fan-out duplicate)
 #
-# Clasificatii se leaga pe C.IDClsf. Daca pe date reale Clsf iese gol pe TOATE
-# randurile, cheia corecta este C.IdClsfAcc — se schimba DOAR aici. LEFT JOIN
-# face ca greseala sa fie vizibila (coloana goala), nu tacuta (randuri disparute).
+# Capcana a costat TREI rulari pe felia asta: aggOrd (R.IDORDTBL -> R.IDORDTBLP),
+# apoi cheia spre Clasificatii, apoi predicatul IdUnitate lipsa + duplicatele.
+# Vederea ORD, care urmeaza, lucreaza numai cu familia FX_ORD.
+#
+# Concluzie operationala: NU deduce cheia din numele coloanei — numara randurile
+# inainte si dupa join. Un join care intoarce 0 sau mai multe randuri decat tabelul
+# din stanga e un defect, nu o particularitate a datelor.
 _SQL = (
     "SELECT A.CodAngajament, IST.DataFX, A.DataCreare, A.DataDefinitivare, "
     "A.Descriere, A.Stare, A.Incarcat, A.Preluat, "
-    "C.Clsf, I.CodIndicator, aggRev.Partener, "
+    "(SELECT C.Clsf FROM Clasificatii C "
+    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  LIMIT 1) AS Clsf, "
+    "I.CodIndicator, aggRev.Partener, "
     "COALESCE(aggRez.TotalRezervari, 0)    AS TotalRezervari, "
     "COALESCE(aggRec.TotalReceptii, 0)     AS TotalReceptii, "
     "COALESCE(aggPlati.TotalPlati, 0)      AS TotalPlati, "
@@ -100,7 +125,6 @@ _SQL = (
     "FROM FX_Angajamente A "
     "INNER JOIN FX_Indicatori I ON A.CodAngajament = I.CodAngajament "
     "INNER JOIN FX_Istoric IST  ON A.CodAngajament = IST.CodAngajament "
-    "LEFT JOIN Clasificatii C   ON I.IdClsf = C.IDClsf "
     "LEFT JOIN (SELECT CodAngajament, CodIndicator, SUM(R_Valoare) AS TotalRezervari "
     "           FROM FX_Rezervari WHERE CodAngajament = %s "
     "           GROUP BY CodAngajament, CodIndicator) aggRez "
@@ -118,9 +142,11 @@ _SQL = (
     "      AND aggPlati.CodIndicator  = I.CodIndicator "
     "LEFT JOIN (SELECT SA.CodAngajament, SA.CodIndicator, "
     "                  ROUND(SUM(SA.ValCur), 2) AS TotalRevizii, "
-    "                  MIN(P.DenumirePartener)  AS Partener "
+    "                  MIN((SELECT P.DenumirePartener FROM Parteneri P "
+    "                        WHERE P.CodPartener = SA.CodPartener "
+    "                          AND P.IdUnitate   = SA.IdUnitate "
+    "                        LIMIT 1)) AS Partener "
     "           FROM FX_DDF_REV_SA SA "
-    "           LEFT JOIN Parteneri P ON SA.CodPartener = P.CodPartener "
     "           WHERE SA.CodAngajament = %s "
     "           GROUP BY SA.CodAngajament, SA.CodIndicator) aggRev "
     "       ON aggRev.CodAngajament = I.CodAngajament "
@@ -132,9 +158,9 @@ _SQL = (
     "             AND T.CodAI IN (SELECT CodAI FROM FX_Indicatori "
     "                             WHERE CodAngajament = %s) "
     "           GROUP BY T.CodAI) aggOrd ON I.CodAI = aggOrd.CodAI "
-    "WHERE IST.Descriere = 'Angajament nou.' "
-    "AND A.CodAngajament = %s "
-    "ORDER BY C.Clsf, I.CodIndicator"
+    "WHERE A.CodAngajament = %s "
+    "GROUP BY I.CodIndicator "
+    "ORDER BY Clsf, I.CodIndicator"
 )
 
 
