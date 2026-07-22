@@ -2,9 +2,15 @@
 # -----------------------------------------------------------------------------
 # One-shot Access -> MariaDB seed for the un-migrated FX_ tables.
 #
-# Two endpoints, both keyed on the target DC (= db_name):
+# Three endpoints, all keyed on the target DC (= db_name):
 #   POST /api/forexe/seed/schema   -> DROP TABLE IF EXISTS + CREATE TABLE
 #   POST /api/forexe/seed/rows     -> optional TRUNCATE, then INSERT ... ON DUPLICATE KEY UPDATE
+#   GET  /api/forexe/seed/columns  -> SHOW COLUMNS (read-only introspection)
+#
+# NOTE (slice 0012-01): /schema stays in the code but the migration utility does NOT
+# call it. Locked decision, variant A (non-destructive): the tables already exist in
+# MariaDB with clean DDL and are not recreated from the DAO types. /columns exists so
+# the caller can read the REAL column list instead of re-deriving it from Access.
 #
 # Design rules honoured here:
 #   * The Access primary-key IDs are preserved verbatim (no AUTO_INCREMENT during the
@@ -288,6 +294,57 @@ def seed_rows():
     return _json(
         {"ok": True, "table": table, "received": len(rows), "affected": inserted}
     )
+
+
+# -----------------------------------------------------------------------------
+# 3) COLUMNS: introspecție read-only a coloanelor unui tabel deja existent.
+#
+#   GET /api/forexe/seed/columns?db_name=075_CEVM&table=FX_Receptii
+#   -> {"ok": true, "table": "FX_Receptii", "columns": ["IDR", "IDRH", ...]}
+#
+# Utilitarul de migrare cere lista reală de coloane din MariaDB ca să construiască
+# INSERT-urile spre /rows fără să recreeze schema (varianta A, nedistructivă: tabelele
+# există deja cu DDL curat, nu se regenerează din tipurile DAO).
+#
+# Tabel inexistent -> 200 cu listă goală, NU 404: apelantul trebuie să poată distinge
+# «tabelul nu are coloane aici» de o eroare de rețea/autentificare. De aceea existența
+# se testează întâi cu SHOW TABLES LIKE (care nu aruncă), și abia apoi SHOW COLUMNS.
+#
+# Strict read-only: nicio scriere, niciun DDL, niciun commit.
+# -----------------------------------------------------------------------------
+@seed_bp.route("/api/forexe/seed/columns", methods=["GET"])
+@require_api_key
+def seed_columns():
+    db_name = request.args.get("db_name")
+    table = request.args.get("table")
+
+    if not _validate_db_name(db_name):
+        return _err("Numele bazei de date (DC) este invalid.", 400)
+    if not _validate_table(table):
+        return _err("Tabelul „%s” nu este permis pentru seed." % table, 400)
+
+    columns = []
+    conn = None
+    try:
+        conn = get_db_connection(db_name)
+        cur = conn.cursor()
+        # LIKE pe un literal parametrizat: numele a trecut deja allow-list-ul, dar
+        # aici nici nu ajunge in SQL ca identificator.
+        cur.execute("SHOW TABLES LIKE %s", (table,))
+        if cur.fetchone() is not None:
+            # Identificatorul e sigur: `table` e membru al ALLOWED_TABLES.
+            cur.execute("SHOW COLUMNS FROM `%s`" % table)
+            # SHOW COLUMNS: Field, Type, Null, Key, Default, Extra — ordinea din tabel.
+            columns = [r[0] for r in cur.fetchall()]
+    except Exception as exc:  # surface loudly, never swallow
+        return _err(
+            "Eroare la citirea coloanelor tabelului „%s”: %s" % (table, exc), 500
+        )
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return _json({"ok": True, "table": table, "columns": columns})
 
 
 def _all_idents(values):
