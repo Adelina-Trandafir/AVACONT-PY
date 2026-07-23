@@ -37,7 +37,7 @@ CLSF_ACC = 990015
 ROW_KEYS = (
     "idrr", "nrcrt_r", "data_r", "suma_antet", "incarcat", "preluat",
     "idrh", "nrcrt_h", "data_h", "total", "difh", "sters_h", "descriere_h",
-    "idr", "id_clsf", "cod_indicator", "clsf", "nrcrt_ind", "valoare", "dif",
+    "idr", "id_clsf", "cod_indicator", "clsf", "denumire", "nrcrt_ind", "valoare", "dif",
 )
 PLATA_KEYS = ("data_plata", "suma")
 
@@ -320,6 +320,7 @@ def test_classification_is_the_generated_dotted_code(client, auth_headers, demo_
     FX_Indicatori insoteste linia."""
     r = _by_idrr(client.get(f"{URL}?cod={COD}", headers=auth_headers))[970001]
     assert r["clsf"] == "65.02.04.02.20.01.03"
+    assert r["denumire"] == "Clasificație test"
     assert r["cod_indicator"] == "IND-A"
     assert r["nrcrt_ind"] == 1
 

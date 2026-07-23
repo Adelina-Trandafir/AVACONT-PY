@@ -25,9 +25,12 @@ Sursa Access (verificata in export, NU reghicita):
                             Ordinea: R.NRCRT, R.DataR, H.NrCrt, H.DataH.
   - qFX_MAIN_REC_LISTA_IND: grila per antet = rand-total (IDR=-1, Sum(DIF)) UNION ALL
                             randuri per clsf (Sum(Valoare), cu FX_Indicatori.NrCrt +
-                            eticheta clasificatiei). Descrierea afisata = Descrierea
-                            ANTETULUI (FX_Receptii_H.Descriere), Nz -> 'Toti indicatorii'
-                            pe randul-total.
+                            eticheta clasificatiei). NB (revizuire operator 2026-07-22):
+                            clientul agrega LISTA la ORICE nivel (luna/receptie/antet), iar
+                            coloana Descriere arata `Denumire` clasificatiei (bine definita
+                            per clsf la orice nivel), nu Descrierea antetului — de aceea se
+                            intoarce si `denumire`. `descriere_h` (antetul) ramane pe fir ca
+                            coloana bruta, dar grila nu o mai foloseste.
   - qFX_MAIN_REC_TT_PLATI : platile receptiei = Data_plata, Suma din FX_Plati WHERE
                             CodAngajament = cod, ORDER BY Data_plata. FARA alt filtru
                             (nici Incarcat/Preluat/Tip) — confirmat in export.
@@ -76,7 +79,10 @@ _SQL_RECEPTII = (
     "Rc.IDR, Rc.IdClsf, Rc.CodIndicator, I.NrCrt AS NrCrtInd, Rc.Valoare, Rc.DIF, "
     "(SELECT C.Clsf FROM Clasificatii C "
     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
-    "  LIMIT 1) AS Clsf "
+    "  LIMIT 1) AS Clsf, "
+    "(SELECT C.Denumire FROM Clasificatii C "
+    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  LIMIT 1) AS Denumire "
     "FROM FX_Receptii_R R "
     "INNER JOIN FX_Receptii_H H ON H.IDRR = R.IDRR "
     "LEFT JOIN FX_Receptii Rc  ON Rc.IDRH = H.IDRH "
@@ -134,8 +140,8 @@ def get_receptii():
     Query: cod (obligatoriu) = CodAngajament.
     Returneaza { cod, receptii: [ {idrr, nrcrt_r, data_r, suma_antet, incarcat,
     preluat, idrh, nrcrt_h, data_h, total, difh, sters_h, descriere_h, idr, id_clsf,
-    cod_indicator, clsf, nrcrt_ind, valoare, dif}, ... ], plati: [ {data_plata, suma},
-    ... ] }.
+    cod_indicator, clsf, denumire, nrcrt_ind, valoare, dif}, ... ], plati: [ {data_plata,
+    suma}, ... ] }.
 
     Un `cod` necunoscut / fara receptii NU este 404: un angajament fara receptii este
     legitim, deci raspunsul este 200 cu receptii=[] (si plati dupa caz).
@@ -158,7 +164,8 @@ def get_receptii():
         receptii = []
         for (idrr, nrcrt_r, data_r, suma_antet, incarcat, preluat,
              idrh, nrcrt_h, data_h, total, difh, sters_h, descriere_h,
-             idr, id_clsf, cod_indicator, nrcrt_ind, valoare, dif, clsf) in cursor.fetchall():
+             idr, id_clsf, cod_indicator, nrcrt_ind, valoare, dif, clsf,
+             denumire) in cursor.fetchall():
             receptii.append({
                 "idrr": int(idrr) if idrr is not None else None,
                 "nrcrt_r": _opt_int(nrcrt_r),
@@ -178,6 +185,7 @@ def get_receptii():
                 "id_clsf": int(id_clsf) if id_clsf is not None else 0,
                 "cod_indicator": cod_indicator,
                 "clsf": clsf,
+                "denumire": denumire,
                 "nrcrt_ind": _opt_int(nrcrt_ind),
                 "valoare": _num(valoare),
                 "dif": _num(dif),
