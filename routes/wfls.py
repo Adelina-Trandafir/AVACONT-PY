@@ -5,6 +5,11 @@ import json
 import base64
 from flask import Blueprint, request, jsonify, send_file
 from utils.security import require_api_key
+import threading
+ 
+_versions_lock = threading.Lock()
+ 
+VERSIONS_FILENAME = "versiuni_wfl.txt"
 
 wfl_bp = Blueprint('wfls', __name__)
 logger = logging.getLogger(__name__)
@@ -72,6 +77,109 @@ def load_server_versions(file_path):
         logger.error(f"Eroare la citirea versiunilor server: {str(e)}")
     
     return versions
+
+# ==============================================================================
+# HELPER: cale sigura in folderul WFL (anti path-traversal + doar .wfl)
+# ==============================================================================
+def _safe_wfl_path(filename):
+    """
+    Returneaza calea absoluta in cache/wfl_templates daca numele e un basename
+    curat cu extensia .wfl; altfel None.
+    """
+    if not filename or filename != os.path.basename(filename):
+        return None
+    if not filename.lower().endswith(".wfl"):
+        return None
+ 
+    wfl_dir = os.path.abspath(get_wfl_dir())
+    path = os.path.abspath(os.path.join(wfl_dir, filename))
+    if os.path.commonpath([path, wfl_dir]) != wfl_dir:
+        return None
+    return path
+    
+# ==============================================================================
+# HELPER: citire / scriere lista de versiuni (pastreaza formatul JSON existent)
+# ==============================================================================
+def _versions_file_path():
+    return os.path.join(get_wfl_dir(), VERSIONS_FILENAME)
+ 
+ 
+def _read_versions_list(path):
+    """Returneaza lista de {FileName, Version}. Lista goala daca fisierul lipseste."""
+    if not os.path.exists(path):
+        logger.warning(f"{VERSIONS_FILENAME} nu exista la {path} — se porneste de la lista goala")
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, list):
+        raise ValueError(f"{VERSIONS_FILENAME} nu contine o lista JSON")
+    return data
+ 
+ 
+def _write_versions_list(path, data):
+    """Scriere atomica: .tmp -> os.replace (acelasi pattern ca la rebuild_versions)."""
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+ 
+ 
+def _upsert_version(fname, version):
+    """
+    Actualizeaza (sau insereaza) intrarea pentru fname in versiuni_wfl.txt.
+    Se apeleaza DOAR sub _versions_lock. Sorteaza dupa FileName ca sa ramana
+    consistent cu ce produce rebuild_versions.
+    """
+    path = _versions_file_path()
+    data = _read_versions_list(path)
+ 
+    for item in data:
+        if item.get("FileName") == fname:
+            item["Version"] = version
+            break
+    else:
+        data.append({"FileName": fname, "Version": version})
+ 
+    data.sort(key=lambda x: x.get("FileName", ""))
+    _write_versions_list(path, data)
+ 
+ 
+# ==============================================================================
+# HELPER: verdictul comparatiei de versiuni
+# ==============================================================================
+def _upload_verdict(server_ver, client_ver):
+    """
+    'new'     -> fisierul nu e in versiuni_wfl.txt         => upload direct
+    'block'   -> server > client                           => refuz
+    'confirm' -> server == client                          => cere confirmare
+    'upgrade' -> server < client                           => upload direct
+    """
+    if server_ver is None:
+        return "new"
+    if server_ver > client_ver:
+        return "block"
+    if server_ver == client_ver:
+        return "confirm"
+    return "upgrade"
+ 
+ 
+_VERDICT_MESSAGES = {
+    "new":     "Fisier nou — se incarca direct.",
+    "upgrade": "Versiune mai noua decat cea de pe server — se incarca direct.",
+    "confirm": "Versiune identica cu cea de pe server — necesita confirmare pentru suprascriere.",
+    "block":   "Serverul are o versiune MAI NOUA — incarcare blocata.",
+}
+ 
+ 
+def _validate_client_version(raw):
+    """Returneaza (version:int|None, error:str|None). Refuza -1 / 0 / non-numeric."""
+    try:
+        version = int(raw)
+    except (TypeError, ValueError):
+        return None, "Campul 'version' (intreg) e obligatoriu."
+    if version <= 0:
+        return None, "Versiune invalida (fisierul nu are header V.x valid)."
+    return version, None
 
 # ==============================================================================
 # ENDPOINT: DOWNLOAD VERSIUNI (existent, doar am ajustat path-ul sa fie dinamic)
@@ -232,4 +340,184 @@ def rebuild_versions():
 
     except Exception as e:
         logger.error(f"Eroare la rebuild_versions: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+# ==============================================================================
+# ENDPOINT: CHECK UPLOAD — verdict inainte de a trimite continutul
+# ==============================================================================
+@wfl_bp.route('/api/wfls/check_upload', methods=['POST'])
+@require_api_key
+def check_upload():
+    """
+    Primeste: [{"FileName": "x.wfl", "Version": 3}, ...]  (sau un singur obiect)
+    Returneaza verdictul per fisier, fara sa scrie nimic pe disk.
+ 
+    {
+      "status": "success",
+      "results": [
+        {"FileName": "x.wfl", "ClientVersion": 3, "ServerVersion": 2,
+         "verdict": "upgrade", "needs_confirm": false, "allowed": true,
+         "message": "..."}
+      ]
+    }
+    """
+    try:
+        payload = request.get_json(silent=True)
+        if isinstance(payload, dict):
+            payload = [payload]
+        if not isinstance(payload, list):
+            return jsonify({"error": "Payload-ul trebuie sa fie o lista de obiecte JSON"}), 400
+ 
+        server_versions = load_server_versions(_versions_file_path())
+        results = []
+ 
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+ 
+            fname = item.get("FileName")
+            client_ver, err = _validate_client_version(item.get("Version"))
+ 
+            if not fname or _safe_wfl_path(fname) is None:
+                results.append({
+                    "FileName": fname, "verdict": "invalid", "allowed": False,
+                    "needs_confirm": False, "message": "Nume de fisier invalid (se accepta doar .wfl)."
+                })
+                continue
+ 
+            if err:
+                results.append({
+                    "FileName": fname, "verdict": "invalid", "allowed": False,
+                    "needs_confirm": False, "message": err
+                })
+                continue
+ 
+            server_ver = server_versions.get(fname)
+            verdict = _upload_verdict(server_ver, client_ver)
+ 
+            results.append({
+                "FileName": fname,
+                "ClientVersion": client_ver,
+                "ServerVersion": server_ver,
+                "verdict": verdict,
+                "allowed": verdict != "block",
+                "needs_confirm": verdict == "confirm",
+                "message": _VERDICT_MESSAGES[verdict],
+            })
+ 
+            logger.info(
+                f"[CHECK_UPLOAD] {fname} | client={client_ver} server={server_ver} -> {verdict}"
+            )
+ 
+        return jsonify({"status": "success", "count": len(results), "results": results}), 200
+ 
+    except Exception as e:
+        logger.error(f"Eroare la check_upload: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+ 
+ 
+# ==============================================================================
+# ENDPOINT: UPLOAD — scrie fisierul in cache/wfl_templates + actualizeaza versiunea
+# ==============================================================================
+@wfl_bp.route('/api/wfls/upload', methods=['POST'])
+@require_api_key
+def upload_wfl():
+    """
+    Multipart form-data:
+      file    : fisierul .wfl
+      version : intreg (MAJOR, citit din header-ul V.x de catre client)
+      confirm : 'true' / '1' — necesar DOAR cand versiunea e egala cu cea de pe server
+ 
+    Coduri:
+      200 -> incarcat, versiuni_wfl.txt actualizat
+      400 -> parametri invalizi
+      403 -> blocat (serverul are versiune mai noua)
+      409 -> necesita confirmare (versiune egala, confirm lipsa)
+      500 -> eroare interna
+    """
+    uploaded = request.files.get('file')
+    if uploaded is None or not uploaded.filename:
+        return jsonify({"error": "Lipseste fisierul ('file')."}), 400
+ 
+    fname = os.path.basename(uploaded.filename)
+    dest_path = _safe_wfl_path(fname)
+    if dest_path is None:
+        return jsonify({"error": "Nume de fisier invalid (se accepta doar .wfl)."}), 400
+ 
+    client_ver, err = _validate_client_version(request.form.get('version'))
+    if err:
+        return jsonify({"error": err}), 400
+ 
+    confirm = str(request.form.get('confirm', '')).strip().lower() in ('true', '1', 'yes', 'da')
+ 
+    try:
+        wfl_dir = get_wfl_dir()
+        os.makedirs(wfl_dir, exist_ok=True)
+ 
+        with _versions_lock:
+            server_versions = load_server_versions(_versions_file_path())
+            server_ver = server_versions.get(fname)
+            verdict = _upload_verdict(server_ver, client_ver)
+ 
+            if verdict == "block":
+                logger.warning(
+                    f"[UPLOAD] BLOCAT {fname} | client={client_ver} < server={server_ver}"
+                )
+                return jsonify({
+                    "status": "blocked",
+                    "FileName": fname,
+                    "ClientVersion": client_ver,
+                    "ServerVersion": server_ver,
+                    "verdict": verdict,
+                    "message": _VERDICT_MESSAGES[verdict],
+                }), 403
+ 
+            if verdict == "confirm" and not confirm:
+                logger.info(
+                    f"[UPLOAD] CONFIRMARE NECESARA {fname} | versiune identica ({client_ver})"
+                )
+                return jsonify({
+                    "status": "confirm_required",
+                    "FileName": fname,
+                    "ClientVersion": client_ver,
+                    "ServerVersion": server_ver,
+                    "verdict": verdict,
+                    "message": _VERDICT_MESSAGES[verdict],
+                }), 409
+ 
+            if verdict == "new" and os.path.exists(dest_path):
+                logger.warning(
+                    f"[UPLOAD] {fname} exista pe disk dar lipseste din {VERSIONS_FILENAME} "
+                    f"— se suprascrie si se adauga intrarea"
+                )
+ 
+            # --- scriere atomica a fisierului ---
+            tmp_path = dest_path + '.upload.tmp'
+            uploaded.save(tmp_path)
+            os.replace(tmp_path, dest_path)
+ 
+            # --- actualizare incrementala versiuni_wfl.txt ---
+            _upsert_version(fname, client_ver)
+ 
+        logger.info(
+            f"[UPLOAD] OK {fname} v{client_ver} (anterior: {server_ver}) | verdict={verdict} "
+            f"| confirm={confirm}"
+        )
+        return jsonify({
+            "status": "ok",
+            "FileName": fname,
+            "Version": client_ver,
+            "PreviousVersion": server_ver,
+            "verdict": verdict,
+            "message": "Fisier incarcat si versiune actualizata.",
+        }), 200
+ 
+    except Exception as e:
+        logger.error(f"Eroare la upload_wfl {fname}: {str(e)}", exc_info=True)
+        try:
+            tmp_path = dest_path + '.upload.tmp'
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
         return jsonify({"error": str(e)}), 500
