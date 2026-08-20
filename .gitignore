@@ -36,3 +36,5 @@ _push/push_settings.json
 AvacontPush/push_settings.example.json
 AvacontPush/README.md
 main.py.bak
+schema_diff/
+backup/
