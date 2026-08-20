@@ -1,3 +1,5 @@
+import json
+
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 from utils.logger import setup_logger
@@ -38,7 +40,29 @@ except Exception:
 # imparti un singur bucket si s-ar bloca reciproc.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 
-app.config['MAX_CONTENT_LENGTH'] = None  # Dezactiveaza limita globala de content-length (pentru imagini mari)
+# Limita globala de content-length (felia 0041). ERA `None` (dezactivata, „pentru imagini
+# mari"); acum e 17 MB, plafonul practic al unui PDF semnat stocat pe server.
+#
+# ATENTIE — SCHIMBAREA ATINGE TOATE RUTELE, nu doar cele de PDF: incarcarile mari existente
+# (atasamente base64, capturi de ecran, upload FTP) primesc de acum 413 daca depasesc pragul.
+# Decizia operatorului (2026-08-17): limita GLOBALA, dar cu un mesaj care spune clar cat e
+# plafonul si ce e de facut — vezi handler-ul de mai jos. Capturile de ecran trebuie comprimate
+# la generare, inainte sa intre in XML.
+app.config['MAX_CONTENT_LENGTH'] = 17 * 1024 * 1024
+
+# Werkzeug taie cererea inainte sa ajunga la vreo ruta, deci 413-ul NU trece prin niciun
+# handler de-al nostru — fara acesta, clientul ar primi pagina HTML implicita si operatorul
+# un mesaj gol. K-BOT citeste campul «error», deci raspunsul trebuie sa fie JSON romanesc.
+@app.errorhandler(413)
+def _payload_prea_mare(_e):
+    plafon_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    body = json.dumps({
+        "error": f"Fișierul trimis depășește limita de {plafon_mb} MB acceptată de server. "
+                 f"Reduceți dimensiunea documentului (comprimați capturile de ecran atașate) "
+                 f"și încercați din nou.",
+        "reason": "PAYLOAD_TOO_LARGE",
+    }, ensure_ascii=False)
+    return app.response_class(body, status=413, mimetype="application/json")
 
 # 2. Inregistram Blueprints
 # Aici practic ii spunem aplicatiei principale sa includa rutele din celelalte fisiere

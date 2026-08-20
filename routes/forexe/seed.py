@@ -5,7 +5,9 @@
 # Three endpoints, all keyed on the target DC (= db_name):
 #   POST /api/forexe/seed/schema   -> DROP TABLE IF EXISTS + CREATE TABLE
 #   POST /api/forexe/seed/rows     -> optional TRUNCATE, then INSERT ... ON DUPLICATE KEY UPDATE
+#                                     (mode="insert_missing" => randurile existente NU se ating)
 #   GET  /api/forexe/seed/columns  -> SHOW COLUMNS (read-only introspection)
+#   GET|POST /api/forexe/seed/ids  -> exista aceste id-uri? (read-only, allow-list PROPRIU)
 #
 # NOTE (slice 0012-01): /schema stays in the code but the migration utility does NOT
 # call it. Locked decision, variant A (non-destructive): the tables already exist in
@@ -58,6 +60,20 @@ ALLOWED_TABLES = {
     "FX_Receptii_Plati",
     "FX_Plati",
 }
+
+# --- allow-list SEPARATA, ingusta, DOAR pentru /seed/ids ----------------------
+# /ids citeste tabele pe care seed-ul NU are voie sa le scrie (familia DDF). De aceea
+# NU refoloseste ALLOWED_TABLES: o pereche (tabel, coloana) explicita, si nimic altceva.
+# Motivul existentei rutei: pe MariaDB FX_DDF.IDDF si FX_DDF_REV.IDREV sunt AUTO_INCREMENT
+# si nu pastreaza id-ul Access alaturi, deci migratorul VERIFICA acele id-uri inainte de
+# scriere. Nu traduce si nu ghiceste nimic — la lipsa, opreste DC-ul.
+ALLOWED_ID_PAIRS = {
+    ("FX_DDF", "IDDF"),
+    ("FX_DDF_REV", "IDREV"),
+}
+
+# Max id-uri acceptate intr-o singura cerere /ids (GET sau POST).
+MAX_IDS_PER_REQUEST = 1000
 
 # Identifiers we are willing to emit into SQL (after allow-list checks).
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -232,9 +248,27 @@ def seed_schema():
 #   "table":          "FX_Receptii",
 #   "columns":        ["IDR","IDRH","CodAI", ...],   # order matches every row
 #   "rows":           [ [264, 225, "AAB..-AAB", ...], ... ],  # values: num|str|bool|null
-#   "truncate_first": true            # true only on the first chunk of the table
+#   "truncate_first": true,           # true only on the first chunk of the table
+#   "mode": "overwrite"               # optional; "overwrite" (implicit) | "insert_missing"
 # }
 # Dates arrive as "YYYY-MM-DD HH:MM:SS" strings; booleans as 0/1; missing as null.
+#
+# mode="overwrite"       -> ON DUPLICATE KEY UPDATE <toate coloanele> (comportamentul istoric;
+#                           Access suprascrie MariaDB). Ramane implicit ca apelantii existenti
+#                           sa nu se schimbe.
+# mode="insert_missing"  -> ON DUPLICATE KEY UPDATE <prima coloana> = <prima coloana>, adica o
+#                           auto-atribuire care nu face nimic. Un rand deja prezent pe MariaDB
+#                           ramane NEATINS.
+#
+# De ce auto-atribuirea si NU `INSERT IGNORE`: IGNORE degradeaza la avertisment si erorile de
+# tip, trunchierile si violarile de constrangere — adica ar inghiti esecuri reale. Forma de
+# mai sus suprima EXCLUSIV cazul cheii duplicate.
+#
+# Sub aceasta forma `cursor.rowcount` e 1 pentru fiecare rand inserat si 0 pentru fiecare
+# duplicat sarit, deci raspunsul poate raporta "inserted" si "skipped" exact.
+#
+# truncate_first + mode="insert_missing" -> 400. Combinatia e intotdeauna o greseala: golesti
+# tabelul si apoi ceri sa nu suprascrii nimic.
 # -----------------------------------------------------------------------------
 @seed_bp.route("/api/forexe/seed/rows", methods=["POST"])
 @require_api_key
@@ -246,6 +280,7 @@ def seed_rows():
     columns = body.get("columns")
     rows = body.get("rows")
     truncate_first = bool(body.get("truncate_first"))
+    mode = body.get("mode") or "overwrite"
 
     if not _validate_db_name(db_name):
         return _err("Numele bazei de date (DC) este invalid.", 400)
@@ -260,6 +295,18 @@ def seed_rows():
             "Prea multe rânduri într-o singură cerere (max %d)." % MAX_ROWS_PER_REQUEST,
             400,
         )
+    if mode not in ("overwrite", "insert_missing"):
+        return _err(
+            "Modul de scriere „%s” este necunoscut (permise: „overwrite”, „insert_missing”)."
+            % mode,
+            400,
+        )
+    if truncate_first and mode == "insert_missing":
+        return _err(
+            "„truncate_first” nu se poate combina cu modul „insert_missing”: "
+            "ai goli tabelul și apoi ai cere să nu suprascrii nimic.",
+            400,
+        )
 
     ncols = len(columns)
     for r in rows:
@@ -268,7 +315,11 @@ def seed_rows():
 
     col_list = ",".join("`%s`" % c for c in columns)
     placeholders = ",".join(["%s"] * ncols)
-    updates = ",".join("`%s`=VALUES(`%s`)" % (c, c) for c in columns)
+    if mode == "insert_missing":
+        # Auto-atribuire fara efect pe prima coloana: suprima DOAR cheia duplicata.
+        updates = "`%s`=`%s`" % (columns[0], columns[0])
+    else:
+        updates = ",".join("`%s`=VALUES(`%s`)" % (c, c) for c in columns)
     insert_sql = (
         "INSERT INTO `%s` (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s"
         % (table, col_list, placeholders, updates)
@@ -291,9 +342,14 @@ def seed_rows():
         if conn is not None:
             conn.close()
 
-    return _json(
-        {"ok": True, "table": table, "received": len(rows), "affected": inserted}
-    )
+    # In modul insert_missing rowcount e 1/rand inserat si 0/duplicat sarit, deci diferenta
+    # fata de numarul de randuri primite este exact numarul celor sarite.
+    payload = {"ok": True, "table": table, "received": len(rows), "affected": inserted}
+    if mode == "insert_missing":
+        payload["mode"] = mode
+        payload["inserted"] = inserted
+        payload["skipped"] = len(rows) - inserted
+    return _json(payload)
 
 
 # -----------------------------------------------------------------------------
@@ -352,3 +408,133 @@ def _all_idents(values):
         if not isinstance(v, str) or not _IDENT_RE.match(v):
             return False
     return True
+
+
+# -----------------------------------------------------------------------------
+# 4) IDS: exista aceste id-uri in tabelul tinta? Strict read-only.
+#
+#   GET  /api/forexe/seed/ids?db_name=045_CTER&table=FX_DDF&column=IDDF&values=73,77,79
+#   POST /api/forexe/seed/ids   {"db_name":"045_CTER","table":"FX_DDF",
+#                                "column":"IDDF","values":[73,77,79]}
+#   -> 200 {"ok": true, "table": "FX_DDF", "column": "IDDF",
+#           "found": [73, 77], "missing": [79]}
+#
+# DE CE EXISTA: in setul migrat, sapte coloane arata spre familia DDF —
+# FX_Angajamente.IDDF, FX_Salarii.IDDF, FX_Salarii.IDREV, FX_Rezervari.IDREV,
+# FX_Receptii.IDREV, FX_Plati.IDREV, FX_Istoric.IDREV. Pe MariaDB FX_DDF.IDDF si
+# FX_DDF_REV.IDREV sunt AUTO_INCREMENT si NU pastreaza id-ul Access alaturi, deci
+# potrivirea celor doua parti e o PRESUPUNERE. Ruta asta o verifica inainte de prima
+# scriere. Nu traduce nimic, nu remapeaza nimic: la prima lipsa, migratorul opreste DC-ul
+# si listeaza id-urile care lipsesc.
+#
+# Allow-list PROPRIE (ALLOWED_ID_PAIRS), nu ALLOWED_TABLES: ruta citeste tocmai tabelele
+# pe care seed-ul are interzis sa le scrie. Perechea (tabel, coloana) e fixa; niciun
+# identificator din client nu ajunge in SQL fara sa treaca prin ea.
+#
+# Valorile sunt intregi (IDDF/IDREV sunt Long in Access, INT pe MariaDB) si intra in SQL
+# DOAR parametrizate. Varianta POST exista pentru loturile prea mari pentru un URL.
+#
+# Tabel inexistent -> 500 cu mesaj explicit, NU 200 cu «toate lipsesc»: alea doua sunt
+# diagnostice complet diferite, iar al doilea ar minti. (Difera intentionat de /columns,
+# unde lista goala e un raspuns cu sens.)
+#
+# Strict read-only: niciun INSERT, niciun DDL, niciun commit. conn.close() in finally.
+# -----------------------------------------------------------------------------
+@seed_bp.route("/api/forexe/seed/ids", methods=["GET", "POST"])
+@require_api_key
+def seed_ids():
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        db_name = body.get("db_name")
+        table = body.get("table")
+        column = body.get("column")
+        raw_values = body.get("values")
+    else:
+        db_name = request.args.get("db_name")
+        table = request.args.get("table")
+        column = request.args.get("column")
+        raw = request.args.get("values")
+        # Lista goala si parametrul absent sunt lucruri diferite: "" -> [], lipsa -> None.
+        if raw is None:
+            raw_values = None
+        else:
+            raw_values = [p for p in raw.split(",") if p.strip() != ""]
+
+    if not _validate_db_name(db_name):
+        return _err("Numele bazei de date (DC) este invalid.", 400)
+    if not isinstance(table, str) or not isinstance(column, str):
+        return _err("Tabelul și coloana sunt obligatorii.", 400)
+    if (table, column) not in ALLOWED_ID_PAIRS:
+        return _err(
+            "Perechea tabel/coloană „%s”.„%s” nu este permisă pentru verificarea de id-uri."
+            % (table, column),
+            400,
+        )
+    if not isinstance(raw_values, list):
+        return _err("Câmpul „values” lipsește sau nu este o listă.", 400)
+    if len(raw_values) > MAX_IDS_PER_REQUEST:
+        return _err(
+            "Prea multe id-uri într-o singură cerere (max %d)." % MAX_IDS_PER_REQUEST,
+            400,
+        )
+
+    # Intregi, si numai intregi. Un id care nu e intreg e o eroare de apelant, nu un id lipsa.
+    wanted = []
+    seen = set()
+    for v in raw_values:
+        if isinstance(v, bool) or not isinstance(v, (int, str)):
+            return _err("Id-ul „%s” nu este un număr întreg." % (v,), 400)
+        try:
+            n = int(str(v).strip())
+        except (TypeError, ValueError):
+            return _err("Id-ul „%s” nu este un număr întreg." % (v,), 400)
+        if n not in seen:
+            seen.add(n)
+            wanted.append(n)
+
+    if not wanted:
+        return _json(
+            {"ok": True, "table": table, "column": column, "found": [], "missing": []}
+        )
+
+    found = []
+    conn = None
+    try:
+        conn = get_db_connection(db_name)
+        cur = conn.cursor()
+        # Ca la /columns: SHOW COLUMNS/SELECT pe un tabel inexistent arunca, iar adulmecarea
+        # errno-ului ar inghiti la fel de bine o eroare reala de drepturi. Testam intai
+        # existenta cu numele ca VALOARE parametrizata.
+        cur.execute("SHOW TABLES LIKE %s", (table,))
+        if cur.fetchone() is None:
+            return _err(
+                "Tabelul „%s” nu există în baza „%s”. Schema nu a fost instalată acolo."
+                % (table, db_name),
+                500,
+            )
+        placeholders = ",".join(["%s"] * len(wanted))
+        # Identificatorii vin EXCLUSIV din ALLOWED_ID_PAIRS; valorile sunt parametrizate.
+        cur.execute(
+            "SELECT DISTINCT `%s` FROM `%s` WHERE `%s` IN (%s)"
+            % (column, table, column, placeholders),
+            tuple(wanted),
+        )
+        found = [int(r[0]) for r in cur.fetchall() if r[0] is not None]
+    except Exception as exc:  # surface loudly, never swallow
+        return _err(
+            "Eroare la verificarea id-urilor în „%s”: %s" % (table, exc), 500
+        )
+    finally:
+        if conn is not None:
+            conn.close()
+
+    found_set = set(found)
+    return _json(
+        {
+            "ok": True,
+            "table": table,
+            "column": column,
+            "found": sorted(found_set),
+            "missing": sorted(n for n in wanted if n not in found_set),
+        }
+    )

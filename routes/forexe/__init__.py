@@ -41,6 +41,8 @@ forexe_bp = Blueprint("forexe", __name__)
 # plati.py       -> GET /api/forexe/plati
 # ddf.py         -> GET /api/forexe/ddf
 # istoric.py     -> GET /api/forexe/istoric
+# ord.py         -> GET /api/forexe/ord
+# pdf.py         -> GET/PUT /api/forexe/ddf/pdf/<idrev>, GET/PUT /api/forexe/ord/pdf/<idordp>
 from . import angajamente  # noqa: E402,F401
 from . import tree  # noqa: E402,F401
 from . import sumar  # noqa: E402,F401
@@ -49,3 +51,7 @@ from . import receptii  # noqa: E402,F401
 from . import plati  # noqa: E402,F401
 from . import ddf  # noqa: E402,F401
 from . import istoric  # noqa: E402,F401
+# `as ord_route`: importat simplu, numele `ord` ar umbri built-in-ul `ord()` in spatiul
+# de nume al pachetului. Fisierul ramane `ord.py` (numele rutei), legarea nu.
+from . import ord as ord_route  # noqa: E402,F401
+from . import pdf  # noqa: E402,F401

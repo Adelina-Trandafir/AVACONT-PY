@@ -99,13 +99,23 @@ _SQL_ANTET = (
 # ca SUBINTEROGARE SCALARA (nu join + GROUP BY): forma interogarii garanteaza singura
 # „un rand per revizie". COALESCE -> o revizie fara linii de sectiune A da 0, nu NULL.
 # Filtrul e `IN (SELECT ...)`, nu un join pe antet — vezi nota FAN-OUT din modul.
+#
+# FELIA 0041 — evidenta PDF-ului SEMNAT stocat pe server (`FX_DDF_PDF`), adaugata ADITIV:
+# `pdf_sha256` / `pdf_dimensiune` / `pdf_data_modif`, toate NULL cand nu exista PDF semnat.
+# LEFT JOIN si nu subinterogare fiindca `FX_DDF_PDF.IDREV` are CHEIE UNICA -> cel mult un
+# rand per revizie, deci fan-out imposibil (aceeasi justificare ca la FX_ORD_PART din ord.py).
+# Nota de modul de mai sus ramane adevarata pentru cele PATRU coloane Access (ArePDFDDF /
+# CalePDFDDF / AreDDF / CaleDDF): ele tot nu exista, iar serverul tot nu tine CAI de fisier —
+# tine CONTINUTUL PDF-ului semnat, iar `pdf_sha256` e semnalul de existenta.
 _SQL_REVIZII = (
     "SELECT "
     "r.IDREV, r.IDDF, r.NumarRev, r.DataRev, r.Desc_Scurta, r.Desc_Lunga_ANSI, "
     "r.Tip, r.Incarcat, r.Preluat, r.Semnatura, "
     "COALESCE((SELECT SUM(sa.ValCur) FROM FX_DDF_REV_SA sa "
-    "          WHERE sa.IDREV = r.IDREV), 0) AS TotalRevizie "
+    "          WHERE sa.IDREV = r.IDREV), 0) AS TotalRevizie, "
+    "p.Sha256, p.Dimensiune, p.DataModif "
     "FROM FX_DDF_REV r "
+    "LEFT JOIN FX_DDF_PDF p ON p.IDREV = r.IDREV "
     "WHERE r.IDDF IN (SELECT IDDF FROM FX_DDF WHERE CodAngajament = %s) "
     "ORDER BY r.DataRev, r.NumarRev"
 )
@@ -186,6 +196,15 @@ def _iso(value):
         return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
+def _iso_dt(value):
+    """DateTime -> ISO CU ora, sau None. Sora lui `_iso`, dar fara `.date()`: `DataModif` din
+    FX_DDF_PDF spune CAND s-a semnat documentul, iar taierea orei ar face doua semnari din
+    aceeasi zi sa arate identic."""
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
 def _num(value):
     """Coloana de bani -> float. DOUBLE vine ca float; None devine 0.0 (server-side), ca
     grila si totalurile arborelui sa arate «0,00», nu gol."""
@@ -254,7 +273,8 @@ def get_ddf():
         cursor.execute(_SQL_REVIZII, (cod,))
         revizii = []
         for (idrev, iddf, numar_rev, data_rev, desc_scurta, desc_lunga,
-             tip, incarcat, preluat, semnatura, total_revizie) in cursor.fetchall():
+             tip, incarcat, preluat, semnatura, total_revizie,
+             pdf_sha, pdf_dim, pdf_modif) in cursor.fetchall():
             revizii.append({
                 "idrev": int(idrev) if idrev is not None else None,
                 "iddf": int(iddf) if iddf is not None else None,
@@ -271,6 +291,12 @@ def get_ddf():
                 "semnatura": semnatura,
                 # SUM real peste sectiunea A — NU valoarea unei linii arbitrare (vezi nota).
                 "total_revizie": _num(total_revizie),
+                # Felia 0041 — PDF-ul SEMNAT stocat pe server. `pdf_sha256` non-null INSEAMNA
+                # «exista PDF semnat»; clientul il foloseste si ca validator de cache local
+                # (If-None-Match pe ruta de octeti). Toate trei sunt null cand nu exista rand.
+                "pdf_sha256": pdf_sha,
+                "pdf_dimensiune": int(pdf_dim) if pdf_dim is not None else None,
+                "pdf_data_modif": _iso_dt(pdf_modif),
             })
 
         # --- linii: FX_DDF_REV_SA ------------------------------------------------------

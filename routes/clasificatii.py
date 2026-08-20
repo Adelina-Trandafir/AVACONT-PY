@@ -6,6 +6,7 @@ from mysql.connector import Error
 from utils.security import require_api_key
 from config import DB_CONFIG  # Importam configurarea
 from typing import Any, Dict, cast
+import json
 
 DB_NAME_REGEX = re.compile(r'^[A-Za-z0-9_]+$')
 
@@ -61,7 +62,9 @@ def _to_int(value, field_name, required=False):
     try:
         return int(value)
     except Exception:
-        raise ValueError(f"Camp invalid: {field_name}")
+        # Include the actual value and its type in the error
+        value_repr = repr(value)[:100]  # Limit to avoid huge error messages
+        raise ValueError(f"Camp invalid: {field_name} - valoare primita: {value_repr} (tip: {type(value).__name__})")
 
 
 def _to_float(value, field_name, required=False):
@@ -79,7 +82,9 @@ def _to_float(value, field_name, required=False):
     try:
         return float(value)
     except Exception:
-        raise ValueError(f"Camp invalid: {field_name}")
+        # Include the actual value and its type in the error
+        value_repr = repr(value)[:100]  # Limit to avoid huge error messages
+        raise ValueError(f"Camp invalid: {field_name} - valoare primita: {value_repr} (tip: {type(value).__name__})")
 
 
 def _to_str(value, field_name, required=False, strip_value=True):
@@ -94,13 +99,17 @@ def _to_str(value, field_name, required=False, strip_value=True):
             raise ValueError(f"Camp obligatoriu lipsa: {field_name}")
         return None
 
+    # Store original value for error messages
+    original_value = value
     value = str(value)
 
     if strip_value:
         value = value.strip()
 
     if required and value == "":
-        raise ValueError(f"Camp obligatoriu lipsa: {field_name}")
+        # Show the original value that became empty after stripping
+        value_repr = repr(original_value)[:100]
+        raise ValueError(f"Camp obligatoriu lipsa: {field_name} - valoare primita: {value_repr}")
 
     return value
 
@@ -727,11 +736,13 @@ def save_clasificatii_complete_upsert():
                 mapping[mapping_key] = current_id_clsf
 
             except ValueError as e:
+                # Log the full item for debugging
                 logger.warning(
-                    "UPSERT CLASIFICATII invalid payload. db=%s, item=%s, err=%s",
+                    "UPSERT CLASIFICATII invalid payload. db=%s, item=%s, err=%s, full_item=%s",
                     db_name,
                     idx,
-                    str(e)
+                    str(e),
+                    json.dumps(item, default=str)  # Convert to JSON for readability
                 )
                 raise
 
