@@ -44,7 +44,10 @@ def clear_pending(conn, logger) -> int:
     finally:
         cur.close()
     if n:
-        logger.info("Șterse %d rânduri neexecutate din rulările anterioare.", n)
+        logger.info(
+            "Curățate %d instrucțiuni rămase neexecutate din rulările "
+            "anterioare — planul valabil este cel calculat ACUM; dacă noua "
+            "comparație nu le mai generează, ele nu mai erau necesare.", n)
     return n
 
 

@@ -955,7 +955,10 @@ def build_diff(conn, targets, mode, logger, blocks=None) -> list:
             continue
         diff = SchemaDiff(source, target, db, mode, logger, conn)
         produced = diff.run()
-        logger.info("  %s: %d instrucțiuni.", db, len(produced))
+        if produced:
+            logger.info("  %s: %d instrucțiuni.", db, len(produced))
+        else:
+            logger.info("  %s: nicio diferență față de sursă.", db)
         statements.extend(produced)
         if blocks is not None:
             blocks.extend(diff.blocks)

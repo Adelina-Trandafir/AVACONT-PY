@@ -95,7 +95,11 @@ def main(argv=None) -> int:
         rows = generate(conn, targets, args.mode, logger,
                         reset=not args.no_reset)
         if not rows:
-            logger.info("Schemele sunt deja sincronizate. Nimic de făcut.")
+            logger.info(
+                "REZULTAT: structura din AVACONT_SURSA se regăsește deja "
+                "întocmai în %s — tabele, coloane, indexuri și chei străine, "
+                "toate identice. Nu e nimic de reparat și nu s-a executat "
+                "nimic.", ", ".join(targets) or "bazele țintă")
             return 0
 
         out_path = args.out or os.path.join(
