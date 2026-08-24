@@ -12,10 +12,21 @@
 #   BLOCANT  -- structura sau valoarea nu incap: tabel/coloana lipsa, tip gresit,
 #               depasire de lungime sau de interval, NULL intr-o coloana NOT NULL.
 #               Cat timp exista unul, NICIUN buton nu porneste.
-#   FORTABIL -- link integrity: foreign key with no match, duplicate primary
-#               key, row whose key exists nowhere in the file. «Ruleaza» ramane
-#               oprit, «Forteaza rularea» porneste si SARE peste randurile
-#               vinovate, fara sa le piarda din raport.
+#   FORTABIL -- link integrity: duplicate primary key, row whose key exists
+#               nowhere in the file, foreign key with no match on a column that
+#               ACCEPTS NULL. «Ruleaza» ramane oprit, «Forteaza rularea»
+#               porneste si SARE peste randurile vinovate, fara sa le piarda din
+#               raport.
+#
+# A foreign key with no match on a NOT NULL column is BLOCANT instead: there is
+# no NULL to fall back on, so the row can be neither written nor emptied. On a
+# nullable one the row IS written, with that column set to NULL -- the row is
+# kept and only the link is lost (operator decision, 2026-08-22).
+#
+# The write ORDER is checked too, before any row is read: a ticked table written
+# before a ticked table it depends on is BLOCANT, because a foreign key needs
+# the referenced row present at INSERT time and emptying the parent first makes
+# that failure certain rather than avoiding it.
 #
 # The operator can narrow WHICH Access columns travel (the `columns` argument):
 # an unticked column is simply not written, so it is neither reported as missing
@@ -24,14 +35,17 @@
 #
 # A foreign key whose parent table is written IN THE SAME RUN is checked against
 # the union of the target's rows and the rows this run itself will write: on an
-# empty database everything is "missing" otherwise, which is exactly wrong.
+# empty database everything is "missing" otherwise, which is exactly wrong. Ten
+# of the constraints point outside the migrated set (Parteneri, Clasificatii,
+# Unitati); there is no "will be written" to add, so the target's rows are the
+# whole answer.
 # -----------------------------------------------------------------------------
 
 import datetime
 import decimal
 import logging
 
-from . import tables
+from . import parser, tables
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +61,16 @@ F_NUL_INTERZIS = "NUL_INTERZIS"
 F_CHEIE_STRAINA = "CHEIE_STRAINA"
 F_CHEIE_DUBLA = "CHEIE_DUBLA"
 F_SELECTION = "SELECTIE"
+# A target column MariaDB will not let out of the INSERT (primary key, or NOT
+# NULL with no default) that is not in it -- unticked or uncorrelated. ASCII on
+# the wire like every other token here (rule 0), so the migrator can match it.
+F_COLOANA_OBLIGATORIE = "COLOANA_OBLIGATORIE"
+# A ticked table written BEFORE a ticked table it depends on. Read from the live
+# constraint set, never from a list in tables.py.
+F_ORDINE_TABELE = "ORDINE_TABELE"
+# A foreign-key value with no parent, in a NOT NULL column: NULL is not
+# available there, so the row cannot be kept and nothing may be written.
+F_CHEIE_STRAINA_OBLIGATORIE = "CHEIE_STRAINA_OBLIGATORIE"
 
 CLASS_OF = {
     F_TABEL_LIPSA: BLOCANT,
@@ -57,6 +81,9 @@ CLASS_OF = {
     F_CHEIE_STRAINA: FORTABIL,
     F_CHEIE_DUBLA: FORTABIL,
     F_SELECTION: FORTABIL,
+    F_COLOANA_OBLIGATORIE: BLOCANT,
+    F_ORDINE_TABELE: BLOCANT,
+    F_CHEIE_STRAINA_OBLIGATORIE: BLOCANT,
 }
 
 # Cate exemple pastram pentru fiecare (tabel, coloana, fel). Numaratoarea e
@@ -94,10 +121,26 @@ class TargetSchema(object):
         self.columns = {}       # tabel -> {coloana: meta}
         self.primary_key = {}   # tabel -> [coloane]
         self.foreign_keys = {}  # tabel -> [ {coloana, tabel_ref, coloana_ref, nume} ]
+        # (schema, tabel, coloana) -> auto_increment?, for the columns the
+        # foreign keys POINT AT -- including the ones outside the migrated set
+        # (Parteneri, Clasificatii, Unitati), which `columns` never loads.
+        self.referenced = {}
         self._load(conn, table_names)
 
     def has(self, table):
         return table in self.columns
+
+    def referenced_is_auto(self, fk):
+        """
+        Is the column this foreign key points at AUTO_INCREMENT?
+
+        It decides how a 0 reads: no auto-increment table can hold a row 0, so a
+        0 in the child is an orphan whatever a probe of the parent answers.
+        Unknown (the parent could not be read) answers False -- we do not invent
+        an orphan.
+        """
+        return bool(self.referenced.get(
+            (fk["schema_ref"], fk["tabel_ref"], fk["coloana_ref"])))
 
     def _load(self, conn, table_names):
         placeholders = ",".join(["%s"] * len(table_names))
@@ -125,6 +168,10 @@ class TargetSchema(object):
                     "accepta_nul": (nullable or "").upper() == "YES",
                     "are_implicit": default is not None,
                     "auto": "auto_increment" in (extra or "").lower(),
+                    # The raw EXTRA, kept whole: `auto` above answers only one of
+                    # its questions, and `is_required` needs the others
+                    # (generated columns, on-update expressions).
+                    "extra": (extra or "").lower(),
                     "cheie": key,
                 }
 
@@ -153,6 +200,26 @@ class TargetSchema(object):
                     "coloana_ref": ref_column,
                     "nume": name,
                 })
+
+            # One more pass over information_schema, for the tables the keys
+            # POINT AT. Ten of the constraints leave the migrated set entirely
+            # (Parteneri, Clasificatii, Unitati), so their columns are not in
+            # `self.columns` and there is nowhere else to read this from.
+            wanted = {}
+            for fks in self.foreign_keys.values():
+                for fk in fks:
+                    wanted.setdefault(fk["schema_ref"], set()).add(fk["tabel_ref"])
+            for ref_schema, ref_tables in wanted.items():
+                names = sorted(ref_tables)
+                slots = ",".join(["%s"] * len(names))
+                cur.execute(
+                    "SELECT TABLE_NAME, COLUMN_NAME, EXTRA "
+                    "  FROM information_schema.COLUMNS "
+                    " WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN (" + slots + ")",
+                    tuple([ref_schema] + names))
+                for ref_table, ref_column, extra in cur.fetchall():
+                    self.referenced[(ref_schema, ref_table, ref_column)] = (
+                        "auto_increment" in (extra or "").lower())
         finally:
             cur.close()
 
@@ -253,6 +320,119 @@ def check_value(meta, value):
     return None
 
 
+def is_required(meta):
+    """
+    Is this a target column MariaDB will refuse to leave out of an INSERT?
+
+    True for NOT NULL columns with no default that the server does not fill in
+    by itself. Under strict mode, omitting one of those is error 1364, «Field
+    '<col>' doesn't have a default value» -- which is about the COLUMN LIST, not
+    about the values (a NULL in a NOT NULL column is 1048, a different error).
+
+    False for anything the server supplies on its own: `auto_increment`, a
+    generated column, an `on update` expression. A column with a DEFAULT is
+    already covered by `are_implicit`, which is tested first.
+    """
+    if meta.get("accepta_nul"):
+        return False
+    if meta.get("are_implicit"):
+        return False
+    if meta.get("auto"):
+        return False
+    extra = (meta.get("extra") or "").lower()
+    if "generated" in extra or "on update" in extra:
+        return False
+    return True
+
+
+def required_columns_of(target_columns, pk_columns):
+    """
+    The target columns that must be in the INSERT: the primary key plus every
+    `is_required` one. The names are the TARGET's own -- never the Access-side
+    key from `tables.py`, which may not even be a column over there.
+    """
+    protected = set(pk_columns or [])
+    for name, meta in target_columns.items():
+        if is_required(meta):
+            protected.add(name)
+    return protected
+
+
+# Why an Access column did not make it into the INSERT. ASCII tokens, rendered
+# in Romanian by `describe_skipped` at the two places the operator reads them.
+SKIP_UNCORRELATED = "necorelata"
+SKIP_UNTICKED = "debifata"
+
+_SKIP_TEXT = {
+    SKIP_UNCORRELATED: "necorelată",
+    SKIP_UNTICKED: "debifată",
+}
+
+
+def insert_columns(table_name, access_columns, rename, chosen_cols):
+    """
+    The TARGET columns one INSERT into `table_name` will carry, in the Access
+    file's own column order, plus what was left out and why.
+
+    Two filters, and telling them apart is the whole point: a column is dropped
+    either because no correlation sends it anywhere (`rename` has no entry --
+    the operator set «(nu se scrie)», or MariaDB simply has no such column), or
+    because the operator unticked it (`chosen_cols`). Both used to be silent.
+
+    Returns (columns, skipped), where `skipped` is [(access_name, reason)].
+
+    Two Access columns landing on the SAME target column stop everything: one of
+    the two values would be thrown away and nobody can say which.
+
+    ONE function on purpose. The analysis has to measure exactly the list the
+    write will build; two copies of this rule drifting apart is how a required
+    column got dropped from the statement in the first place.
+    """
+    columns = []
+    skipped = []
+    for name in access_columns:
+        target_name = rename.get(name.lower())
+        if target_name is None:
+            skipped.append((name, SKIP_UNCORRELATED))
+            continue
+        if chosen_cols is not None and target_name not in chosen_cols:
+            skipped.append((name, SKIP_UNTICKED))
+            continue
+        if target_name in columns:
+            raise ValidationError(
+                "În «%s», două coloane din Access sunt corelate cu «%s» de pe "
+                "MariaDB. Repară corelațiile și analizează din nou."
+                % (table_name, target_name))
+        columns.append(target_name)
+    return columns, skipped
+
+
+def describe_skipped(skipped):
+    """The skipped Access columns as one Romanian phrase, each with its reason,
+    for the job log and the dump file headers."""
+    return ", ".join("%s (%s)" % (name, _SKIP_TEXT.get(reason, reason))
+                     for name, reason in skipped)
+
+
+def missing_required(target_columns, columns):
+    """
+    The required target columns that are NOT in the INSERT column list, in the
+    target's own order. Empty is the only good answer: anything else is MariaDB
+    error 1364 waiting to happen.
+    """
+    present = set(columns)
+    return [name for name, meta in target_columns.items()
+            if name not in present and is_required(meta)]
+
+
+def required_columns_message(table_name, missing):
+    """The one sentence both the analysis and the write say about it."""
+    return ("«%s»: coloanele %s de pe MariaDB nu acceptă lipsa lor (cheie primară "
+            "sau NOT NULL fără valoare implicită), dar nu ajung în INSERT — sunt "
+            "debifate sau necorelate. MariaDB ar răspunde «doesn't have a default "
+            "value»." % (table_name, ", ".join("«%s»" % n for n in missing)))
+
+
 def _short(value):
     text = str(value)
     return text if len(text) <= 60 else text[:57] + "…"
@@ -318,6 +498,10 @@ class Report(object):
         # Valorile de cheie straina care LIPSESC pe tinta, pastrate ca sa poata fi
         # sarite la rulare fara sa mai intrebam serverul inca o data.
         self.missing_fk = {}    # (tabel, coloana) -> set(valori)
+        # Aceleasi valori, dar pe coloane care ACCEPTA NULL: acolo randul se
+        # pastreaza si se pierde doar legatura, deci scrierea le goleste in loc
+        # sa sara randul. Cele doua dictionare nu se suprapun niciodata.
+        self.null_fk = {}       # (tabel, coloana) -> set(valori)
         # Coloanele alese de operator (tabel -> [coloane]), pastrate pe raport ca
         # scrierea sa foloseasca EXACT ce a masurat analiza, nu o alta alegere.
         self.columns = None
@@ -325,10 +509,16 @@ class Report(object):
         # acelasi motiv: rularea scrie in coloanele pe care le-a MASURAT analiza.
         self.mappings = None
 
-    def add(self, table, column, kind, key, message, value=None):
+    def add(self, table, column, kind, key, message, value=None, count=1):
+        """
+        `count` > 1 says «this same finding, on this many rows». The foreign-key
+        checks use it: they collect DISTINCT values but the operator needs to
+        read how many ROWS carry each one. The example list still shows the
+        first row's key, which is the one worth looking up.
+        """
         bucket = self._buckets.setdefault((table, column, kind),
                                           {"numar": 0, "exemple": []})
-        bucket["numar"] += 1
+        bucket["numar"] += count
         if len(bucket["exemple"]) < MAX_EXAMPLES:
             bucket["exemple"].append({
                 "cheie": key,
@@ -399,6 +589,51 @@ def missing_table_dependents(schema, chosen_names, missing_name, db_name):
     return dependents
 
 
+def order_findings(schema, chosen_names, db_name):
+    """
+    The child-before-parent pairs in the order the operator arranged, measured
+    against the LIVE constraint set.
+
+    A foreign key needs the referenced row PRESENT AT INSERT TIME. Emptying the
+    parent first in «Inlocuieste tot» does not relax that -- it makes the failure
+    certain. So a ticked table written before a ticked table it depends on is a
+    refusal, not a warning.
+
+    Read from `information_schema` (through TargetSchema), never from a list in
+    tables.py: the constraint that failed the run of 2026-08-21,
+    FX_Rezervari__FX_DDF_REV, did not exist in the schema dump we had. Adding a
+    constraint to the database has to change this answer with no code change.
+
+    Returns [(child, parent, constraint_name, child_column)], each pair once.
+    A key a table has on ITSELF cannot be ordered away and is left alone; so is
+    one whose parent the operator did not tick (that parent is not written in
+    this run at all, and its rows are checked against the target as they stand).
+    """
+    position = dict((name, index) for index, name in enumerate(chosen_names))
+    seen = set()
+    out = []
+    for name in chosen_names:
+        for fk in schema.foreign_keys.get(name, []):
+            parent = fk["tabel_ref"]
+            if fk["schema_ref"] != db_name or parent == name:
+                continue
+            if parent not in position or position[parent] < position[name]:
+                continue
+            key = (name, parent, fk["nume"])
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append((name, parent, fk["nume"], fk["coloana"]))
+    return out
+
+
+def order_message(child, parent, constraint, column):
+    """The one sentence both the analysis and the write say about it."""
+    return ("«%s» se scrie înaintea lui «%s», dar depinde de el prin «%s» (%s). "
+            "Mută-l după el în lista de tabele."
+            % (child, parent, constraint, column))
+
+
 def column_case_map(target_columns):
     """
     Access column names are case-insensitive («Cual» and «CUAL» are the same
@@ -408,7 +643,7 @@ def column_case_map(target_columns):
     return dict((name.lower(), name) for name in target_columns)
 
 
-def column_rename_map(table_name, target_columns, mappings):
+def column_rename_map(table_name, target_columns, mappings, protected=None):
     """
     Access column -> the TARGET column it is written into, keyed by the LOWER
     -cased Access name (Access is case-insensitive). A name absent from the
@@ -425,6 +660,15 @@ def column_rename_map(table_name, target_columns, mappings):
     is not there. An empty target means «this column does not travel». Two of
     them pointing at the SAME target column stop everything -- one of the two
     values would be thrown away, and neither we nor the operator can say which.
+
+    `protected` is the set of TARGET column names MariaDB will not let out of
+    the INSERT (see `required_columns_of`). An empty target aimed at one of them
+    is REFUSED, not obeyed: the migrator sends the whole correlation map for
+    every ticked table, so a single «(nu se scrie)» on a primary key used to
+    delete the column from the statement and leave MariaDB to answer «doesn't
+    have a default value» about a column the operator never meant to drop.
+    `None` protects nothing, which is what the callers that do not know the
+    target's keys want.
     """
     by_lower = column_case_map(target_columns)
     rename = tables.default_rename_map(target_columns)
@@ -432,6 +676,14 @@ def column_rename_map(table_name, target_columns, mappings):
     for access_name, target_name in (mappings or {}).get(table_name, {}).items():
         key = str(access_name).lower()
         if not target_name:
+            default = rename.get(key)
+            if default is not None and protected and default in protected:
+                raise ValidationError(
+                    "În «%s», coloana «%s» este corelată cu «(nu se scrie)», dar "
+                    "«%s» de pe MariaDB nu acceptă lipsa ei: e cheie primară sau "
+                    "NOT NULL fără valoare implicită. Corelează-o înapoi înainte "
+                    "de a rula din nou."
+                    % (table_name, access_name, default))
             rename.pop(key, None)
             continue
         exact = by_lower.get(str(target_name).lower())
@@ -510,6 +762,14 @@ def analyze(conn, db_name, fx_path, plan, only=None, columns=None,
     report.mappings = mappings
     schema = TargetSchema(conn, db_name, [t.name for t in chosen])
     in_run = set(t.name for t in chosen)
+
+    # The arrangement, before a single row is read: a child written before its
+    # parent cannot succeed whatever the rows say.
+    for child, parent, constraint, column in order_findings(
+            schema, [t.name for t in chosen], db_name):
+        report.add(child, column, F_ORDINE_TABELE, "",
+                   order_message(child, parent, constraint, column))
+
     # Cheile primare pe care ACEASTA rulare le va scrie, tabel cu tabel, ca o
     # cheie straina spre un parinte migrat in acelasi lot sa nu fie "lipsa".
     written_pks = {}
@@ -533,12 +793,32 @@ def analyze(conn, db_name, fx_path, plan, only=None, columns=None,
 
         say("Se verifică «%s»." % table.name)
         target_columns = schema.columns[table.name]
-        rename = column_rename_map(table.name, target_columns, mappings)
-        selector = plan.selector_for(table)
+        # The primary key first: `column_rename_map` needs it to know which
+        # correlations it may NOT obey.
         pk_columns = schema.primary_key.get(table.name) or [table.primary_key]
+        protected = required_columns_of(target_columns,
+                                        schema.primary_key.get(table.name))
+        rename = column_rename_map(table.name, target_columns, mappings, protected)
+        selector = plan.selector_for(table)
         chosen_cols = chosen_columns_of(table.name, columns, pk_columns, rename)
+
+        # Exactly the column list the write will build, measured HERE so a
+        # column MariaDB will not let out of the INSERT is named in the report
+        # instead of surfacing as «doesn't have a default value» mid-run.
+        access_columns = [c["nume"] for c in accdb_columns(fx_path, table.name)]
+        insert_cols, skipped = insert_columns(table.name, access_columns,
+                                              rename, chosen_cols)
+        if skipped:
+            say("«%s»: coloane Access sărite — %s."
+                % (table.name, describe_skipped(skipped)))
+        for name in missing_required(target_columns, insert_cols):
+            report.add(table.name, name, F_COLOANA_OBLIGATORIE, "",
+                       required_columns_message(table.name, [name]))
+
         seen_keys = set()
         unknown_reported = set()
+        converted = 0
+        ambiguous = 0
         pk_single = pk_columns[0] if len(pk_columns) == 1 else None
         own_written = set()
         written_pks[table.name] = own_written
@@ -566,6 +846,13 @@ def analyze(conn, db_name, fx_path, plan, only=None, columns=None,
             # aici incolo randul e citit cu numele EXACTE ale tintei. Randul
             # original ramane neatins - selectia l-a citit deja cu numele lui.
             vrow = with_target_names(row, rename)
+            # Shaped for the target BEFORE it is measured, with the same call the
+            # write uses. Measuring the raw value and sending the shaped one --
+            # or the other way round -- is how «04/28/26 15:28:03» passed the
+            # analysis and was then refused by MariaDB.
+            vrow, changes = parser.parse_row(vrow, target_columns)
+            converted += len(changes)
+            ambiguous += sum(1 for c in changes if c.ambiguous)
 
             # coloane care exista in Access si lipsesc din tinta. O coloana pe
             # care operatorul a debifat-o nu se scrie, deci lipsa ei din tinta
@@ -608,7 +895,14 @@ def analyze(conn, db_name, fx_path, plan, only=None, columns=None,
             for (column, name), collected in fk_values.items():
                 value = vrow.get(column)
                 if value is not None and value != "":
-                    collected.setdefault(value, key)
+                    seen_value = collected.get(value)
+                    if seen_value is None:
+                        # First row carrying it: its key is the example. The
+                        # count is what the operator reads -- one orphan value
+                        # on 300 rows is a different problem from one on one.
+                        collected[value] = {"cheie": key, "numar": 1}
+                    else:
+                        seen_value["numar"] += 1
 
             if row_ok:
                 stats["de_scris"] += 1
@@ -617,8 +911,15 @@ def analyze(conn, db_name, fx_path, plan, only=None, columns=None,
             else:
                 stats["sarite"] += 1
 
+        if converted:
+            say("«%s»: %d valori aduse la forma cerută de MariaDB (date, "
+                "zecimale, Da/Nu)%s."
+                % (table.name, converted,
+                   "" if not ambiguous
+                   else ", dintre care %d date cu zi/lună ambiguă" % ambiguous))
+
         _check_foreign_keys(conn, schema, table, fk_values, report, say,
-                            db_name, in_run, written_pks)
+                            db_name, in_run, written_pks, target_columns)
 
     return report
 
@@ -646,6 +947,17 @@ def _key_known(known, value):
     return isinstance(value, str) and value.lower() in known
 
 
+def accdb_columns(fx_path, table_name):
+    """The Access column names of one table, in the file's own order."""
+    from . import accdb
+    try:
+        return accdb.columns(fx_path, table_name)
+    except accdb.AccdbError as exc:
+        raise ValidationError(
+            "Coloanele tabelului «%s» nu au putut fi citite din fișierul Access: %s"
+            % (table_name, exc))
+
+
 def _iter_table(fx_path, table_name, say):
     from . import accdb
     try:
@@ -657,7 +969,7 @@ def _iter_table(fx_path, table_name, say):
 
 
 def _check_foreign_keys(conn, schema, table, fk_values, report, say,
-                        db_name, in_run, written_pks):
+                        db_name, in_run, written_pks, target_columns):
     """
     O interogare pe cheie straina, in loturi. Nu incarcam tabelul referit in
     memorie: pot fi nomenclatoare de zeci de mii de randuri.
@@ -666,6 +978,20 @@ def _check_foreign_keys(conn, schema, table, fk_values, report, say,
     inaintea acestuia in ordinea de scriere), o valoare care nu e inca pe tinta
     dar E printre randurile care se vor scrie NU lipseste: pe o baza goala
     absolut totul ar iesi «lipsa» altfel — exact pe dos.
+
+    Ten of the constraints point OUTSIDE the migrated set (Parteneri,
+    Clasificatii, Unitati). «Inlocuieste tot» cannot help there -- those parents
+    are neither emptied nor written -- so the probe below is the only answer, and
+    it is the same probe: `incoming` is simply None for them.
+
+    An orphan is then judged by the CHILD COLUMN, not by the table:
+
+      * the column accepts NULL -> the row is WRITTEN, with that column emptied.
+        The row is kept; only the link is lost. FORTABIL, one finding per row.
+        (Operator decision, 2026-08-22, replacing «skip the row» for this case.)
+      * the column is NOT NULL -> NULL is not available, so there is no way to
+        keep the row and nothing may be written. BLOCANT, with the column named.
+        FX_ORD_TBL.IdUnitate is the one that will meet this.
     """
     for fk in schema.foreign_keys.get(table.name, []):
         collected = fk_values.get((fk["coloana"], fk["nume"]))
@@ -684,6 +1010,11 @@ def _check_foreign_keys(conn, schema, table, fk_values, report, say,
                "" if incoming is None
                else "; se socotesc și rândurile scrise în aceeași rulare"))
 
+        # A parent whose key is AUTO_INCREMENT can hold no row 0, so a 0 in the
+        # child is an orphan whatever the probe answers -- including when this
+        # very run would write a 0 into the parent.
+        zero_is_orphan = schema.referenced_is_auto(fk)
+
         ref = "`%s`.`%s`" % (fk["schema_ref"], fk["tabel_ref"])
         values = list(collected.keys())
         present = set()
@@ -701,12 +1032,39 @@ def _check_foreign_keys(conn, schema, table, fk_values, report, say,
         finally:
             cur.close()
 
-        missing = [v for v in values
-                   if not _key_known(present, v)
-                   and not (incoming is not None and _key_known(incoming, v))]
-        if missing:
+        def _orphan(value):
+            if zero_is_orphan and _as_int(value) == 0:
+                return True
+            if _key_known(present, value):
+                return False
+            return not (incoming is not None and _key_known(incoming, value))
+
+        missing = [v for v in values if _orphan(v)]
+        if not missing:
+            continue
+
+        meta = target_columns.get(fk["coloana"]) or {}
+        rows = sum(collected[v]["numar"] for v in missing)
+        if meta.get("accepta_nul"):
+            report.null_fk.setdefault((table.name, fk["coloana"]), set()).update(missing)
+            for value in missing:
+                report.add(table.name, fk["coloana"], F_CHEIE_STRAINA,
+                           collected[value]["cheie"],
+                           "valoarea nu există în %s.%s — coloana acceptă NULL, "
+                           "deci rândul se scrie cu «%s» gol"
+                           % (fk["tabel_ref"], fk["coloana_ref"], fk["coloana"]),
+                           value, count=collected[value]["numar"])
+            say("«%s»: %d valori %s fără corespondent, scrise ca NULL."
+                % (table.name, rows, fk["coloana"]))
+        else:
             report.missing_fk.setdefault((table.name, fk["coloana"]), set()).update(missing)
             for value in missing:
-                report.add(table.name, fk["coloana"], F_CHEIE_STRAINA, collected[value],
-                           "valoarea nu există în %s.%s"
-                           % (fk["tabel_ref"], fk["coloana_ref"]), value)
+                report.add(table.name, fk["coloana"], F_CHEIE_STRAINA_OBLIGATORIE,
+                           collected[value]["cheie"],
+                           "valoarea nu există în %s.%s, iar «%s» nu acceptă NULL "
+                           "— rândul nu poate fi nici scris, nici golit"
+                           % (fk["tabel_ref"], fk["coloana_ref"], fk["coloana"]),
+                           value, count=collected[value]["numar"])
+            say("«%s»: %d rânduri au «%s» fără corespondent, iar coloana nu "
+                "acceptă NULL — blocant."
+                % (table.name, rows, fk["coloana"]))

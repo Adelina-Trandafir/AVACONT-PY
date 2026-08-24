@@ -94,6 +94,7 @@ funcționează** — importurile relative cer forma cu `-m`.
 | `schema_generate.py` | rulează comparația și o salvează în `schema_diff_log` |
 | `schema_execute.py` | execută ce s-a salvat |
 | `schema_sync.py` | le combină pe amândouă — fișierul pe care îl rulați |
+| `schema_service.py` | aceiași pași, dar ca funcție, pentru ruta HTTP; nu se rulează de mână |
 
 ---
 
@@ -387,6 +388,47 @@ Cele două faze se pot rula și separat, cu `schema_generate` și
 
 ---
 
+## Din K-BOT Migrator, peste HTTP
+
+Migratorul este o fereastră Windows, iar bazele sunt aici, pe server. Ca
+să nu-i trebuiască un cont de shell și o cheie SSH pe calculatorul
+fiecărui operator, aceiași pași se pot porni și printr-o rută, păzită de
+aceeași `X-Api-Key` ca restul rutelor de migrare:
+
+```
+POST /api/migrare/schema-sync
+{ "dc": "000_DEMO", "mod": "SAFE" }
+   -> { "ok": true, "lucrare": "<id>" }
+
+GET  /api/migrare/stare/<id>?de_la=<câte rânduri s-au citit deja>
+```
+
+Ruta pornește o lucrare și întoarce imediat un identificator; jurnalul se
+citește din `stare`, rând cu rând, cât timp rularea este încă în curs —
+aceeași buclă pe care migratorul o folosește deja pentru analiză și
+pentru scriere.
+
+| Câmp din cerere | Înlocuiește |
+|---|---|
+| `mod` | `--mode`; implicit `SAFE` |
+| `permite_distructive` | `--allow-destructive` **și** confirmarea tastată `DA`, care nu are cine să o tasteze într-o cerere |
+| `doar_vezi` | `--view` |
+
+Nu există `--targets` cu mai multe baze: ruta primește **o singură**
+bază, cea aleasă în migrator, și îi verifică forma (`000_DEMO`) înainte
+de orice. Bazele de serviciu — `AVACONT_SURSA`, `AVACONT_COMUN` — sunt
+refuzate, ca și în linia de comandă.
+
+**O rulare o dată, pe tot serverul.** Două sincronizări în paralel și-ar
+încurca instrucțiunile în același `schema_diff_log`; a doua primește
+«O sincronizare de schemă este deja în curs pe server» și nu pornește.
+
+Linia de comandă rămâne neatinsă și este în continuare calea de urmat
+pentru `--drop-legacy`, pentru mai multe baze deodată și pentru orice
+rulare în care vreți să citiți rezumatul înainte de a răspunde.
+
+---
+
 ## Redenumirea unei coloane
 
 Ca să redenumiți o coloană în toate bazele, puneți în `AVACONT_SURSA`, în
@@ -496,6 +538,11 @@ Numărul erorii se salvează în `schema_diff_log`, nu doar textul.
 - Nu atinge datele — doar structura.
 - Nu sincronizează vederi (`views`), proceduri sau declanșatoare.
 - Nu modifică `AVACONT_COMUN` și nu o tratează niciodată ca țintă.
-- Nu sare peste coloanele generate (`GENERATED ... PERSISTENT`) — le
-  ignoră complet, la comparație și la creare.
+- Nu compară coloanele generate (`GENERATED ALWAYS AS ... STORED /
+  VIRTUAL`): nu le modifică și nu le șterge niciodată într-o bază care
+  există deja. La **creare** însă sunt scrise întocmai ca în sursă, cu
+  expresia lor cu tot — altfel tabelul nou ar rămâne fără o coloană pe
+  care aplicația o citește. (Până la 2026-08-23 erau scrise greșit, fără
+  expresie, și `CREATE TABLE` cădea cu 1064; vezi
+  `tests/test_schema_diff_columns.py`.)
 - Nu restaurează singur o copie de siguranță.

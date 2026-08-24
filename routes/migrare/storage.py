@@ -68,6 +68,25 @@ def pushed_dir():
     return path
 
 
+def sql_dir():
+    """
+    Folderul in care ramane, in text simplu, SQL-ul pe care fiecare scriere l-a
+    trimis. Un dosar propriu, nu sub PUSHED_ACCDB_DIR: acolo stau fisiere
+    Access, aici o consemnare.
+
+    Vine din config.MIGRARE_SQL_DIR, dupa aceeasi regula ca `pushed_dir`: fara
+    valoare implicita ascunsa. Lipsa cheii opreste scrierea cu numele ei, nu
+    scrie in cine stie ce cale.
+    """
+    path = getattr(config, "MIGRARE_SQL_DIR", None)
+    if not path:
+        raise StorageError(
+            "MIGRARE_SQL_DIR lipsește din config.py — serverul nu știe unde să "
+            "lase instrucțiunile SQL ale migrării.")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 def _temp_root():
     path = getattr(config, "TEMP_UPLOAD_DIR", None)
     if not path:

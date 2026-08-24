@@ -141,7 +141,77 @@ def list_tables(path):
     return tables
 
 
-_COL_RE = re.compile(r"^\s*`(?P<name>[^`]+)`\s+(?P<type>[A-Za-z0-9_ ]+?)\s*(?:\((?P<size>[0-9, ]+)\))?\s*,?\s*$")
+# The NAME is the only thing this has to get right, so it is the only thing
+# matched strictly: a backtick-quoted name, then whatever else the line carries.
+# Everything after it is best-effort -- see `_parse_column`.
+#
+# This used to be ONE anchored expression covering name + type + optional size
+# and nothing else, which meant that any line with something AFTER the size --
+# ``CodAngajament` varchar (50) NOT NULL,` -- matched nothing and the column was
+# dropped from the list WITHOUT A WORD. That is how `CodAngajament` went missing
+# from the migrator's column grid and, downstream, from the INSERT: MariaDB then
+# answered 1364 about a column the operator never chose to leave out.
+_COL_RE = re.compile(r"^\s*`(?P<name>[^`]+)`\s+(?P<rest>.*?)\s*,?\s*$")
+
+# What mdb-schema's mysql backend may append after the type. Stripped one at a
+# time, from the end, so the order in the line does not matter.
+_CONSTRAINT_RE = re.compile(
+    r"\s+(NOT\s+NULL|NULL|AUTO_INCREMENT|PRIMARY\s+KEY|UNIQUE(\s+KEY)?"
+    r"|DEFAULT\s+\S+|COMMENT\s+.*)$", re.IGNORECASE)
+
+_TYPE_RE = re.compile(
+    r"^(?P<type>[A-Za-z][A-Za-z0-9_ ]*?)\s*(?:\((?P<size>[0-9, ]+)\))?$")
+
+
+def _parse_column(line):
+    """
+    One line of a `mdb-schema ... mysql` CREATE TABLE body -> {"nume", "tip",
+    "marime"}, or None when the line holds no column at all.
+
+    A column is NEVER dropped for having a type this cannot read. The type here
+    decides nothing -- validation reads it from MariaDB, which is what accepts or
+    refuses the row -- while a missing NAME silently changes the INSERT. So an
+    unreadable type yields "" and the column stays.
+    """
+    m = _COL_RE.match(line)
+    if m is None:
+        return None
+
+    rest = m.group("rest")
+    while True:
+        stripped = _CONSTRAINT_RE.sub("", rest)
+        if stripped == rest:
+            break
+        rest = stripped
+
+    tip, marime = "", None
+    t = _TYPE_RE.match(rest.strip())
+    if t is not None:
+        tip = t.group("type").strip().upper()
+        size = t.group("size")
+        first = size.split(",")[0].strip() if size else ""
+        marime = int(first) if first.isdigit() else None
+
+    return {"nume": m.group("name"), "tip": tip, "marime": marime}
+
+
+def parse_columns(text):
+    """The columns of one `mdb-schema ... mysql` output, in the file's order."""
+    cols = []
+    inside = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.upper().startswith("CREATE TABLE"):
+            inside = True
+            continue
+        if not inside:
+            continue
+        if stripped.startswith(")"):
+            break
+        col = _parse_column(line)
+        if col is not None:
+            cols.append(col)
+    return cols
 
 
 def columns(path, table):
@@ -155,26 +225,7 @@ def columns(path, table):
     """
     out = _run([_tool("mdb-schema"), "--table", table, path, "mysql"], SHORT_TIMEOUT)
 
-    cols = []
-    inside = False
-    for line in out.splitlines():
-        stripped = line.strip()
-        if stripped.upper().startswith("CREATE TABLE"):
-            inside = True
-            continue
-        if not inside:
-            continue
-        if stripped.startswith(")"):
-            break
-        m = _COL_RE.match(line)
-        if m:
-            size = m.group("size")
-            cols.append({
-                "nume": m.group("name"),
-                "tip": m.group("type").strip().upper(),
-                "marime": int(size.split(",")[0]) if size and size.strip().split(",")[0].strip().isdigit() else None,
-            })
-
+    cols = parse_columns(out)
     if not cols:
         raise AccdbError(
             "Nu s-au putut citi coloanele tabelului «%s» din «%s»."

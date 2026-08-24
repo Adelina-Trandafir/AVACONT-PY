@@ -163,7 +163,14 @@ class TableSelector(object):
         self.plan = plan
 
     def primary_key_of(self, row):
-        value = row.get(self.table.primary_key)
+        """
+        The row's key, for the report. `access_key`, NOT `primary_key`: this
+        reads an ACCESS row, and on the ORD family the target's key is the
+        P-suffix column while Access carries the plain one. Reading
+        `primary_key` here would report every ORD row under the Access `IDORDP`
+        column, which is all zeros.
+        """
+        value = row.get(self.table.access_key)
         return "?" if value is None else str(value)
 
     def keep(self, row):
@@ -472,4 +479,7 @@ def _rows(fx_path, table, say):
         for row in accdb.iter_rows(fx_path, table):
             yield row
     except accdb.AccdbError as exc:
+        # Spus operatorului SI serverului: jurnalul lucrarii traieste doua ore,
+        # jurnalul serverului pastreaza urma intreaga.
+        logger.exception("migrare/rutare: «%s» nu a putut fi citit", table)
         say("«%s» nu a putut fi citit la construirea selecției: %s" % (table, exc))

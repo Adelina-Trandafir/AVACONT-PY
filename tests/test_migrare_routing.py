@@ -236,13 +236,21 @@ def test_setul_are_ordinea_ceruta_de_operator():
     assert len(nume) == 27
     # Ordinea numerotata de operator (2026-08-21): cele 23, apoi cele patru
     # ramase in afara numerotarii, cu parintii mereu inaintea copiilor.
+    #
+    # Pe 2026-08-22 perechea DDF a urcat pe pozitiile 3 si 4: FX_Rezervari.IDREV
+    # are cheie straina pe FX_DDF_REV (FX_Rezervari__FX_DDF_REV), iar o cheie
+    # straina cere randul parinte PREZENT la INSERT — golirea parintelui in
+    # «Inlocuieste tot» face esecul sigur, nu il evita. Nimic altceva nu s-a
+    # mutat.
     assert nume[:23] == [
-        "FX_Angajamente", "FX_Indicatori", "FX_Istoric", "FX_Rezervari",
+        "FX_Angajamente", "FX_Indicatori", "FX_DDF", "FX_DDF_REV",
+        "FX_Istoric", "FX_Rezervari",
         "FX_Receptii_R", "FX_Receptii_RHR", "FX_Receptii_H", "FX_Receptii",
         "FX_Plati", "FX_Extrase_F", "FX_Extrase_H", "FX_Extrase",
-        "FX_DDF", "FX_DDF_REV", "FX_DDF_REV_SA", "FX_DDF_REV_SB",
+        "FX_DDF_REV_SA", "FX_DDF_REV_SB",
         "FX_DDF_REV_ATT", "FX_DDF_REV_PRT",
         "FX_ORD", "FX_ORD_PART", "FX_ORD_TBL", "FX_ORD_DOC", "FX_ORD_ATT"]
+    assert nume.index("FX_DDF_REV") < nume.index("FX_Rezervari")
     assert nume.index("FX_Rezervari") < nume.index("FX_Rezervarii_IMG")
     assert nume.index("FX_Receptii_R") < nume.index("FX_Receptii_IMG")
     assert nume.index("FX_Receptii_H") < nume.index("FX_Receptii_Plati")

@@ -150,6 +150,29 @@ def format_charset(col) -> str:
     return f" CHARACTER SET {col.charset} COLLATE {col.collation}"
 
 
+def format_generated(col) -> str:
+    """The GENERATED ALWAYS AS (...) clause for a generated column.
+
+    EXTRA reads "STORED GENERATED" or "VIRTUAL GENERATED". That is a
+    DESCRIPTION, not syntax. Appending it the way every other column's
+    EXTRA is appended produces
+
+        `TOTAL` double STORED GENERATED
+
+    which is errno 1064, and it also loses the only part that matters:
+    the expression lives in GENERATION_EXPRESSION and has to be written
+    out, or there is nothing to generate FROM.
+
+    VIRTUAL is the fallback because it is MariaDB's own default when the
+    kind is not spelled out -- but EXTRA does spell it out in practice,
+    so the fallback should never be reached.
+    """
+    extra = (col.extra or "").upper()
+    stored = "STORED" in extra or "PERSISTENT" in extra
+    kind = "STORED" if stored else "VIRTUAL"
+    return f" GENERATED ALWAYS AS ({col.generation_expr}) {kind}"
+
+
 def column_definition(col, name: str = None, comment: str = None) -> str:
     """Full column definition as it appears in CREATE or ALTER.
 
@@ -158,12 +181,20 @@ def column_definition(col, name: str = None, comment: str = None) -> str:
     """
     parts = [q(name or col.name), " ", col.column_type]
     parts.append(format_charset(col))
-    parts.append("" if col.is_nullable else " NOT NULL")
-    if col.is_nullable and col.default is None and not col.is_generated:
-        pass  # format_default emits DEFAULT NULL below
-    parts.append(format_default(col))
-    if col.extra:
-        parts.append(f" {col.extra}")
+
+    if col.is_generated:
+        # Nothing else fits here. MariaDB's grammar for a generated
+        # column is  type [CHARACTER SET ...] GENERATED ALWAYS AS (expr)
+        # VIRTUAL|STORED [COMMENT ...]  -- no DEFAULT, because the value
+        # comes from the expression, and no NULL / NOT NULL, which the
+        # grammar does not accept in that position.
+        parts.append(format_generated(col))
+    else:
+        parts.append("" if col.is_nullable else " NOT NULL")
+        parts.append(format_default(col))
+        if col.extra:
+            parts.append(f" {col.extra}")
+
     final_comment = col.effective_comment if comment is None else comment
     if final_comment:
         parts.append(f" COMMENT {quote_literal(final_comment)}")
