@@ -26,6 +26,7 @@ def _ensure_importable():
         except Exception:
             cfg = types.ModuleType("config")
             cfg.DB_CONFIG = {}
+            cfg.DB_CONFIG_NEW = {}
             cfg.API_KEY = "test"
             sys.modules["config"] = cfg
     if "mysql.connector" not in sys.modules:
@@ -110,7 +111,7 @@ def app(monkeypatch):
 
     # No real MariaDB: identity always valid, reader returns canned rows, audit no-op.
     monkeypatch.setattr(auth_module, "_verify_operator", lambda u, p: True)
-    monkeypatch.setattr(auth_module, "get_comun_reader_connection", lambda: _FakeConn())
+    monkeypatch.setattr(auth_module, "get_kbot_comun_connection", lambda: _FakeConn())
     monkeypatch.setattr(auth_module, "_log_action", lambda *a, **k: None)
 
     flask_app = Flask(__name__)

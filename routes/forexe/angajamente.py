@@ -14,7 +14,7 @@ import logging
 from flask import request, jsonify
 
 from routes.auth.guard import require_session    # bearer opac (Felia 1 auth)
-from utils.database import get_db_connection     # R5 verificat: database.py:9
+from utils.database import get_kbot_connection   # serverul K-BOT (DB_CONFIG_NEW)
 # R5 verificat: validatorul canonic db_name traieste in routes/admin.py:24
 # (DB_NAME_REGEX = ^[A-Za-z0-9_]+$, ridica ValueError("db_name invalid")).
 from routes.admin import _validate_db_name
@@ -137,7 +137,7 @@ def get_angajamente():
 
     conn = None
     try:
-        conn = get_db_connection(db_name)
+        conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
         cursor.execute(sql, params)
         rows = []
@@ -195,7 +195,7 @@ def upsert_angajamente():
 
     conn = None
     try:
-        conn = get_db_connection(db_name)
+        conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
         conn.start_transaction()
         cursor.executemany(_UPSERT_SQL, values)

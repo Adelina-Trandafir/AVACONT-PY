@@ -23,6 +23,7 @@ def _ensure_importable():
         except Exception:
             cfg = types.ModuleType("config")
             cfg.DB_CONFIG = {}
+            cfg.DB_CONFIG_NEW = {}
             cfg.API_KEY = "test"
             sys.modules["config"] = cfg
     if "mysql.connector" not in sys.modules:

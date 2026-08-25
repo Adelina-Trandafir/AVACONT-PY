@@ -4,7 +4,7 @@
 # Preconditions (see handoff §9):
 #   1) FX_Angajamente exists on the 000_DEMO MariaDB (gates the insert/update test);
 #   2) config.py is present on the host (utils.database needs it);
-#   3) the direct-verification step hits get_db_connection("000_DEMO") and always
+#   3) the direct-verification step hits get_kbot_connection("000_DEMO") and always
 #      cleans up its T1 row.
 #
 # Auth: the routes are guarded by @require_session (bearer token). The tests mint
@@ -20,7 +20,7 @@ import pytest
 try:
     from main import app
     from routes.auth.session_store import STORE
-    from utils.database import get_db_connection
+    from utils.database import get_kbot_connection
 except Exception as e:                              # pragma: no cover - off-host
     pytest.skip(f"host-only test (config.py / app imports unavailable): {e}",
                 allow_module_level=True)
@@ -128,7 +128,7 @@ def test_get_returns_list_shape(client, auth_headers):
 def test_get_orphan_row_has_null_surse_and_sorts_last(client, auth_headers):
     """An angajament with NO FX_Indicatori rows appears via the orphan branch
     (scoped by DC = db_name) with Surse = null and O = 1 (sorts after main rows)."""
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     try:
         cur = conn.cursor()
         cur.execute("DELETE FROM FX_Angajamente WHERE CodAngajament = %s", ("ORPH1",))
@@ -156,7 +156,7 @@ def test_get_doar_anulate_switches_the_filter(client, auth_headers):
     """doar_anulate=1 replaces the IdUnitate filter with the anulate/suspendat/ascuns
     condition: a row whose IdUnitate would NOT match id_unitate=0 is hidden normally
     but visible when doar_anulate=1 because its Stare contains 'Anulat'."""
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     try:
         cur = conn.cursor()
         cur.execute("DELETE FROM FX_Indicatori WHERE CodAngajament = %s", ("ANUL1",))
@@ -193,7 +193,7 @@ def test_get_doar_anulate_switches_the_filter(client, auth_headers):
 def test_insert_then_update_refreshes_descriere_stare(client, auth_headers):
     """Upsert semantics: INSERT sets DC + Preluat=1; the duplicate refreshes ONLY
     Descriere/Stare. Verified directly in FX_Angajamente, then the T1 row is deleted."""
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     try:
         body1 = {"db_name": DB_NAME, "rows": [{"Cod": "T1", "Descriere": "D1", "Stare": "S1"}]}
         assert client.post(URL, headers=auth_headers, data=json.dumps(body1)).status_code == 200

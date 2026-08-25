@@ -17,7 +17,7 @@ import pytest
 try:
     from main import app
     from routes.auth.session_store import STORE
-    from utils.database import get_db_connection
+    from utils.database import get_kbot_connection
 except Exception as e:                              # pragma: no cover - off-host
     pytest.skip(f"host-only test (config.py / app imports unavailable): {e}",
                 allow_module_level=True)
@@ -75,7 +75,7 @@ def demo_rows():
     TREEO : DataCreare in AN, ZERO indicators (orphan) -> always visible (SS escape).
     TREEX : DataCreare in AN, indicators ALL under a DIFFERENT SS -> hidden by SS.
     """
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     cur = conn.cursor()
     codes = ("TREE1", "TREEH", "TREEA", "TREEN", "TREEO", "TREEX")
     try:

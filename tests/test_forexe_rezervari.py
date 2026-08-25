@@ -18,7 +18,7 @@ import pytest
 try:
     from main import app
     from routes.auth.session_store import STORE
-    from utils.database import get_db_connection
+    from utils.database import get_kbot_connection
 except Exception as e:                              # pragma: no cover - off-host
     pytest.skip(f"host-only test (config.py / app imports unavailable): {e}",
                 allow_module_level=True)
@@ -98,7 +98,7 @@ def demo_rows():
     IdClsfAcc sub ALTA unitate. Cu un JOIN, fiecare rezervare a lui IND-A ar aparea de
     2-3 ori; cu subinterogarea scalara + LIMIT 1, exact o data.
     """
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     cur = conn.cursor()
     codes = (COD, COD_GOL)
     unitati = _unitati(cur, 2)

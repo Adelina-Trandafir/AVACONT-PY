@@ -2,14 +2,20 @@
 """
 K-BOT login / session endpoints.
 
+EVERY connection in this module goes to the K-BOT server (DB_CONFIG_NEW), never
+to the legacy one the Access/VBA clients still write to — login, the login tables
+and the audit journal all live there. See utils/database.py for the split.
+
 Model (option A):
   - Identity is proven by trying to log in to MariaDB AS the operator
     (username = e-mail, lowercase). If that login works, the person is real.
     The password is used ONLY for that check and is then thrown away — it is
     never stored in the session.
   - Which databases a person may open, their role, and their last SS come from
-    three tables in AVACONT_COMUN, read through the read-only 'db_reader'
-    account (get_comun_reader_connection). Operators never touch AVACONT_COMUN:
+    three tables in AVACONT_COMUN, read through the service account
+    (get_kbot_comun_connection). The read-only 'db_reader' account existed only
+    on the legacy server and has no counterpart on the new one, so the reads use
+    the same account as the writes. Operators never touch AVACONT_COMUN:
       * Unitati               (DC, NumeUnitate, CF)
       * Unitati_Utilizatori   (UN, DC, Rol, LastSS)
       * Unitati_Ani           (DC, AN, SS, CodProgram)
@@ -38,8 +44,8 @@ from datetime import datetime, timezone
 import mysql.connector
 from flask import Blueprint, request, jsonify, g
 
-from config import DB_CONFIG
-from utils.database import get_db_connection, get_comun_reader_connection
+from utils.database import (get_kbot_connection, get_kbot_comun_connection,
+                            kbot_server_address)
 from routes.auth.session_store import STORE, REASON_CONTEXT_MISMATCH
 from routes.auth.guard import require_session, json_response
 from routes.auth.ratelimit import LIMITER
@@ -74,11 +80,12 @@ def _verify_operator(username: str, password: str) -> bool:
     Connects with NO default database (operator accounts are USAGE-only).
     The connection is opened only to prove the password, then closed at once.
     """
+    host, port = kbot_server_address()
     conn = None
     try:
         conn = mysql.connector.connect(
-            host=DB_CONFIG["host"],
-            port=DB_CONFIG.get("port", 3306),
+            host=host,
+            port=port,
             user=username,
             password=password,
             connection_timeout=10,
@@ -102,7 +109,7 @@ def _log_action(un, dc, actiune, tinta=None, detalii=None,
                 rezultat="OK", masina=None, ip=None):
     conn = None
     try:
-        conn = get_db_connection(COMMON_DB)     # DB_CONFIG service account
+        conn = get_kbot_connection(COMMON_DB)   # contul de serviciu al serverului K-BOT
         cur = conn.cursor()
         cur.execute(
             """
@@ -167,7 +174,7 @@ def auth_units():
 
     conn = None
     try:
-        conn = get_comun_reader_connection()
+        conn = get_kbot_comun_connection()
         cursor = conn.cursor(dictionary=True)   # dictionary=True -> rows as {col: value}
         cursor.execute(
             """
@@ -226,7 +233,7 @@ def auth_login():
 
     conn = None
     try:
-        conn = get_comun_reader_connection()
+        conn = get_kbot_comun_connection()
         cursor = conn.cursor(dictionary=True)
 
         # Authorization: is this user actually granted this database?
@@ -319,7 +326,7 @@ def auth_periods():
 
     conn = None
     try:
-        conn = get_comun_reader_connection()
+        conn = get_kbot_comun_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
@@ -345,7 +352,7 @@ def auth_periods():
 # Body: { "ss": "<SS>" }
 # Remembers the SS for THIS user on THIS database. The (user, database) come
 # from the token's session, never from the client, so a user can't write another
-# user's row. Written by the API service account (db_reader is read-only).
+# user's row.
 # ---------------------------------------------------------------------------
 @auth_bp.route("/api/auth/last-ss", methods=["POST"])
 @require_session
@@ -358,10 +365,10 @@ def auth_last_ss():
     un = g.session.username
     dc = g.session.db_name
 
-    # Validate SS is a real SS for this database (read-only reader).
+    # Validate SS is a real SS for this database.
     rconn = None
     try:
-        rconn = get_comun_reader_connection()
+        rconn = get_kbot_comun_connection()
         rcur = rconn.cursor()
         rcur.execute(
             "SELECT 1 FROM Unitati_Ani WHERE DC = %s AND SS = %s LIMIT 1",
@@ -378,10 +385,10 @@ def auth_last_ss():
     if not known_ss:
         return jsonify({"error": "SS necunoscut pentru această unitate."}), 400
 
-    # Write via the service account (has UPDATE on Unitati_Utilizatori).
+    # Write on a transactional connection (the read above is autocommit).
     wconn = None
     try:
-        wconn = get_db_connection(COMMON_DB)    # DB_CONFIG service account
+        wconn = get_kbot_connection(COMMON_DB)  # contul de serviciu al serverului K-BOT
         wcur = wconn.cursor()
         wcur.execute(
             "UPDATE Unitati_Utilizatori SET LastSS = %s WHERE UN = %s AND DC = %s",

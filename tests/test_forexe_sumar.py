@@ -18,7 +18,7 @@ import pytest
 try:
     from main import app
     from routes.auth.session_store import STORE
-    from utils.database import get_db_connection
+    from utils.database import get_kbot_connection
 except Exception as e:                              # pragma: no cover - off-host
     pytest.skip(f"host-only test (config.py / app imports unavailable): {e}",
                 allow_module_level=True)
@@ -116,7 +116,7 @@ def demo_rows():
     Cu un JOIN, IND-A ar aparea de 2 ori (sau de 3, fara predicatul IdUnitate).
     Cu subinterogarea scalara + LIMIT 1, exact o data.
     """
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     cur = conn.cursor()
     codes = (COD, COD_GOL)
     unitati = _unitati(cur, 2)
@@ -373,13 +373,3 @@ def test_rows_are_deterministically_ordered(client, auth_headers, demo_rows):
     first = client.get(f"{URL}?cod={COD}", headers=auth_headers).get_json()["rows"]
     second = client.get(f"{URL}?cod={COD}", headers=auth_headers).get_json()["rows"]
     assert [r["cod_indicator"] for r in first] == [r["cod_indicator"] for r in second]
-
-
-def test_debug_dump(client, auth_headers):
-    import json
-    resp = client.get("/api/forexe/sumar?cod=AAB2EF2MCP4", headers=auth_headers)
-    data = resp.get_json()
-    print("\nSTATUS:", resp.status_code)
-    print("HEADER:", json.dumps(data.get("header"), ensure_ascii=False, indent=2))
-    print("NR RANDURI:", len(data.get("rows") or []))
-    print(json.dumps(data.get("rows"), ensure_ascii=False, indent=2)[:1500])

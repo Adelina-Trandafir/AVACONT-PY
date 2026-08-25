@@ -17,7 +17,7 @@ import pytest
 try:
     from main import app
     from routes.auth.session_store import STORE
-    from utils.database import get_db_connection
+    from utils.database import get_kbot_connection
 except Exception as e:                              # pragma: no cover - off-host
     pytest.skip(f"host-only test (config.py / app imports unavailable): {e}",
                 allow_module_level=True)
@@ -123,7 +123,7 @@ def demo_rows():
     invers fata de FX_Indicatori), deci fixture-ul insereaza intai clasificatia si CITESTE
     IDClsf-ul generat. A hardcoda un id ar pica pe constrangere.
     """
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     cur = conn.cursor()
     id_unitate = _unitate(cur)
     try:
@@ -461,7 +461,7 @@ def test_report_duplicate_cod_angajament_count(client, auth_headers, capsys):
     interogare Access presupune ca nu se intampla. Acest test NU pica niciodata — doar
     raporteaza numarul, ca sa se poata scrie in worklog daca §2.7 e teoretic sau real.
     """
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     try:
         cur = conn.cursor()
         cur.execute(

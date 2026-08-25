@@ -55,7 +55,7 @@ import logging
 from flask import request, g, current_app
 
 from routes.auth.guard import require_session
-from utils.database import get_db_connection
+from utils.database import get_kbot_connection
 
 from . import forexe_bp
 
@@ -140,7 +140,7 @@ def get_plati():
 
     conn = None
     try:
-        conn = get_db_connection(db_name)
+        conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
 
         # SQL parametrizat — `cod` nu se interpoleaza NICIODATA in text.

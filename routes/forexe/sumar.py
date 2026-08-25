@@ -76,7 +76,7 @@ import logging
 from flask import request, g, current_app
 
 from routes.auth.guard import require_session
-from utils.database import get_db_connection
+from utils.database import get_kbot_connection
 
 from . import forexe_bp
 
@@ -158,8 +158,11 @@ _SQL = (
     "             AND T.CodAI IN (SELECT CodAI FROM FX_Indicatori "
     "                             WHERE CodAngajament = %s) "
     "           GROUP BY T.CodAI) aggOrd ON I.CodAI = aggOrd.CodAI "
-    "WHERE A.CodAngajament = %s "
-    "GROUP BY I.CodIndicator "
+    "WHERE IST.Descriere = 'Angajament nou.' "
+    "AND A.CodAngajament = %s "
+    # Nu mai exista aliasul C (join-ul a devenit subinterogare scalara), deci se
+    # ordoneaza dupa aliasul de iesire — MariaDB accepta alias-uri de SELECT in
+    # ORDER BY, si asa subinterogarea nu se mai evalueaza a doua oara.
     "ORDER BY Clsf, I.CodIndicator"
 )
 
@@ -213,7 +216,7 @@ def get_sumar():
 
     conn = None
     try:
-        conn = get_db_connection(db_name)
+        conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
         # Cei sapte %s in ordinea aparitiei in textul SQL: aggRez, aggRec, aggPlati,
         # aggRev, apoi DOI in aggOrd (T.CodAngajament + subinterogarea pe CodAI) si

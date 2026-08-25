@@ -44,6 +44,7 @@ except ImportError:
     _stub = types.ModuleType("config")
     _stub.DB_CONFIG = {"host": "unused", "port": 3306,
                        "user": "unused", "password": "unused"}
+    _stub.DB_CONFIG_NEW = dict(_stub.DB_CONFIG)
     _stub.API_KEY = "unused"
     sys.modules["config"] = _stub
 

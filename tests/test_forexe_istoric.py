@@ -19,7 +19,7 @@ import pytest
 try:
     from main import app
     from routes.auth.session_store import STORE
-    from utils.database import get_db_connection
+    from utils.database import get_kbot_connection
 except Exception as e:                              # pragma: no cover - off-host
     pytest.skip(f"host-only test (config.py / app imports unavailable): {e}",
                 allow_module_level=True)
@@ -115,7 +115,7 @@ def demo_rows():
 
     Clsf/Titlu/SS sunt coloane GENERATED, deci NU se scriu.
     """
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     cur = conn.cursor()
     id_unitate = _unitate(cur)
     try:
@@ -333,7 +333,7 @@ def test_report_duplicate_clsf_finding(client, auth_headers, capsys):
     livrate sunt afectate. Testul NU pica niciodata — doar raporteaza, ca sa se scrie in
     worklog. Inchide punctul deschis din Status_migrare_5 §9 la fiecare rulare pe host.
     """
-    conn = get_db_connection(DB_NAME)
+    conn = get_kbot_connection(DB_NAME)
     try:
         cur = conn.cursor()
         cur.execute(

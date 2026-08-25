@@ -30,7 +30,7 @@ from flask import request, jsonify, g, current_app
 import json
 
 from routes.auth.guard import require_session    # bearer opac (Felia 1 auth)
-from utils.database import get_db_connection     # R5 verificat: database.py:9
+from utils.database import get_kbot_connection   # serverul K-BOT (DB_CONFIG_NEW)
 
 from . import forexe_bp
 
@@ -144,7 +144,7 @@ def get_tree():
 
     conn = None
     try:
-        conn = get_db_connection(db_name)
+        conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
         cursor.execute(_SQL, (an, ss, include_hidden))
         rows = []
