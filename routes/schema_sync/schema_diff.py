@@ -29,7 +29,8 @@ leaving a mismatch in place makes later key creation fail.
 
 from dataclasses import dataclass
 
-from .schema_common import SOURCE_DB, SchemaSyncError, priority_of, query
+from .schema_common import (SOURCE_DB, SchemaSyncError, is_exempt_column,
+                            priority_of, query)
 from .schema_introspect import read_schema
 
 # Rules that never route through the diff.
@@ -385,6 +386,12 @@ class SchemaDiff:
         for col in src_tbl.columns_in_order():
             if col.is_generated:
                 continue                       # generated columns skipped
+            # The seven migrated primary keys: plain INT here, AUTO_INCREMENT
+            # on every migrated target, by design and forever. Neither
+            # reported nor rewritten. See schema_common.EXEMPT_COLUMNS and
+            # docs/PLAN_ForexeIngest.md 3.2.
+            if is_exempt_column(src_tbl.name, col.name):
+                continue
             old_name = col.rename_from
             tgt_col = tgt_tbl.columns.get(col.name)
 

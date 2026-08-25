@@ -37,6 +37,62 @@ CONTROL_DB = COMMON_DB
 # they happen to sit.
 EXCLUDED_TABLES = {"schema_diff_log"}
 
+# ---------------------------------------------------------------------
+# Columns the sync must not look at -- see docs/PLAN_ForexeIngest.md 3.2
+# ---------------------------------------------------------------------
+# These seven primary keys are plain `INT NOT NULL` in AVACONT_SURSA and
+# `INT NOT NULL AUTO_INCREMENT` in every MIGRATED unit database. That is
+# deliberate and permanent, not drift:
+#
+#   * The reference schema keeps them plain so that during a migration a
+#     row arriving with a missing, NULL or zero id RAISES instead of
+#     silently receiving a fabricated key from MariaDB (plan 3.1).
+#   * The ALTER that adds AUTO_INCREMENT is the LAST thing that happens
+#     to a unit database, once, after its transfer is verified. It is
+#     never applied to AVACONT_SURSA.
+#
+# So every migrated database differs from the reference on exactly these
+# seven columns, forever, and the sync must neither report nor rewrite
+# that difference.
+#
+# WRITTEN OUT AS A NAMED LIST ON PURPOSE. A rule such as "skip anything
+# auto_increment" would quietly swallow a real difference somewhere else;
+# this cannot.
+#
+# ACCEPTED COST, stated plainly: the exemption covers the WHOLE column,
+# not merely its AUTO_INCREMENT attribute. If anyone ever deliberately
+# changes one of these seven columns in AVACONT_SURSA -- a type change, a
+# width change -- it will NOT propagate, and the divergence will NOT be
+# reported. This list is where they will have to look.
+#
+# Safe because nothing edits these columns: they are primary keys whose
+# only property that ever changes is the one the migrator sets, once.
+#
+# Compared case-insensitively (see is_exempt_column): information_schema
+# reports names in whatever case the server stores them, and a server
+# running with lower_case_table_names=1 folds them.
+EXEMPT_COLUMNS = {
+    ("FX_Istoric",      "ID"),
+    ("FX_Receptii_R",   "IDRR"),
+    ("FX_Receptii_H",   "IDRH"),
+    ("FX_Receptii",     "IDR"),
+    ("FX_Receptii_RHR", "IDRHR"),
+    ("FX_Plati",        "IdPlataFX"),
+    ("FX_Rezervari",    "IDRZ"),
+}
+
+# Lower-cased once at import so the per-column test below is a plain set
+# lookup rather than a scan. A set is a dictionary with keys and no
+# values -- membership is a hash-table probe, not a loop.
+_EXEMPT_COLUMNS_LOWER = {(t.lower(), c.lower()) for t, c in EXEMPT_COLUMNS}
+
+
+def is_exempt_column(table_name: str, column_name: str) -> bool:
+    """True when this (table, column) is on the EXEMPT_COLUMNS list."""
+    if table_name is None or column_name is None:
+        return False
+    return (table_name.lower(), column_name.lower()) in _EXEMPT_COLUMNS_LOWER
+
 FORBIDDEN_TARGETS = {COMMON_DB, SOURCE_DB, "information_schema",
                      "performance_schema", "mysql", "sys"}
 
