@@ -1,0 +1,629 @@
+{
+ "cod": "AAB37CNBK95",
+ "workflow": "adlop - Prelucrare Completa.wfl",
+ "moment": "2026-08-26T10:00:00",
+ "scalari": {
+  "CodAngajament": "AAB37CNBK95",
+  "DataAngajament": "10/02/2026",
+  "DataInceputDerulare": "10/02/2026",
+  "UltimaModificare": "10/02/2026 22:46:36",
+  "DescriereAngajament": "2026 - NOVA WATER",
+  "StareAngajament": "În derulare"
+ },
+ "tabele": {
+  "TabelIndicatori_results": [
+   {
+    "Indicator_ang": "AAB",
+    "Program": "0000000000",
+    "Obiectiv": "---",
+    "Proiect": "---",
+    "Sector_Sursa_Indicator": "02E- 65. 03. 01. 20. 03. 01",
+    "Limita_credit_angajament": "819.500,00",
+    "Total_credit_angajament": "819.500,00",
+    "Credit_bugetar": "819.500,00",
+    "Angajament_legal": "3.587,00",
+    "Credit_bugetar_rezervat_definitiv_an_curent": "3.587,00",
+    "Credit_bugetar_rezervat_definitiv_ani_urmatori": "0,00",
+    "Col_12": "",
+    "BugetIndicator": [
+     {
+      "Col_1": "Credit angajament",
+      "2026!Total": "819.500,00",
+      "2026!Limita": "819.500,00",
+      "2026!Disponibil": "550.789,81",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": "",
+      "dupa_2029!Total": "",
+      "dupa_2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Credit bugetar",
+      "2026!Total": "819.500,00",
+      "2026!Limita": "",
+      "2026!Disponibil": "550.789,81",
+      "2027!Total": "700.000,00",
+      "2027!Disponibil": "700.000,00",
+      "2028!Total": "700.000,00",
+      "2028!Disponibil": "700.000,00",
+      "2029!Total": "700.000,00",
+      "2029!Disponibil": "700.000,00",
+      "dupa_2029!Total": "0,00",
+      "dupa_2029!Disponibil": "0,00"
+     },
+     {
+      "Col_1": "Valoare recepţii",
+      "2026!Total": "3.587,00",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Valoare plătită",
+      "2026!Total": "3.587,00",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Angajament legal an curent",
+      "2026!Total": "3.587",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Credit bugetar rezervat definitiv",
+      "2026!Total": "3.587",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": ""
+     }
+    ]
+   },
+   {
+    "Indicator_ang": "AA2",
+    "Program": "0000000000",
+    "Obiectiv": "---",
+    "Proiect": "---",
+    "Sector_Sursa_Indicator": "02A- 65. 03. 01. 20. 01. 30",
+    "Limita_credit_angajament": "52.510,00",
+    "Total_credit_angajament": "52.510,00",
+    "Credit_bugetar": "52.510,00",
+    "Angajament_legal": "300,00",
+    "Credit_bugetar_rezervat_definitiv_an_curent": "300,00",
+    "Credit_bugetar_rezervat_definitiv_ani_urmatori": "0,00",
+    "Col_12": "",
+    "BugetIndicator": [
+     {
+      "Col_1": "Credit angajament",
+      "2026!Total": "52.510,00",
+      "2026!Limita": "52.510,00",
+      "2026!Disponibil": "9.029,17",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": "",
+      "dupa_2029!Total": "",
+      "dupa_2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Credit bugetar",
+      "2026!Total": "52.510,00",
+      "2026!Limita": "",
+      "2026!Disponibil": "9.029,17",
+      "2027!Total": "52.510,00",
+      "2027!Disponibil": "52.510,00",
+      "2028!Total": "52.510,00",
+      "2028!Disponibil": "52.510,00",
+      "2029!Total": "52.510,00",
+      "2029!Disponibil": "52.510,00",
+      "dupa_2029!Total": "0,00",
+      "dupa_2029!Disponibil": "0,00"
+     },
+     {
+      "Col_1": "Valoare recepţii",
+      "2026!Total": "300,00",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Valoare plătită",
+      "2026!Total": "300,00",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Angajament legal an curent",
+      "2026!Total": "300",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": "",
+      "2028!Total": "",
+      "2028!Disponibil": "",
+      "2029!Total": "",
+      "2029!Disponibil": ""
+     },
+     {
+      "Col_1": "Credit bugetar rezervat definitiv",
+      "2026!Total": "300",
+      "2026!Limita": "",
+      "2026!Disponibil": "",
+      "2027!Total": "",
+      "2027!Disponibil": ""
+     }
+    ]
+   }
+  ],
+  "ListaReceptii_results": [
+   {
+    "Tip": "Partial",
+    "Data": "11/02/2026",
+    "Suma": "510,00",
+    "DescriereReceptie": "PLATA FACT.",
+    "Detaliu": [
+     {
+      "Cod": "AA2",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02A- 65. 03. 01. 20. 01. 30",
+      "Credit_bugetar_rezervat_definitiv": "300,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "300"
+     },
+     {
+      "Cod": "AAB",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02E- 65. 03. 01. 20. 03. 01",
+      "Credit_bugetar_rezervat_definitiv": "3.587,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "210"
+     }
+    ]
+   },
+   {
+    "Tip": "Partial",
+    "Data": "16/02/2026",
+    "Suma": "1.029,00",
+    "DescriereReceptie": "Plata fact",
+    "Detaliu": [
+     {
+      "Cod": "AA2",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02A- 65. 03. 01. 20. 01. 30",
+      "Credit_bugetar_rezervat_definitiv": "300,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "0"
+     },
+     {
+      "Cod": "AAB",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02E- 65. 03. 01. 20. 03. 01",
+      "Credit_bugetar_rezervat_definitiv": "3.587,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "1.029"
+     }
+    ]
+   },
+   {
+    "Tip": "Partial",
+    "Data": "31/03/2026",
+    "Suma": "756,00",
+    "DescriereReceptie": "Plata fact.",
+    "Detaliu": [
+     {
+      "Cod": "AA2",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02A- 65. 03. 01. 20. 01. 30",
+      "Credit_bugetar_rezervat_definitiv": "300,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "0"
+     },
+     {
+      "Cod": "AAB",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02E- 65. 03. 01. 20. 03. 01",
+      "Credit_bugetar_rezervat_definitiv": "3.587,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "756"
+     }
+    ]
+   },
+   {
+    "Tip": "Partial",
+    "Data": "30/04/2026",
+    "Suma": "672,00",
+    "DescriereReceptie": "PLATA FACT",
+    "Detaliu": [
+     {
+      "Cod": "AA2",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02A- 65. 03. 01. 20. 01. 30",
+      "Credit_bugetar_rezervat_definitiv": "300,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "0"
+     },
+     {
+      "Cod": "AAB",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02E- 65. 03. 01. 20. 03. 01",
+      "Credit_bugetar_rezervat_definitiv": "3.587,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "672"
+     }
+    ]
+   },
+   {
+    "Tip": "Partial",
+    "Data": "20/05/2026",
+    "Suma": "460,00",
+    "DescriereReceptie": "Plata fact.",
+    "Detaliu": [
+     {
+      "Cod": "AA2",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02A- 65. 03. 01. 20. 01. 30",
+      "Credit_bugetar_rezervat_definitiv": "300,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "0"
+     },
+     {
+      "Cod": "AAB",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02E- 65. 03. 01. 20. 03. 01",
+      "Credit_bugetar_rezervat_definitiv": "3.587,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "460"
+     }
+    ]
+   },
+   {
+    "Tip": "Partial",
+    "Data": "29/05/2026",
+    "Suma": "460,00",
+    "DescriereReceptie": "Plata fact.",
+    "Detaliu": [
+     {
+      "Cod": "AA2",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02A- 65. 03. 01. 20. 01. 30",
+      "Credit_bugetar_rezervat_definitiv": "300,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "0"
+     },
+     {
+      "Cod": "AAB",
+      "Program": "0000000000",
+      "Proiect": "---",
+      "Obiectiv": "---",
+      "Sector_Sursa_Indicator": "02E- 65. 03. 01. 20. 03. 01",
+      "Credit_bugetar_rezervat_definitiv": "3.587,00",
+      "Valoare_nereceptionata": "0,00",
+      "Valoare": "460"
+     }
+    ]
+   }
+  ],
+  "TabelIstoric": [
+   {
+    "Timp": "10/02/2026 22:45:23",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Initializare angajament",
+    "Observatii": "Rand contract: AAB, angajament legal: n/a, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: n/a, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "10/02/2026 22:45:23",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Angajament nou.",
+    "Observatii": "Contract: AAB37CNBK95: 2026 - NOVA WATER, ajustare titlul 85: 0"
+   },
+   {
+    "Timp": "10/02/2026 22:45:43",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "adaugare rand",
+    "Observatii": "Rand contract: AA2, angajament legal: n/a, credit de angajament rezervat intial: 300, credit bugetar rezervat definitiv: an curent: n/a, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "10/02/2026 22:45:51",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Modificare stare: Initial -> În definitivare: DA",
+    "Observatii": ""
+   },
+   {
+    "Timp": "10/02/2026 22:46:17",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "PLATA FACT.",
+    "Observatii": "Rand contract: AAB, angajament legal: 210, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 210, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "10/02/2026 22:46:30",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "PLATA FACT.",
+    "Observatii": "Rand contract: AA2, angajament legal: 300, credit de angajament rezervat intial: 300, credit bugetar rezervat definitiv: an curent: 300, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "10/02/2026 22:46:36",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Modificare stare: În definitivare -> În derulare: DA",
+    "Observatii": ""
+   },
+   {
+    "Timp": "10/02/2026 22:46:54",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AAB,Suma receptie: 210 RON"
+   },
+   {
+    "Timp": "10/02/2026 22:46:54",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AA2,Suma receptie: 300 RON"
+   },
+   {
+    "Timp": "10/02/2026 22:46:54",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Receptie: PLATA FACT., valoare: 510, (activ:true)"
+   },
+   {
+    "Timp": "13/02/2026 18:33:14",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Plata fact",
+    "Observatii": "Rand contract: AAB, angajament legal: 1239, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 1239, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "13/02/2026 18:33:30",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AAB,Suma receptie: 1029 RON"
+   },
+   {
+    "Timp": "13/02/2026 18:33:30",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AA2,Suma receptie: 0 RON"
+   },
+   {
+    "Timp": "13/02/2026 18:33:30",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Receptie: Plata fact, valoare: 1029, (activ:true)"
+   },
+   {
+    "Timp": "13/02/2026 21:55:42",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "sume nemodificate",
+    "Observatii": "Rand contract: AAB, angajament legal: 1239, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 1239, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "16/02/2026 19:06:25",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 38, data: Feb 16, 2026 12:00:00 AM valoare: 819, IdTrezor: TZ52198479598"
+   },
+   {
+    "Timp": "16/02/2026 19:06:25",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 34, data: Feb 16, 2026 12:00:00 AM valoare: 210, IdTrezor: TZ52198479612"
+   },
+   {
+    "Timp": "16/02/2026 19:06:25",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AA2, document: 59, data: Feb 16, 2026 12:00:00 AM valoare: 300, IdTrezor: TZ52198482642"
+   },
+   {
+    "Timp": "26/02/2026 20:13:13",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "sume nemodificate",
+    "Observatii": "Rand contract: AAB, angajament legal: 1239, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 1239, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "28/02/2026 08:24:33",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 74, data: Feb 27, 2026 12:00:00 AM valoare: 210, IdTrezor: TZ52198724248"
+   },
+   {
+    "Timp": "30/03/2026 22:22:06",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Plata fact.",
+    "Observatii": "Rand contract: AAB, angajament legal: 1995, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 1995, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "30/03/2026 22:22:23",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AAB,Suma receptie: 756 RON"
+   },
+   {
+    "Timp": "30/03/2026 22:22:23",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AA2,Suma receptie: 0 RON"
+   },
+   {
+    "Timp": "30/03/2026 22:22:23",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Receptie: Plata fact., valoare: 756, (activ:true)"
+   },
+   {
+    "Timp": "01/04/2026 07:11:57",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 116, data: Mar 31, 2026 12:00:00 AM valoare: 210, IdTrezor: TZ52199263346"
+   },
+   {
+    "Timp": "01/04/2026 07:11:57",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 122, data: Mar 31, 2026 12:00:00 AM valoare: 546, IdTrezor: TZ52199263358"
+   },
+   {
+    "Timp": "29/04/2026 22:58:22",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "PLATA FACT",
+    "Observatii": "Rand contract: AAB, angajament legal: 2667, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 2667, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "29/04/2026 22:58:51",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AAB,Suma receptie: 672 RON"
+   },
+   {
+    "Timp": "29/04/2026 22:58:51",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AA2,Suma receptie: 0 RON"
+   },
+   {
+    "Timp": "29/04/2026 22:58:51",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Receptie: PLATA FACT, valoare: 672, (activ:true)"
+   },
+   {
+    "Timp": "01/05/2026 08:12:12",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 162, data: Apr 30, 2026 12:00:00 AM valoare: 336, IdTrezor: TZ52199881853"
+   },
+   {
+    "Timp": "01/05/2026 08:12:12",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 157, data: Apr 30, 2026 12:00:00 AM valoare: 336, IdTrezor: TZ52199886851"
+   },
+   {
+    "Timp": "20/05/2026 00:35:54",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Plata fact.",
+    "Observatii": "Rand contract: AAB, angajament legal: 3127, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 3127, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "20/05/2026 00:36:12",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AAB,Suma receptie: 460 RON"
+   },
+   {
+    "Timp": "20/05/2026 00:36:12",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AA2,Suma receptie: 0 RON"
+   },
+   {
+    "Timp": "20/05/2026 00:36:12",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Receptie: Plata fact., valoare: 460, (activ:true)"
+   },
+   {
+    "Timp": "20/05/2026 18:33:44",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 188, data: May 20, 2026 12:00:00 AM valoare: 230, IdTrezor: TZ521100189960"
+   },
+   {
+    "Timp": "20/05/2026 18:33:44",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 187, data: May 20, 2026 12:00:00 AM valoare: 230, IdTrezor: TZ521100189980"
+   },
+   {
+    "Timp": "28/05/2026 20:11:18",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Plata fact.",
+    "Observatii": "Rand contract: AAB, angajament legal: 3587, credit de angajament rezervat intial: 210, credit bugetar rezervat definitiv: an curent: 3587, an+1: n/a, an+2: n/a, an+3: n/a, alti ani: n/a"
+   },
+   {
+    "Timp": "28/05/2026 20:11:34",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AAB,Suma receptie: 460 RON"
+   },
+   {
+    "Timp": "28/05/2026 20:11:34",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Rand: AA2,Suma receptie: 0 RON"
+   },
+   {
+    "Timp": "28/05/2026 20:11:34",
+    "Utilizator": "13202060 alexandrescu dorina 29170933",
+    "Descriere": "Salvare receptie.",
+    "Observatii": "Receptie: Plata fact., valoare: 460, (activ:true)"
+   },
+   {
+    "Timp": "30/05/2026 08:19:33",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 202, data: May 29, 2026 12:00:00 AM valoare: 230, IdTrezor: TZ521100441052"
+   },
+   {
+    "Timp": "30/05/2026 08:19:33",
+    "Utilizator": "SYSTEM",
+    "Descriere": "Inregistrare Plată",
+    "Observatii": "Plata: Rand: AAB, document: 208, data: May 29, 2026 12:00:00 AM valoare: 230, IdTrezor: TZ521100441064"
+   }
+  ]
+ }
+}

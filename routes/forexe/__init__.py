@@ -44,6 +44,7 @@ forexe_bp = Blueprint("forexe", __name__)
 # ord.py         -> GET /api/forexe/ord
 # pdf.py         -> GET/PUT /api/forexe/ddf/pdf/<idrev>, GET/PUT /api/forexe/ord/pdf/<idordp>
 # prelucrare.py  -> POST /api/forexe/prelucrare (ingestia FOREXE; pasii 1-2 in 0048-02)
+# asociere.py    -> GET/POST /api/forexe/asociere (editorul R<->H de ORICAND, 0048-04)
 from . import angajamente  # noqa: E402,F401
 from . import tree  # noqa: E402,F401
 from . import sumar  # noqa: E402,F401
@@ -57,3 +58,4 @@ from . import istoric  # noqa: E402,F401
 from . import ord as ord_route  # noqa: E402,F401
 from . import pdf  # noqa: E402,F401
 from . import prelucrare  # noqa: E402,F401
+from . import asociere  # noqa: E402,F401

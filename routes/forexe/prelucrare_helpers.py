@@ -667,3 +667,56 @@ def split_sector_sursa_indicator(raw: Optional[str]):
 def cod_ai(cod_angajament: str, cod_indicator: str) -> str:
     """CodAI = CodAngajament & "-" & CodIndicator (the FX_Indicatori key)."""
     return f"{cod_angajament}-{cod_indicator}"
+
+
+def fx_receptii_parse_ro_date(value) -> Optional[date]:
+    """
+    Port of FX_Receptii_ParseRoDate -- the `Data` cell of ListaReceptii_results.
+
+    "11/02/2026" -> date(2026, 2, 11). Splits on "/" and REQUIRES exactly three
+    pieces; anything else is None (the VBA's Null exit), not an error.
+
+    Deliberately NOT the same function as parse_data_zzllaaaa: that one also
+    accepts dots because its callers rewrite "/" to "." before calling. This one
+    is the reception path and the VBA splits on "/" only. Two call sites, two
+    tolerances; keeping them apart is how a payload that changes shape shows up
+    as a failure rather than as a date that quietly parses in the wrong module.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text == "":
+        return None
+    parts = text.split("/")
+    if len(parts) != 3:
+        return None
+    try:
+        return date(int(parts[2]), int(parts[1]), int(parts[0]))
+    except ValueError:
+        raise ValueError(f"Data receptiei invalida (asteptat zz/ll/aaaa): '{value}'")
+
+
+# ---------------------------------------------------------------------------
+# Deletion rows
+# ---------------------------------------------------------------------------
+# The exact spelling FOREXE writes into FX_Istoric.Descriere when a reception is
+# deleted on the site. NO DIACRITICS -- confirmed by the operator 26.08.2026, and
+# it is the site's spelling, not ours, so it is matched literally rather than
+# normalised. Rule F21 of docs/FUNDAMENT_Asociere_Receptii.md.
+DESCRIERE_STERGERE_RECEPTIE = "Stergere receptie"
+
+
+def is_stergere_receptie(descriere: Optional[str]) -> bool:
+    """
+    True when this history row is a reception DELETION (F21).
+
+    The row carries `(activ:true)` like every other reception header, so it
+    becomes an ordinary snapshot -- specifically the LAST one in its reception's
+    chain. It carries no per-indicator rows, so it produces no FX_Receptii lines.
+
+    Compared case-insensitively after trimming, but WITHOUT stripping diacritics:
+    the site writes this string without them, and a row that arrived with them
+    would be a different message that we have not seen and must not silently
+    treat as a deletion.
+    """
+    return (descriere or "").strip().lower() == DESCRIERE_STERGERE_RECEPTIE.lower()

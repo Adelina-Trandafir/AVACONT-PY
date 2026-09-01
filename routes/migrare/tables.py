@@ -22,6 +22,7 @@ BY_EXTRAS_HEADER = "by_extras_header"   # own IdUnitate when present, else IDFXH
 BY_DDF = "by_ddf"                       # IDDF, through the FX_DDF set
 BY_REV = "by_rev"                       # IDREV, through the FX_DDF_REV set
 BY_ORD = "by_ord"                       # IDORD, through the FX_ORD set
+BY_ORD_TBL = "by_ord_tbl"               # IDORDTBL, through the FX_ORD_TBL set
 
 
 class SeedTable(object):
@@ -107,21 +108,38 @@ ALL = [
               access_key="IDORDDOC"),
     SeedTable("FX_ORD_ATT", "IDORDATTP", BY_ORD, key_column="IDORD",
               access_key="IDORDATT"),
-    # The four tables outside the operator's numbered order.
+    # FX_ORD_TBL_REC links a payment to the ordonantare LINE that consumed it.
+    #
+    # It was declared a relic by decision D5 of PLAN_ForexeIngest and left out of this
+    # list. The operator withdrew that on 26.08.2026 -- correction C1 of
+    # docs/FUNDAMENT_Asociere_Receptii.md: it must travel through migration and it will
+    # be used. It comes AFTER FX_ORD_TBL (its IDORDTBLP parent) and after FX_Plati (its
+    # IdPlataFX parent); both are already above it.
+    #
+    # Its parent column is IDORDTBL -- the FX_ORD_TBL line, not the FX_ORD order -- so it
+    # needs its own selection kind. `IDRP` is NOT mapped: it pointed at
+    # FX_Receptii_Plati, which is dead (C2), so the column travels unwritten.
+    SeedTable("FX_ORD_TBL_REC", "IDORDRECP", BY_ORD_TBL, key_column="IDORDTBL",
+              access_key="IDORDREC"),
+    # The three tables outside the operator's numbered order.
     SeedTable("FX_Salarii", "IDFXS", BY_ANGAJAMENT, key_column="CodAngajament"),
     SeedTable("FX_Rezervarii_IMG", "IDRZC", BY_REZERVARE, key_column="IDRZ"),
     # Two parents: IDRR first, then IDRH.
     SeedTable("FX_Receptii_IMG", "IDRDC", TWO_PARENTS,
               key_column="IDRR", key_column2="IDRH"),
-    # Two parents, in the reverse order of the one above.
-    SeedTable("FX_Receptii_Plati", "IDRP", TWO_PARENTS,
-              key_column="IDRH", key_column2="IDRR"),
 ]
 
 BY_NAME = dict((t.name, t) for t in ALL)
 
 # Declared out of scope. If they appear in the file they are REPORTED, not migrated.
-OUT_OF_SCOPE = ("FX_PRT_EXPL", "FX_CopacAngajamente")
+#
+# FX_Receptii_Plati joined this list on 26.08.2026 (correction C2 of
+# docs/FUNDAMENT_Asociere_Receptii.md). The operator: «NOT used anymore. it contains no
+# data anymore. Excluded completely from migration.» It was an early attempt to join a
+# reception to a payment directly, made before the flow was understood, and it is empty.
+# It used to be IN the list above, which was the actual mistake -- migrating an empty
+# table is harmless, but keeping it there implies somebody still expects rows in it.
+OUT_OF_SCOPE = ("FX_PRT_EXPL", "FX_CopacAngajamente", "FX_Receptii_Plati")
 
 
 def by_name(name):

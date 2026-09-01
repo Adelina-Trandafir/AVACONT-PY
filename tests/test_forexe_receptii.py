@@ -36,6 +36,7 @@ CLSF_ACC = 990015
 # Cheile pe care contractul de fir le promite (oglindesc ReceptieRow pe partea VB.NET).
 ROW_KEYS = (
     "idrr", "nrcrt_r", "data_r", "suma_antet", "incarcat", "preluat",
+    "reconstituit", "reconstituit_nesigur",
     "idrh", "nrcrt_h", "data_h", "total", "difh", "sters_h", "descriere_h",
     "idr", "id_clsf", "cod_indicator", "clsf", "denumire", "nrcrt_ind", "valoare", "dif",
 )

@@ -232,6 +232,12 @@ class TableSelector(object):
             return self._by_set("ord", _as_long(row.get(self.table.key_column)),
                                 self.table.key_column, "FX_ORD")
 
+        # FX_ORD_TBL_REC hangs off an ordonantare LINE, not off the order itself, so it
+        # routes through the FX_ORD_TBL set rather than the FX_ORD one.
+        if kind == tables.BY_ORD_TBL:
+            return self._by_set("ord_tbl", _as_long(row.get(self.table.key_column)),
+                                self.table.key_column, "FX_ORD_TBL")
+
         if kind == tables.TWO_PARENTS:
             return self._two_parents(row)
 
@@ -310,7 +316,7 @@ class TableSelector(object):
 # -----------------------------------------------------------------------------
 
 FAMILIES = ("unit", "commitment", "reservation", "receipt_r", "receipt_h",
-            "statement", "statement_h", "ddf", "rev", "ord")
+            "statement", "statement_h", "ddf", "rev", "ord", "ord_tbl")
 
 
 def build_plan(fx_path, db_name, progress=None):
@@ -451,6 +457,19 @@ def build_plan(fx_path, db_name, progress=None):
         % (len(sets["rev"].ours), len(sets["rev"].known)))
 
     _children_of_commitment(fx_path, "FX_ORD", "IDORD", sets, "ord", say)
+
+    # FX_ORD_TBL, keyed by IDORDTBL, so FX_ORD_TBL_REC can be routed through its line.
+    # Not _children_of_commitment: the lines carry IDORD, not CodAngajament, so they
+    # follow the ORDER, which has already been decided just above.
+    say("Se citește FX_ORD_TBL (rândurile ordonanțărilor).")
+    for row in _rows(fx_path, "FX_ORD_TBL", say):
+        line = _as_long(row.get("IDORDTBL"))
+        if line is None:
+            continue
+        order = _as_long(row.get("IDORD"))
+        sets["ord_tbl"].add(line, order in sets["ord"].ours if order is not None else False)
+    say("Rânduri de ordonanțare: %d ale unității din %d."
+        % (len(sets["ord_tbl"].ours), len(sets["ord_tbl"].known)))
 
     plan = UnitPlan(db_name, sets, units, all_units, single_unit)
     say(plan.describe())

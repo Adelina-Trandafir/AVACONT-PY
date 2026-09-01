@@ -74,6 +74,11 @@ logger = logging.getLogger(__name__)
 _SQL_RECEPTII = (
     "SELECT "
     "R.IDRR, R.NRCRT AS NrCrtR, R.DataR, R.SumaAntet, R.Incarcat, R.Preluat, "
+    # F28 (felia 0048-03-completare): receptie reconstituita a carei GRUPARE nu a putut
+    # fi verificata de program, fiindca pe acelasi angajament mai era una (F27). Se duce
+    # pana in arbore ca sa poarte un semn: cine citeste un total peste luni trebuie sa
+    # poata afla ca la baza lui a stat o judecata, nu o verificare.
+    "R.Reconstituit, R.ReconstituitNesigur, "
     "H.IDRH, H.NrCrt AS NrCrtH, H.DataH, H.Total, H.DIFH, H.Sters AS StersH, "
     "H.Descriere AS DescriereH, "
     "Rc.IDR, Rc.IdClsf, Rc.CodIndicator, I.NrCrt AS NrCrtInd, Rc.Valoare, Rc.DIF, "
@@ -139,7 +144,8 @@ def get_receptii():
 
     Query: cod (obligatoriu) = CodAngajament.
     Returneaza { cod, receptii: [ {idrr, nrcrt_r, data_r, suma_antet, incarcat,
-    preluat, idrh, nrcrt_h, data_h, total, difh, sters_h, descriere_h, idr, id_clsf,
+    preluat, reconstituit, reconstituit_nesigur, idrh, nrcrt_h, data_h, total, difh,
+    sters_h, descriere_h, idr, id_clsf,
     cod_indicator, clsf, denumire, nrcrt_ind, valoare, dif}, ... ], plati: [ {data_plata,
     suma}, ... ] }.
 
@@ -163,6 +169,7 @@ def get_receptii():
         cursor.execute(_SQL_RECEPTII, (cod,))
         receptii = []
         for (idrr, nrcrt_r, data_r, suma_antet, incarcat, preluat,
+             reconstituit, reconstituit_nesigur,
              idrh, nrcrt_h, data_h, total, difh, sters_h, descriere_h,
              idr, id_clsf, cod_indicator, nrcrt_ind, valoare, dif, clsf,
              denumire) in cursor.fetchall():
@@ -173,6 +180,8 @@ def get_receptii():
                 "suma_antet": _num(suma_antet),
                 "incarcat": bool(incarcat),
                 "preluat": bool(preluat),
+                "reconstituit": bool(reconstituit),
+                "reconstituit_nesigur": bool(reconstituit_nesigur),
                 "idrh": int(idrh) if idrh is not None else None,
                 "nrcrt_h": _opt_int(nrcrt_h),
                 "data_h": _iso(data_h),

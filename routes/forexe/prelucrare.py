@@ -1,52 +1,59 @@
 # routes/forexe/prelucrare.py
 """
-Ingestia FOREXE -- POST /api/forexe/prelucrare (felia 0048, plan docs/PLAN_ForexeIngest.md).
+Ingestia FOREXE -- POST /api/forexe/prelucrare (feliile 0048-02 si 0048-03).
 
-!!! CONDUCTA ESTE PARTIALA IN FELIA 0048-02 !!!
-------------------------------------------------------------------------------------
-Portati si activi: pasul 0 (tranzactia), pasul 1 (FX_Angajamente) si pasul 2
-(FX_Indicatori), plus drumul dus-intors prin care operatorul alege unitatea cand o
-clasificatie se potriveste cu mai multe.
-
-NEPORTATI: pasii 3-8 -- istoric, rezervari, receptii, plati/incasari, marcarea
-`Prelucrat` si `FX_Extrase`. Nu se scrie NIMIC in tabelele lor. Raspunsul spune asta
-in `avertismente`, in romana, ca sa nu existe nicio rulare care sa para completa fara
-sa fie. Clientul NU cheama inca ruta din fluxul de descarcare; se exercita din
-DevHarness. Cand pasii 3-8 sosesc, avertismentul si nota asta pleaca impreuna cu ei.
-------------------------------------------------------------------------------------
+Plan: docs/PLAN_ForexeIngest.md + PLAN_ForexeIngestSteps3to8 (felia 0048-03).
+Fundament: docs/FUNDAMENT_Asociere_Receptii.md -- regulile F* si deciziile D-* de mai
+jos vin de acolo si NU se re-deduc aici.
 
 Scope: baza conectata ESTE unitatea (o baza MariaDB = o unitate), deci nu exista
 parametru db_name / id_unitate -- baza vine din sesiune (g.session.db_name), exact ca
 la toate celelalte rute /api/forexe/*. Un token nu poate tinti alta baza decat cea pe
 care s-a logat.
 
-CONTRACT
---------
-Cerere:
-    {
-      "cod": "AAB37CNBK95",
-      "workflow": "adlop - Prelucrare Completa.wfl",
-      "moment": "2026-08-25T10:12:00",
-      "scalari": { "DataAngajament": "10/02/2026", ... },
-      "tabele":  { "TabelIndicatori_results": [ {...} ], ... },
-      "alegeri": [ { "ss": "02E", "clsfe": "200101", "id_unitate": 76,
-                     "retine": false } ]        <- optional; vezi mai jos
-    }
+===========================================================================
+CONTRACTUL IN DOUA FAZE (D-B, si corectia C3 a deciziilor D1/D3 din planul parinte)
+===========================================================================
+O singura ruta, doua moduri. Motivul e in fundament, §1.4: istoricul FOREXE nu numeste
+niciodata receptia (F4), trecerea automata poate aseza doar ULTIMUL instantaneu al unui
+lant (F9), deci restul -- aproximativ (instantanee − receptii) per angajament (F10) --
+ajung, prin constructie, la operator. Asta NU e o cale de exceptie: e rezultatul normal
+al fiecarei descarcari. Nimic nu are voie sa ajunga in baza inainte ca omul sa fi
+raspuns, fiindca o asociere gresita e tacuta si permanenta (F12).
 
-Raspuns 200:
-    { "cod": ..., "are": {...}, "scrise": {...}, "avertismente": [...] }
+FAZA UNU -- "mod": "propunere"
+    Serverul ruleaza pasii 1..8 intr-o tranzactie, exact cum i-ar rula pe bune, si apoi
+    DERULEAZA INAPOI NECONDITIONAT. Nu e o rulare pe uscat si nu e o ramura paralela
+    strecurata prin codul pasilor: e acelasi drum, terminat cu rollback() in loc de
+    commit(). Doua implementari ar aluneca una fata de alta si alunecarea nu s-ar vedea
+    pana cand n-ar produce cifre gresite.
 
-Raspuns 409 (o clasificatie se potriveste cu mai multe unitati):
-    { "error": "<mesaj romanesc>", "reason": "ALEGERE_UNITATE", "cod": ...,
-      "alegeri_necesare": [ { "ss", "clsfe", "clsf", "cod_indicator",
-                              "indicatori": [...], "unitati": [ {...} ] } ] }
-    TRANZACTIA E DERULATA INAPOI. Nu s-a scris nimic -- nici angajamentul din pasul 1.
-    Clientul intreaba operatorul si trimite ACEEASI sarcina utila cu `alegeri` completat.
+    Raspuns 200 cu tabloul construit: `receptii`, `instantanee`, `amprenta`.
 
-DE CE 409 SI NU 400: cererea nu e gresita. Serverului ii lipseste o informatie pe care
-doar un om o are, exact ca in Access, unde `Obtine_IdUnitate_Din` deschidea formularul
-modal `FX_Unitate`. `reason` e un cod-motiv stabil, acelasi tipar ca la 401-urile din
-routes/auth/guard.py, si KBot.Api.ApiException il poarta deja ca `Reason`.
+FAZA DOI -- "mod": "salvare"
+    ACELASI payload (clientul retrimite ce a pastrat in fisierul lui de decizii), plus
+    `amprenta` inapoi si `decizii`. Serverul verifica amprenta, ruleaza aceiasi pasi,
+    aplica deciziile la pasul 4c si COMMITE.
+
+DE CE ACELASI PAYLOAD, OBLIGATORIU: `rand_istoric` din `decizii` este INDICELE randului
+in `TabelIstoric` (F24), nu o cheie de baza de date. Id-urile atribuite in timpul
+propunerii dispar la rollback si nu se intorc identice. Indicele e stabil prin
+constructie -- dar numai daca ambele faze poarta acelasi payload. O re-descarcare intre
+faze produce alt payload si trebuie sa porneasca o propunere noua.
+
+MODUL IMPLICIT E "propunere". Un client care nu stie de faze primeste faza care NU
+scrie nimic. Tacerea nu are voie sa insemne «salveaza».
+
+===========================================================================
+CELELALTE DOUA DRUMURI DUS-INTORS
+===========================================================================
+409 ALEGERE_UNITATE (felia 0048-02, neschimbat) -- o clasificatie se potriveste cu mai
+multe unitati si serverului ii lipseste o informatie pe care doar un om o are. Se
+declanseaza in faza intai. Un angajament poate deci avea nevoie de DOUA drumuri dus-intors
+inainte ca operatorul sa vada formularul de asociere. Asa trebuie; nu se contopesc.
+
+409 STARE_MODIFICATA (felia 0048-03) -- baza s-a schimbat intre propunere si salvare,
+deci deciziile descriu un tablou care nu mai exista. Nimic nu se scrie.
 
 O SINGURA TRANZACTIE (D10): orice esec deruleaza inapoi tot. Nimic pe jumatate scris.
 """
@@ -75,17 +82,42 @@ from .prelucrare_unitate import (
     normalize_supplied_choices,
     resolve_units,
 )
+from .prelucrare_pasi import (
+    TABLE_ISTORIC,
+    cere_lista,
+    text_celula,
+    TABLE_RECEPTII,
+    read_indicatori,
+    step3a_populeaza_istoric,
+    step3b_prelucreaza_observatii,
+    step3cd_populeaza_rezervari,
+    step3e_asociaza_idrev,
+    step4a_populeaza_receptii,
+    step4b_receptii_prelucrare,
+    step4d_calculeaza_dif,
+    step5_plati_incasari,
+    step7_actualizeaza_rezolvat,
+    step8_actualizeaza_extrase,
+)
+from .prelucrare_asociere import (
+    MSG_STARE_MODIFICATA,
+    REASON_STARE_MODIFICATA,
+    DecizieInvalida,
+    amprenta,
+    aplica_decizii,
+    citeste_instantanee,
+    citeste_receptii,
+    marcheaza_reconstituirile_nesigure,
+    normalizeaza_decizii,
+    pas4c_automat,
+)
 
 logger = logging.getLogger(__name__)
 
-# Numele tabelului din `tabele` care hraneste pasul 2.
 TABLE_INDICATORI = "TabelIndicatori_results"
 
-# Avertismentul care spune, in fiecare raspuns, ce NU s-a facut. Pleaca odata cu pasii.
-WARNING_PARTIAL = (
-    "Pașii 3–8 ai ingestiei nu sunt încă portați: istoricul, rezervările, recepțiile, "
-    "plățile și încasările NU s-au scris. S-au scris doar angajamentul și indicatorii."
-)
+MOD_PROPUNERE = "propunere"
+MOD_SALVARE = "salvare"
 
 
 def _json_utf8(payload, status):
@@ -213,22 +245,41 @@ def _read_indicators(cod: str, rows) -> list:
     for i, row in enumerate(rows):
         if not isinstance(row, dict):
             raise ValueError(f"{TABLE_INDICATORI}[{i}] nu este un obiect.")
-        cod_ind = (_field(row, "Indicator_ang", "Indicator ang") or "").strip()
+        unde = f"{TABLE_INDICATORI}[{i}]"
+        cod_ind = text_celula(
+            _field(row, "Indicator_ang", "Indicator ang"), unde, "Indicator_ang").strip()
         if cod_ind == "":
             continue
-        raw = _field(row, "Sector_Sursa_Indicator", "Sector - Sursa - Indicator")
-        if raw is None or str(raw).strip() == "":
+        raw = text_celula(
+            _field(row, "Sector_Sursa_Indicator", "Sector - Sursa - Indicator"),
+            unde, "Sector_Sursa_Indicator")
+        if raw.strip() == "":
             raise ValueError(
                 f"Indicatorul {cod_ind} nu are «Sector_Sursa_Indicator»; "
                 f"unitatea și clasificația nu pot fi determinate."
             )
+        # `BugetIndicator` e a DOUA coloana imbricata a sarcinii utile (prima e
+        # `ListaReceptii.Detaliu`). Amandoua vin din acelasi tipar de workflow: un
+        # `ForEachVar` al carui `collectFields` numeste un camp pe care un `ScrapeTable`
+        # interior il scrie cu `saveTo` -- vezi «adlop - Prelucrare Completa.wfl».
+        #
+        # NIMIC NU O CITESTE, si asta e portat deliberat: VBA-ul pazeste
+        # `dInd("BugetIndicator")` cu `Exists("BugetIndicatori")` -- cu «i» la coada --
+        # deci testul e mereu fals (D18). Forma i se verifica totusi, fiindca daca ea
+        # soseste ca text inseamna ca CLIENTUL aplatizeaza, iar clientul acela
+        # aplatizeaza si `Detaliu`, pe care chiar il citim. E cel mai ieftin loc in care
+        # se poate prinde regresia, si prinde intreaga sarcina utila deodata.
+        if "BugetIndicator" in row and row["BugetIndicator"] is not None:
+            cere_lista(row["BugetIndicator"],
+                       f"{TABLE_INDICATORI}[{i}]", "BugetIndicator", gol_permis=True)
+
         ss, clsf_sal, clsf_e = split_sector_sursa_indicator(raw)
         out.append({
             "cod_indicator": cod_ind,
             "ss": ss,
             "clsf_sal": clsf_sal,
             "clsf_e": clsf_e,
-            "clsf_raw": str(raw),
+            "clsf_raw": raw,
             "row": row,
         })
     return out
@@ -261,14 +312,20 @@ def _step2_indicatori(cursor, cod: str, indicators: list, units: dict,
         id_clsf = find_id_clsf_acc(cursor, id_unitate, ind["clsf_sal"],
                                    ind["clsf_raw"], ind["cod_indicator"], warnings)
 
-        prevedere = parse_amount(_field(row, "Credit_bugetar", "Credit bugetar"))
-        credit_init = parse_amount(
-            _field(row, "Total_credit_angajament", "Total credit angajament"))
-        ang_legal = parse_amount(_field(row, "Angajament_legal", "Angajament legal"))
-        credit_def = parse_amount(_field(
-            row,
-            "Credit_bugetar_rezervat_definitiv_an_curent",
-            "Credit bugetar rezervat definitiv an curent"))
+        # Cele patru celule de bani ale indicatorului. Scalare, si o cer explicit --
+        # `parse_amount` peste o lista ar da tacut zero, adica un buget inventat.
+        unde = f"{TABLE_INDICATORI}[{ind['cod_indicator']}]"
+        prevedere = parse_amount(text_celula(
+            _field(row, "Credit_bugetar", "Credit bugetar"), unde, "Credit_bugetar"))
+        credit_init = parse_amount(text_celula(
+            _field(row, "Total_credit_angajament", "Total credit angajament"),
+            unde, "Total_credit_angajament"))
+        ang_legal = parse_amount(text_celula(
+            _field(row, "Angajament_legal", "Angajament legal"), unde, "Angajament_legal"))
+        credit_def = parse_amount(text_celula(
+            _field(row, "Credit_bugetar_rezervat_definitiv_an_curent",
+                   "Credit bugetar rezervat definitiv an curent"),
+            unde, "Credit_bugetar_rezervat_definitiv_an_curent"))
 
         cursor.execute(_IND_EXISTS_SQL, (cod, ind["cod_indicator"]))
         exists = cursor.fetchone() is not None
@@ -302,6 +359,119 @@ def _step2_indicatori(cursor, cod: str, indicators: list, units: dict,
 
 
 # ---------------------------------------------------------------------------
+# Conducta -- IDENTICA in ambele faze
+# ---------------------------------------------------------------------------
+def _ruleaza_pasii(cursor, cod, scalari, tabele, db_name, un, supplied, warnings):
+    """
+    Pasii 1..5, 7 si 8, in ordinea impusa de cheile straine.
+
+    Nu stie in ce faza e. Singurul lucru care difera intre faze -- pasul 4c -- se
+    intampla la apelant, dupa ce functia asta se termina.
+
+    Intoarce (scrise, are, index_la_id).
+    """
+    scrise = {}
+    are = {}
+
+    # --- pasul 1 -----------------------------------------------------------
+    scrise["FX_Angajamente"] = _step1_angajament(cursor, cod, scalari, db_name)
+
+    # --- pasul 2 -----------------------------------------------------------
+    rows_indicatori = tabele.get(TABLE_INDICATORI) or []
+    if not isinstance(rows_indicatori, list):
+        raise ValueError(f"«{TABLE_INDICATORI}» trebuie să fie o listă.")
+    indicators = _read_indicators(cod, rows_indicatori)
+    # Rezolvarea TUTUROR unitatilor, inainte de orice scriere in FX_Indicatori.
+    units = resolve_units(cursor, indicators, supplied, un, warnings)
+    scrise["FX_Indicatori"] = _step2_indicatori(cursor, cod, indicators, units, warnings)
+    are["Indicatori"] = scrise["FX_Indicatori"] > 0
+
+    # Indicatorii se recitesc ACUM din baza: pasii 3-5 au nevoie de `IdClsf`,
+    # `IdUnitate`, `Clsf` si `CodSSI` asa cum sunt ele DUPA pasul 2, nu cum au sosit.
+    indicatori = read_indicatori(cursor, cod, warnings)
+
+    # --- pasul 3 -----------------------------------------------------------
+    randuri_istoric = tabele.get(TABLE_ISTORIC) or []
+    if not isinstance(randuri_istoric, list):
+        raise ValueError(f"«{TABLE_ISTORIC}» trebuie să fie o listă.")
+
+    index_la_id, ids_noi = step3a_populeaza_istoric(cursor, cod, randuri_istoric,
+                                                    indicatori)
+    scrise["FX_Istoric"] = len(ids_noi)
+    are["Istoric"] = len(ids_noi) > 0
+
+    # VBA: daca nu e nimic nou in istoric, tot pasul 3 se opreste. NU e o eroare.
+    # Pasul 4 merge insa mai departe -- `ListaReceptii` poate purta schimbari chiar
+    # si cand istoricul nu are randuri noi, iar D-F cere ca instantaneele ramase
+    # neasezate din rulari anterioare sa fie din nou in joc.
+    if ids_noi:
+        step3b_prelucreaza_observatii(cursor, cod, indicatori)
+        rez = step3cd_populeaza_rezervari(cursor, cod, True, warnings)
+        rez += step3cd_populeaza_rezervari(cursor, cod, False, warnings)
+        step3e_asociaza_idrev(cursor, cod)
+        scrise["FX_Rezervari"] = rez
+        are["Rezervari"] = rez > 0
+    else:
+        scrise["FX_Rezervari"] = 0
+        are["Rezervari"] = False
+
+    # --- pasul 4a / 4b -----------------------------------------------------
+    antete = step4a_populeaza_receptii(cursor, cod, indicatori)
+    scrise["FX_Receptii_H"] = antete
+    are["ReceptiiH"] = antete > 0
+
+    randuri_receptii = tabele.get(TABLE_RECEPTII) or []
+    if not isinstance(randuri_receptii, list):
+        raise ValueError(f"«{TABLE_RECEPTII}» trebuie să fie o listă.")
+    r_scrise, rhr_scrise = step4b_receptii_prelucrare(cursor, cod, randuri_receptii,
+                                                      indicatori)
+    scrise["FX_Receptii_R"] = r_scrise
+    scrise["FX_Receptii_RHR"] = rhr_scrise
+    are["Receptii"] = (r_scrise + rhr_scrise) > 0
+
+    # --- pasul 5 -----------------------------------------------------------
+    plati, are_p, are_i = step5_plati_incasari(cursor, cod, indicatori, warnings)
+    scrise["FX_Plati"] = plati
+    are["Plati"] = are_p
+    are["Incasari"] = are_i
+
+    # --- pasul 7 -----------------------------------------------------------
+    # In faza «propunere» asta se deruleaza inapoi cu tot restul, deci o propunere nu
+    # marcheaza NICIODATA istoricul ca prelucrat -- exact ce face rularea repetabila.
+    step7_actualizeaza_rezolvat(cursor, ids_noi)
+
+    # --- pasul 8 -----------------------------------------------------------
+    # NECONDITIONAT, la coada, in aceeasi tranzactie -- exact ca originalul Access.
+    # Nu se pazeste cu niciun steag `are` si nu se sare cand pasul 5 n-a scris nimic:
+    # `FX_Extrase` poate purta randuri ramase in urma din rulari mai vechi, iar
+    # filtrul `CodAI IS NULL` face ca fiecare trecere sa recupereze tot restantul.
+    scrise["FX_Extrase"] = step8_actualizeaza_extrase(cursor)
+
+    return scrise, are, index_la_id
+
+
+def _pas4d_pe_receptiile_atinse(cursor, cod: str) -> None:
+    """
+    Pasul 4d peste fiecare receptie a angajamentului care are un lant.
+
+    Access cheama `FX_CalculeazaDIF_Receptii_Tmp` exact aici -- DUPA asociere (4c) --
+    fiindca inainte de ea un instantaneu nu apartine inca niciunei receptii si nu are
+    lant in care sa i se calculeze diferenta.
+
+    IESIREA LUI NU DECIDE NIMIC. `DIFH` se calculeaza LOCAL, de noi, dupa ce
+    instantaneul a fost deja asezat; nu vine din payload si nu poate deci sa spuna daca
+    o salvare a schimbat ceva. (Regula F20 a fundamentului, care propunea `DIFH = 0` ca
+    marcaj de salvare-fara-schimbare, e RETRASA pe 26.08.2026 chiar din motivul asta.)
+    Cifrele de aici hranesc eticheta plutitoare din Recepții si atat.
+    """
+    cursor.execute(
+        "SELECT DISTINCT IDRR FROM FX_Receptii_H "
+        "WHERE CodAngajament = %s AND IDRR IS NOT NULL", (cod,))
+    for r in cursor.fetchall():
+        step4d_calculeaza_dif(cursor, cod, int(r["IDRR"]))
+
+
+# ---------------------------------------------------------------------------
 # Ruta
 # ---------------------------------------------------------------------------
 @forexe_bp.route("/api/forexe/prelucrare", methods=["POST"])
@@ -316,18 +486,33 @@ def post_prelucrare():
     tabele = data.get("tabele") or {}
     if not isinstance(scalari, dict) or not isinstance(tabele, dict):
         return _json_utf8({"error": "«scalari» și «tabele» trebuie să fie obiecte."}, 400)
-    rows_indicatori = tabele.get(TABLE_INDICATORI) or []
-    if not isinstance(rows_indicatori, list):
-        return _json_utf8({"error": f"«{TABLE_INDICATORI}» trebuie să fie o listă."}, 400)
+
+    # Implicit «propunere»: un client care nu stie de faze primeste faza care NU scrie.
+    mod = (data.get("mod") or MOD_PROPUNERE).strip()
+    if mod not in (MOD_PROPUNERE, MOD_SALVARE):
+        return _json_utf8(
+            {"error": f"«mod» «{mod}» nu este cunoscut (permise: "
+                      f"{MOD_PROPUNERE}, {MOD_SALVARE})."}, 400)
 
     try:
         supplied = normalize_supplied_choices(data.get("alegeri"))
+        decizii = None
+        if mod == MOD_SALVARE:
+            if "decizii" not in data:
+                return _json_utf8(
+                    {"error": "Modul «salvare» cere «decizii»."}, 400)
+            decizii = normalizeaza_decizii(data.get("decizii"))
+            if not (data.get("amprenta") or "").strip():
+                return _json_utf8(
+                    {"error": "Modul «salvare» cere «amprenta» din propunere."}, 400)
+    except DecizieInvalida as err:
+        return _json_utf8({"error": str(err)}, 400)
     except ValueError as err:
         return _json_utf8({"error": str(err)}, 400)
 
     db_name = g.session.db_name
     un = g.session.username
-    warnings = [WARNING_PARTIAL]
+    warnings = []
 
     conn = None
     cursor = None
@@ -339,24 +524,93 @@ def post_prelucrare():
         conn.start_transaction()
         cursor = conn.cursor(dictionary=True)
 
-        scrise = {}
-        scrise["FX_Angajamente"] = _step1_angajament(cursor, cod, scalari, db_name)
+        # AMPRENTA SE IA INAINTE DE ORICE SCRIERE, in ambele faze. Luata la coada fazei
+        # intai ar descrie starea scrisa -- care e apoi derulata inapoi -- si faza a doua
+        # nu s-ar potrivi niciodata.
+        amprenta_acum = amprenta(cursor, cod)
+        if mod == MOD_SALVARE and data["amprenta"].strip() != amprenta_acum:
+            conn.rollback()
+            logger.info("PRELUCRARE_STARE_MODIFICATA dc=%s cod=%s", db_name, cod)
+            return _json_utf8({
+                "error": MSG_STARE_MODIFICATA,
+                "reason": REASON_STARE_MODIFICATA,
+                "cod": cod,
+            }, 409)
 
-        indicators = _read_indicators(cod, rows_indicatori)
-        # Rezolvarea TUTUROR unitatilor, inainte de orice scriere in FX_Indicatori.
-        units = resolve_units(cursor, indicators, supplied, un, warnings)
-        scrise["FX_Indicatori"] = _step2_indicatori(cursor, cod, indicators, units,
-                                                    warnings)
+        scrise, are, index_la_id = _ruleaza_pasii(
+            cursor, cod, scalari, tabele, db_name, un, supplied, warnings)
+
+        receptii = citeste_receptii(cursor, cod)
+        instantanee = citeste_instantanee(cursor, cod, index_la_id, warnings)
+
+        if mod == MOD_PROPUNERE:
+            # --- PASUL 4c, FAZA UNU: sugestii, nicio scriere -------------------
+            sugestii = pas4c_automat(cursor, cod, instantanee)
+            nedecise = [i for i in instantanee if i["idrh"] not in sugestii]
+            if nedecise:
+                warnings.append(
+                    f"{len(nedecise)} instantanee nu au primit nicio sugestie automată "
+                    f"și trebuie așezate de operator."
+                )
+
+            # --- pasul 4d, si in faza intai --------------------------------
+            # Ruleaza pe lanturile care EXISTA deja (rulari anterioare), fiindcă faza
+            # intai nu aseaza nimic. Se deruleaza inapoi cu tot restul. E aici ca cele
+            # doua faze sa parcurga acelasi drum: o ramura care ruleaza doar la salvare
+            # e o ramura care nu se testeaza decat la salvare.
+            _pas4d_pe_receptiile_atinse(cursor, cod)
+
+            # `FX_Extrase` NU se raporteaza in propunere. Pasul 8 chiar a rulat -- si s-a
+            # derulat inapoi cu restul -- dar el nu e o propunere despre care operatorul
+            # are ceva de decis: e o legatura mecanica intre extrase si plati. Un contor
+            # in tabloul de decizii ar cere un raspuns care nu i se cere.
+            scrise_propuse = {k: v for k, v in scrise.items() if k != "FX_Extrase"}
+
+            corp = {
+                "cod": cod,
+                "faza": MOD_PROPUNERE,
+                "amprenta": amprenta_acum,
+                "receptii": [
+                    {k: v for k, v in r.items() if k != "nr_crt"} for r in receptii
+                ],
+                "instantanee": [{
+                    "rand_istoric": i["rand_istoric"],
+                    "data_h": i["data_h"],
+                    "descriere": i["descriere"],
+                    "total": i["total"],
+                    "stergere": i["stergere"],
+                    "sugestie_idrr": sugestii.get(i["idrh"]),
+                    "sugestie_automata": i["idrh"] in sugestii,
+                    "linii": i["linii"],
+                } for i in instantanee],
+                "are": are,
+                # `scrise` raporteaza ce S-AR FI scris. Tranzactia se deruleaza inapoi
+                # imediat dupa; contorul arata a rezultat, dar descrie o rulare anulata.
+                "scrise": scrise_propuse,
+                "avertismente": warnings,
+            }
+            # DERULARE INAPOI NECONDITIONATA. Nu e o cale de eroare: e chiar contractul.
+            conn.rollback()
+            return _json_utf8(corp, 200)
+
+        # --- PASUL 4c, FAZA DOI: se aplica deciziile, se ignora automatul ------
+        numarat = aplica_decizii(cursor, cod, decizii, instantanee, receptii, warnings)
+        scrise["asocieri"] = numarat
+
+        # F28: doua sau mai multe reconstituiri pe acelasi angajament fac gruparea
+        # imposibil de verificat (F27). Se marcheaza TOATE, se numara si cele ramase din
+        # rulari mai vechi, si marcajul nu se sterge niciodata.
+        scrise["reconstituiri_nesigure"] = marcheaza_reconstituirile_nesigure(
+            cursor, cod, warnings)
+
+        # --- pasul 4d, per receptie atinsa ------------------------------------
+        _pas4d_pe_receptiile_atinse(cursor, cod)
 
         conn.commit()
-
         return _json_utf8({
             "cod": cod,
-            # `are` poarta DOAR steagul pe care pasii portati il pot pune. Restul
-            # steagurilor din plan (Istoric, Rezervari, Receptii, ReceptiiH, Plati,
-            # Incasari) lipsesc INTENTIONAT: un `false` ar arata ca «s-a verificat si
-            # nu era nimic», cand adevarul e «nu s-a rulat pasul».
-            "are": {"Indicatori": scrise["FX_Indicatori"] > 0},
+            "faza": MOD_SALVARE,
+            "are": are,
             "scrise": scrise,
             "avertismente": warnings,
         }, 200)
@@ -380,6 +634,14 @@ def post_prelucrare():
             conn.rollback()
         logger.error("PRELUCRARE dc=%s cod=%s: %s", db_name, cod, err)
         return _json_utf8({"error": str(err)}, 500)
+
+    except DecizieInvalida as err:
+        # Deciziile nu descriu tabloul (un instantaneu lipsa, o data care nu se
+        # potriveste, un lant care nu se inchide). Mesajul e deja romanesc si spune care.
+        if conn is not None:
+            conn.rollback()
+        logger.warning("PRELUCRARE dc=%s cod=%s decizii respinse: %s", db_name, cod, err)
+        return _json_utf8({"error": str(err)}, 400)
 
     except ValueError as err:
         # Sarcina utila e de nefolosit (clasificatie fara unitate, camp lipsa, alegere
