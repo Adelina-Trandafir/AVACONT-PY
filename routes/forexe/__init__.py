@@ -42,6 +42,10 @@ forexe_bp = Blueprint("forexe", __name__)
 # ddf.py         -> GET /api/forexe/ddf
 # istoric.py     -> GET /api/forexe/istoric
 # ord.py         -> GET /api/forexe/ord
+# ord_edit.py    -> POST /api/forexe/ord/genereaza, GET /api/forexe/ord/draft/<idordp>,
+#                   GET /api/forexe/ord/zile, POST /api/forexe/ord/save,
+#                   DELETE /api/forexe/ord/<idordp>,
+#                   GET/PUT/DELETE /api/forexe/ord/att/<idordattp>/imagine  (felia 0049)
 # pdf.py         -> GET/PUT /api/forexe/ddf/pdf/<idrev>, GET/PUT /api/forexe/ord/pdf/<idordp>
 # prelucrare.py  -> POST /api/forexe/prelucrare (ingestia FOREXE; pasii 1-2 in 0048-02)
 # asociere.py    -> GET/POST /api/forexe/asociere (editorul R<->H de ORICAND, 0048-04)
@@ -56,6 +60,10 @@ from . import istoric  # noqa: E402,F401
 # `as ord_route`: importat simplu, numele `ord` ar umbri built-in-ul `ord()` in spatiul
 # de nume al pachetului. Fisierul ramane `ord.py` (numele rutei), legarea nu.
 from . import ord as ord_route  # noqa: E402,F401
+# ord_edit.py = jumatatea de SCRIERE a ordonantarii (felia 0049). Fisier separat, ca ord.py
+# (citirea vederii 0033) sa ramana neatins; `routes/ord/*` — clientul Access legacy pe
+# X-Api-Key — nu se atinge deloc.
+from . import ord_edit  # noqa: E402,F401
 from . import pdf  # noqa: E402,F401
 from . import prelucrare  # noqa: E402,F401
 from . import asociere  # noqa: E402,F401
