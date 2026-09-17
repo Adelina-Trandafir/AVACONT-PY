@@ -36,8 +36,8 @@ CLSF_ACC = 990015
 # Cheile pe care contractul de fir le promite (oglindesc ReceptieRow pe partea VB.NET).
 ROW_KEYS = (
     "idrr", "nrcrt_r", "data_r", "suma_antet", "incarcat", "preluat",
-    "reconstituit", "reconstituit_nesigur",
-    "idrh", "nrcrt_h", "data_h", "total", "difh", "sters_h", "descriere_h",
+    "reconstituit", "reconstituit_nesigur", "descriere_r",
+    "idrh", "nrcrt_h", "data_h", "total", "difh", "sters_h", "este_stergere", "descriere_h",
     "idr", "id_clsf", "cod_indicator", "clsf", "denumire", "nrcrt_ind", "valoare", "dif",
 )
 PLATA_KEYS = ("data_plata", "suma")
@@ -297,6 +297,8 @@ def test_two_receptii_with_parents_populated(client, auth_headers, demo_rows):
     assert r1["data_h"] == "2026-01-19"
     assert r1["idr"] == 990001
     assert r1["descriere_h"] == "Plata factura"
+    assert r1["descriere_r"] == "Plata factura"       # slice 0065: R.Descriere on the wire
+    assert r1["este_stergere"] is False
 
 
 def test_root_icon_state_flags_are_bools(client, auth_headers, demo_rows):

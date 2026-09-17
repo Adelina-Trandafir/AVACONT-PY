@@ -426,7 +426,8 @@ def is_header_only_snapshot(este_stergere: bool, line_rows_seen) -> bool:
 # only lines were zeros look the same until «Refacere din istoric» (slice 0062) puts
 # those lines back; until then they are hidden too, which is the documented repair path.
 SNAPSHOT_COUNTS_SQL = (
-    "(COALESCE(H.EsteStergere, 0) <> 0 "
+    "(H.IDRH IS NULL "
+    " OR COALESCE(H.EsteStergere, 0) <> 0 "
     " OR EXISTS (SELECT 1 FROM FX_Receptii L WHERE L.IDRH = H.IDRH))"
 )
 

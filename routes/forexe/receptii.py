@@ -10,13 +10,17 @@ parametru db_name / id_unitate — baza vine din sesiune (g.session.db_name), ex
 ca la /api/forexe/tree, /api/forexe/sumar si /api/forexe/rezervari. Un token nu poate
 tinti alta baza decat cea pe care s-a logat.
 
-Granulatia `receptii`: UN RAND per linie FX_Receptii (IDR), cu parintele antet (H) si
-parintele receptie (R) purtate pe rand. Endpoint-ul este un cititor "brut" deliberat —
+Granulatia `receptii` (17.09.2026): UN RAND per (receptie R, indicator RHR, antet H), cu
+linia FX_Receptii a ACELUI indicator in ACEL antet purtata pe rand (IDR/Valoare NULL ->
+0 cand antetul nu are linie pe indicator). Endpoint-ul este un cititor "brut" deliberat —
 NU pre-formeaza arborele si NU deduplica randurile pe fir. Clientul (ReceptiiView)
 deriva:
-  * arborele pe 2 niveluri: receptie (IDRR) -> antet (IDRH), dedus prin distinct;
-  * grila LISTA (per antet selectat): un rand-total sintetic + un rand per clsf;
-  * (felia 0015-02) tooltip-ul de receptie, din DIFH-uri + `plati`.
+  * arborele: radacina «Toate receptiile» -> luna -> receptie (IDRR), dedus prin distinct;
+  * grila LISTA (per nod selectat): un rand per clsf, din ULTIMUL antet al fiecarei
+    receptii (felia 0065) -- nu un agregat peste toate antetele lantului;
+  * tooltip-ul de receptie / luna: cumulul totalurilor ULTIMULUI antet al fiecarei
+    receptii + `plati` (felia 0065; pana atunci suma DIFH-urilor, care e NULL pe un
+    antet asezat din editor inainte de 0065 si pierdea receptia din total).
 Aceeasi lista de randuri hraneste si arborele si grila si tooltip-ul, deci o modelare
 pe server ar duplica-o pe fir.
 
@@ -84,33 +88,63 @@ from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
 
 logger = logging.getLogger(__name__)
 
+# STUPID FACUT DE CLAUDE!!!!
 # Un rand per FX_Receptii (IDR) al angajamentului, cu antetul (H) si receptia (R) purtate.
 # Clsf prin subinterogare scalara (LIMIT 1) cheiata pe FX_Indicatori.IdClsf (= id Access)
 # + IdUnitate. Ordinea reproduce arborele Access (R.NRCRT, R.DataR, H.NrCrt, H.DataH),
 # cu Rc.IDR ca tiebreaker stabil intre refresh-uri.
+# _SQL_RECEPTII = (
+#     "SELECT "
+#     "R.IDRR, R.NRCRT AS NrCrtR, R.DataR, R.SumaAntet, R.Incarcat, R.Preluat, "
+#     "R.Reconstituit, R.ReconstituitNesigur, "
+#     "R.Descriere AS DescriereR, "
+#     "H.IDRH, H.NrCrt AS NrCrtH, H.DataH, H.Total, H.DIFH, H.Sters AS StersH, "
+#     "COALESCE(H.EsteStergere, 0) AS EsteStergere, "
+#     "H.Descriere AS DescriereH, "
+#     "Rc.IDR, Rc.IdClsf, Rc.CodIndicator, I.NrCrt AS NrCrtInd, Rc.Valoare, Rc.DIF, "
+#     "(SELECT C.Clsf FROM Clasificatii C "
+#     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+#     "  LIMIT 1) AS Clsf, "
+#     "(SELECT C.Denumire FROM Clasificatii C "
+#     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+#     "  LIMIT 1) AS Denumire "
+#     "FROM FX_Receptii_H H "
+#     "LEFT JOIN FX_Receptii_R R ON R.IDRR = H.IDRR "
+#     "LEFT JOIN FX_Receptii Rc  ON Rc.IDRH = H.IDRH "
+#     "LEFT JOIN FX_Indicatori I ON I.CodAI = Rc.CodAI "
+#     "WHERE H.CodAngajament = %s AND " + SNAPSHOT_COUNTS_SQL + " "
+#     "ORDER BY R.NRCRT, R.DataR, H.NrCrt, H.DataH, Rc.IDR"
+# )
 _SQL_RECEPTII = (
     "SELECT "
     "R.IDRR, R.NRCRT AS NrCrtR, R.DataR, R.SumaAntet, R.Incarcat, R.Preluat, "
-    # F28 (felia 0048-03-completare): receptie reconstituita a carei GRUPARE nu a putut
-    # fi verificata de program, fiindca pe acelasi angajament mai era una (F27). Se duce
-    # pana in arbore ca sa poarte un semn: cine citeste un total peste luni trebuie sa
-    # poata afla ca la baza lui a stat o judecata, nu o verificare.
     "R.Reconstituit, R.ReconstituitNesigur, "
+    "R.Descriere AS DescriereR, "
     "H.IDRH, H.NrCrt AS NrCrtH, H.DataH, H.Total, H.DIFH, H.Sters AS StersH, "
+    "COALESCE(H.EsteStergere, 0) AS EsteStergere, "
     "H.Descriere AS DescriereH, "
-    "Rc.IDR, Rc.IdClsf, Rc.CodIndicator, I.NrCrt AS NrCrtInd, Rc.Valoare, Rc.DIF, "
+    # The indicator's identity (IdClsf, CodIndicator, Clsf, Denumire) comes from RHR/I,
+    # the value from THAT indicator's line in THIS header (Rc, matched on CodAI too).
+    "Rc.IDR, I.IdClsf, RHR.CodIndicator, I.NrCrt AS NrCrtInd, Rc.Valoare, Rc.DIF, "
     "(SELECT C.Clsf FROM Clasificatii C "
     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
     "  LIMIT 1) AS Clsf, "
     "(SELECT C.Denumire FROM Clasificatii C "
     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
     "  LIMIT 1) AS Denumire "
-    "FROM FX_Receptii_H H "
-    "LEFT JOIN FX_Receptii_R R ON R.IDRR = H.IDRR "
-    "LEFT JOIN FX_Receptii Rc  ON Rc.IDRH = H.IDRH "
-    "LEFT JOIN FX_Indicatori I ON I.CodAI = Rc.CodAI "
-    "WHERE H.CodAngajament = %s AND " + SNAPSHOT_COUNTS_SQL + " "
-    "ORDER BY R.NRCRT, R.DataR, H.NrCrt, H.DataH, Rc.IDR"
+    "FROM FX_Receptii_R R "
+    "INNER JOIN FX_Receptii_RHR RHR ON R.IDRR = RHR.IDRR "
+    "INNER JOIN (SELECT I.CodAI, I.IdClsf, I.IdUnitate, I.NrCrt "
+    "            FROM FX_Indicatori I "
+    "            WHERE I.CodAngajament = %s) AS I ON I.CodAI = RHR.CodAI "
+    "LEFT JOIN FX_Receptii_H H ON H.IDRR = R.IDRR "
+    # One row per (receptie, indicator, header). Without `Rc.CodAI = RHR.CodAI` every
+    # line of the header was crossed with every indicator of the receptie, so each
+    # indicator carried the header's whole total (operator's finding, 17.09.2026).
+    # An indicator with no line in this header comes with Rc NULL -> Valoare 0.
+    "LEFT JOIN FX_Receptii Rc  ON Rc.IDRH = H.IDRH AND Rc.CodAI = RHR.CodAI "
+    "WHERE R.CodAngajament = %s AND " + SNAPSHOT_COUNTS_SQL + " "
+    "ORDER BY R.NRCRT, R.DataR, H.NrCrt, H.DataH, I.NrCrt, Rc.IDR"
 )
 
 # Platile angajamentului (qFX_MAIN_REC_TT_PLATI): Data_plata + Suma, fara alt filtru.
@@ -142,6 +176,16 @@ def _iso(value):
         return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
+def _isoTime(value):
+    """DateTime -> 'YYYY-MM-DDTHH:MM:SS' (ISO) sau None. Păstrează ora, minutele și secundele."""
+    if value is None:
+        return None
+    try:
+        return value.isoformat(sep='T', timespec='seconds')
+    except AttributeError:
+        return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
 def _num(value):
     """Coloana de bani -> float. DOUBLE vine ca float; None devine 0.0, ca grila/tooltip
     sa arate «0,00», nu gol."""
@@ -161,8 +205,8 @@ def get_receptii():
 
     Query: cod (obligatoriu) = CodAngajament.
     Returneaza { cod, receptii: [ {idrr, nrcrt_r, data_r, suma_antet, incarcat,
-    preluat, reconstituit, reconstituit_nesigur, idrh, nrcrt_h, data_h, total, difh,
-    sters_h, descriere_h, idr, id_clsf,
+    preluat, reconstituit, reconstituit_nesigur, descriere_r, idrh, nrcrt_h, data_h,
+    total, difh, sters_h, este_stergere, descriere_h, idr, id_clsf,
     cod_indicator, clsf, denumire, nrcrt_ind, valoare, dif}, ... ], plati: [ {data_plata,
     suma}, ... ] }.
 
@@ -183,11 +227,11 @@ def get_receptii():
         cursor = conn.cursor()
 
         # SQL parametrizat — `cod` nu se interpoleaza NICIODATA in text.
-        cursor.execute(_SQL_RECEPTII, (cod,))
+        cursor.execute(_SQL_RECEPTII, (cod, cod, ))
         receptii = []
         for (idrr, nrcrt_r, data_r, suma_antet, incarcat, preluat,
-             reconstituit, reconstituit_nesigur,
-             idrh, nrcrt_h, data_h, total, difh, sters_h, descriere_h,
+             reconstituit, reconstituit_nesigur, descriere_r,
+             idrh, nrcrt_h, data_h, total, difh, sters_h, este_stergere, descriere_h,
              idr, id_clsf, cod_indicator, nrcrt_ind, valoare, dif, clsf,
              denumire) in cursor.fetchall():
             receptii.append({
@@ -200,12 +244,14 @@ def get_receptii():
                 "preluat": bool(preluat),
                 "reconstituit": bool(reconstituit),
                 "reconstituit_nesigur": bool(reconstituit_nesigur),
+                "descriere_r": descriere_r,
                 "idrh": int(idrh) if idrh is not None else None,
                 "nrcrt_h": _opt_int(nrcrt_h),
-                "data_h": _iso(data_h),
+                "data_h": _isoTime(data_h),
                 "total": _num(total),
                 "difh": _num(difh),
                 "sters_h": bool(sters_h),
+                "este_stergere": bool(este_stergere),
                 "descriere_h": descriere_h,
                 # NULL cand antetul nu are linii de receptie (ramura LEFT JOIN).
                 "idr": int(idr) if idr is not None else None,

@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 _BINARY_TYPES = frozenset(("blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary"))
 
 # Table name prefixes / suffixes that are left out of the dump entirely.
-_EXCLUDED_PREFIXES = ("tmp", "FX_Extrase")
+_EXCLUDED_PREFIXES = ("tmp", "FX_Extrase", "FX_Istoric")
 _EXCLUDED_SUFFIXES = ("_IMG", "_PDF")
 
 # Preferred order for the discovery pass (parents / the well-known tables first);

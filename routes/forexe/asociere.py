@@ -99,6 +99,7 @@ from utils import asociere_log as journal
 
 from . import forexe_bp
 from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
+from .prelucrare_pasi import step4d_calculeaza_dif
 from .prelucrare_asociere import (
     ACTIUNE_ASOCIAT,
     ACTIUNE_IGNORAT,
@@ -593,6 +594,14 @@ def aplica_comenzi(cursor, cod: str, comenzi: list, instantanee: list,
 
     for idrr in sorted(de_recalculat):
         recalculeaza_final(cursor, idrr)
+
+    # Pasul 4d, pe fiecare lant atins (felia 0065). Ingestia il ruleaza dupa 4c si
+    # refacerea dupa ce a scris; editorul de oricand NU il rula, deci un instantaneu
+    # asezat de aici ramanea cu `DIFH`/`DIF` NULL -- iar `SUM(DIF)` din ordonantare
+    # (`qFX_ORD_REC_ANT`) si eticheta din Receptii nu il vedeau. Operatorul a gasit o
+    # receptie lipsa din total: 25.410 in loc de 29.645.
+    for idrr in sorted(de_recalculat):
+        step4d_calculeaza_dif(cursor, cod, idrr)
 
     marcheaza_reconstituirile_nesigure(cursor, cod, avertismente)
     journal.section("ce s-a scris")

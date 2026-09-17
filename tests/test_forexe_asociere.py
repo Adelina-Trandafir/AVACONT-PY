@@ -425,6 +425,12 @@ class FakeConnection:
         # readers are told apart by the blocking counters only `_BLOCAJE_SQL` has.
         if sql.startswith("SELECT H.IDRH") and " AS ord_h" in sql:
             return self.tabele.get("blocaje", [])
+        if sql.startswith("SELECT H.IDRH, H.Total FROM FX_Receptii_H H"):
+            # `_DIF_H_SQL` (step 4d, slice 0065): the chain of one reception, by IDRR.
+            return [{"IDRH": i["IDRH"], "Total": i["Total"]}
+                    for i in self.tabele.get("instantanee", []) if i["IDRR"]]
+        if sql.startswith("SELECT R.IDR, R.CodAI"):
+            return []                                   # `_DIF_R_SQL`: no line DIFs here
         if sql.startswith("SELECT IDRH, CodIndicator"):
             return self.tabele.get("linii", [])
         if sql.startswith("SELECT H.IDRH, H.IDRR"):
@@ -583,6 +589,38 @@ def test_a_whole_save_passes_the_chain_check(client, auth_headers, monkeypatch):
     assert c.committed and not c.rolled_back
     assert any(sql.startswith("UPDATE FX_Receptii_H SET IDRR = NULL")
                for sql, _ in c.executed)
+
+
+def test_a_save_recomputes_dif_on_every_touched_chain(client, auth_headers, monkeypatch):
+    """
+    Slice 0065: the always-available editor runs step 4d on each chain it touched. Before,
+    a snapshot placed here kept `DIFH`/`DIF` NULL, and `SUM(DIF)` (ordonantare, Receptii
+    label) silently lost the reception -- the operator's 25.410 instead of 29.645.
+    """
+    c = baza_cu_un_lant()
+    c.tabele["instantanee"].append(
+        {"IDRH": 6, "IDRR": None, "IDH": 10, "DataH": dt("2026-02-12 00:00:00"),
+         "Total": 1500.0, "Descriere": "Plata fact.", "TipReceptie": "",
+         "Sters": 0, "EsteStergere": 0})
+    c.tabele["linii"].append(
+        {"IDRH": 6, "CodIndicator": "AAB", "CodAI": COD + "-AAB", "CodSSI": "",
+         "IdClsf": 1, "Valoare": 1500.0})
+    monkeypatch.setattr(A, "get_kbot_connection", lambda db=None: c)
+
+    amp = P.amprenta(c.cursor(dictionary=True), COD)
+    c.executed.clear()
+    corp = _json.dumps({"cod": COD, "amprenta": amp,
+                        "comenzi": [cmd(6, A.ACTIUNE_ASOCIAT, idrr=3)]})
+    r = client.post(URL, data=corp, headers=auth_headers)
+    assert r.status_code == 200, r.get_data(as_text=True)
+
+    difh = [p for sql, p in c.executed
+            if sql.startswith("UPDATE FX_Receptii_H SET DIFH")]
+    # The fake answers `_DIF_H_SQL` with the snapshots ALREADY on the chain (IDRH 5); the
+    # point is that the recomputation ran for IDRR 3 at all, with the first snapshot's
+    # DIFH = its own Total.
+    assert difh == [(1000.0, 0.0, 5)]
+    assert c.committed
 
 
 def test_post_pe_o_legatura_blocata_da_409(client, auth_headers, monkeypatch):
