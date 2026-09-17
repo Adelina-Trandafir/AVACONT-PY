@@ -374,6 +374,63 @@ def get_tip_rand(obs: Optional[str]) -> str:
     return ""
 
 
+def este_linie_receptie(rand) -> bool:
+    """
+    Is this non-header history row a reception LINE (one indicator of a snapshot)?
+
+    Step 4a and the rebuild route (`receptii_refacere`) walk the same rows and must
+    agree, so the criterion lives here, once.
+
+    The VBA kept only `Val_Receptie <> 0`. That drops the rows the site emits for an
+    indicator that did not move or fell to zero -- and the snapshot then LOSES that
+    indicator in `FX_Receptii`, while the reception still has it in `RHR`. F14/F16 are
+    built on "an indicator can fall to zero but never disappears" (F31), so a zero row
+    that NAMES an indicator (`CodAI` set) is a line and gets written with `Valoare = 0`.
+    A zero row that names no indicator is still skipped, as before; a non-zero row is
+    still a line whatever `CodAI` says, so the unknown-indicator error keeps firing.
+    """
+    if float(rand.get("Val_Receptie") or 0) != 0:
+        return True
+    return bool(str(rand.get("CodAI") or "").strip())
+
+
+def is_header_only_snapshot(este_stergere: bool, line_rows_seen) -> bool:
+    """
+    Is this history header a snapshot with ONLY the total row -- no indicator lines?
+
+    `line_rows_seen` is what the walk collected since the previous header: a list, or a
+    count. It is the history LINE ROWS seen, not the lines successfully built -- a line
+    whose indicator is unknown to `FX_Indicatori` is still a line row of that header,
+    and the rebuild route counts it, so the header keeps its `FX_Receptii_H` anchor and
+    the line can attach on a later rebuild once the indicator exists.
+
+    F32. The old Access app left such headers in `FX_Istoric`: a reception header row
+    with a `Total` and not one per-indicator row before it. They are errors of the old
+    app, not a state a reception can be in (with F31 even a save that changed nothing
+    names every indicator, at zero), and they are IGNORED everywhere: step 4a does not
+    write an `FX_Receptii_H` for them, the rebuild route does not either, and every
+    reader of `FX_Receptii_H` filters them out with `SNAPSHOT_COUNTS_SQL` below.
+
+    The one legitimate line-less header is the deletion row (F21): it never carries
+    indicator rows and it IS a snapshot -- the last of its chain -- so it is exempt.
+    Both walks (step 4a and `receptii_refacere`) must agree, so the criterion lives here.
+    """
+    return (not este_stergere) and not line_rows_seen
+
+
+# Read-side twin of `is_header_only_snapshot` (F32): the `FX_Receptii_H` rows that count.
+# A header-only snapshot that is already in the base (ingested before 17.09.2026, or
+# migrated from Access) has no `FX_Receptii` line, so this is how every reader leaves it
+# out -- the association editor, the ingest proposal, the chain checks, DIFH, the
+# Receptii tree. The header table must be aliased `H`. Rows ingested before F31 whose
+# only lines were zeros look the same until «Refacere din istoric» (slice 0062) puts
+# those lines back; until then they are hidden too, which is the documented repair path.
+SNAPSHOT_COUNTS_SQL = (
+    "(COALESCE(H.EsteStergere, 0) <> 0 "
+    " OR EXISTS (SELECT 1 FROM FX_Receptii L WHERE L.IDRH = H.IDRH))"
+)
+
+
 def is_rand_contract_row(obs: Optional[str]) -> bool:
     """Port of IsRandContractRow -- first 14 characters are 'rand contract:'."""
     return (obs or "").strip()[:14].lower() == "rand contract:"

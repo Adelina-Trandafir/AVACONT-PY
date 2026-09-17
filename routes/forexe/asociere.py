@@ -75,13 +75,12 @@ F14 (submultimea de indicatori) si F16 (multimile doar cresc) RIDICA, la fel ca 
 ingestie: sunt absolute. Un instantaneu nu poate numi indicatori pe care recepția nu ii
 are; un indicator nu poate disparea din lant.
 
-F13 (data) NU MAI RIDICA, DE NICAIERI -- retras pe 31.08.2026. Se sprijinea pe premisa ca
-`FX_Receptii_R.DataR` spune cand a aparut receptia; operatorul a corectat premisa: e un
-camp obisnuit, tastat pe site si schimbabil dupa aceea, iar tabelul nu are nicio coloana
-cu momentul crearii (F29). Un veto cladit pe un camp tastat refuza plasari corecte, si pe
-calea de ingestie asta inseamna un operator infundat pe o receptie pe care nu o poate
-repara -- exact ce interzice F10. Comparatia a ramas ca SEMN, in `avertismente`, pe
-amandoua caile. Detaliile si comparatia pe ZI: docstring-ul lui `valideaza_plasarile`.
+F13 (data) NU MAI EXISTA DELOC -- retras ca veto pe 31.08.2026, sters si ca semn pe
+09.09.2026. Se sprijinea pe premisa ca `FX_Receptii_R.DataR` spune cand a aparut receptia;
+operatorul a corectat premisa: e un camp obisnuit, tastat pe site si schimbabil dupa
+aceea, iar tabelul nu are nicio coloana cu momentul crearii (F29). Ca semn se aprindea pe
+date perfect corecte, deci nu mai apare NICAIERI -- nici in `avertismente`, nici in
+formular. Detaliile: docstring-ul lui `valideaza_plasarile`.
 
 F15 (capatul lantului) doar AVERTIZEAZA aici. Fundamentul §1.5 chiar asa il descrie --
 «aratat per recepție ca un SEMN» -- iar un editor in care nu poti desprinde ultimul
@@ -96,8 +95,10 @@ from flask import request, g, current_app
 
 from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
+from utils import asociere_log as journal
 
 from . import forexe_bp
+from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
 from .prelucrare_asociere import (
     ACTIUNE_ASOCIAT,
     ACTIUNE_IGNORAT,
@@ -140,10 +141,15 @@ class InstantaneuBlocat(Exception):
 # TOATE instantaneele angajamentului, nu doar cele neasezate: aici se editeaza legaturile
 # EXISTENTE, deci cele asociate sunt chiar subiectul. Vin si cele marcate `Sters` (F17,
 # «nu consemneaza nicio schimbare»), ca operatorul sa le poata rasgandi.
+#
+# F32: un antet fara nicio linie, care nu e stergere, NU e instantaneu -- e o eroare a
+# vechii aplicatii Access -- si nu apare in editor. `SNAPSHOT_COUNTS_SQL` il lasa afara;
+# o comanda care l-ar numi cade in `verifica_blocajele` cu «nu exista pe acest angajament».
 _INSTANTANEE_SQL = (
-    "SELECT IDRH, IDRR, IDH, DataH, Total, Descriere, TipReceptie, "
-    "       COALESCE(Sters, 0) AS Sters, COALESCE(EsteStergere, 0) AS EsteStergere "
-    "FROM FX_Receptii_H WHERE CodAngajament = %s ORDER BY DataH, IDRH"
+    "SELECT H.IDRH, H.IDRR, H.IDH, H.DataH, H.Total, H.Descriere, H.TipReceptie, "
+    "       COALESCE(H.Sters, 0) AS Sters, COALESCE(H.EsteStergere, 0) AS EsteStergere "
+    "FROM FX_Receptii_H H WHERE H.CodAngajament = %s AND " + SNAPSHOT_COUNTS_SQL + " "
+    "ORDER BY H.DataH, H.IDRH"
 )
 _LINII_SQL = (
     "SELECT IDRH, CodIndicator, CodAI, CodSSI, IdClsf, Valoare "
@@ -240,6 +246,20 @@ def motive_blocare(rand: dict) -> list:
     return motive
 
 
+def citeste_plati(cursor, cod: str) -> list:
+    """
+    Platile angajamentului, contextul in care se citeste orice lant.
+
+    Publica fiindca o cheama SI ingestia (routes/forexe/prelucrare.py): reperele de plata
+    sunt chiar rostul asezarii -- §1.3 din fundament, fiecare ordonantare citeste totalul
+    receptiei ASA CUM STATEA la data platii -- deci ele trebuie sa fie pe ecran cand se
+    aseaza, nu abia dupa.
+    """
+    cursor.execute(_PLATI_SQL, (cod,))
+    return [{"data_plata": r["Data_plata"], "suma": float(r["Suma"] or 0),
+             "nr_op": r["NrOP"] or ""} for r in cursor.fetchall()]
+
+
 def citeste_blocaje(cursor, cod: str) -> dict:
     """{IDRH: [motiv, ...]} pentru instantaneele asociate ale angajamentului."""
     cursor.execute(_BLOCAJE_SQL, (cod,))
@@ -257,6 +277,12 @@ def citeste_instantanee(cursor, cod: str, blocaje: dict) -> list:
 
     Ancora e `idrh`, nu `rand_istoric`: nu exista sarcina utila din care sa vina un
     indice, si nici nu e nevoie -- randurile sunt deja in baza.
+
+    `rand_istoric` se pune totusi, ca ALIAS al lui `idrh` -- exact ca in
+    `normalizeaza_comenzi`. Functiile imprumutate din `prelucrare_asociere`
+    (`valideaza_plasarile`, `materializeaza_reconstituite`) cheiaza instantaneele pe
+    `rand_istoric`, si fara alias FIECARE salvare cadea cu `KeyError: 'rand_istoric'`
+    la prima verificare de lant (defectul din 17.09.2026).
     """
     cursor.execute(_LINII_SQL, (cod,))
     linii = {}
@@ -278,6 +304,7 @@ def citeste_instantanee(cursor, cod: str, blocaje: dict) -> list:
         motive = blocaje.get(idrh, [])
         out.append({
             "idrh": idrh,
+            "rand_istoric": idrh,
             "idrr": int(r["IDRR"]) if r["IDRR"] is not None else 0,
             "idh": int(r["IDH"]) if r["IDH"] is not None else 0,
             "data_h": r["DataH"],
@@ -291,6 +318,17 @@ def citeste_instantanee(cursor, cod: str, blocaje: dict) -> list:
             "motive": motive,
             "linii": linii.get(idrh, []),
         })
+
+    journal.section("instantaneele angajamentului (%d)" % len(out))
+    journal.table(
+        ("IDRH", "IDRR", "DataH", "Total", "tip", "stergere", "ignorat", "blocat",
+         "linii"),
+        [(i["idrh"], i["idrr"], i["data_h"], i["total"], i["tip_receptie"],
+          i["stergere"], i["ignorat"], i["blocat"],
+          journal.sume_pe_indicator(i["linii"])) for i in out])
+    for i in out:
+        if i["motive"]:
+            journal.line("IDRH %s blocat: %s", i["idrh"], " ".join(i["motive"]))
     return out
 
 
@@ -492,6 +530,16 @@ def aplica_comenzi(cursor, cod: str, comenzi: list, instantanee: list,
       4. `Final` / `Partial`, o singura data per recepție atinsa;
       5. F28.
     """
+    journal.section("comenzile operatorului (%d)" % len(comenzi))
+    dupa_idrh = {i["idrh"]: i for i in instantanee}
+    journal.table(
+        ("IDRH", "acțiune", "IDRR cerut", "receptie_noua", "IDRR de acum", "DataH",
+         "Total"),
+        [(c["idrh"], c["actiune"], c["idrr"], c["receptie_noua"],
+          dupa_idrh.get(c["idrh"], {}).get("idrr"),
+          dupa_idrh.get(c["idrh"], {}).get("data_h"),
+          dupa_idrh.get(c["idrh"], {}).get("total")) for c in comenzi])
+
     etichete = verifica_etichetele(comenzi)
     noi = materializeaza_reconstituite(cursor, cod, comenzi, instantanee,
                                        etichete, avertismente)
@@ -540,11 +588,17 @@ def aplica_comenzi(cursor, cod: str, comenzi: list, instantanee: list,
     # Steagul `Sters` de pe recepțiile care si-au pierdut randul de stergere.
     for idrr in sorted(de_recalculat):
         cursor.execute(_R_DEMARCHEAZA_SQL, (idrr, idrr))
+        if cursor.rowcount:
+            journal.line("recepția %s nu mai are rând de ștergere: Sters = 0", idrr)
 
     for idrr in sorted(de_recalculat):
         recalculeaza_final(cursor, idrr)
 
     marcheaza_reconstituirile_nesigure(cursor, cod, avertismente)
+    journal.section("ce s-a scris")
+    journal.line("legături: %s", numarat)
+    for a in avertismente:
+        journal.line("avertisment: %s", a)
     return numarat
 
 
@@ -567,6 +621,7 @@ def _serializeaza(v):
 
 @forexe_bp.route("/api/forexe/asociere", methods=["GET"])
 @require_session
+@journal.traced("asociere GET")
 def get_asociere():
     """
     Tabloul de asociere al unui angajament, citit DIRECT din baza.
@@ -583,6 +638,7 @@ def get_asociere():
     cod = str(cod).strip()
 
     db_name = g.session.db_name
+    journal.note(dc=db_name, user=g.session.username, cod=cod)
     conn = None
     try:
         conn = get_kbot_connection(db_name)
@@ -597,9 +653,7 @@ def get_asociere():
         blocaje = citeste_blocaje(cursor, cod)
         instantanee = citeste_instantanee(cursor, cod, blocaje)
 
-        cursor.execute(_PLATI_SQL, (cod,))
-        plati = [{"data_plata": r["Data_plata"], "suma": float(r["Suma"] or 0),
-                  "nr_op": r["NrOP"] or ""} for r in cursor.fetchall()]
+        plati = citeste_plati(cursor, cod)
 
         logger.info(
             "[forexe.asociere] %s: cod=%s -> %s recepții, %s instantanee "
@@ -614,6 +668,7 @@ def get_asociere():
         }, 200)
     except Exception as e:
         # Fara inghitire: o lista goala ar minti operatorul ca nu are ce edita.
+        journal.refusal("citirea tabloului a căzut: %s", e)
         logger.error(f"[forexe.asociere] {e}", exc_info=True)
         return _json_utf8(
             {"error": f"Eroare la citirea asocierii: {e}"}, 500)
@@ -624,6 +679,7 @@ def get_asociere():
 
 @forexe_bp.route("/api/forexe/asociere", methods=["POST"])
 @require_session
+@journal.traced("asociere POST")
 def post_asociere():
     """
     Aplica un set PARTIAL de modificari peste legaturile R <-> H.
@@ -646,6 +702,7 @@ def post_asociere():
         return _json_utf8({"error": "Câmp lipsă: amprenta"}, 400)
 
     db_name = g.session.db_name
+    journal.note(dc=db_name, user=g.session.username, cod=cod)
     conn = None
     try:
         comenzi = normalizeaza_comenzi(date.get("comenzi"))
@@ -661,6 +718,8 @@ def post_asociere():
         amp_server = amprenta(cursor, cod)
         if amp_server != amp_client:
             conn.rollback()
+            journal.refusal("amprenta nu se potrivește: formularul are %s, baza are "
+                            "%s. Nu s-a scris nimic.", amp_client, amp_server)
             return _json_utf8({"error": MSG_STARE_MODIFICATA,
                                "reason": REASON_STARE_MODIFICATA}, 409)
 
@@ -670,6 +729,7 @@ def post_asociere():
 
         avertismente = []
         numarat = aplica_comenzi(cursor, cod, comenzi, instantanee, avertismente)
+        journal.line("commit")
         conn.commit()
 
         # Amprenta noua, ca formularul sa poata continua fara sa reincarce tot.
@@ -681,15 +741,18 @@ def post_asociere():
     except InstantaneuBlocat as e:
         if conn is not None:
             conn.rollback()
+        journal.refusal("%s -- nu s-a scris nimic (rollback)", e)
         return _json_utf8({"error": str(e),
                            "reason": REASON_INSTANTANEU_BLOCAT}, 409)
     except DecizieInvalida as e:
         if conn is not None:
             conn.rollback()
+        journal.refusal("%s -- nu s-a scris nimic (rollback)", e)
         return _json_utf8({"error": str(e)}, 400)
     except Exception as e:
         if conn is not None:
             conn.rollback()
+        journal.refusal("salvarea a căzut: %s -- rollback", e)
         logger.error(f"[forexe.asociere] {e}", exc_info=True)
         return _json_utf8({"error": f"Eroare la salvarea asocierii: {e}"}, 500)
     finally:

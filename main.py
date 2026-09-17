@@ -3,6 +3,20 @@ import json
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 from utils.logger import setup_logger
+from utils import asociere_log
+
+# ---------------------------------------------------------------------------
+# THE ASSOCIATION JOURNAL SWITCH. True writes `asociere.log` next to
+# `api_server.log`, one block per association request: the picture it read, what
+# the run meant to do, every check with the numbers it compared, and what was
+# written. False opens no file and builds no line.
+#
+# Flip it HERE and restart the server. `KBOT_ASOCIERE=0` in the environment
+# outranks this switch (that is how the test suite keeps the file shut);
+# `ASOCIERE_LOG_PATH` in config.py moves the file.
+# ---------------------------------------------------------------------------
+ASOCIERE_LOG_ENABLED = True
+asociere_log.set_enabled(ASOCIERE_LOG_ENABLED)
 
 # Importam modulele (Blueprints) pe care le-am creat in folderul /routes
 from routes.admin import admin_bp

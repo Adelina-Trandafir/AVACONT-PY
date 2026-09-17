@@ -39,7 +39,7 @@ from datetime import datetime
 
 import mysql.connector
 
-from config import DB_CONFIG
+from config import DB_CONFIG_NEW
 from .schema_common import (CONTROL_DB, SchemaSyncError, check_prerequisites,
                             connect, discover_targets, ensure_control_table,
                             fetch_pending, parse_targets, setup_logging,
@@ -78,10 +78,10 @@ def dump_database(db_name: str, backup_dir: str, logger) -> str:
     out_path = os.path.join(backup_dir, f"{db_name}_{stamp}.sql")
 
     cmd = [tool,
-           f"--host={DB_CONFIG['host']}",
-           f"--port={DB_CONFIG['port']}",
-           f"--user={DB_CONFIG['user']}",
-           f"--password={DB_CONFIG['password']}",
+           f"--host={DB_CONFIG_NEW['host']}",
+           f"--port={DB_CONFIG_NEW['port']}",
+           f"--user={DB_CONFIG_NEW['user']}",
+           f"--password={DB_CONFIG_NEW['password']}",
            "--databases", db_name,
            "--routines", "--triggers", "--events",
            "--single-transaction",
@@ -118,7 +118,7 @@ def dump_database(db_name: str, backup_dir: str, logger) -> str:
 
 def restore_hint(db_name: str, dump_path: str) -> str:
     """The exact commands to put a database back. Printed, never run."""
-    host, port, user = DB_CONFIG["host"], DB_CONFIG["port"], DB_CONFIG["user"]
+    host, port, user = DB_CONFIG_NEW["host"], DB_CONFIG_NEW["port"], DB_CONFIG_NEW["user"]
     return (
         f"  Pentru a reveni la starea dinainte pentru `{db_name}`:\n"
         f"    1. Verificați că nimeni nu este conectat la baza respectivă.\n"

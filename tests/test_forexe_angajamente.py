@@ -221,3 +221,88 @@ def test_insert_then_update_refreshes_descriere_stare(client, auth_headers):
             conn.commit()
         finally:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# doar_noi (felia 0057) — butonul din dreapta subsolului de arbore
+# ---------------------------------------------------------------------------
+def test_doar_noi_empty_rows_reports_both_counters(client, auth_headers):
+    r = client.post(URL, headers=auth_headers,
+                    data=json.dumps({"db_name": DB_NAME, "doar_noi": True, "rows": []}))
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["inserate"] == 0
+    assert body["existente"] == 0
+
+
+def test_doar_noi_inserts_the_missing_and_leaves_the_present_untouched(client, auth_headers):
+    """The whole point of the flag: an angajament the server already has keeps its
+    Descriere and Stare, byte for byte, while a code it has never seen is inserted.
+
+    Without this, pressing the tree footer's refresh would overwrite every description
+    in the database with whatever FOREXE currently shows — silently, and on every press.
+    """
+    conn = get_kbot_connection(DB_NAME)
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM FX_Angajamente WHERE CodAngajament IN (%s, %s)",
+                    ("DNOI_VECHI", "DNOI_NOU"))
+        cur.execute(
+            "INSERT INTO FX_Angajamente (CodAngajament, Descriere, Stare, DC, Preluat) "
+            "VALUES (%s, %s, %s, %s, 1)",
+            ("DNOI_VECHI", "Descriere pastrata", "Stare pastrata", DB_NAME),
+        )
+        conn.commit()
+
+        body = {"db_name": DB_NAME, "doar_noi": True, "rows": [
+            {"Cod": "DNOI_VECHI", "Descriere": "SUPRASCRISA", "Stare": "SUPRASCRISA"},
+            {"Cod": "DNOI_NOU", "Descriere": "Angajament nou", "Stare": "În derulare"},
+        ]}
+        r = client.post(URL, headers=auth_headers, data=json.dumps(body))
+        assert r.status_code == 200
+        raspuns = r.get_json()
+        assert raspuns["inserate"] == 1
+        assert raspuns["existente"] == 1
+
+        cur = conn.cursor()
+        cur.execute("SELECT Descriere, Stare FROM FX_Angajamente WHERE CodAngajament = %s",
+                    ("DNOI_VECHI",))
+        assert cur.fetchone() == ("Descriere pastrata", "Stare pastrata")
+        cur.execute("SELECT Descriere FROM FX_Angajamente WHERE CodAngajament = %s",
+                    ("DNOI_NOU",))
+        assert cur.fetchone()[0] == "Angajament nou"
+    finally:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM FX_Angajamente WHERE CodAngajament IN (%s, %s)",
+                    ("DNOI_VECHI", "DNOI_NOU"))
+        conn.commit()
+        conn.close()
+
+
+def test_absent_doar_noi_keeps_the_old_upsert(client, auth_headers):
+    """A client from before the flag existed must still get the refreshing upsert."""
+    conn = get_kbot_connection(DB_NAME)
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM FX_Angajamente WHERE CodAngajament = %s", ("DNOI_PLAT",))
+        cur.execute(
+            "INSERT INTO FX_Angajamente (CodAngajament, Descriere, Stare, DC, Preluat) "
+            "VALUES (%s, %s, %s, %s, 1)",
+            ("DNOI_PLAT", "Veche", "Veche", DB_NAME),
+        )
+        conn.commit()
+
+        body = {"db_name": DB_NAME, "rows": [
+            {"Cod": "DNOI_PLAT", "Descriere": "Noua", "Stare": "Noua"}]}
+        r = client.post(URL, headers=auth_headers, data=json.dumps(body))
+        assert r.status_code == 200
+
+        cur = conn.cursor()
+        cur.execute("SELECT Descriere, Stare FROM FX_Angajamente WHERE CodAngajament = %s",
+                    ("DNOI_PLAT",))
+        assert cur.fetchone() == ("Noua", "Noua")
+    finally:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM FX_Angajamente WHERE CodAngajament = %s", ("DNOI_PLAT",))
+        conn.commit()
+        conn.close()

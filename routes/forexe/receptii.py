@@ -46,11 +46,27 @@ Join-ul clasificatiei — aceleasi decizii ca la Sumar (felia 0011-03), NU se re
   - Predicatul IdUnitate RAMANE la nomenclator (regula „drop IdUnitate" e doar pentru
     tabelele FX_).
 
-LEFT JOIN FX_Receptii (nu INNER): un antet FARA linii de receptie nu are voie sa DISPARA
-din arbore — qFX_MAIN_REC_TREE il arata (R INNER JOIN H, fara dependenta de FX_Receptii).
-Cu LEFT JOIN, un asemenea antet vine cu un rand avand campurile de linie NULL; clientul
-il pastreaza in arbore, iar grila lui arata doar randul-total (Sum(DIF)=0).
+ANTETUL E RADACINA INTEROGARII, NU RECEPTIA (felia 0062). Pana la 0062 se pornea din
+FX_Receptii_R cu INNER JOIN pe H, ca in qFX_MAIN_REC_TREE. Operatorul a constatat insa ca
+Access pierde IDRR-ul pe FX_Receptii_H, iar dupa migrare antetele ajung cu `IDRR IS NULL`:
+INNER JOIN-ul le pierdea pe toate si vederea spunea «angajamentul nu are receptii» cand el
+avea, doar neasezate pe o receptie. Acum se porneste din H, cu LEFT JOIN spre R: un antet
+neasezat vine cu campurile de receptie NULL (`idrr` None pe fir; clientul il arata intr-un
+dosar «Instantanee neasezate» si il trimite la editorul de legaturi). O receptie FARA niciun
+antet nu apare -- nici in Access nu aparea (R INNER JOIN H).
+
+LEFT JOIN FX_Receptii (nu INNER): randul de STERGERE (F21) nu are linii de receptie si
+nu are voie sa DISPARA din arbore — qFX_MAIN_REC_TREE il arata (R INNER JOIN H, fara
+dependenta de FX_Receptii). Cu LEFT JOIN, un asemenea antet vine cu un rand avand
+campurile de linie NULL; clientul il pastreaza in arbore, iar grila lui arata doar
+randul-total (Sum(DIF)=0).
 LEFT JOIN FX_Indicatori: analog, eticheta lipsa nu sterge linia.
+
+F32 (17.09.2026): ORICE ALT antet fara linii -- doar totalul, fara niciun indicator, si
+care nu e stergere -- NU e instantaneu, e o eroare lasata de vechea aplicatie Access, si
+se lasa afara cu `SNAPSHOT_COUNTS_SQL` (acelasi filtru ca editorul de legaturi, ingestia
+si DIFH). Pana pe 17.09 arborele il arata, ca Access; operatorul a hotarat ca se ignora
+peste tot.
 
 CONVENTIA CHEILOR MariaDB vs Access: vezi nota extinsa din routes/forexe/sumar.py.
 Pe scurt: NU deduce cheia din numele coloanei — numara randurile inainte si dupa join.
@@ -64,6 +80,7 @@ from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 
 from . import forexe_bp
+from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +105,11 @@ _SQL_RECEPTII = (
     "(SELECT C.Denumire FROM Clasificatii C "
     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
     "  LIMIT 1) AS Denumire "
-    "FROM FX_Receptii_R R "
-    "INNER JOIN FX_Receptii_H H ON H.IDRR = R.IDRR "
+    "FROM FX_Receptii_H H "
+    "LEFT JOIN FX_Receptii_R R ON R.IDRR = H.IDRR "
     "LEFT JOIN FX_Receptii Rc  ON Rc.IDRH = H.IDRH "
     "LEFT JOIN FX_Indicatori I ON I.CodAI = Rc.CodAI "
-    "WHERE R.CodAngajament = %s "
+    "WHERE H.CodAngajament = %s AND " + SNAPSHOT_COUNTS_SQL + " "
     "ORDER BY R.NRCRT, R.DataR, H.NrCrt, H.DataH, Rc.IDR"
 )
 
@@ -174,6 +191,7 @@ def get_receptii():
              idr, id_clsf, cod_indicator, nrcrt_ind, valoare, dif, clsf,
              denumire) in cursor.fetchall():
             receptii.append({
+                # None = antet neasezat pe nicio receptie (H.IDRR NULL, felia 0062).
                 "idrr": int(idrr) if idrr is not None else None,
                 "nrcrt_r": _opt_int(nrcrt_r),
                 "data_r": _iso(data_r),

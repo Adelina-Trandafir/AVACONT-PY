@@ -39,7 +39,9 @@ import hashlib
 import logging
 from typing import Dict, List, Optional, Set, Tuple
 
-from .prelucrare_helpers import fx_receptii_h_get_hash_ident
+from utils import asociere_log as journal
+
+from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL, fx_receptii_h_get_hash_ident
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +118,11 @@ def amprenta(cursor, cod: str) -> str:
         f"rc={r['rc']}", f"rm={r['rm']}",
         f"hc={r['hc']}", f"hm={r['hm']}", f"hn={r['hn']}",
     ])
-    return hashlib.sha256(brut.encode("utf-8")).hexdigest()[:32]
+    semnatura = hashlib.sha256(brut.encode("utf-8")).hexdigest()[:32]
+    # The components, not just the hash: when two phases disagree, the only useful
+    # question is WHICH of the eight numbers moved between them.
+    journal.line("amprenta %s din %s", semnatura, brut)
+    return semnatura
 
 
 # ===========================================================================
@@ -135,19 +141,33 @@ _RHR_SQL = (
 # ramase din rulari anterioare. Selectia e `IDRR IS NULL AND Sters = 0`, NU «inserate de
 # rularea curenta». Marcajul Access `OrigIDRH IS NULL` nu are echivalent aici si nu se
 # reconstruieste.
+#
+# F32: un antet fara nicio linie (si care nu e stergere) NU e instantaneu -- e o eroare a
+# vechii aplicatii Access -- si nu intra nici in tabloul de hotarat, nici in context.
+# `SNAPSHOT_COUNTS_SQL` il lasa afara pe TOATE citirile din fisierul asta.
 _INSTANTANEE_SQL = (
-    "SELECT IDRH, IDH, DataH, Total, Descriere, EsteStergere "
-    "FROM FX_Receptii_H "
-    "WHERE CodAngajament = %s AND IDRR IS NULL AND COALESCE(Sters, 0) = 0 "
-    "ORDER BY DataH, IDRH"
+    "SELECT H.IDRH, H.IDH, H.DataH, H.Total, H.Descriere, H.EsteStergere "
+    "FROM FX_Receptii_H H "
+    "WHERE H.CodAngajament = %s AND H.IDRR IS NULL AND COALESCE(H.Sters, 0) = 0 "
+    "  AND " + SNAPSHOT_COUNTS_SQL + " "
+    "ORDER BY H.DataH, H.IDRH"
 )
 _LINII_SQL = (
     "SELECT IDRH, CodIndicator, CodAI, CodSSI, IdClsf, Valoare "
     "FROM FX_Receptii WHERE CodAngajament = %s ORDER BY IDRH, CodIndicator"
 )
+# Toate instantaneele angajamentului, pentru CONTEXTUL propunerii. Aceleasi coloane ca in
+# routes/forexe/asociere.py, ca sa poata calatori in aceeasi forma pe fir.
+_TOATE_INSTANTANEELE_SQL = (
+    "SELECT H.IDRH, H.IDRR, H.IDH, H.DataH, H.Total, H.Descriere, H.TipReceptie, "
+    "       COALESCE(H.Sters, 0) AS Sters, COALESCE(H.EsteStergere, 0) AS EsteStergere "
+    "FROM FX_Receptii_H H WHERE H.CodAngajament = %s AND " + SNAPSHOT_COUNTS_SQL + " "
+    "ORDER BY H.DataH, H.IDRH"
+)
 
 
-def citeste_receptii(cursor, cod: str) -> List[dict]:
+def citeste_receptii(cursor, cod: str,
+                     ancore: Optional[Dict[int, int]] = None) -> List[dict]:
     """
     Fiecare receptie a angajamentului, cu liniile ei -- INCLUSIV cele pe care rularea
     asta nu le-a atins si inclusiv cele sterse.
@@ -155,7 +175,22 @@ def citeste_receptii(cursor, cod: str) -> List[dict]:
     Formularul are nevoie de toate ca tinte de plasare: o receptie stearsa poate primi
     in continuare un instantaneu ANTERIOR stergerii ei. Steagul `Sters` nu o scoate din
     joc -- si cu atat mai putin acum, de cand F13 nu mai refuza nimic pe data (31.08.2026).
+
+    `ancore` sunt cele intoarse de `step4b_receptii_prelucrare`: {indice in ListaReceptii
+    -> IDRR}, doar pentru receptiile NASCUTE in rularea curenta. Fiecare astfel de
+    receptie pleaca spre client si cu `rand_receptie`, indicele ei -- singurul nume al ei
+    care supravietuieste derularii inapoi a propunerii. Pentru toate celelalte campul e
+    `None`, iar numele care conteaza ramane `idrr`.
+
+    Editorul de ORICAND (routes/forexe/asociere.py) cheama fara `ancore`: acolo nu exista
+    sarcina utila, nu se deruleaza nimic inapoi, si fiecare `IDRR` e deja real.
     """
+    rand_dupa_idrr: Dict[int, int] = {}
+    for rand, idrr in (ancore or {}).items():
+        # Doua randuri de payload din aceeasi zi pot ajunge pe aceeasi receptie; se tine
+        # PRIMUL indice, ca sa fie o singura ancora pentru o singura receptie.
+        if idrr not in rand_dupa_idrr:
+            rand_dupa_idrr[idrr] = rand
     cursor.execute(_RHR_SQL, (cod,))
     linii: Dict[int, List[dict]] = {}
     for r in cursor.fetchall():
@@ -185,8 +220,19 @@ def citeste_receptii(cursor, cod: str) -> List[dict]:
             # drag-uri, cand avertismentul inca valoreaza ceva -- si ca sa puna un semn pe
             # randurile deja marcate.
             "reconstituit_nesigur": bool(r["ReconstituitNesigur"]),
+            # Vezi docstring-ul: numele care supravietuieste fazei intai, sau None.
+            "rand_receptie": rand_dupa_idrr.get(idrr),
             "rhr": linii.get(idrr, []),
         })
+
+    # The left-hand side of every F15 comparison, written out once: the sums the
+    # rule will compare against are exactly these, so a refusal can be read
+    # against them without opening the database.
+    journal.section("recepțiile angajamentului (%d)" % len(out))
+    journal.table(
+        ("IDRR", "DataR", "SumaAntet", "sters", "reconst.", "rand", "linii RHR"),
+        [(r["idrr"], r["data_r"], r["suma_antet"], r["sters"], r["reconstituit"],
+          r["rand_receptie"], journal.sume_pe_indicator(r["rhr"])) for r in out])
     return out
 
 
@@ -246,11 +292,107 @@ def citeste_instantanee(cursor, cod: str, index_la_id: Dict[int, int],
             "linii": linii.get(idrh, []),
         })
 
+    journal.section("instantaneele de hotărât în rularea asta (%d)" % len(out))
+    journal.table(
+        ("IDRH", "rand", "DataH", "Total", "stergere", "linii"),
+        [(i["idrh"], i["rand_istoric"], i["data_h"], i["total"], i["stergere"],
+          journal.sume_pe_indicator(i["linii"])) for i in out])
     if fara_indice:
+        journal.line("%d instantanee lăsate afară: rândul lor de istoric nu e în "
+                     "descărcarea asta", fara_indice)
         warnings.append(
             f"{fara_indice} instantanee neasociate nu au rândul lor de istoric în "
             f"această descărcare și nu pot fi rezolvate acum. Rămân neasociate."
         )
+    return out
+
+
+# Frazele puse pe un instantaneu care nu e blocat de nicio ordonantare si de nicio plata,
+# dar nici nu se poate misca DE AICI: in ingestie deciziile acopera doar randurile de
+# asezat, si nimic altceva. Doua cazuri, si nu se confunda -- unul are o legatura scrisa,
+# celalalt n-are cu ce sa fie rezolvat acum.
+MOTIV_CONTEXT = (
+    "Legătura este deja scrisă. Se corectează în editorul de asociere, nu în timpul "
+    "descărcării."
+)
+MOTIV_FARA_ISTORIC = (
+    "Rândul lui de istoric nu este în această descărcare, deci nu poate fi așezat acum. "
+    "Rămâne neasociat."
+)
+
+
+def citeste_instantanee_context(cursor, cod: str, de_decis: Set[int],
+                                blocaje: Dict[int, List[str]]) -> List[dict]:
+    """
+    RESTUL instantaneelor angajamentului: tot ce nu e de decis in rularea asta.
+
+    DE CE EXISTA (08.09.2026, cerinta operatorului dupa prima rulare adevarata). Tabloul
+    propunerii continea doar randurile de asezat -- `IDRR IS NULL AND Sters = 0` --, deci
+    o receptie al carei lant era deja legat sosea pe ecran GOALA: fara linie in grafic
+    (formularul sare peste lanturile de lungime zero), fara marcaje pe banda, fara nimic
+    sub ea in arbore. Vazut de la locul operatorului, «recepțiile vechi nu mai vin».
+    Erau acolo; povestea lor nu era.
+
+    Nu e doar aspect: serverul JUDECA deja pe lantul intreg -- `aplica_decizii` aduce
+    instantaneele deja asociate ale acelorasi receptii inainte de `valideaza_plasarile`,
+    fiindca F15 si F16 se refera la lant, nu la ce se adauga acum. Pana la felia asta,
+    formularul era singurul care nu vedea ce vede vetoul.
+
+    SE ARATA, NU SE MISCA. Toate ies cu `blocat = True`: acoperirea ceruta de
+    `verifica_acoperirea` e exact multimea de decis, iar o decizie pentru un rand din
+    afara ei e respinsa (si pe drept -- ar rescrie tacut legaturi vechi la fiecare
+    descarcare). Corectarea unei legaturi vechi ramane treaba editorului de oricand.
+
+    `de_decis` sunt IDRH-urile intoarse de `citeste_instantanee`. Complementul lor, nu un
+    filtru SQL paralel: asa nu poate exista un rand pe care sa nu-l ia niciuna dintre cele
+    doua liste -- nici macar cel lasat afara fiindca nu si-a gasit randul de istoric in
+    descarcarea asta.
+    """
+    cursor.execute(_LINII_SQL, (cod,))
+    linii: Dict[int, List[dict]] = {}
+    for r in cursor.fetchall():
+        if r["IDRH"] is None:
+            continue
+        linii.setdefault(int(r["IDRH"]), []).append({
+            "cod_indicator": r["CodIndicator"] or "",
+            "cod_ai": r["CodAI"] or "",
+            "cod_ssi": r["CodSSI"] or "",
+            "id_clsf": r["IdClsf"],
+            "valoare": float(r["Valoare"] or 0),
+        })
+
+    cursor.execute(_TOATE_INSTANTANEELE_SQL, (cod,))
+    out = []
+    for r in cursor.fetchall():
+        idrh = int(r["IDRH"])
+        if idrh in de_decis:
+            continue
+        idrr = int(r["IDRR"]) if r["IDRR"] is not None else 0
+        motive = list(blocaje.get(idrh, []))
+        if not motive:
+            motive = [MOTIV_CONTEXT if idrr else MOTIV_FARA_ISTORIC]
+        out.append({
+            "idrh": idrh,
+            "idrr": idrr,
+            "idh": int(r["IDH"]) if r["IDH"] is not None else 0,
+            "data_h": r["DataH"],
+            "descriere": r["Descriere"] or "",
+            "total": float(r["Total"] or 0),
+            "tip_receptie": r["TipReceptie"] or "",
+            "stergere": bool(r["EsteStergere"]),
+            # F17: marcat de operator ca «nu consemneaza nicio schimbare».
+            "ignorat": bool(r["Sters"]),
+            "blocat": True,
+            "motive": motive,
+            "linii": linii.get(idrh, []),
+        })
+
+    journal.section("instantaneele deja așezate, doar arătate (%d)" % len(out))
+    journal.table(
+        ("IDRH", "IDRR", "DataH", "Total", "tip", "stergere", "ignorat", "linii"),
+        [(i["idrh"], i["idrr"], i["data_h"], i["total"], i["tip_receptie"],
+          i["stergere"], i["ignorat"], journal.sume_pe_indicator(i["linii"]))
+         for i in out])
     return out
 
 
@@ -303,28 +445,40 @@ def pas4c_automat(cursor, cod: str, instantanee: List[dict]) -> Dict[int, int]:
     for r in cursor.fetchall():
         dic_r.setdefault(_cheie_suma(r["SumaAntet"]), []).append(int(r["IDRR"]))
 
+    journal.section("trecerea automată (doar sugestii, nu scrie nimic)")
+    journal.line("candidați după sumă: %s",
+                 "  ".join("%s -> %s" % (k, v) for k, v in sorted(dic_r.items()))
+                 or "(nicio recepție neștearsă)")
+
     folosite: Set[int] = set()
     sugestii: Dict[int, int] = {}
 
-    def _incearca(lista: List[dict]) -> None:
+    def _incearca(lista: List[dict], tura: int) -> None:
         for inst in lista:
             if inst["idrh"] in sugestii:
                 continue
             cheie = _cheie_suma(inst["total"])
             candidati = dic_r.get(cheie)
             if not candidati:
+                journal.line("tura %d: IDRH %s (%s, %s) -- nicio recepție cu suma asta",
+                             tura, inst["idrh"], journal.moment(inst["data_h"]), cheie)
                 continue
             while candidati:
                 idrr = candidati.pop(0)
                 if idrr not in folosite:
                     folosite.add(idrr)
                     sugestii[inst["idrh"]] = idrr
+                    journal.line("tura %d: IDRH %s (%s, %s) -> recepția %s",
+                                 tura, inst["idrh"], journal.moment(inst["data_h"]),
+                                 cheie, idrr)
                     break
 
     # RUN 1 -- instantanee de la cel mai nou catre cel mai vechi.
-    _incearca(sorted(instantanee, key=lambda x: (x["data_h"], x["idrh"]), reverse=True))
+    _incearca(sorted(instantanee, key=lambda x: (x["data_h"], x["idrh"]), reverse=True), 1)
     # RUN 2 -- ce a ramas, de la cel mai vechi catre cel mai nou.
-    _incearca(sorted(instantanee, key=lambda x: (x["data_h"], x["idrh"])))
+    _incearca(sorted(instantanee, key=lambda x: (x["data_h"], x["idrh"])), 2)
+    journal.line("%d sugestii, %d instantanee rămân pentru operator",
+                 len(sugestii), len(instantanee) - len(sugestii))
     return sugestii
 
 
@@ -362,6 +516,7 @@ def normalizeaza_decizii(brut) -> List[dict]:
             raise DecizieInvalida(f"«decizii»[{i}]: «data_h» este obligatorie.")
 
         idrr = item.get("idrr")
+        rand_receptie = item.get("rand_receptie")
         eticheta = item.get("receptie_noua")
         if idrr is not None:
             try:
@@ -369,29 +524,40 @@ def normalizeaza_decizii(brut) -> List[dict]:
             except (TypeError, ValueError) as err:
                 raise DecizieInvalida(
                     f"«decizii»[{i}]: «idrr» nu este un număr.") from err
+        if rand_receptie is not None:
+            try:
+                rand_receptie = int(rand_receptie)
+            except (TypeError, ValueError) as err:
+                raise DecizieInvalida(
+                    f"«decizii»[{i}]: «rand_receptie» nu este un număr.") from err
         if eticheta is not None:
             eticheta = str(eticheta).strip()
             if eticheta == "":
                 raise DecizieInvalida(
                     f"«decizii»[{i}]: «receptie_noua» nu poate fi șir gol.")
 
-        # `asociat` si `stergere` cer EXACT una dintre cele doua tinte.
+        # `asociat` si `stergere` cer EXACT una dintre cele TREI tinte. A treia,
+        # `rand_receptie`, e indicele randului in `ListaReceptii` si numeste o receptie
+        # pe care o naste CHIAR RULAREA ASTA: `IDRR`-ul ei din propunere nu supravietuieste
+        # derularii inapoi (vezi `step4b_receptii_prelucrare`), deci nu are voie sa fie
+        # numele pe care il poarta decizia.
+        tinte = [x is not None for x in (idrr, rand_receptie, eticheta)]
         if actiune in (ACTIUNE_ASOCIAT, ACTIUNE_STERGERE):
-            if (idrr is None) == (eticheta is None):
+            if sum(tinte) != 1:
                 raise DecizieInvalida(
-                    f"«decizii»[{i}] ({actiune}): trebuie exact una dintre «idrr» și "
-                    f"«receptie_noua», nu ambele și nu niciuna."
+                    f"«decizii»[{i}] ({actiune}): trebuie exact una dintre «idrr», "
+                    f"«rand_receptie» și «receptie_noua»."
                 )
         elif actiune == ACTIUNE_RECONSTITUIRE:
             if eticheta is None:
                 raise DecizieInvalida(
                     f"«decizii»[{i}] (reconstituire): «receptie_noua» este obligatorie.")
-            if idrr is not None:
+            if idrr is not None or rand_receptie is not None:
                 raise DecizieInvalida(
-                    f"«decizii»[{i}] (reconstituire): «idrr» nu are sens — recepția "
-                    f"încă nu există.")
+                    f"«decizii»[{i}] (reconstituire): «idrr» / «rand_receptie» nu au "
+                    f"sens — recepția încă nu există.")
         else:   # ignorat
-            if idrr is not None or eticheta is not None:
+            if any(tinte):
                 raise DecizieInvalida(
                     f"«decizii»[{i}] (ignorat): nu poate purta o recepție.")
 
@@ -400,6 +566,7 @@ def normalizeaza_decizii(brut) -> List[dict]:
             "actiune": actiune,
             "data_h": str(data_h),
             "idrr": idrr,
+            "rand_receptie": rand_receptie,
             "receptie_noua": eticheta,
         })
     return out
@@ -458,6 +625,8 @@ def verifica_acoperirea(decizii: List[dict], instantanee: List[dict]) -> Dict[in
         vazute[rand] = d
 
     lipsa = [i["rand_istoric"] for i in instantanee if i["rand_istoric"] not in vazute]
+    journal.line("acoperire: %d decizii pentru %d instantanee, %d fără hotărâre",
+                 len(decizii), len(instantanee), len(lipsa))
     if lipsa:
         raise DecizieInvalida(
             f"Lipsesc deciziile pentru {len(lipsa)} instantanee "
@@ -579,6 +748,7 @@ def materializeaza_reconstituite(cursor, cod: str, decizii: List[dict],
     if not etichete:
         return {}
 
+    journal.section("recepții reconstituite de creat (%d)" % len(etichete))
     dupa_rand = {i["rand_istoric"]: i for i in instantanee}
     cursor.execute(_IND_SQL, (cod,))
     indicatori = {str(r["CodAI"]): r for r in cursor.fetchall()}
@@ -615,6 +785,11 @@ def materializeaza_reconstituite(cursor, cod: str, decizii: List[dict],
         idrr = int(cursor.lastrowid)
         nr_crt += 1
         rezolvate[eticheta] = idrr
+        journal.line("reconstituire «%s» -> recepția %s: NrCrt %s, DataR %s (primul "
+                     "instantaneu), SumaAntet %.2f (rândul de ștergere), %d "
+                     "instantanee în lanț",
+                     eticheta, idrr, nr_crt - 1, journal.moment(lant[0]["data_h"]),
+                     inst_stergere["total"], len(lant))
 
         # Liniile: ultimul instantaneu DINAINTEA stergerii care are linii. Randul de
         # stergere nu are (F21), deci se merge inapoi pana la primul care are.
@@ -708,6 +883,9 @@ def marcheaza_reconstituirile_nesigure(cursor, cod: str,
     reconstituite = [int(r["IDRR"]) for r in cursor.fetchall()]
 
     de_marcat = f28_de_marcat(reconstituite)
+    journal.line("F28: %d recepții reconstituite pe angajament %s, de marcat %s",
+                 len(reconstituite), reconstituite or "(niciuna)",
+                 de_marcat or "(niciuna)")
     if not de_marcat:
         return 0
 
@@ -737,7 +915,8 @@ def _indicatori_instantaneu(inst: dict) -> Set[str]:
 def valideaza_plasarile(lanturi: Dict[int, List[dict]],
                         receptii: Dict[int, dict],
                         f15_ca_avertisment: bool = False,
-                        avertismente: Optional[List[str]] = None) -> None:
+                        avertismente: Optional[List[str]] = None,
+                        id_stabil: bool = True) -> None:
     """
     Toate regulile care pot spune «nu acolo», rulate pe tabloul REZULTAT.
 
@@ -756,59 +935,61 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
     F14 si F16 raman vetouri in AMANDOUA cazurile: sunt absolute. Un instantaneu nu poate
     numi indicatori pe care recepția nu ii are, iar un indicator nu poate disparea din lant.
 
-    F13 A FOST RETRAS (31.08.2026) SI E ACUM UN SEMN, PE AMANDOUA CAILE
-    ------------------------------------------------------------------
+    F13 A FOST RETRAS (31.08.2026) SI APOI STERS CU TOTUL (09.09.2026)
+    -----------------------------------------------------------------
     Vetoul de data se sprijinea pe premisa ca `FX_Receptii_R.DataR` spune cand a aparut
     receptia. Operatorul a corectat premisa: `DataR` e un camp OBISNUIT, pe care omul il
     tasteaza pe site si il poate schimba dupa aceea, iar `FX_Receptii_R` nu are NICIO
     coloana cu momentul crearii (F29 -- verificat in `000_DEMO.sql` si in
     `FX_System_Export/TABLES/FX_Receptii_R.md`).
 
-    Un veto cladit pe un camp tastat poate refuza o plasare corecta. Pe calea de INGESTIE
-    asta e mai rau decat incomod: operatorul ramane blocat pe o receptie pe care nu are cum
-    s-o repare din formular, adica exact infundarea despre care F10 spune ca nu are voie sa
-    existe. De-asta coborarea se aplica pe amandoua caile, nu doar in editor.
+    Prima treapta l-a coborat de la veto la semn. A doua l-a scos si de acolo, la cererea
+    explicita a operatorului: semnul se aprindea pe date perfect corecte -- o data tastata
+    soseste la miezul noptii, iar un instantaneu din chiar ziua receptiei iesea deci
+    «inainte de ea» -- deci nu spunea nimic si aparea pe rand dupa rand. AICI NU SE MAI
+    SCRIE NICIUN AVERTISMENT DESPRE `DataR`. Perechea din client (`AsociereForm`) a fost
+    curatata in aceeasi zi si in acelasi fel.
 
-    Comparatia supravietuieste ca SEMN: se scrie in `avertismente`, si atat.
-
-    Se compara pe ZI, nu pe timestamp complet. Formularea veche -- «timestamp complet, nu
-    granularitate de zi» -- pleca de la ideea ca ambele capete sunt momente. Nu sunt:
-    `DataR` e o data tastata, deci soseste la miezul noptii, iar `DataH` e ceasul
-    sistemului. Comparate ca momente, ORICE instantaneu din chiar ziua receptiei ar iesi
-    «inainte de ea», si semnul s-ar aprinde pe date perfect corecte.
-
-    `avertismente` este OPTIONAL, si un apelant care nu-l da renunta la semnele F13/F15.
+    `avertismente` este OPTIONAL, si un apelant care nu-l da renunta la semnul F15.
     Nu e un no-op tacut: o regula care prin definitie nu refuza nu are cum sa se faca
-    auzita altfel, iar AMANDOI apelantii din productie (`aplica_decizii` de mai jos si
-    `aplica_comenzi` din `asociere.py`) trec o lista adevarata, care ajunge in raspuns.
-    Fara lista raman doar testele de logica pura, care nu au unde arata nimic oricum.
+    auzita altfel, iar apelantul din productie care coboara F15 (`aplica_comenzi` din
+    `asociere.py`) trece o lista adevarata, care ajunge in raspuns.
+
+    `id_stabil` spune daca `IDRR`-urile din `lanturi` sunt numere pe care operatorul le
+    poate cauta. In editorul de oricand sunt (False nu se trimite de acolo). Pe calea de
+    INGESTIE nu sunt: receptiile nascute in rularea de fata au primit `IDRR` inauntrul
+    tranzactiei, deci mesajul «Recepția 235: ...» numea o receptie pe care operatorul nu
+    o gaseste nicaieri in lista -- exact plangerea din 09.09.2026, si acelasi defect ca
+    «Recepția 188 nu există pe acest angajament» din felia 0056. Cu False, receptia se
+    numeste prin data si valoarea ei, adica prin chiar textul randului din formular.
     """
     if f15_ca_avertisment and avertismente is None:
         raise ValueError(
             "f15_ca_avertisment cere o listă «avertismente» în care să scrie; "
             "altfel semnalarea s-ar pierde în tăcere.")
+    journal.section("verificarea lanțurilor (%d recepții atinse; F15 = %s)"
+                    % (len(lanturi), "semn" if f15_ca_avertisment else "veto"))
     for idrr, lant in lanturi.items():
         rec = receptii[idrr]
+        nume = _numeste_receptia(idrr, rec, id_stabil)
         lant = sorted(lant, key=lambda x: (x["data_h"], x["idrh"]))
 
         ind_rec = _indicatori_receptie(rec)
 
+        # The whole chain as the rules below see it, plus the reception it has to
+        # close on. Everything a refusal talks about is on these lines.
+        journal.line("recepția %s (%s) SumaAntet=%.2f  linii=%s",
+                     idrr, nume, float(rec.get("suma_antet") or 0),
+                     journal.sume_pe_indicator(rec["rhr"]))
+        journal.table(
+            ("IDRH", "rand", "DataH", "Total", "stergere", "linii"),
+            [(i["idrh"], i["rand_istoric"], i["data_h"], i["total"], i["stergere"],
+              journal.sume_pe_indicator(i["linii"])) for i in lant])
+
         precedente: Set[str] = set()
         for inst in lant:
-            # --- F13, RETRAS ca veto pe 31.08.2026 -- ramane SEMN. Vezi docstring-ul:
-            # `DataR` e tastat de om si se poate schimba, deci nu spune cand a aparut
-            # receptia. Pe ZI, nu pe timestamp: o data tastata soseste la miezul noptii.
-            if (avertismente is not None
-                    and rec["data_r"] is not None and inst["data_h"] is not None):
-                if _ca_datetime(rec["data_r"]).date() > _ca_datetime(inst["data_h"]).date():
-                    avertismente.append(
-                        f"Recepția {idrr}: instantaneul de la {inst['data_h']} este mai "
-                        f"vechi decât data recepției ({rec['data_r']}). Data recepției se "
-                        f"scrie de mână pe site și se poate schimba, deci asta nu "
-                        f"împiedică asocierea — dar ori data e greșită, ori instantaneul "
-                        f"este al altei recepții."
-                    )
-
+            # NIMIC despre `DataR` aici. Vezi docstring-ul: semnul F13 a fost sters cu
+            # totul pe 09.09.2026, fiindca se aprindea pe date corecte.
             ind_inst = _indicatori_instantaneu(inst)
 
             # --- F14, submultimea de indicatori. Slab (majoritatea angajamentelor au un
@@ -816,27 +997,40 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
             # si cad la zero, insa nu dispar din bloc.
             if ind_inst and not ind_inst <= ind_rec:
                 lipsa = ", ".join(sorted(ind_inst - ind_rec))
+                journal.line("F14 CADE pe IDRH %s: instantaneul are {%s}, recepția "
+                             "are {%s}", inst["idrh"], ", ".join(sorted(ind_inst)),
+                             ", ".join(sorted(ind_rec)))
                 raise DecizieInvalida(
                     f"Instantaneul de la {inst['data_h']} numește indicatorii {lipsa}, "
-                    f"pe care recepția {idrr} nu îi are."
+                    f"pe care {nume.lower()} nu îi are."
                 )
 
             # --- F16, multimile doar cresc, de-a lungul lantului ordonat dupa DataH.
             if ind_inst and not precedente <= ind_inst:
                 pierduti = ", ".join(sorted(precedente - ind_inst))
+                journal.line("F16 CADE pe IDRH %s: până aici {%s}, acum {%s}",
+                             inst["idrh"], ", ".join(sorted(precedente)),
+                             ", ".join(sorted(ind_inst)))
                 raise DecizieInvalida(
                     f"Instantaneul de la {inst['data_h']} pierde indicatorii "
-                    f"{pierduti}, prezenți mai devreme în lanțul recepției {idrr}. "
-                    f"Un indicator poate cădea la zero, dar nu poate dispărea."
+                    f"{pierduti}, prezenți mai devreme în lanțul recepției "
+                    f"({nume.lower()}). Un indicator poate cădea la zero, dar nu poate "
+                    f"dispărea."
                 )
             if ind_inst:
                 precedente = precedente | ind_inst
 
+        journal.line("F14 și F16 trec pe toate cele %d instantanee ale lanțului",
+                     len(lant))
+
         # --- F15, capatul lantului --------------------------------------------
         if not lant:
+            journal.line("lanț gol, nimic de închis")
             continue
         ultimul = lant[-1]
         if ultimul["stergere"]:
+            journal.line("F15 sărit: ultimul instantaneu (IDRH %s) e rândul de "
+                         "ștergere", ultimul["idrh"])
             # SARIT DELIBERAT. Ultimul instantaneu al unei receptii sterse E randul de
             # stergere; a-l compara cu starea de ACUM nu inseamna nimic. Receptiile
             # reconstituite sunt mereu in categoria asta.
@@ -849,8 +1043,13 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
                 raise DecizieInvalida(mesaj)
 
         if round(ultimul["total"], 2) != round(rec["suma_antet"], 2):
+            journal.line("F15 CADE pe total: ultimul IDRH %s (%s) are %.2f, "
+                         "SumaAntet e %.2f, diferența %.2f",
+                         ultimul["idrh"], journal.moment(ultimul["data_h"]),
+                         ultimul["total"], rec["suma_antet"],
+                         round(ultimul["total"] - rec["suma_antet"], 2))
             _f15(
-                f"Recepția {idrr}: ultimul instantaneu ({ultimul['data_h']}) are "
+                f"{nume}: ultimul instantaneu ({ultimul['data_h']}) are "
                 f"totalul {ultimul['total']:.2f}, dar recepția valorează acum "
                 f"{rec['suma_antet']:.2f}. Lanțul nu se închide."
             )
@@ -858,14 +1057,82 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
             # aici in mod deliberat: daca totalul nu se potriveste, nici liniile nu au
             # cum, iar a doua semnalare ar fi aceeasi veste spusa de doua ori.
             continue
-        val_inst = {l["cod_indicator"]: round(l["valoare"], 2)
-                    for l in ultimul["linii"]}
-        val_rec = {l["cod_indicator"]: round(l["valoare"], 2) for l in rec["rhr"]}
+        val_inst = _valori_pe_indicator(ultimul["linii"])
+        val_rec = _valori_pe_indicator(rec["rhr"])
+        # BOTH sides, as the rule sees them -- summed per indicator and with the
+        # zeroes already dropped. The raw lines are in the tables above; these two
+        # lines are what the comparison actually runs on, and the difference
+        # between the two is the whole answer when a right-looking placement is
+        # refused.
+        journal.line("F15 pe linii: instantaneu %s", _ca_text(val_inst))
+        journal.line("              recepție    %s", _ca_text(val_rec))
         if val_inst and val_inst != val_rec:
+            journal.line("F15 CADE pe linii: tablourile de mai sus nu sunt egale")
+            dif = ", ".join(
+                f"{cod}: instantaneu {val_inst.get(cod, 0):.2f} / recepție "
+                f"{val_rec.get(cod, 0):.2f}"
+                for cod in sorted(set(val_inst) | set(val_rec))
+                if round(val_inst.get(cod, 0), 2) != round(val_rec.get(cod, 0), 2))
             _f15(
-                f"Recepția {idrr}: liniile ultimului instantaneu nu se potrivesc cu "
-                f"cele ale recepției. Lanțul nu se închide."
+                f"{nume}: liniile ultimului instantaneu nu se potrivesc cu "
+                f"cele ale recepției ({dif}). Lanțul nu se închide."
             )
+        else:
+            journal.line("F15 trece: lanțul se închide pe recepția %s", idrr)
+
+
+def _ca_text(valori: Dict[str, float]) -> str:
+    """A {indicator: value} map on one line, for the journal. `(gol)` when empty."""
+    if not valori:
+        return "(gol)"
+    return "  ".join("%s=%.2f" % (c, v) for c, v in sorted(valori.items()))
+
+
+def _valori_pe_indicator(linii) -> Dict[str, float]:
+    """
+    Valoarea pe INDICATOR, adunata -- si fara indicatorii ramasi pe zero.
+
+    Doua defecte reparate deodata (09.09.2026, plangerea «pun corect recepțiile la locul
+    lor si tot imi apare mesajul»):
+
+    1. Varianta veche era o dictionar-comprehensiune pe `cod_indicator`, deci o receptie
+       cu MAI MULTE linii pe acelasi indicator (alt `CodAI`, alt `CodSSI`) pastra doar
+       ULTIMA linie -- si cele doua laturi, citite din tabele diferite cu ordini diferite,
+       puteau pastra linii diferite. Comparatia refuza atunci o plasare perfect corecta,
+       si o refuza tacut de fiecare data. Suma pe indicator e bine definita indiferent de
+       ordine, iar totalul pe antet a fost deja verificat mai sus.
+
+    2. Un indicator cazut la ZERO (F16 spune limpede ca poate) apare pe o latura si
+       lipseste de pe cealalta, dupa cum tabela pastreaza sau nu randul gol. Zerourile ies
+       din amandoua, deci cele doua tablouri se compara pe ce inseamna bani.
+    """
+    out: Dict[str, float] = {}
+    for l in linii or []:
+        cod = l.get("cod_indicator") or ""
+        out[cod] = out.get(cod, 0.0) + float(l.get("valoare") or 0)
+    return {cod: round(v, 2) for cod, v in out.items() if round(v, 2) != 0}
+
+
+def _numeste_receptia(idrr: int, rec: dict, id_stabil: bool = True) -> str:
+    """
+    Cum se numeste o receptie INTR-UN MESAJ CITIT DE OPERATOR.
+
+    Cu `id_stabil=False` numarul NU se scrie deloc: pe calea de ingestie `IDRR`-ul unei
+    receptii nascute in rularea curenta s-a dat inauntrul tranzactiei si nu supravietuieste
+    derularii inapoi, deci operatorul cauta in zadar «Recepția 235». Data si valoarea sunt
+    chiar textul randului din formular (`AsociereForm.CaptionReceptie`), deci se gasesc din
+    prima privire.
+    """
+    bucati = []
+    d = rec.get("data_r")
+    if d is not None:
+        m = _ca_datetime(d)
+        bucati.append(m.strftime("%d.%m.%Y") if hasattr(m, "strftime") else str(d))
+    bucati.append(f"{float(rec.get('suma_antet') or 0):.2f}")
+    coada = " · ".join(bucati)
+    if id_stabil:
+        return f"Recepția {idrr} ({coada})"
+    return f"Recepția din {coada}"
 
 
 def _ca_datetime(v):
@@ -889,20 +1156,44 @@ _H_IGNORA_SQL = (
 )
 _R_MARCHEAZA_STEARSA_SQL = "UPDATE FX_Receptii_R SET Sters = 1 WHERE IDRR = %s"
 _H_TIP_SQL = "UPDATE FX_Receptii_H SET TipReceptie = %s, HASH = %s WHERE IDRH = %s"
+# F32: un antet gol nu e in lant, deci nu poate fi «ultimul» si nu ia `Final`.
 _H_LANT_SQL = (
-    "SELECT IDRH, DataH, Descriere, TipReceptie, CodAngajament FROM FX_Receptii_H "
-    "WHERE IDRR = %s ORDER BY DataH, IDRH"
+    "SELECT H.IDRH, H.DataH, H.Descriere, H.TipReceptie, H.CodAngajament "
+    "FROM FX_Receptii_H H "
+    "WHERE H.IDRR = %s AND " + SNAPSHOT_COUNTS_SQL + " ORDER BY H.DataH, H.IDRH"
+)
+# Membrii deja asezati ai unui lant atins de deciziile de acum (F15 / F16 judeca lantul
+# intreg). Acelasi filtru F32: un antet gol in mijlocul lantului ar avea multimea de
+# indicatori VIDA, si F16 («multimile doar cresc») ar cadea pe un rand pe care operatorul
+# nu il vede si nu l-a atins.
+_H_MEMBRI_LANT_SQL = (
+    "SELECT H.IDRH, H.DataH, H.Total, H.EsteStergere FROM FX_Receptii_H H "
+    "WHERE H.IDRR = %s AND " + SNAPSHOT_COUNTS_SQL
 )
 
 
 def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict],
-                   receptii: List[dict], warnings: List[str]) -> Dict[str, int]:
+                   receptii: List[dict], warnings: List[str],
+                   ancore: Optional[Dict[int, int]] = None) -> Dict[str, int]:
     """
     Faza a doua a pasului 4c. Aplica `decizii` si ignora complet trecerea automata.
+
+    `ancore` = {indice in ListaReceptii -> IDRR}, cele intoarse de
+    `step4b_receptii_prelucrare` DIN RULAREA ASTA. Prin ele se rezolva deciziile care
+    numesc o receptie prin `rand_receptie`; vezi docstring-ul pasului 4b pentru de ce
+    `idrr`-ul din propunere nu are voie sa fie numele.
 
     Intoarce numaratorile scrise.
     """
     dupa_rand = {i["rand_istoric"]: i for i in instantanee}
+
+    journal.section("hotărârile operatorului (%d)" % len(decizii))
+    journal.table(
+        ("rand", "acțiune", "IDRR", "rand_receptie", "receptie_noua", "data_h"),
+        [(d["rand_istoric"], d["actiune"], d["idrr"], d["rand_receptie"],
+          d["receptie_noua"], d["data_h"]) for d in decizii])
+    journal.line("ancore din pasul 4b (rând ListaReceptii -> IDRR): %s",
+                 dict(sorted((ancore or {}).items())) or "(niciuna)")
 
     verifica_acoperirea(decizii, instantanee)
     etichete = verifica_etichetele(decizii)
@@ -914,7 +1205,21 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     # Tabloul receptiilor se reciteste, ca sa contina si cele tocmai create.
     toate = {r["idrr"]: r for r in citeste_receptii(cursor, cod)}
 
+    ancore = ancore or {}
+
     def _tinta(d: dict) -> int:
+        if d["rand_receptie"] is not None:
+            idrr = ancore.get(d["rand_receptie"])
+            if idrr is None:
+                # Randul acela nu a nascut nicio receptie in rularea de fata. Ori sarcina
+                # utila s-a schimbat intre faze, ori deciziile vin dintr-un dosar mai
+                # vechi. In ambele cazuri tabloul descris nu mai exista.
+                raise DecizieInvalida(
+                    f"Rândul {d['rand_receptie']} din «ListaReceptii» nu a creat nicio "
+                    f"recepție în această salvare. Descărcarea nu mai este aceeași — "
+                    f"reluați-o."
+                )
+            return idrr
         if d["idrr"] is not None:
             if d["idrr"] not in toate:
                 raise DecizieInvalida(
@@ -923,19 +1228,24 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
         return noi[d["receptie_noua"]]
 
     # --- se construiesc lanturile REZULTATE si se valideaza INAINTE de a scrie ------
+    journal.section("ce vrea să facă rularea")
     lanturi: Dict[int, List[dict]] = {}
     for d in decizii:
         if d["actiune"] == ACTIUNE_IGNORAT:
+            journal.line("rând %s (IDRH %s): IGNORAT -- IDRR gol, Sters = 1",
+                         d["rand_istoric"], dupa_rand[d["rand_istoric"]]["idrh"])
             continue
         inst = dupa_rand[d["rand_istoric"]]
-        lanturi.setdefault(_tinta(d), []).append(inst)
+        idrr_tinta = _tinta(d)
+        journal.line("rând %s (IDRH %s, %s, total %.2f): %s -> recepția %s",
+                     d["rand_istoric"], inst["idrh"], journal.moment(inst["data_h"]),
+                     inst["total"], d["actiune"].upper(), idrr_tinta)
+        lanturi.setdefault(idrr_tinta, []).append(inst)
 
     # Instantaneele DEJA asociate ale acelorasi receptii fac parte din lant si ele --
     # F15 si F16 se refera la lantul intreg, nu doar la ce se adauga acum.
     for idrr in list(lanturi):
-        cursor.execute(
-            "SELECT H.IDRH, H.DataH, H.Total, H.EsteStergere FROM FX_Receptii_H H "
-            "WHERE H.IDRR = %s", (idrr,))
+        cursor.execute(_H_MEMBRI_LANT_SQL, (idrr,))
         for r in cursor.fetchall():
             idrh = int(r["IDRH"])
             if any(x["idrh"] == idrh for x in lanturi[idrr]):
@@ -952,11 +1262,20 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
                 "descriere": "", "total": float(r["Total"] or 0),
                 "stergere": bool(r["EsteStergere"]), "linii": linii,
             })
+            # These are NOT decided in this run: they are already written, and they
+            # join the chain because F15 and F16 speak about the whole chain. A
+            # refusal can therefore come from a row the operator never touched.
+            journal.line("recepția %s primește în lanț și IDRH %s (%s, total %.2f), "
+                         "deja legat dinainte", idrr, idrh,
+                         journal.moment(r["DataH"]), float(r["Total"] or 0))
 
-    # `warnings` se da si aici, nu doar in editor: de cand F13 e semn si nu veto (31.08.2026),
-    # calea de ingestie are si ea ce semnala, iar un semn pe care nu-l poate scrie nicaieri e
-    # un semn pierdut. F15 ramane veto aici -- `f15_ca_avertisment` ramane implicit False.
-    valideaza_plasarile(lanturi, toate, avertismente=warnings)
+    # `id_stabil=False`: receptiile nascute in rularea de fata au primit `IDRR` inauntrul
+    # tranzactiei asteia, deci numarul nu e un nume pe care operatorul sa-l poata cauta --
+    # «Recepția 235» nu exista nicaieri in lista lui (plangere, 09.09.2026). Mesajele o
+    # numesc prin data si valoare, adica prin chiar textul randului din formular.
+    # `warnings` ramane trecut ca F15 sa aiba unde scrie daca vreodata coboara si aici;
+    # acum e veto (`f15_ca_avertisment` implicit False), deci lista nu se atinge.
+    valideaza_plasarile(lanturi, toate, avertismente=warnings, id_stabil=False)
 
     # --- scrierea ---------------------------------------------------------------
     numarat = {"asociat": 0, "ignorat": 0, "stergere": 0, "reconstituit": len(noi)}
@@ -988,6 +1307,8 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
             numarat["asociat"] += 1
 
     # --- Final / Partial, o singura data per receptie ---------------------------
+    journal.section("ce s-a scris")
+    journal.line("legături: %s", numarat)
     for idrr in sorted(lanturi):
         recalculeaza_final(cursor, idrr)
 
@@ -1020,3 +1341,5 @@ def recalculeaza_final(cursor, idrr: int) -> None:
         h = fx_receptii_h_get_hash_ident(
             r["CodAngajament"] or "", r["DataH"], dorit, r["Descriere"] or "")
         cursor.execute(_H_TIP_SQL, (dorit, h, int(r["IDRH"])))
+        journal.line("recepția %s: IDRH %s trece din «%s» în «%s»",
+                     idrr, int(r["IDRH"]), r["TipReceptie"] or "(gol)", dorit)

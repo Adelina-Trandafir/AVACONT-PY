@@ -37,6 +37,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .prelucrare_helpers import (
     cod_ai,
+    este_linie_receptie,
     extract_number_after_label,
     extract_numar_rev,
     extract_obs_value,
@@ -47,8 +48,10 @@ from .prelucrare_helpers import (
     fx_receptii_istoric_get_indent,
     get_hash_for_row_istoric,
     get_tip_rand,
+    is_header_only_snapshot,
     is_rand_contract_row,
     is_stergere_receptie,
+    SNAPSHOT_COUNTS_SQL,
     null_if_empty,
     parse_amount,
     parse_english_date,
@@ -669,7 +672,15 @@ def step4a_populeaza_receptii(cursor, cod: str,
 
       * un rand ale carui Observatii contin `(activ:true)` e un ANTET -> FX_Receptii_H,
         iar liniile stranse pana atunci se varsa sub el;
-      * un rand cu `Val_Receptie <> 0` e o LINIE -> se pune deoparte.
+      * a row that names an indicator (`CodAI`) or has `Val_Receptie <> 0` is a LINE
+        -> set aside (`este_linie_receptie`).
+
+    F31 -- ZERO LINES ARE KEPT (17.09.2026). The VBA kept only `Val_Receptie <> 0`, so
+    an indicator that did not move or fell to zero DISAPPEARED from the snapshot while
+    the reception still carries it in `RHR`. F14/F16 ("an indicator can fall to zero
+    but never disappears") then refused correct placements, and `SUM(DIF)` no longer
+    came down with the indicator. A zero row that names an indicator is a line with
+    `Valoare = 0`; a zero row naming none is skipped, as before.
 
     F21 -- STERGEREA. Un rand cu `Descriere = "Stergere receptie"` poarta si el
     `(activ:true)`, deci devine antet pe calea NORMALA. NU e deviat, NU e filtrat, NU e
@@ -677,6 +688,13 @@ def step4a_populeaza_receptii(cursor, cod: str,
     deci nu produce nicio linie -- si asta iese de la sine, fiindca liniile lui nu exista
     in istoric, nu fiindca le-am opri noi. E ultimul instantaneu al lantului lui, si
     formularul trebuie sa il poata vedea si fixa.
+
+    F32 -- HEADER-ONLY SNAPSHOTS ARE SKIPPED (17.09.2026). The old Access app left
+    headers in `FX_Istoric` with a total and NO indicator row before them. That is not a
+    state a reception can be in; it is an error of the old app, and no `FX_Receptii_H`
+    is written for it (`is_header_only_snapshot`). The deletion row (F21) is the one
+    line-less header that IS a snapshot, and it is exempt. The history row still gets
+    `Prelucrat = 1` with the rest of the run (step 7), so it is not re-read.
 
     D3 -- fara tabele temporare. Access scria in tmpFX_Receptii_H / tmpFX_Receptii si le
     salva la pasul 6; aici se scrie direct in tabelele vii, inauntrul tranzactiei.
@@ -699,6 +717,7 @@ def step4a_populeaza_receptii(cursor, cod: str,
 
     tampon: List[dict] = []      # liniile stranse pana la urmatorul antet
     antete = 0
+    antete_goale = 0             # F32: header-only snapshots, not written
 
     for r in randuri:
         obs = r["Observatii"] or ""
@@ -706,6 +725,13 @@ def step4a_populeaza_receptii(cursor, cod: str,
         if "(activ:true)" in obs:
             # --- ANTET -----------------------------------------------------
             este_stergere = is_stergere_receptie(r["Descriere"])
+            if is_header_only_snapshot(este_stergere, tampon):
+                # F32: the total row alone, no indicator line. Not a snapshot.
+                antete_goale += 1
+                logger.info("PRELUCRARE cod=%s: antet de receptie fara nicio linie "
+                            "(rand de istoric %s, DataFX %s, Total %s) -- ignorat (F32)",
+                            cod, r["ID"], r["DataFX"], r["Val_Receptie"])
+                continue
             descriere = extract_text_between(obs, "Receptie: ", ",")
             cursor.execute(_H_INSERT_SQL, (
                 int(r["ID"]), nr_crt, str(r["CodAngajament"]), r["DataFX"],
@@ -728,8 +754,8 @@ def step4a_populeaza_receptii(cursor, cod: str,
                 vazuti.add(ci)
             tampon = []
 
-        elif float(r["Val_Receptie"] or 0) != 0:
-            # --- LINIE -----------------------------------------------------
+        elif este_linie_receptie(r):
+            # --- LINIE (F31: a zero value is still a line) ---------------------
             ind = indicatori.get(str(r["CodAI"] or ""))
             if ind is None:
                 # Se pastreaza ca EROARE, ca in VBA. O linie de receptie al carei
@@ -767,6 +793,9 @@ def step4a_populeaza_receptii(cursor, cod: str,
     if tampon:
         logger.info("PRELUCRARE cod=%s: %s linii de receptie fara antet, amanate",
                     cod, len(tampon))
+    if antete_goale:
+        logger.info("PRELUCRARE cod=%s: %s antete de receptie fara linii ignorate (F32)",
+                    cod, antete_goale)
 
     return antete
 
@@ -929,7 +958,7 @@ def cere_lista(valoare, unde: str, coloana: str, gol_permis: bool = False):
 
 
 def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
-                               indicatori: Dict[str, dict]) -> Tuple[int, int]:
+                               indicatori: Dict[str, dict]) -> Tuple[int, int, Dict[int, int]]:
     """
     Aduce `FX_Receptii_R` / `FX_Receptii_RHR` la zi din payload.
 
@@ -939,14 +968,31 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
       * receptie gasita si suma diferita  -> UPDATE `R` + `RHR`;
       * receptie negasita                 -> INSERT `R` + toate `RHR`.
 
-    Intoarce (receptii scrise, linii RHR scrise).
+    Intoarce (receptii scrise, linii RHR scrise, ANCORE).
+
+    ANCORELE, si de ce exista (08.09.2026, dupa prima rulare adevarata a contractului in
+    doua faze). `IDRR`-ul unei receptii pe care O CREEAZA RULAREA ASTA nu supravietuieste
+    fazei intai: propunerea deruleaza tranzactia inapoi neconditionat, iar contorul
+    AUTO_INCREMENT al InnoDB NU se deruleaza odata cu ea -- la salvare aceeasi receptie
+    primeste alt numar. O decizie care numea numarul din propunere cadea deci cu
+    «Recepția N nu există pe acest angajament», si asa a si cazut.
+
+    Ancora e INDICELE randului in `ListaReceptii`, exact acelasi rationament ca
+    `rand_istoric` pentru instantanee (F24): indicele e stabil prin constructie, fiindca
+    AMANDOUA fazele poarta acelasi payload. `{indice: IDRR}`, doar pentru randurile a
+    caror receptie s-a NASCUT in rularea asta -- restul au un `IDRR` real, dinainte, care
+    nu se misca.
+
+    Se numara receptia ca «nascuta acum» dupa IDRR, nu dupa ramura care a rulat: doua
+    randuri de payload din aceeasi zi se potrivesc pe acelasi rand, deci al doilea poate
+    ajunge, prin potrivire, pe o receptie pe care tocmai a inserat-o primul.
     """
     from .prelucrare_helpers import (
         fx_receptii_h_get_hash_ident, fx_receptii_parse_ro_date, parse_loose_number,
     )
 
     if not randuri:
-        return 0, 0
+        return 0, 0, {}
 
     cursor.execute(_RHR_INDICATORI_VAZUTI_SQL, (cod,))
     vazuti = {str(r["CodIndicator"]) for r in cursor.fetchall()
@@ -958,6 +1004,9 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
 
     r_scrise = 0
     rhr_scrise = 0
+    # IDRR-urile nascute in rularea asta, si ancorele randurilor care ajung pe ele.
+    nascute = set()
+    ancore: Dict[int, int] = {}
 
     for i, rec in enumerate(randuri):
         if not isinstance(rec, dict):
@@ -1024,6 +1073,7 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
                 nr_crt, cod, rec.get("Tip"), data_r, suma,
                 rec.get("DescriereReceptie"), hash_ident))
             idrr = int(cursor.lastrowid)
+            nascute.add(idrr)
             nr_crt += 1
             r_scrise += 1
 
@@ -1037,7 +1087,10 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
                 vazuti.add(d["CodIndicator"])
                 rhr_scrise += 1
 
-    return r_scrise, rhr_scrise
+        if idrr in nascute:
+            ancore[i] = idrr
+
+    return r_scrise, rhr_scrise, ancore
 
 
 # ===========================================================================
@@ -1055,9 +1108,12 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
 #
 # LANTUL UNEI RECEPTII STERSE SE TERMINA LA INSTANTANEUL DE STERGERE. Nu exista randuri
 # dupa el, deci nu exista o regula de inventat pentru ele.
+# F32: a header-only snapshot (no lines, not a deletion) is not part of the chain, so it
+# must not become the `precedent` of the real snapshot after it.
 _DIF_H_SQL = (
-    "SELECT IDRH, Total FROM FX_Receptii_H "
-    "WHERE CodAngajament = %s AND IDRR = %s ORDER BY DataH, IDRH"
+    "SELECT H.IDRH, H.Total FROM FX_Receptii_H H "
+    "WHERE H.CodAngajament = %s AND H.IDRR = %s AND " + SNAPSHOT_COUNTS_SQL + " "
+    "ORDER BY H.DataH, H.IDRH"
 )
 _DIF_H_UPDATE_SQL = "UPDATE FX_Receptii_H SET DIFH = %s, DIFHC = %s WHERE IDRH = %s"
 _DIF_R_SQL = (

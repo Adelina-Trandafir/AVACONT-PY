@@ -4,10 +4,20 @@ Ruta upsert pentru FX_Angajamente (fluxul ListaAngajamente).
 
 Contract (POST /api/forexe/angajamente/upsert):
     { "db_name": "<unit db>",
+      "doar_noi": false,
       "rows": [ { "Cod": "...", "Descriere": "...", "Stare": "..." }, ... ] }
 
 Semantica upsert (decizie blocata): INSERT seteaza DC + Preluat=1; la duplicat
 se reimprospateaza DOAR Descriere si Stare (Preluat/DC NU se ating la update).
+
+`doar_noi` (felia 0057) rastoarna jumatatea de update: codurile care exista deja
+NU se ating deloc -- nici Descriere, nici Stare. Asta e ce cere butonul din
+dreapta subsolului de arbore, unde intrebarea nu e "adu la zi tot ce stie
+FOREXE" ci "ce angajamente noi au aparut de cand m-am uitat ultima data".
+Codurile existente se citesc INAINTE de scriere, in aceeasi tranzactie, deci
+raspunsul poate spune exact cate randuri s-au inserat si cate erau deja acolo --
+spre deosebire de `rowcount`, care sub ON DUPLICATE KEY numara 1 per insert si
+2 per update si nu se poate desface inapoi.
 """
 import logging
 
@@ -15,6 +25,7 @@ from flask import request, jsonify
 
 from routes.auth.guard import require_session    # bearer opac (Felia 1 auth)
 from utils.database import get_kbot_connection   # serverul K-BOT (DB_CONFIG_NEW)
+from utils import timing                         # cronometrul, forexe_timing.log
 # R5 verificat: validatorul canonic db_name traieste in routes/admin.py:24
 # (DB_NAME_REGEX = ^[A-Za-z0-9_]+$, ridica ValueError("db_name invalid")).
 from routes.admin import _validate_db_name
@@ -29,6 +40,15 @@ _UPSERT_SQL = (
     "INSERT INTO FX_Angajamente (CodAngajament, Descriere, Stare, DC, Preluat) "
     "VALUES (%s, %s, %s, %s, 1) "
     "ON DUPLICATE KEY UPDATE Descriere = VALUES(Descriere), Stare = VALUES(Stare)"
+)
+
+# Varianta `doar_noi`: acelasi INSERT, dar duplicatul se atinge cu o atribuire care
+# nu schimba nimic. IGNORE nu se foloseste in locul ei fiindca ar inghiti ORICE
+# eroare de rand (tip gresit, text prea lung), nu doar coliziunea de cheie.
+_INSERT_DOAR_NOI_SQL = (
+    "INSERT INTO FX_Angajamente (CodAngajament, Descriere, Stare, DC, Preluat) "
+    "VALUES (%s, %s, %s, %s, 1) "
+    "ON DUPLICATE KEY UPDATE CodAngajament = CodAngajament"
 )
 
 
@@ -165,10 +185,18 @@ def get_angajamente():
 
 @forexe_bp.route("/api/forexe/angajamente/upsert", methods=["POST"])
 @require_session
+@timing.timed("angajamente-upsert")
 def upsert_angajamente():
-    data = request.json or {}
+    # Cronometrata desi e o singura `executemany`: prima intrebare la o ingestie
+    # inceata e «care din rute», iar raspunsul «nu asta» se da doar daca ruta scrie
+    # si ea o linie.
+    with timing.stage("citire JSON"):
+        data = request.json or {}
     db_name = data.get("db_name")
     rows = data.get("rows")
+    # Absent inseamna False: clientii de dinainte de felia 0057 nu trimit cheia si
+    # trebuie sa pastreze exact comportamentul vechi (upsert cu reimprospatare).
+    doar_noi = bool(data.get("doar_noi", False))
 
     # `is None`: un payload cu rows=[] este valid (0 randuri), nu lipsa.
     if db_name is None or rows is None:
@@ -191,13 +219,47 @@ def upsert_angajamente():
         values.append((cod, r.get("Descriere"), r.get("Stare"), db_name))
 
     if not values:
-        return jsonify({"status": "success", "received": len(rows), "written": 0}), 200
+        return jsonify({"status": "success", "received": len(rows), "written": 0,
+                        "inserate": 0, "existente": 0}), 200
+
+    timing.note(dc=db_name, doar_noi=doar_noi, octeti=request.content_length)
+    timing.count(rows=len(rows), candidate=len(values))
 
     conn = None
     try:
-        conn = get_kbot_connection(db_name)
-        cursor = conn.cursor()
-        conn.start_transaction()
+        with timing.stage("conectare MariaDB"):
+            conn = get_kbot_connection(db_name)
+            cursor = timing.watch(conn.cursor())
+            conn.start_transaction()
+
+        if doar_noi:
+            # Citim INTAI ce exista, in aceeasi tranzactie, ca sa putem raporta cifre
+            # exacte. Lista de coduri e cea a randurilor primite, deci IN (...) e
+            # marginit de dimensiunea listei descarcate din FOREXE, nu de tabel.
+            coduri = [v[0] for v in values]
+            marcaje = ", ".join(["%s"] * len(coduri))
+            cursor.execute(
+                "SELECT CodAngajament FROM FX_Angajamente "
+                f"WHERE CodAngajament IN ({marcaje})",
+                tuple(coduri),
+            )
+            existente = {r[0] for r in cursor.fetchall()}
+            noi = [v for v in values if v[0] not in existente]
+            if noi:
+                cursor.executemany(_INSERT_DOAR_NOI_SQL, noi)
+            conn.commit()
+            logger.info(
+                f"[forexe.angajamente.upsert] {db_name}: doar_noi received={len(rows)} "
+                f"candidates={len(values)} inserate={len(noi)} existente={len(existente)}"
+            )
+            return jsonify({
+                "status": "success",
+                "received": len(rows),
+                "candidates": len(values),
+                "inserate": len(noi),
+                "existente": len(existente),
+            }), 200
+
         cursor.executemany(_UPSERT_SQL, values)
         conn.commit()
         logger.info(

@@ -83,6 +83,10 @@ _SELECTS_GOALE = (
     "SELECT IDRR, SumaAntet",           # 4c, candidatii trecerii automate
     "SELECT DISTINCT IDRR",             # 4d, recepțiile de recalculat
     "SELECT IDRR FROM FX_Receptii_R",   # F28, reconstituirile angajamentului
+    # Contextul propunerii (felia 0056): restul instantaneelor, blocajele lor si platile.
+    "SELECT IDRH, IDRR, IDH",           # citeste_instantanee_context, antetele
+    "SELECT H.IDRH,",                   # citeste_blocaje
+    "SELECT Data_plata, Suma, NrOP",    # citeste_plati
 )
 
 # Amprenta (2.3): o baza goala are zero peste tot. Valorile conteaza doar prin faptul ca

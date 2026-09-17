@@ -280,18 +280,19 @@ def test_f15_ramane_veto_in_ingestie():
         P.valideaza_plasarile(lanturi, receptii)
 
 
-def test_f13_nu_mai_e_veto_ci_semn():
+def test_f13_nu_mai_exista_nici_ca_semn():
     """
-    RETRAS pe 31.08.2026. `DataR` nu spune cand a aparut receptia -- e un camp tastat pe
-    site, schimbabil dupa aceea, iar tabelul nu are nicio coloana cu momentul crearii
-    (F29). Comparatia a ramas ca semn, pe amandoua caile.
+    RETRAS ca veto pe 31.08.2026, STERS si ca semn pe 09.09.2026. `DataR` nu spune cand a
+    aparut receptia -- e un camp tastat pe site, schimbabil dupa aceea, iar tabelul nu are
+    nicio coloana cu momentul crearii (F29). Ca semn se aprindea pe date perfect corecte,
+    deci operatorul l-a cerut scos cu totul: nici in `avertismente`, nici in formular.
     """
     lanturi = {5: [inst(10, "2026-01-19 10:00:00", 100, idrr=5)]}
     receptii = {5: rec(5, "2026-03-01 08:00:00", 100)}
     avertismente = []
     P.valideaza_plasarile(lanturi, receptii, f15_ca_avertisment=True,
                           avertismente=avertismente)          # nu ridica
-    assert any("mai vechi decât data recepției" in a for a in avertismente)
+    assert avertismente == []
 
 
 def test_f14_ramane_veto_si_in_editor():
@@ -404,17 +405,29 @@ class FakeConnection:
         self.closed = False
 
     def rows_for(self, sql):
+        if sql.startswith("UPDATE "):
+            return []
         if "(SELECT COUNT(*) FROM FX_Istoric" in sql:
             return [dict(_AMPRENTA)]
+        if sql.startswith("SELECT IDRR FROM FX_Receptii_R"):
+            return []                                   # F28: nothing reconstituted
+        if sql.startswith("SELECT H.IDRH, H.DataH, H.Descriere"):
+            # `_H_LANT_SQL` (recalculeaza_final): the chain of one reception.
+            return [{"IDRH": i["IDRH"], "DataH": i["DataH"],
+                     "Descriere": i["Descriere"], "TipReceptie": i["TipReceptie"],
+                     "CodAngajament": COD}
+                    for i in self.tabele.get("instantanee", []) if i["IDRR"]]
         if sql.startswith("SELECT IDRR, CodIndicator"):
             return self.tabele.get("rhr", [])
         if sql.startswith("SELECT IDRR, NRCRT"):
             return self.tabele.get("receptii", [])
-        if sql.startswith("SELECT H.IDRH"):
+        # F32: `_INSTANTANEE_SQL` carries the alias `H` too, so the two `SELECT H.IDRH`
+        # readers are told apart by the blocking counters only `_BLOCAJE_SQL` has.
+        if sql.startswith("SELECT H.IDRH") and " AS ord_h" in sql:
             return self.tabele.get("blocaje", [])
         if sql.startswith("SELECT IDRH, CodIndicator"):
             return self.tabele.get("linii", [])
-        if sql.startswith("SELECT IDRH, IDRR"):
+        if sql.startswith("SELECT H.IDRH, H.IDRR"):
             return self.tabele.get("instantanee", [])
         if sql.startswith("SELECT Data_plata"):
             return self.tabele.get("plati", [])
@@ -524,6 +537,52 @@ def test_un_instantaneu_blocat_ajunge_la_client_cu_motive(client, auth_headers,
     inst5 = date["instantanee"][0]
     assert inst5["blocat"] is True
     assert "01.03.2026" in inst5["motive"][0]
+
+
+def test_editor_snapshots_carry_the_rand_istoric_alias(conn):
+    """
+    The 17.09.2026 defect: EVERY save died with «'rand_istoric'». The editor's snapshots
+    carried `idrh` only, while `valideaza_plasarile` (the chain journal, slice 0058) and
+    `materializeaza_reconstituite` key on `rand_istoric`. The alias is set at read time,
+    exactly as on the commands.
+    """
+    out = A.citeste_instantanee(conn.cursor(dictionary=True), COD, {})
+    assert [(i["idrh"], i["rand_istoric"]) for i in out] == [(5, 5)]
+    # The very path that died: the chain check over the editor's snapshots.
+    receptii = {3: rec(3, "2026-02-10 00:00:00", 1000)}
+    avertismente = []
+    P.valideaza_plasarile({3: out}, receptii, f15_ca_avertisment=True,
+                          avertismente=avertismente)
+    assert avertismente == []
+
+
+def test_a_whole_save_passes_the_chain_check(client, auth_headers, monkeypatch):
+    """
+    End to end: a chain of TWO snapshots, one gets detached. The survivor goes through
+    `valideaza_plasarile` -- exactly the line that died with «'rand_istoric'» -- and the
+    request reaches commit, not a 500. (With a single snapshot the resulting chain is
+    empty and the defect did not show.)
+    """
+    c = baza_cu_un_lant()
+    c.tabele["instantanee"].append(
+        {"IDRH": 6, "IDRR": 3, "IDH": 10, "DataH": dt("2026-02-12 00:00:00"),
+         "Total": 1000.0, "Descriere": "Plata fact.", "TipReceptie": "",
+         "Sters": 0, "EsteStergere": 0})
+    c.tabele["linii"].append(
+        {"IDRH": 6, "CodIndicator": "AAB", "CodAI": COD + "-AAB", "CodSSI": "",
+         "IdClsf": 1, "Valoare": 1000.0})
+    monkeypatch.setattr(A, "get_kbot_connection", lambda db=None: c)
+
+    amp = P.amprenta(c.cursor(dictionary=True), COD)
+    c.executed.clear()
+    corp = _json.dumps({"cod": COD, "amprenta": amp,
+                        "comenzi": [cmd(5, A.ACTIUNE_DESPRINS)]})
+    r = client.post(URL, data=corp, headers=auth_headers)
+    assert r.status_code == 200, r.get_data(as_text=True)
+    assert r.get_json()["scrise"]["desprins"] == 1
+    assert c.committed and not c.rolled_back
+    assert any(sql.startswith("UPDATE FX_Receptii_H SET IDRR = NULL")
+               for sql, _ in c.executed)
 
 
 def test_post_pe_o_legatura_blocata_da_409(client, auth_headers, monkeypatch):

@@ -16,6 +16,11 @@ Three ways to run it:
         statements are still refused unless --allow-destructive is
         given, and still require the typed DA.
 
+    python schema_sync.py --list-targets
+        Write the unit databases (names starting with three digits)
+        one per line and exit. Compares nothing, executes nothing,
+        creates nothing.
+
     python schema_sync.py --drop-legacy
         Remove proc_SchemaDiff_DDL, proc_SchemaDiff_CreateTable and
         proc_ExecuteSchemaDiff. Nothing in this package uses them, and
@@ -32,12 +37,18 @@ import mysql.connector
 
 from .schema_common import (OUT_DIR, SchemaSyncError, check_prerequisites,
                             connect, discover_targets, drop_legacy_procedures,
-                            ensure_control_table, parse_targets, setup_logging,
-                            summarise, verify_targets)
+                            ensure_control_table, list_unit_databases,
+                            parse_targets, setup_logging, summarise,
+                            verify_targets)
 from .schema_execute import (confirm_destructive, execute_rows,
                              refuse_destructive, render_sql, report,
                              take_backups)
 from .schema_generate import generate
+
+
+# Every --list-targets data line starts with this, so a caller parsing the
+# output can never mistake a log line on stdout for a database name.
+TARGET_LINE_PREFIX = "DB"
 
 
 def _ask(prompt: str, choices: tuple) -> str:
@@ -71,6 +82,9 @@ def main(argv=None) -> int:
     parser.add_argument("--no-reset", action="store_true")
     parser.add_argument("--drop-legacy", action="store_true",
                         help="Șterge procedurile stocate înlocuite.")
+    parser.add_argument("--list-targets", action="store_true",
+                        help="Scrie bazele de unitate (nume care încep cu "
+                             "trei cifre), una pe linie, și iese.")
     parser.add_argument("--targets", default=None)
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -83,6 +97,17 @@ def main(argv=None) -> int:
     conn = None
     try:
         conn = connect()
+
+        # Deliberately BEFORE ensure_control_table and check_prerequisites:
+        # listing what exists must not create a control table, and must not
+        # fail on a server whose sql_mode would refuse a real sync.
+        if args.list_targets:
+            for db in list_unit_databases(conn):
+                print(f"{TARGET_LINE_PREFIX}\t{db['name']}\t"
+                      f"{'CAI' if db['in_cai'] else '-'}\t"
+                      f"{'EXISTS' if db['exists'] else 'MISSING'}")
+            return 0
+
         ensure_control_table(conn, logger)
         check_prerequisites(conn, logger)
 

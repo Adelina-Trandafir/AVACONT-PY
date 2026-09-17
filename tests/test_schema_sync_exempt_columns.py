@@ -4,14 +4,14 @@
 #   python -m pytest tests/test_schema_sync_exempt_columns.py
 #
 # WHY THIS EXISTS (slice 0048, plan docs/PLAN_ForexeIngest.md 3.1 / 3.2):
-# seven primary keys are plain `INT NOT NULL` in AVACONT_SURSA and
+# eleven primary keys are plain `INT NOT NULL` in AVACONT_SURSA and
 # `INT NOT NULL AUTO_INCREMENT` in every migrated unit database. The reference
 # keeps them plain deliberately -- during a migration, a row arriving with a
 # missing/NULL/zero id must RAISE rather than silently receive a fabricated key.
-# So every migrated database differs from the reference on exactly these seven
+# So every migrated database differs from the reference on exactly these eleven
 # columns, forever, and schema_sync must neither report nor rewrite that.
 #
-# These tests pin the LIST ITSELF. If someone adds an eighth pair, or widens the
+# These tests pin the LIST ITSELF. If someone adds a twelfth pair, or widens the
 # rule into "skip anything auto_increment", the count assertion fails and they
 # have to come and read 3.2 -- which is the point.
 import sys
@@ -36,9 +36,20 @@ from routes.schema_sync.schema_common import (          # noqa: E402
     is_exempt_column,
 )
 
-# The seven pairs, written out again here on purpose. This is a PIN, not a
+# The eleven pairs, written out again here on purpose. This is a PIN, not a
 # re-import: if the production list changes, this literal must be changed too,
 # by someone who has read plan 3.2.
+#
+# The three FX_Extrase* pairs arrived on 08.09.2026 with the SNM statement
+# import (felia 0057): routes/forexe/extrase.py links its child rows through
+# `cursor.lastrowid`, which a plain INT key answers as 0, so those three tables
+# cannot be written on a migrated database until they are AUTO_INCREMENT too.
+#
+# Clasificatii_Venituri.IdClsfV arrived on 09.09.2026, for the opposite reason:
+# the table (Access ClasificatiiV, renamed) entered AVACONT_SURSA already
+# declared AUTO_INCREMENT, i.e. WITHOUT the guard, on the one key that
+# FX_Extrase_H.IdClsfV and a foreign key both point at. The operator made it
+# plain on the server, so it now belongs on this list like the other ten.
 EXPECTED = {
     ("FX_Istoric",      "ID"),
     ("FX_Receptii_R",   "IDRR"),
@@ -47,12 +58,16 @@ EXPECTED = {
     ("FX_Receptii_RHR", "IDRHR"),
     ("FX_Plati",        "IdPlataFX"),
     ("FX_Rezervari",    "IDRZ"),
+    ("FX_Extrase_F",    "IDEXF"),
+    ("FX_Extrase_H",    "IDEXH"),
+    ("FX_Extrase",      "IDFXE"),
+    ("Clasificatii_Venituri", "IdClsfV"),
 }
 
 
 class TestTheListItself:
-    def test_exactly_seven_pairs(self):
-        assert len(EXEMPT_COLUMNS) == 7
+    def test_exactly_eleven_pairs(self):
+        assert len(EXEMPT_COLUMNS) == 11
 
     def test_the_pairs_are_the_documented_ones(self):
         assert EXEMPT_COLUMNS == EXPECTED
@@ -84,6 +99,10 @@ class TestIsExemptColumn:
 
     def test_unrelated_table_is_not_exempt(self):
         assert is_exempt_column("Clasificatii", "IDClsf") is False
+        # Neighbouring name, different table: only Clasificatii_Venituri is on
+        # the list, and only for its key column.
+        assert is_exempt_column("Clasificatii_Venituri", "Capitol") is False
+        assert is_exempt_column("Clasificatii_Venituri_Rectificari", "IdClsfV") is False
 
     def test_none_is_not_exempt(self):
         # Never raise on a missing name; just answer "not exempt".
@@ -93,7 +112,7 @@ class TestIsExemptColumn:
 
 
 class TestTheVbListAgrees:
-    """The SAME seven pairs exist twice, in two languages, describing one decision.
+    """The SAME eleven pairs exist twice, in two languages, describing one decision.
 
     KBot.Migrator applies the ALTER; schema_sync exempts the result. If the two
     lists ever drift, one database gets a key the sync then tries to "repair" --
@@ -119,7 +138,7 @@ class TestTheVbListAgrees:
         rx = re.compile(r'New\s+AutoIncrementTarget\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)')
         return {(t, c) for t, c in rx.findall(source)}
 
-    def test_vb_declares_the_same_seven_pairs(self):
+    def test_vb_declares_the_same_eleven_pairs(self):
         assert self._vb_pairs() == EXPECTED
 
 

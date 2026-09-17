@@ -5,7 +5,8 @@ import os
 import logging
 import re
 
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
+import json
 from mysql.connector import errorcode
 from utils.security import require_api_key
 from utils.database import get_db_connection
@@ -436,6 +437,51 @@ def setup_database():
     except Exception as outer_e:
         logger.error(f"Eroare CRITICA in setup_database: {str(outer_e)}", exc_info=True)
         return jsonify({"error": str(outer_e)}), 500
+
+
+@admin_bp.route('/api/admin/receptii/refacere', methods=['POST'])
+@require_api_key
+def receptii_refacere_admin():
+    """
+    Intretinere (felia 0062): reface instantaneele / liniile de receptie lipsa din istoric,
+    FARA sesiune de operator -- cheia de administrare + baza numita in corp.
+
+    Corp: { db_name, aplica?, cod? | toate?: true }. Acelasi contract si acelasi raspuns ca
+    POST /api/forexe/receptii/refacere (vezi routes/forexe/receptii_refacere.py).
+
+    ATENTIE: tabelele FX_ traiesc pe serverul K-BOT (get_kbot_connection), nu pe cel legacy
+    pe care lucreaza celelalte rute de aici -- de aceea nu trece prin get_db_connection.
+    """
+    # Import local, nu la nivel de modul: routes.forexe.angajamente importa de aici
+    # `_validate_db_name`, deci un import la varf ar inchide un cerc la pornire.
+    from routes.forexe.receptii_refacere import (
+        CerereInvalida, citeste_cererea, executa_refacerea)
+
+    data = request.get_json(silent=True) or {}
+    try:
+        db_name = _validate_db_name(data.get('db_name'))
+    except ValueError:
+        return jsonify({"error": "db_name invalid"}), 400
+    try:
+        cod, toate, aplica = citeste_cererea(data)
+    except CerereInvalida as e:
+        return current_app.response_class(
+            json.dumps({"error": str(e)}, ensure_ascii=False), status=400,
+            mimetype="application/json")
+
+    logger.info("[admin.receptii.refacere] db=%s cod=%s toate=%s aplica=%s ip=%s",
+                db_name, cod or "-", toate, aplica, request.remote_addr)
+    try:
+        payload = executa_refacerea(db_name, cod, toate, aplica)
+        payload["db_name"] = db_name
+        # Diacritice literale in `avertismente` / `erori`: ensure_ascii=False, ca la forexe.
+        return current_app.response_class(
+            json.dumps(payload, ensure_ascii=False), status=200, mimetype="application/json")
+    except Exception as e:
+        logger.error(f"[admin.receptii.refacere] db={db_name}: {e}", exc_info=True)
+        return current_app.response_class(
+            json.dumps({"error": f"Eroare la refacerea recepțiilor: {e}"}, ensure_ascii=False),
+            status=500, mimetype="application/json")
 
 
 @admin_bp.route('/api/admin/ping_db', methods=['POST'])

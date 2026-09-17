@@ -33,6 +33,7 @@ from routes.auth.guard import require_session    # bearer opac (Felia 1 auth)
 from utils.database import get_kbot_connection   # serverul K-BOT (DB_CONFIG_NEW)
 
 from . import forexe_bp
+from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,10 @@ _SELECT = (
     "EXISTS (SELECT 1 FROM FX_Istoric x WHERE x.CodAngajament = a.CodAngajament) AS AreIstoric, "
     "EXISTS (SELECT 1 FROM FX_DDF_REV_SA r WHERE r.CodAngajament = a.CodAngajament) AS AreRevizii, "
     "EXISTS (SELECT 1 FROM FX_Rezervari z WHERE z.CodAngajament = a.CodAngajament) AS AreRezervari, "
-    "EXISTS (SELECT 1 FROM FX_Receptii_H h WHERE h.CodAngajament = a.CodAngajament) AS AreReceptii, "
+    # F32: un antet fara linii (si care nu e stergere) nu e instantaneu, deci nu aprinde
+    # steagul; acelasi filtru ca vederea Receptii (`SNAPSHOT_COUNTS_SQL`, alias `H`).
+    "EXISTS (SELECT 1 FROM FX_Receptii_H H WHERE H.CodAngajament = a.CodAngajament "
+    "        AND " + SNAPSHOT_COUNTS_SQL + ") AS AreReceptii, "
     "EXISTS (SELECT 1 FROM FX_Plati p WHERE p.CodAngajament = a.CodAngajament) AS ArePlati, "
     "(a.IDDF IS NOT NULL) AS AreDDF, "
     "EXISTS (SELECT 1 FROM FX_DDF d "

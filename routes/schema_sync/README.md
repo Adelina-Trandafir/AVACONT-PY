@@ -120,6 +120,24 @@ Din `AVACONT_COMUN.CAI`, coloana `DbName`, valori distincte. O bază
 trecută în `CAI` dar care nu există pe server este ignorată, cu avertisment
 în jurnal. `AVACONT_COMUN` și `AVACONT_SURSA` nu pot fi niciodată ținte.
 
+`--list-targets` răspunde la altă întrebare și citește din altă parte: ce
+baze de unitate există **pe server** — numele care încep cu trei cifre din
+`information_schema.SCHEMATA`, fără șabloanele și schemele serverului. Fiecare
+linie spune și dacă registrul `CAI` o listează:
+
+```
+DB<TAB>000_DEMO<TAB>CAI
+DB<TAB>202_UNITATE<TAB>-
+```
+
+O bază marcată `-` există, dar `CAI` nu o cunoaște — deci discovery-ul
+obișnuit **nu** ar atinge-o. Se afișează tocmai ca să se vadă.
+
+Prefixul `DB` este acolo ca cel care citește ieșirea (AvacontPush, prin SSH)
+să nu poată confunda o linie de jurnal cu un nume de bază. Listarea se face
+înainte de orice altceva: nu creează tabelul de control și nu cade pe un
+server al cărui `sql_mode` ar refuza o sincronizare adevărată.
+
 ### Ordinea de execuție
 
 Contează, pentru că MariaDB refuză multe operații dacă nu sunt făcute în
@@ -362,6 +380,12 @@ schema_sync --run --mode FORCE --allow-destructive --backup-dir D:\backup
 Sincronizare completă, cu copie de siguranță și confirmare tastată.
 
 ```
+schema_sync --list-targets
+```
+Scrie bazele de unitate de pe server, una pe linie, și iese. Nu compară,
+nu execută și nu creează nimic.
+
+```
 schema_sync --drop-legacy --view
 ```
 Șterge procedurile stocate vechi. Se face o singură dată.
@@ -381,6 +405,7 @@ schema_sync --drop-legacy --view
 | `--continue-on-error` | continuă după o eroare; implicit se oprește |
 | `--no-reset` | păstrează instrucțiunile negenerate din rulările anterioare |
 | `--drop-legacy` | șterge procedurile stocate înlocuite |
+| `--list-targets` | scrie bazele de unitate de pe server (`DB<TAB>nume<TAB>CAI\|-`) și iese |
 | `--verbose` | afișează fiecare instrucțiune SQL |
 
 Cele două faze se pot rula și separat, cu `schema_generate` și
