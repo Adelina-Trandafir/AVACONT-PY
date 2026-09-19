@@ -471,6 +471,17 @@ _SQL_PARTENERI_ZI = (
 )
 
 
+def exista_ddf(cursor, cod: str) -> bool:
+    """Are angajamentul macar un document de fundamentare (FX_DDF)?
+
+    `_SQL_BASE` face INNER JOIN pe FX_DDF, deci fara DDF interogarea intoarce ZERO randuri
+    chiar daca ziua e plina de plati neordonantate. Mesajul «nu exista plati neordonantate»
+    ar minti operatorul; verificarea asta il inlocuieste cu motivul adevarat.
+    """
+    cursor.execute("SELECT 1 FROM FX_DDF WHERE CodAngajament = %s LIMIT 1", (cod,))
+    return cursor.fetchone() is not None
+
+
 def contor_parteneri_zi(cursor, cod: str, dt: date) -> int:
     """Numarul de ordonantari necesare pentru ziua data (1 = incape intr-una singura)."""
     cursor.execute(_SQL_PARTENERI_ZI, (cod, dt))
@@ -735,6 +746,14 @@ def post_ord_genereaza():
 
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor(dictionary=True)
+
+        # Fara DDF nu se poate ordonanta nimic (antetul ia IDDF/CUAL/Comp din el), iar
+        # `_SQL_BASE` ar intoarce oricum zero randuri. Refuz cu motivul adevarat, ca sa nu
+        # para ca ziua nu are plati.
+        if not exista_ddf(cursor, cod):
+            return _json_utf8(
+                {"error": f"Angajamentul {cod} nu are niciun document de fundamentare (DDF). "
+                          f"Ordonanțarea nu se poate genera fără un DDF salvat."}, 409)
 
         avertismente = []
 

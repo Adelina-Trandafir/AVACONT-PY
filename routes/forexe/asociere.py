@@ -22,10 +22,17 @@ ACCESS AVEA EXACT DOUA GAZDE PENTRU ACELEASI PATRU PANOURI, si a doua e chiar as
 `FX_System_Export/FORMS` -- codul ei nu poate fi citit. Cele patru subformulare SUNT
 exportate, si ele poarta regulile; pierderea e aspectul gazdei, nu logica.
 
-BLOCAREA (decizia operatorului, 29.08.2026)
-===========================================
+BLOCAREA (decizia operatorului, 29.08.2026; ingustata pe 18.09.2026)
+====================================================================
 «Daca exista ordonantari construite pe platile din R sau H, sau plati in acele date,
 legaturile NU vor mai fi editabile, dar raman VIZIBILE.»
+
+18.09.2026, operatorul a INGUSTAT regula: legaturile se editeaza cat timp NU EXISTA
+ORDONANTARE; o simpla plata a angajamentului NU mai blocheaza nimic. Jumatatea «plati» de
+mai jos e pastrata ca istoric al deciziei, dar `_BLOCAJE_SQL` si `motive_blocare` nu o
+mai citesc. Motivul: platile se inregistreaza inaintea ordonantarii, iar pe un angajament
+viu aproape fiecare instantaneu istoric are plati dupa el -- editorul ajungea sa nu poata
+corecta tocmai legaturile pentru care exista.
 
 Access avea chiar verificarea asta, si e COMENTATA in `frmFX_DUBII_LISTA_HA.btnDel_Click`:
 
@@ -52,11 +59,15 @@ sursa ei de date nu, deci se re-cheiaza pe tabelele vii. Verificat in `MariaDB_S
     blocajul se sprijina pe jumatatea «plati». De-asta jumatatea aia trebuie sa fie buna.
 
 CELE DOUA JUMATATI DE REGULA, asa cum le-a fixat operatorul:
-  * fereastra: ORICE plata a angajamentului cu `Data_plata >= DataH` a instantaneului.
-    Motivul e §1.3 din fundament -- fiecare plata de dupa acea data citeste totalul
-    recepției asa cum statea atunci, deci mutarea instantaneului le strica pe toate.
+  * fereastra (RETRASA pe 18.09.2026): ORICE plata a angajamentului cu
+    `Data_plata >= DataH` a instantaneului. Motivul era §1.3 din fundament -- fiecare
+    plata de dupa acea data citeste totalul receptiei asa cum statea atunci. Nu se mai
+    aplica: platile raman pe ecran ca repere, dar nu mai ingheata nicio legatura.
   * granularitate: SE BLOCHEAZA DOAR INSTANTANEUL ATINS. Restul lantului aceleiasi
     recepții ramane editabil. Nu se inghetă recepția intreaga.
+
+CE BLOCHEAZA ACUM: doar o ordonantare -- construita chiar pe instantaneu (`FX_ORD.IDRH`)
+sau pe receptia lui, cu data ulterioara instantaneului (`FX_ORD.IDRR` + `DataORD`).
 
 SI PE CE NU SE APLICA, DELIBERAT
 --------------------------------
@@ -177,6 +188,8 @@ _PLATI_SQL = (
 # `O.DataORD IS NULL OR O.DataORD >= H.DataH`: o ordonantare fara data nu poate fi
 # dovedita anterioara, deci se considera ulterioara. Conservator, si e ramura care
 # blocheaza -- nu una care lasa sa treaca ceva nedovedit.
+#
+# NU se mai numara platile (18.09.2026): doar ordonantarile blocheaza. Vezi antetul.
 # ---------------------------------------------------------------------------
 _BLOCAJE_SQL = (
     "SELECT H.IDRH, "
@@ -186,11 +199,7 @@ _BLOCAJE_SQL = (
     " (SELECT COUNT(*) FROM FX_ORD O WHERE O.IDRR = H.IDRR "
     "    AND (O.DataORD IS NULL OR O.DataORD >= H.DataH)) AS ord_r, "
     " (SELECT MIN(O.DataORD) FROM FX_ORD O WHERE O.IDRR = H.IDRR "
-    "    AND (O.DataORD IS NULL OR O.DataORD >= H.DataH)) AS ord_r_data, "
-    " (SELECT COUNT(*) FROM FX_Plati P WHERE P.CodAngajament = H.CodAngajament "
-    "    AND P.Data_plata >= H.DataH) AS plati, "
-    " (SELECT MIN(P.Data_plata) FROM FX_Plati P WHERE P.CodAngajament = H.CodAngajament "
-    "    AND P.Data_plata >= H.DataH) AS plati_data "
+    "    AND (O.DataORD IS NULL OR O.DataORD >= H.DataH)) AS ord_r_data "
     "FROM FX_Receptii_H H "
     "WHERE H.CodAngajament = %s AND H.IDRR IS NOT NULL"
 )
@@ -216,7 +225,8 @@ def motive_blocare(rand: dict) -> list:
 
     Lista goala inseamna «editabil». Ordinea e de la cel mai specific la cel mai general:
     o ordonantare construita CHIAR pe acest instantaneu spune mai mult operatorului decat
-    «exista plati dupa data asta», iar mesajul cel mai de sus e cel pe care il vede intai.
+    «receptia are o ordonantare ulterioara», iar mesajul cel mai de sus e cel pe care il
+    vede intai. Doar ordonantarile blocheaza; platile nu (18.09.2026).
     """
     motive = []
 
@@ -236,14 +246,8 @@ def motive_blocare(rand: dict) -> list:
             "Recepția are o ordonanțare fără dată, care nu poate fi dovedită anterioară."
         )
 
-    plati = int(rand.get("plati") or 0)
-    if plati > 0:
-        data = _zi(rand.get("plati_data"))
-        motive.append(
-            "Angajamentul are " + str(plati) + " plăți începând cu " + data +
-            "; ele s-au calculat pe acest lanț."
-        )
-
+    # Platile NU mai blocheaza (18.09.2026): un rand vechi care mai poarta `plati` /
+    # `plati_data` e ignorat aici, nu tradus in motiv.
     return motive
 
 

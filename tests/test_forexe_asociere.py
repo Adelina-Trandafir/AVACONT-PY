@@ -69,9 +69,9 @@ def cmd(idrh, actiune, idrr=None, eticheta=None):
 # ===========================================================================
 # motive_blocare -- the rule itself, as a pure function
 # ===========================================================================
-def blocaj(ord_h=0, ord_h_nr=None, ord_r=0, ord_r_data=None, plati=0, plati_data=None):
+def blocaj(ord_h=0, ord_h_nr=None, ord_r=0, ord_r_data=None):
     return {"IDRH": 1, "ord_h": ord_h, "ord_h_nr": ord_h_nr, "ord_r": ord_r,
-            "ord_r_data": ord_r_data, "plati": plati, "plati_data": plati_data}
+            "ord_r_data": ord_r_data}
 
 
 def test_nimic_nu_blocheaza_o_legatura_curata():
@@ -101,22 +101,26 @@ def test_ordonantare_fara_data_blocheaza_si_o_spune():
     assert "fără dată" in motive[0]
 
 
-def test_platile_de_la_datah_incolo_blocheaza():
-    motive = A.motive_blocare(blocaj(plati=3, plati_data=dt("2026-02-28 08:24:14")))
-    assert len(motive) == 1
-    assert "3 plăți" in motive[0] and "28.02.2026" in motive[0]
+def test_platile_nu_mai_blocheaza():
+    """
+    18.09.2026: the operator narrowed the rule -- a link is frozen only while an
+    ordonantare exists. Payments alone leave it editable. A stale row that still
+    carries the old `plati` / `plati_data` columns must be ignored, not translated.
+    """
+    rand = blocaj()
+    rand["plati"] = 3
+    rand["plati_data"] = dt("2026-02-28 08:24:14")
+    assert A.motive_blocare(rand) == []
 
 
 def test_motivele_vin_de_la_specific_la_general():
     """Operatorul citeste primul mesaj; el trebuie sa fie cel care spune cel mai mult."""
     motive = A.motive_blocare(blocaj(
         ord_h=1, ord_h_nr="14",
-        ord_r=1, ord_r_data=dt("2026-04-07 00:00:00"),
-        plati=5, plati_data=dt("2026-01-31 08:01:01")))
-    assert len(motive) == 3
+        ord_r=1, ord_r_data=dt("2026-04-07 00:00:00")))
+    assert len(motive) == 2
     assert "ordonanțarea nr. 14" in motive[0]
     assert "Recepția are o ordonanțare" in motive[1]
-    assert "plăți" in motive[2]
 
 
 # ===========================================================================
@@ -534,9 +538,8 @@ def test_post_cere_si_el_cursor_pe_dictionar(client, auth_headers, conn):
 def test_un_instantaneu_blocat_ajunge_la_client_cu_motive(client, auth_headers,
                                                           monkeypatch):
     c = baza_cu_un_lant()
-    c.tabele["blocaje"] = [{"IDRH": 5, "ord_h": 0, "ord_h_nr": None, "ord_r": 0,
-                            "ord_r_data": None, "plati": 2,
-                            "plati_data": dt("2026-03-01 00:00:00")}]
+    c.tabele["blocaje"] = [{"IDRH": 5, "ord_h": 0, "ord_h_nr": None, "ord_r": 1,
+                            "ord_r_data": dt("2026-03-01 00:00:00")}]
     monkeypatch.setattr(A, "get_kbot_connection", lambda db=None: c)
 
     date = client.get(URL + "?cod=" + COD, headers=auth_headers).get_json()
@@ -626,7 +629,7 @@ def test_a_save_recomputes_dif_on_every_touched_chain(client, auth_headers, monk
 def test_post_pe_o_legatura_blocata_da_409(client, auth_headers, monkeypatch):
     c = baza_cu_un_lant()
     c.tabele["blocaje"] = [{"IDRH": 5, "ord_h": 1, "ord_h_nr": "77", "ord_r": 0,
-                            "ord_r_data": None, "plati": 0, "plati_data": None}]
+                            "ord_r_data": None}]
     monkeypatch.setattr(A, "get_kbot_connection", lambda db=None: c)
 
     # Amprenta buna, ca sa treaca de paza de concurenta si sa cada exact pe blocaj.

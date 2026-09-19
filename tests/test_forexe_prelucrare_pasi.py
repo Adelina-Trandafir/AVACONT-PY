@@ -173,8 +173,9 @@ def test_a_header_flushes_the_lines_collected_before_it():
         "SELECT CodIndicator FROM FX_Receptii ": [],
         "SELECT MAX(NrCrt)": [],
     })
-    antete = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB", "AA2"))
+    antete, consumate = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB", "AA2"))
     assert antete == 1
+    assert consumate == [9, 7, 8]          # the header, then the lines poured under it
     assert len(cur.inserts("FX_Receptii_H")) == 1
     assert len(cur.inserts("FX_Receptii")) == 2
     # Ambele linii arata catre antetul tocmai creat.
@@ -196,7 +197,7 @@ def test_stergere_receptie_becomes_a_snapshot_with_no_lines():
         "SELECT CodIndicator FROM FX_Receptii ": [],
         "SELECT MAX(NrCrt)": [],
     })
-    antete = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))
+    antete, _ = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))
     assert antete == 1
     h = cur.inserts("FX_Receptii_H")[0]
     # _H_INSERT_SQL: (IDH, NrCrt, CodAngajament, DataH, Total, Descriere, EsteStergere)
@@ -261,7 +262,7 @@ def test_a_zero_row_that_names_no_indicator_is_still_skipped():
         "SELECT CodIndicator FROM FX_Receptii ": [],
         "SELECT MAX(NrCrt)": [],
     })
-    assert P.step4a_populeaza_receptii(cur, COD, indicatori("AAB")) == 1
+    assert P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))[0] == 1
     assert [x[8] for x in cur.inserts("FX_Receptii")] == ["AAB"]
 
 
@@ -278,9 +279,12 @@ def test_a_header_with_no_line_rows_is_not_a_snapshot():
         "SELECT CodIndicator FROM FX_Receptii ": [],
         "SELECT MAX(NrCrt)": [],
     })
-    assert P.step4a_populeaza_receptii(cur, COD, indicatori("AAB")) == 0
+    antete, consumate = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))
+    assert antete == 0
     assert cur.inserts("FX_Receptii_H") == []
     assert cur.inserts("FX_Receptii") == []
+    # F33: skipped, but consumed -- step 7 marks it so it is not read again.
+    assert consumate == [9]
 
 
 def test_a_header_only_snapshot_does_not_steal_the_next_headers_lines():
@@ -297,11 +301,79 @@ def test_a_header_only_snapshot_does_not_steal_the_next_headers_lines():
         "SELECT CodIndicator FROM FX_Receptii ": [],
         "SELECT MAX(NrCrt)": [],
     })
-    assert P.step4a_populeaza_receptii(cur, COD, indicatori("AAB")) == 1
+    assert P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))[0] == 1
     antete = cur.inserts("FX_Receptii_H")
     assert [a[0] for a in antete] == [9]          # IDH of the real header only
     assert antete[0][1] == 1                       # NrCrt not consumed by the skipped one
     assert len(cur.inserts("FX_Receptii")) == 1
+
+
+def test_a_header_whose_snapshot_already_exists_is_not_built_again():
+    """
+    F33. A history row left at `Prelucrat = 0` by something other than this pipeline
+    (migration) was read on every download, and every download built a new, unplaced
+    FX_Receptii_H for it. The header is skipped when its IDH already has a snapshot;
+    the buffered lines are dropped, not poured a second time; and both rows are still
+    reported as consumed so step 7 finally marks them.
+    """
+    cur = FakeCursor({
+        "SELECT ID, HASH": [
+            _istoric_receptie(7, "Rand: AAB,Suma receptie: 510 RON", 510),
+            _istoric_receptie(9, "Receptie: PLATA FACT., valoare: 510, (activ:true)",
+                              510),
+        ],
+        "SELECT IDRH FROM FX_Receptii_H WHERE IDH": [{"IDRH": 265}],
+        "SELECT CodIndicator FROM FX_Receptii ": [],
+        "SELECT MAX(NrCrt)": [],
+    })
+    antete, consumate = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))
+    assert antete == 0
+    assert cur.inserts("FX_Receptii_H") == []
+    assert cur.inserts("FX_Receptii") == []
+    assert sorted(consumate) == [7, 9]
+
+
+def test_a_duplicate_header_does_not_steal_the_next_headers_lines():
+    """The dropped buffer must not leak into the header that follows."""
+    cur = FakeCursor({
+        "SELECT ID, HASH": [
+            _istoric_receptie(7, "Rand: AAB,Suma receptie: 510 RON", 510),
+            _istoric_receptie(9, "Receptie: PLATA FACT., valoare: 510, (activ:true)",
+                              510),
+            _istoric_receptie(17, "Rand: AAB,Suma receptie: 620 RON", 620),
+            _istoric_receptie(19, "Receptie: PLATA FACT., valoare: 620, (activ:true)",
+                              620),
+        ],
+        "SELECT CodIndicator FROM FX_Receptii ": [],
+        "SELECT MAX(NrCrt)": [],
+    })
+    # Only the FIRST header has a snapshot already: answer by IDH, not by prefix.
+    original = cur.execute
+
+    def execute(sql, params=None):
+        original(sql, params)
+        if " ".join(sql.split()).startswith("SELECT IDRH FROM FX_Receptii_H WHERE IDH"):
+            cur._result = [{"IDRH": 265}] if params == (9,) else []
+    cur.execute = execute
+
+    antete, consumate = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))
+    assert antete == 1
+    assert [a[0] for a in cur.inserts("FX_Receptii_H")] == [19]
+    assert [x[1] for x in cur.inserts("FX_Receptii")] == [17]
+    assert sorted(consumate) == [7, 9, 17, 19]
+
+
+def test_lines_still_waiting_for_a_header_are_not_consumed():
+    cur = FakeCursor({
+        "SELECT ID, HASH": [
+            _istoric_receptie(7, "Rand: AAB,Suma receptie: 510 RON", 510),
+        ],
+        "SELECT CodIndicator FROM FX_Receptii ": [],
+        "SELECT MAX(NrCrt)": [],
+    })
+    antete, consumate = P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))
+    assert antete == 0
+    assert consumate == []
 
 
 def test_the_f32_criterion_exempts_the_deletion_row():

@@ -35,6 +35,7 @@ from routes.forexe import forexe_bp  # Importam Blueprint-ul FOREXE (ListaAngaja
 from routes.auth import auth_bp  # Importam Blueprint-ul de login al aplicatiei K-BOT
 from routes.forexe.seed import seed_bp
 from routes.migrare.migrare import migrare_bp  # felia 0044: migrarea prin fisier .accdb impins
+from routes.update import update_bp  # slice 0067: application update channel (public, read-only)
 
 # 1. Initializam logger-ul global (ca sa scrie in fisierul .log)
 logger = setup_logger()
@@ -97,6 +98,7 @@ app.register_blueprint(forexe_bp)  # Inregistram Blueprint-ul FOREXE
 app.register_blueprint(auth_bp)  # Inregistram Blueprint-ul de login
 app.register_blueprint(seed_bp)
 app.register_blueprint(migrare_bp)
+app.register_blueprint(update_bp)
 
 logger.info("=== RUTE ÎNREGISTRATE ===")
 for rule in app.url_map.iter_rules():

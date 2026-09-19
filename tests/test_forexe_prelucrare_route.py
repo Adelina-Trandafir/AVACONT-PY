@@ -75,6 +75,7 @@ _SELECTS_GOALE = (
     "SELECT ID, DataFX",                # 3a, randurile de istoric existente
     "SELECT I.CodAI",                   # read_indicatori
     "SELECT ID, HASH",                  # 4a, randurile de receptie neprelucrate
+    "SELECT IDRH FROM FX_Receptii_H",   # 4a, F33: antetul are deja instantaneu?
     "SELECT ID, Observatii",            # 5, randurile de plata neprelucrate
     "SELECT IDRR, NRCRT",               # citeste_receptii, antetele
     "SELECT IDRR, CodIndicator",        # citeste_receptii, liniile RHR

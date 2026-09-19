@@ -171,7 +171,123 @@ def test_iso_with_a_T_matches_the_database_datetime():
     """Clientul .NET serializeaza cu «T»; baza raspunde cu spatiu. Acelasi moment."""
     instantanee = [inst(9, "2026-02-10 22:46:54", 510)]
     decizii = A.normalizeaza_decizii([dec(9, "ignorat", "2026-02-10T22:46:54")])
-    assert A.verifica_acoperirea(decizii, instantanee)[9]["actiune"] == "ignorat"
+    assert A.verifica_acoperirea(decizii, instantanee)[("rand", 9)]["actiune"] == "ignorat"
+
+
+# ===========================================================================
+# The anchor (F24 / F34): a row index when the history row is in the payload, the
+# FX_Istoric.ID when it is not -- because REVERSE brings only the newer history rows
+# ===========================================================================
+def inst_idh(idh, data_h, total, idrh=None):
+    """A snapshot whose history row is NOT in this download: no index, anchored on IDH."""
+    i = inst(0, data_h, total, idrh=idrh if idrh is not None else 2000 + idh)
+    i["rand_istoric"] = None
+    i["idh"] = idh
+    return i
+
+
+def dec_idh(idh, actiune, data_h, idrr=None, eticheta=None):
+    d = dec(None, actiune, data_h, idrr=idrr, eticheta=eticheta)
+    d["idh"] = idh
+    return d
+
+
+def test_the_anchor_is_the_row_index_when_there_is_one_and_the_idh_otherwise():
+    assert A.ancora({"rand_istoric": 3, "idh": 5786}) == ("rand", 3)
+    assert A.ancora({"rand_istoric": None, "idh": 5786}) == ("idh", 5786)
+    assert A.ancora({"idh": 5786}) == ("idh", 5786)
+    # Index ZERO is a real row, not "missing".
+    assert A.ancora({"rand_istoric": 0, "idh": 5786}) == ("rand", 0)
+    with pytest.raises(DecizieInvalida):
+        A.ancora({"rand_istoric": None, "idh": None})
+
+
+def test_a_decision_names_its_snapshot_by_exactly_one_of_rand_istoric_and_idh():
+    ok = A.normalizeaza_decizii([dec_idh(5786, "ignorat", "2026-07-26 15:14:50")])
+    assert ok[0]["rand_istoric"] is None and ok[0]["idh"] == 5786
+    # null is absence, not a value: the .NET client writes null on the field it did not set.
+    ok = A.normalizeaza_decizii([{"rand_istoric": 4, "idh": None, "actiune": "ignorat",
+                                  "data_h": "2026-07-26 15:14:50"}])
+    assert ok[0]["rand_istoric"] == 4 and ok[0]["idh"] is None
+    with pytest.raises(DecizieInvalida) as e:
+        A.normalizeaza_decizii([{"rand_istoric": 4, "idh": 5786, "actiune": "ignorat",
+                                 "data_h": "2026-07-26 15:14:50"}])
+    assert "exact una" in str(e.value)
+    with pytest.raises(DecizieInvalida):
+        A.normalizeaza_decizii([{"actiune": "ignorat", "data_h": "2026-07-26 15:14:50"}])
+
+
+def test_coverage_accepts_a_decision_anchored_on_idh():
+    instantanee = [inst(9, "2026-08-24 09:42:12", 2718.01),
+                   inst_idh(5786, "2026-07-26 15:14:50", 3240.12)]
+    decizii = A.normalizeaza_decizii([
+        dec(9, "asociat", "2026-08-24 09:42:12", idrr=204),
+        dec_idh(5786, "asociat", "2026-07-26 15:14:50", idrr=203)])
+    vazute = A.verifica_acoperirea(decizii, instantanee)
+    assert vazute[("idh", 5786)]["idrr"] == 203
+
+
+def test_coverage_still_refuses_silence_on_a_snapshot_anchored_on_idh():
+    instantanee = [inst(9, "2026-08-24 09:42:12", 2718.01),
+                   inst_idh(5786, "2026-07-26 15:14:50", 3240.12)]
+    decizii = A.normalizeaza_decizii([dec(9, "asociat", "2026-08-24 09:42:12", idrr=204)])
+    with pytest.raises(DecizieInvalida) as e:
+        A.verifica_acoperirea(decizii, instantanee)
+    assert "istoric 5786" in str(e.value)
+
+
+def test_an_idh_decision_cannot_hit_a_snapshot_that_has_an_index():
+    """The two forms never alias each other: an index row is named by its index only."""
+    instantanee = [inst(9, "2026-08-24 09:42:12", 2718.01)]
+    instantanee[0]["idh"] = 6253
+    decizii = A.normalizeaza_decizii([dec_idh(6253, "ignorat", "2026-08-24 09:42:12")])
+    with pytest.raises(DecizieInvalida):
+        A.verifica_acoperirea(decizii, instantanee)
+
+
+def _rand_h_neasezat(idrh, idh, data_h, total):
+    return {"IDRH": idrh, "IDH": idh, "DataH": dt(data_h), "Total": total,
+            "Descriere": "Salvare receptie.", "EsteStergere": 0}
+
+
+def test_a_leftover_snapshot_is_anchored_on_idh_instead_of_being_left_out():
+    """
+    The AAB2KPRT2EB case of 18.09.2026: the 27.07 reception's snapshot was built from a
+    history row that this REVERSE download did not carry. It used to be dropped with a
+    warning and could only be placed in the anytime editor.
+    """
+    warnings = []
+    cur = FakeCursor([
+        [],                                                        # liniile
+        [_rand_h_neasezat(265, 5786, "2026-07-26 15:14:50", 3240.12),
+         _rand_h_neasezat(266, 6253, "2026-08-24 09:42:12", 2718.01)],
+    ])
+    out = A.citeste_instantanee(cur, COD, {2: 6253}, warnings)
+    assert [(i["idrh"], i["rand_istoric"], i["idh"]) for i in out] == [
+        (265, None, 5786), (266, 2, 6253)]
+    assert [A.ancora(i) for i in out] == [("idh", 5786), ("rand", 2)]
+    assert warnings == []
+
+
+def test_two_unplaced_snapshots_on_one_history_row_are_left_to_the_editor():
+    """F33 leftovers: the anchor would be ambiguous, so neither copy gets a name."""
+    warnings = []
+    cur = FakeCursor([
+        [],
+        [_rand_h_neasezat(265, 5786, "2026-07-26 15:14:50", 3240.12),
+         _rand_h_neasezat(270, 5786, "2026-07-26 15:14:50", 3240.12),
+         _rand_h_neasezat(266, 6253, "2026-08-24 09:42:12", 2718.01)],
+    ])
+    out = A.citeste_instantanee(cur, COD, {}, warnings)
+    assert [i["idrh"] for i in out] == [266]
+    assert len(warnings) == 1 and "dubluri" in warnings[0]
+
+
+def test_a_snapshot_without_any_history_row_is_still_left_out_and_counted():
+    warnings = []
+    cur = FakeCursor([[], [_rand_h_neasezat(14, None, "2026-05-01 09:00:00", 10.0)]])
+    assert A.citeste_instantanee(cur, COD, {}, warnings) == []
+    assert len(warnings) == 1 and "niciun rând de istoric" in warnings[0]
 
 
 # ===========================================================================

@@ -442,7 +442,7 @@ def _ruleaza_pasii(cursor, cod, scalari, tabele, db_name, un, supplied, warnings
 
     # --- pasul 4a / 4b -----------------------------------------------------
     with timing.stage("pas 4a receptii H"):
-        antete = step4a_populeaza_receptii(cursor, cod, indicatori)
+        antete, ids_consumate = step4a_populeaza_receptii(cursor, cod, indicatori)
     scrise["FX_Receptii_H"] = antete
     are["ReceptiiH"] = antete > 0
 
@@ -466,8 +466,10 @@ def _ruleaza_pasii(cursor, cod, scalari, tabele, db_name, un, supplied, warnings
     # --- pasul 7 -----------------------------------------------------------
     # In faza «propunere» asta se deruleaza inapoi cu tot restul, deci o propunere nu
     # marcheaza NICIODATA istoricul ca prelucrat -- exact ce face rularea repetabila.
+    # F33: si randurile mai vechi pe care 4a le-a consumat acum, nu doar cele inserate;
+    # altfel un rand ramas cu steagul jos naste cate un instantaneu la fiecare rulare.
     with timing.stage("pas 7 rezolvat"):
-        step7_actualizeaza_rezolvat(cursor, ids_noi)
+        step7_actualizeaza_rezolvat(cursor, sorted(set(ids_noi) | set(ids_consumate)))
 
     # --- pasul 8 -----------------------------------------------------------
     # NECONDITIONAT, la coada, in aceeasi tranzactie -- exact ca originalul Access.
@@ -654,7 +656,15 @@ def post_prelucrare():
                     "instantanee_asezate": context,
                     "plati": citeste_plati(cursor, cod),
                     "instantanee": [{
+                        # ANCORA (F24 / F34): `rand_istoric` cand randul de istoric e in
+                        # sarcina utila, altfel null si atunci numele e `idh`. Clientul
+                        # trimite inapoi exact ce a primit -- una dintre ele.
                         "rand_istoric": i["rand_istoric"],
+                        "idh": i["idh"],
+                        # `idrh` NU e un nume care supravietuieste derularii inapoi (se
+                        # atribuie din nou la salvare). E unic in tabloul de fata si atat:
+                        # cheia pe care formularul isi tine dictionarele cat traieste.
+                        "idrh": i["idrh"],
                         "data_h": i["data_h"],
                         "descriere": i["descriere"],
                         "total": i["total"],

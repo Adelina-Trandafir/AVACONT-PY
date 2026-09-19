@@ -70,6 +70,54 @@ class StareModificata(Exception):
 
 
 # ===========================================================================
+# ANCORA unui instantaneu intre cele doua faze (F24 + F34)
+# ===========================================================================
+# Numele sub care un instantaneu de asezat calatoreste de la propunere la salvare. Doua
+# forme, si NUMAI doua:
+#
+#   ("rand", n)  indicele randului lui de istoric in `TabelIstoric` (F24). Pentru orice
+#                instantaneu al carui rand de istoric E in sarcina utila -- inclusiv cele
+#                nascute chiar acum, al caror `IDRH` nu supravietuieste derularii inapoi.
+#   ("idh", n)   `FX_Istoric.ID` al randului lui de istoric (F34, 18.09.2026). Pentru un
+#                instantaneu al carui rand NU e in sarcina utila. ID-ul e stabil intre
+#                faze fiindca randul exista DINAINTE de rularea asta: amprenta garanteaza
+#                ca `FX_Istoric` nu s-a miscat, iar un rand vechi nu se deruleaza inapoi.
+#
+# DE CE A DOUA FORMA (F34). Fluxul REVERSE aduce doar randurile de istoric mai noi decat
+# ultimul de acasa, deci `TabelIstoric` e o DIFERENTA, nu istoricul intreg -- presupunerea
+# «FOREXE trimite istoricul intreg la fiecare descarcare» era adevarata doar la prima
+# descarcare. Un instantaneu ramas neasezat dintr-o rulare mai veche nu-si mai gasea
+# indicele si ramanea, prin constructie, de nerezolvat din descarcare. Acum are un nume.
+#
+# Ancora se CALCULEAZA din dictionar, nu se stocheaza: editorul de oricand
+# (routes/forexe/asociere.py) pune `rand_istoric = idrh` ca alias pe ambele laturi si
+# imprumuta functiile de aici neschimbat.
+def ancora(x: dict) -> Tuple[str, int]:
+    """Ancora unui instantaneu sau a unei decizii: («rand», indice) sau («idh», ID)."""
+    rand = x.get("rand_istoric")
+    if rand is not None:
+        return ("rand", int(rand))
+    idh = x.get("idh")
+    if idh is None:
+        raise DecizieInvalida(
+            "Un instantaneu fără «rand_istoric» și fără «idh» nu poate fi numit.")
+    return ("idh", int(idh))
+
+
+def ancora_text(a: Tuple[str, int]) -> str:
+    """Cum se numeste ancora in mesaje si in jurnal: «rândul 3» / «istoric 5786»."""
+    return f"rândul {a[1]}" if a[0] == "rand" else f"istoric {a[1]}"
+
+
+def _ancora_jurnal(x: dict):
+    """Coloana «rand» din tabelele jurnalului, pentru orice dictionar de instantaneu."""
+    try:
+        return ancora_text(ancora(x))
+    except DecizieInvalida:
+        return "(deja legat)"
+
+
+# ===========================================================================
 # AMPRENTA (2.3)
 # ===========================================================================
 # Faza a doua trebuie sa vada aceeasi baza pe care a vazut-o faza intai, altfel deciziile
@@ -239,18 +287,24 @@ def citeste_receptii(cursor, cod: str,
 def citeste_instantanee(cursor, cod: str, index_la_id: Dict[int, int],
                         warnings: List[str]) -> List[dict]:
     """
-    Instantaneele inca neasezate, fiecare cu indicele randului lui de istoric.
+    Instantaneele inca neasezate, fiecare cu ancora lui (vezi `ancora`).
 
     `rand_istoric` (F24) e INDICELE de la zero al randului in `TabelIstoric`, nu o cheie
     de baza de date. Ancorarea pe indice e ce face contractul in doua faze sa functioneze:
     id-urile atribuite in timpul propunerii dispar la rollback si nu se intorc identice,
     dar indicele e stabil prin constructie, fiindca AMBELE faze poarta acelasi payload.
 
-    UN INSTANTANEU AL CARUI RAND DE ISTORIC NU E IN PAYLOAD nu poate primi indice, deci
-    nu poate fi decis in aceasta rulare. Se poate intampla daca site-ul a paginat
-    istoricul altfel sau daca randul a disparut de acolo. NU se strecoara tacut in lista:
-    se lasa afara si se numara intr-un avertisment, ca sa se vada ca a ramas ceva
-    nerezolvabil in loc sa para ca nu exista.
+    UN INSTANTANEU AL CARUI RAND DE ISTORIC NU E IN PAYLOAD nu primeste indice
+    (`rand_istoric = None`) si se ancoreaza pe `idh` (F34): fluxul REVERSE aduce doar
+    diferenta de istoric, deci cazul e cel NORMAL pentru orice rand ramas neasezat dintr-o
+    rulare mai veche, nu o exceptie. `FX_Istoric.ID` al unui rand vechi e stabil intre
+    faze -- amprenta garanteaza ca tabelul nu s-a miscat.
+
+    RAMAN AFARA, numarate intr-un avertisment (nu strecurate tacut, nu inventate):
+      * un instantaneu fara `IDH` deloc -- nu are nume;
+      * doua sau mai multe instantanee neasezate pe ACELASI `IDH` -- dublurile lasate de
+        defectul F33 inainte de a fi inchis; ancora ar fi ambigua, deci le desface
+        editorul de oricand, care le vede pe fiecare cu `IDRH`-ul lui.
     """
     # Harta inversa: FX_Istoric.ID -> indicele in payload. Doua randuri identice din
     # payload arata catre acelasi ID; se pastreaza PRIMUL indice, care e si cel pe care
@@ -273,18 +327,32 @@ def citeste_instantanee(cursor, cod: str, index_la_id: Dict[int, int],
         })
 
     cursor.execute(_INSTANTANEE_SQL, (cod,))
+    randuri = cursor.fetchall()
+
+    # F33 leftovers: the same history row under two or more unplaced snapshots. Counted
+    # BEFORE the loop, so both copies are treated alike -- neither gets a name.
+    cate_pe_idh: Dict[int, int] = {}
+    for r in randuri:
+        if r["IDH"] is not None:
+            cate_pe_idh[int(r["IDH"])] = cate_pe_idh.get(int(r["IDH"]), 0) + 1
+
     out = []
-    fara_indice = 0
-    for r in cursor.fetchall():
+    fara_idh = 0
+    dublate = 0
+    for r in randuri:
         idrh = int(r["IDRH"])
-        idh = r["IDH"]
-        idx = id_la_index.get(int(idh)) if idh is not None else None
-        if idx is None:
-            fara_indice += 1
+        if r["IDH"] is None:
+            fara_idh += 1
+            continue
+        idh = int(r["IDH"])
+        if cate_pe_idh[idh] > 1:
+            dublate += 1
             continue
         out.append({
             "idrh": idrh,
-            "rand_istoric": idx,
+            # None when the row is not in this download: the anchor is then `idh`.
+            "rand_istoric": id_la_index.get(idh),
+            "idh": idh,
             "data_h": r["DataH"],
             "descriere": r["Descriere"] or "",
             "total": float(r["Total"] or 0),
@@ -294,15 +362,26 @@ def citeste_instantanee(cursor, cod: str, index_la_id: Dict[int, int],
 
     journal.section("instantaneele de hotărât în rularea asta (%d)" % len(out))
     journal.table(
-        ("IDRH", "rand", "DataH", "Total", "stergere", "linii"),
-        [(i["idrh"], i["rand_istoric"], i["data_h"], i["total"], i["stergere"],
-          journal.sume_pe_indicator(i["linii"])) for i in out])
-    if fara_indice:
-        journal.line("%d instantanee lăsate afară: rândul lor de istoric nu e în "
-                     "descărcarea asta", fara_indice)
+        ("IDRH", "ancora", "IDH", "DataH", "Total", "stergere", "linii"),
+        [(i["idrh"], _ancora_jurnal(i), i["idh"], i["data_h"], i["total"],
+          i["stergere"], journal.sume_pe_indicator(i["linii"])) for i in out])
+    prin_idh = sum(1 for i in out if i["rand_istoric"] is None)
+    if prin_idh:
+        journal.line("%d instantanee ancorate pe IDH: rândul lor de istoric nu e în "
+                     "descărcarea asta (F34)", prin_idh)
+    if fara_idh:
+        journal.line("%d instantanee lăsate afară: nu au IDH deloc", fara_idh)
         warnings.append(
-            f"{fara_indice} instantanee neasociate nu au rândul lor de istoric în "
-            f"această descărcare și nu pot fi rezolvate acum. Rămân neasociate."
+            f"{fara_idh} instantanee neasociate nu au niciun rând de istoric și nu pot "
+            f"fi așezate din descărcare. Se rezolvă în editorul de asociere."
+        )
+    if dublate:
+        journal.line("%d instantanee lăsate afară: dubluri pe același rând de istoric "
+                     "(F33)", dublate)
+        warnings.append(
+            f"{dublate} instantanee neasociate sunt dubluri ale aceluiași rând de "
+            f"istoric și nu pot fi așezate din descărcare. Se rezolvă în editorul de "
+            f"asociere."
         )
     return out
 
@@ -316,8 +395,8 @@ MOTIV_CONTEXT = (
     "descărcării."
 )
 MOTIV_FARA_ISTORIC = (
-    "Rândul lui de istoric nu este în această descărcare, deci nu poate fi așezat acum. "
-    "Rămâne neasociat."
+    "Nu poate fi numit din descărcare: fie nu are rând de istoric, fie împarte rândul "
+    "cu alt instantaneu neașezat. Se așază în editorul de asociere."
 )
 
 
@@ -499,11 +578,20 @@ def normalizeaza_decizii(brut) -> List[dict]:
     for i, item in enumerate(brut):
         if not isinstance(item, dict):
             raise DecizieInvalida(f"«decizii»[{i}] nu este un obiect.")
+        # Ancora: EXACT una dintre `rand_istoric` (F24) si `idh` (F34). `null` e absenta,
+        # nu o valoare -- clientul .NET scrie null pe campul pe care nu l-a pus.
+        rand = item.get("rand_istoric")
+        idh = item.get("idh")
+        if (rand is None) == (idh is None):
+            raise DecizieInvalida(
+                f"«decizii»[{i}]: trebuie exact una dintre «rand_istoric» și «idh»."
+            )
         try:
-            rand = int(item.get("rand_istoric"))
+            rand = None if rand is None else int(rand)
+            idh = None if idh is None else int(idh)
         except (TypeError, ValueError) as err:
             raise DecizieInvalida(
-                f"«decizii»[{i}]: «rand_istoric» lipsește sau nu este un număr."
+                f"«decizii»[{i}]: «rand_istoric» / «idh» nu este un număr."
             ) from err
         actiune = str(item.get("actiune") or "").strip()
         if actiune not in ACTIUNI:
@@ -563,6 +651,7 @@ def normalizeaza_decizii(brut) -> List[dict]:
 
         out.append({
             "rand_istoric": rand,
+            "idh": idh,
             "actiune": actiune,
             "data_h": str(data_h),
             "idrr": idrr,
@@ -596,41 +685,41 @@ def verifica_acoperirea(decizii: List[dict], instantanee: List[dict]) -> Dict[in
     """
     Fiecare instantaneu trebuie sa apara in `decizii`, o singura data, cu `data_h` potrivit.
 
-    Intoarce {rand_istoric: decizie}.
+    Intoarce {ancora: decizie} -- cheia e tuplul dat de `ancora()`.
 
     Un instantaneu LIPSA e 400, nu o valoare implicita: tacerea nu are voie sa insemne
-    «ignora-l». O `data_h` care nu se potriveste cu randul de la acel indice e tot 400 --
+    «ignora-l». O `data_h` care nu se potriveste cu randul de la acea ancora e tot 400 --
     asa un fisier de decizii invechit cade zgomotos in loc sa asocieze tacut alt rand.
     """
-    dupa_rand = {i["rand_istoric"]: i for i in instantanee}
+    dupa_ancora = {ancora(i): i for i in instantanee}
 
-    vazute: Dict[int, dict] = {}
+    vazute: Dict[Tuple[str, int], dict] = {}
     for d in decizii:
-        rand = d["rand_istoric"]
-        inst = dupa_rand.get(rand)
+        a = ancora(d)
+        inst = dupa_ancora.get(a)
         if inst is None:
             raise DecizieInvalida(
-                f"Decizia pentru rândul de istoric {rand} nu corespunde niciunui "
-                f"instantaneu de rezolvat."
+                f"Decizia pentru {ancora_text(a)} nu corespunde niciunui instantaneu "
+                f"de rezolvat."
             )
-        if rand in vazute:
+        if a in vazute:
             raise DecizieInvalida(
-                f"Rândul de istoric {rand} apare de două ori în «decizii».")
+                f"Instantaneul de la {ancora_text(a)} apare de două ori în «decizii».")
         if not _acelasi_moment(d["data_h"], inst["data_h"]):
             raise DecizieInvalida(
-                f"Rândul de istoric {rand}: «data_h» trimisă ({d['data_h']}) nu se "
-                f"potrivește cu cea din descărcare ({inst['data_h']}). Fișierul de "
+                f"Instantaneul de la {ancora_text(a)}: «data_h» trimisă ({d['data_h']}) "
+                f"nu se potrivește cu cea din descărcare ({inst['data_h']}). Fișierul de "
                 f"decizii este învechit — reluați descărcarea."
             )
-        vazute[rand] = d
+        vazute[a] = d
 
-    lipsa = [i["rand_istoric"] for i in instantanee if i["rand_istoric"] not in vazute]
+    lipsa = [ancora(i) for i in instantanee if ancora(i) not in vazute]
     journal.line("acoperire: %d decizii pentru %d instantanee, %d fără hotărâre",
                  len(decizii), len(instantanee), len(lipsa))
     if lipsa:
         raise DecizieInvalida(
             f"Lipsesc deciziile pentru {len(lipsa)} instantanee "
-            f"(rânduri: {', '.join(str(x) for x in sorted(lipsa)[:20])}"
+            f"({', '.join(ancora_text(x) for x in sorted(lipsa)[:20])}"
             f"{'…' if len(lipsa) > 20 else ''})."
         )
     return vazute
@@ -749,7 +838,7 @@ def materializeaza_reconstituite(cursor, cod: str, decizii: List[dict],
         return {}
 
     journal.section("recepții reconstituite de creat (%d)" % len(etichete))
-    dupa_rand = {i["rand_istoric"]: i for i in instantanee}
+    dupa_ancora = {ancora(i): i for i in instantanee}
     cursor.execute(_IND_SQL, (cod,))
     indicatori = {str(r["CodAI"]): r for r in cursor.fetchall()}
 
@@ -760,14 +849,14 @@ def materializeaza_reconstituite(cursor, cod: str, decizii: List[dict],
     rezolvate: Dict[str, int] = {}
 
     for eticheta in sorted(etichete):
-        lant = [dupa_rand[d["rand_istoric"]] for d in decizii
+        lant = [dupa_ancora[ancora(d)] for d in decizii
                 if d["receptie_noua"] == eticheta]
         lant.sort(key=lambda x: (x["data_h"], x["idrh"]))
 
         stergerea = next(d for d in decizii
                          if d["receptie_noua"] == eticheta
                          and d["actiune"] == ACTIUNE_STERGERE)
-        inst_stergere = dupa_rand[stergerea["rand_istoric"]]
+        inst_stergere = dupa_ancora[ancora(stergerea)]
 
         # Stergerea trebuie sa fie ULTIMUL instantaneu al lantului. Daca nu e, gruparea
         # e gresita: nimic nu se poate intampla cu o receptie dupa ce a fost stearsa.
@@ -982,8 +1071,8 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
                      idrr, nume, float(rec.get("suma_antet") or 0),
                      journal.sume_pe_indicator(rec["rhr"]))
         journal.table(
-            ("IDRH", "rand", "DataH", "Total", "stergere", "linii"),
-            [(i["idrh"], i["rand_istoric"], i["data_h"], i["total"], i["stergere"],
+            ("IDRH", "ancora", "DataH", "Total", "stergere", "linii"),
+            [(i["idrh"], _ancora_jurnal(i), i["data_h"], i["total"], i["stergere"],
               journal.sume_pe_indicator(i["linii"])) for i in lant])
 
         precedente: Set[str] = set()
@@ -1185,12 +1274,12 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
 
     Intoarce numaratorile scrise.
     """
-    dupa_rand = {i["rand_istoric"]: i for i in instantanee}
+    dupa_ancora = {ancora(i): i for i in instantanee}
 
     journal.section("hotărârile operatorului (%d)" % len(decizii))
     journal.table(
-        ("rand", "acțiune", "IDRR", "rand_receptie", "receptie_noua", "data_h"),
-        [(d["rand_istoric"], d["actiune"], d["idrr"], d["rand_receptie"],
+        ("ancora", "acțiune", "IDRR", "rand_receptie", "receptie_noua", "data_h"),
+        [(_ancora_jurnal(d), d["actiune"], d["idrr"], d["rand_receptie"],
           d["receptie_noua"], d["data_h"]) for d in decizii])
     journal.line("ancore din pasul 4b (rând ListaReceptii -> IDRR): %s",
                  dict(sorted((ancore or {}).items())) or "(niciuna)")
@@ -1232,13 +1321,13 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     lanturi: Dict[int, List[dict]] = {}
     for d in decizii:
         if d["actiune"] == ACTIUNE_IGNORAT:
-            journal.line("rând %s (IDRH %s): IGNORAT -- IDRR gol, Sters = 1",
-                         d["rand_istoric"], dupa_rand[d["rand_istoric"]]["idrh"])
+            journal.line("%s (IDRH %s): IGNORAT -- IDRR gol, Sters = 1",
+                         _ancora_jurnal(d), dupa_ancora[ancora(d)]["idrh"])
             continue
-        inst = dupa_rand[d["rand_istoric"]]
+        inst = dupa_ancora[ancora(d)]
         idrr_tinta = _tinta(d)
-        journal.line("rând %s (IDRH %s, %s, total %.2f): %s -> recepția %s",
-                     d["rand_istoric"], inst["idrh"], journal.moment(inst["data_h"]),
+        journal.line("%s (IDRH %s, %s, total %.2f): %s -> recepția %s",
+                     _ancora_jurnal(d), inst["idrh"], journal.moment(inst["data_h"]),
                      inst["total"], d["actiune"].upper(), idrr_tinta)
         lanturi.setdefault(idrr_tinta, []).append(inst)
 
@@ -1258,7 +1347,8 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
                       "id_clsf": x["IdClsf"], "valoare": float(x["Valoare"] or 0)}
                      for x in cursor.fetchall()]
             lanturi[idrr].append({
-                "idrh": idrh, "rand_istoric": -1, "data_h": r["DataH"],
+                # No anchor: not decided in this run (see the note below).
+                "idrh": idrh, "rand_istoric": None, "data_h": r["DataH"],
                 "descriere": "", "total": float(r["Total"] or 0),
                 "stergere": bool(r["EsteStergere"]), "linii": linii,
             })
@@ -1280,7 +1370,7 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     # --- scrierea ---------------------------------------------------------------
     numarat = {"asociat": 0, "ignorat": 0, "stergere": 0, "reconstituit": len(noi)}
     for d in decizii:
-        inst = dupa_rand[d["rand_istoric"]]
+        inst = dupa_ancora[ancora(d)]
         if d["actiune"] == ACTIUNE_IGNORAT:
             # F17 / 1.6: o salvare care nu a consemnat nicio schimbare. `Sters = 1` pe
             # instantaneu, `IDRR` lasat gol. A ignora nu pierde nimic; a forta pe o

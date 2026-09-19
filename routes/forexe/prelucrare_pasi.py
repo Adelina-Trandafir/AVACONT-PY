@@ -166,11 +166,13 @@ def step3a_populeaza_istoric(cursor, cod: str, randuri: List[dict],
     Intoarce:
       * `index_la_id`  -- {indicele randului in TabelIstoric: FX_Istoric.ID}, pentru
                           FIECARE rand din payload, si cele gasite si cele inserate.
-                          Asta e ancora intregului contract in doua faze: `rand_istoric`
-                          din `decizii` e chiar acest indice (F24). Randurile VECHI trebuie
-                          si ele sa fie in harta -- FOREXE trimite istoricul intreg la
-                          fiecare descarcare, iar D-F cere ca instantaneele ramase
-                          neasociate din rulari anterioare sa poata fi decise acum.
+                          Asta e ancora contractului in doua faze pentru randurile din
+                          sarcina utila: `rand_istoric` din `decizii` e chiar acest
+                          indice (F24). Randurile VECHI care sunt in payload intra si ele
+                          in harta. DAR fluxul REVERSE aduce doar diferenta de istoric,
+                          deci un instantaneu ramas neasezat dintr-o rulare mai veche de
+                          regula NU isi gaseste randul aici -- acela se ancoreaza pe
+                          `FX_Istoric.ID` (F34, `prelucrare_asociere.ancora`).
       * `ids_inserate` -- doar cele scrise ACUM. Pasul 7 marcheaza exact pe acestea.
 
     `Rez_Ord` e siretlicul de ordonare si e usor de gresit. Multiplicatorul 0/100/1000 se
@@ -661,12 +663,33 @@ _REC_INSERT_SQL = (
 _INDICATORI_VAZUTI_SQL = (
     "SELECT CodIndicator FROM FX_Receptii WHERE CodAngajament = %s GROUP BY CodIndicator"
 )
+# A header row that ALREADY has its snapshot. See the F33 note in the docstring below.
+_H_EXISTA_IDH_SQL = "SELECT IDRH FROM FX_Receptii_H WHERE IDH = %s LIMIT 1"
 
 
 def step4a_populeaza_receptii(cursor, cod: str,
-                              indicatori: Dict[str, dict]) -> int:
+                              indicatori: Dict[str, dict]) -> Tuple[int, List[int]]:
     """
     Construieste instantaneele (FX_Receptii_H) si liniile lor (FX_Receptii) din istoric.
+
+    Intoarce `(antete scrise, ID-urile de istoric CONSUMATE)`. Al doilea e lista pe care
+    pasul 7 o marcheaza `Prelucrat = 1` pe langa randurile inserate in rularea asta --
+    vezi F33 mai jos.
+
+    F33 -- A HISTORY ROW IS CONSUMED ONCE (18.09.2026). The step reads `Prelucrat = 0`,
+    and step 7 used to mark only the rows THIS run inserted (`ids_noi`). A row that was
+    already in the table at `Prelucrat = 0` -- migrated from Access with the flag unset,
+    or left behind by anything older than this pipeline -- was therefore read on every
+    download, and every download built a NEW `FX_Receptii_H` for it, unplaced (the
+    27.07.2026 reception of AAB2KPRT2EB, history row 5786, is the case that surfaced it).
+    Two guards, and both are needed:
+      * a header whose `IDH` already has an `FX_Receptii_H` is NOT written again; its
+        buffered lines are dropped, because they were poured under that snapshot when it
+        was born (same check `receptii_refacere.py` makes);
+      * every history row the step consumed -- headers written, headers skipped as
+        duplicates or under F32, and the lines poured under a header -- is returned so
+        step 7 marks it. Lines still waiting for a header at the end are NOT in the list:
+        they belong to the next run, as the comment at the bottom has always said.
 
     Merge peste randurile NEPRELUCRATE de receptie, in ordinea `ID`, si acumuleaza:
 
@@ -703,7 +726,7 @@ def step4a_populeaza_receptii(cursor, cod: str,
     cursor.execute(_RECEPTII_ISTORIC_SQL, (cod,))
     randuri = cursor.fetchall()
     if not randuri:
-        return 0
+        return 0, []
 
     # Indicatorii care APAR DEJA in receptiile acestui angajament. Decid `TipIntern`
     # ('VECHI' / 'NOU') la scrierea liniilor.
@@ -716,14 +739,22 @@ def step4a_populeaza_receptii(cursor, cod: str,
     nr_crt = int((row or {}).get("MaxNr") or 0) + 1
 
     tampon: List[dict] = []      # liniile stranse pana la urmatorul antet
+    consumate: List[int] = []    # F33: history rows this pass has used up
     antete = 0
     antete_goale = 0             # F32: header-only snapshots, not written
+    antete_dublate = 0           # F33: headers whose snapshot already exists
 
     for r in randuri:
         obs = r["Observatii"] or ""
 
         if "(activ:true)" in obs:
             # --- ANTET -----------------------------------------------------
+            # The header and everything buffered before it are consumed here, on
+            # every branch below: written, skipped as a duplicate, or skipped under
+            # F32. None of them may be read again by a later run.
+            consumate.append(int(r["ID"]))
+            consumate.extend(linie["IDH"] for linie in tampon)
+
             este_stergere = is_stergere_receptie(r["Descriere"])
             if is_header_only_snapshot(este_stergere, tampon):
                 # F32: the total row alone, no indicator line. Not a snapshot.
@@ -731,6 +762,16 @@ def step4a_populeaza_receptii(cursor, cod: str,
                 logger.info("PRELUCRARE cod=%s: antet de receptie fara nicio linie "
                             "(rand de istoric %s, DataFX %s, Total %s) -- ignorat (F32)",
                             cod, r["ID"], r["DataFX"], r["Val_Receptie"])
+                continue
+            cursor.execute(_H_EXISTA_IDH_SQL, (int(r["ID"]),))
+            if cursor.fetchone() is not None:
+                # F33: built by an earlier run that never marked the row. Its lines
+                # were poured then; the buffer is dropped, not poured a second time.
+                antete_dublate += 1
+                logger.info("PRELUCRARE cod=%s: antetul de receptie din randul de "
+                            "istoric %s are deja instantaneu -- nu se rescrie (F33)",
+                            cod, r["ID"])
+                tampon = []
                 continue
             descriere = extract_text_between(obs, "Receptie: ", ",")
             cursor.execute(_H_INSERT_SQL, (
@@ -796,8 +837,11 @@ def step4a_populeaza_receptii(cursor, cod: str,
     if antete_goale:
         logger.info("PRELUCRARE cod=%s: %s antete de receptie fara linii ignorate (F32)",
                     cod, antete_goale)
+    if antete_dublate:
+        logger.info("PRELUCRARE cod=%s: %s antete de receptie cu instantaneu deja "
+                    "existent, sarite (F33)", cod, antete_dublate)
 
-    return antete
+    return antete, consumate
 
 
 # ===========================================================================
@@ -1306,11 +1350,13 @@ def step5_plati_incasari(cursor, cod: str, indicatori: Dict[str, dict],
 # ===========================================================================
 def step7_actualizeaza_rezolvat(cursor, ids: List[int]) -> int:
     """
-    `Prelucrat = 1` pe EXACT randurile pe care le-a inserat rularea asta.
+    `Prelucrat = 1` pe randurile date: cele pe care le-a inserat rularea asta, plus
+    (F33) cele pe care pasul 4a le-a consumat din stocul mai vechi de `Prelucrat = 0`.
 
-    Randurile care existau deja isi pastreaza ce aveau. Distinctia e ce impiedica o
-    re-descarcare sa reproceseze istoric vechi -- VBA-ul marca doar randurile al caror
-    `IDH` fusese scris in timpul acelei treceri.
+    Restul randurilor care existau deja isi pastreaza ce aveau. VBA-ul marca doar
+    randurile al caror `IDH` fusese scris in timpul acelei treceri; adaosul F33 exista
+    fiindca un rand ajuns in tabel cu steagul jos PE ALTA CALE (migrare) nu era marcat
+    niciodata si isi nastea cate un instantaneu la fiecare descarcare.
 
     In faza «propunere» asta se deruleaza inapoi cu tot restul, deci o propunere nu
     marcheaza NICIODATA istoricul ca prelucrat. Exact asta face rularea repetabila.
