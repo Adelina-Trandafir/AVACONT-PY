@@ -81,6 +81,7 @@ class SessionStore:
     def __init__(self):
         self._lock = threading.Lock()          # 4 thread-uri impart procesul
         self._by_token: dict[str, Session] = {}
+        self._notes: dict[tuple, tuple] = {}   # (token, name) -> (value, expires_at)
 
     def create(self, username, password, id_unitate, db_name, ctx, pcname):
         token = secrets.token_urlsafe(_TOKEN_NBYTES)
@@ -140,6 +141,29 @@ class SessionStore:
     def size(self) -> int:
         with self._lock:
             return len(self._by_token)
+
+    # -- Notes: small values tied to a session token, with their own TTL (slice 0072).
+    #    The pending password-change code lives here: keyed by the SAME token the guard
+    #    validates, so it dies with the session and is invisible to any other login.
+    def put_note(self, token, name, value, ttl_seconds):
+        with self._lock:
+            self._notes[(token, name)] = (value, time.time() + ttl_seconds)
+
+    def get_note(self, token, name):
+        now = time.time()
+        with self._lock:
+            entry = self._notes.get((token, name))
+            if entry is None:
+                return None
+            value, expires_at = entry
+            if expires_at <= now:
+                del self._notes[(token, name)]
+                return None
+            return value
+
+    def delete_note(self, token, name):
+        with self._lock:
+            self._notes.pop((token, name), None)
 
 
 class RedisSessionStore:
@@ -243,6 +267,24 @@ class RedisSessionStore:
         for _ in self._r.scan_iter(match=self._prefix + "*", count=500):
             n += 1
         return n
+
+    # -- Notes (slice 0072): same contract as SessionStore. One Redis key per note, under
+    #    the session prefix, with the note's own TTL. NOTE: size() counts them too, since
+    #    they share the prefix -- acceptable, they are few and short-lived.
+    def _note_key(self, token, name):
+        return f"{self._prefix}note:{name}:{token}"
+
+    def put_note(self, token, name, value, ttl_seconds):
+        self._r.set(self._note_key(token, name), json.dumps(value), ex=max(1, int(ttl_seconds)))
+
+    def get_note(self, token, name):
+        raw = self._r.get(self._note_key(token, name))
+        if raw is None:
+            return None
+        return json.loads(raw)
+
+    def delete_note(self, token, name):
+        self._r.delete(self._note_key(token, name))
 
 
 # ---------------------------------------------------------------------------

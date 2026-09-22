@@ -36,19 +36,36 @@ Endpoints:
   POST /api/auth/logout    (token)     -> drop the session
   GET  /api/auth/periods   (token)     -> year / SS / CodProgram catalog for a database
   POST /api/auth/last-ss   (token)     -> remember the SS the user just picked
+  POST /api/auth/password/code    (token) -> check the current password, e-mail a one-time code
+  POST /api/auth/password/change  (token) -> current password + code + new password -> SET PASSWORD
+
+Password change (slice 0072) -- two factors, one after the other:
+  1. the current password, proven the same way login proves it (a MariaDB login AS the
+     operator), and
+  2. a 6-digit code sent to the operator's e-mail (the user name), kept as a session
+     note (routes.auth.session_store) hashed, for _PWD_CODE_TTL seconds, at most
+     _PWD_CODE_MAX_ATTEMPTS tries. The change itself is `SET PASSWORD` on the operator's
+     OWN connection, so no privilege of the service account is involved. The legacy
+     server gets the same change best-effort (same accounts on both machines), and the
+     answer says whether it took.
 """
+import hashlib
+import hmac
 import logging
 import os
+import secrets
+import time
 from datetime import datetime, timezone
 
 import mysql.connector
 from flask import Blueprint, request, jsonify, g
 
 from utils.database import (get_kbot_connection, get_kbot_comun_connection,
-                            kbot_server_address)
+                            kbot_server_address, legacy_server_address)
 from routes.auth.session_store import STORE, REASON_CONTEXT_MISMATCH
 from routes.auth.guard import require_session, json_response
 from routes.auth.ratelimit import LIMITER
+from routes.auth import mailer
 
 auth_bp = Blueprint("auth", __name__)
 logger = logging.getLogger(__name__)
@@ -406,3 +423,172 @@ def auth_last_ss():
     finally:
         if wconn is not None and wconn.is_connected():
             wconn.close()
+
+
+# ---------------------------------------------------------------------------
+# Password change (slice 0072): two factors, two calls, both on the bearer token.
+# ---------------------------------------------------------------------------
+_PWD_CODE_NOTE = "pwd_code"          # session-note name (routes.auth.session_store)
+_PWD_CODE_TTL = 10 * 60              # seconds a code stays valid
+_PWD_CODE_MAX_ATTEMPTS = 5           # wrong codes before the code is thrown away
+_PWD_MIN_LENGTH = 8
+_PWD_CHANGE_MSG_NOT_CONFIGURED = (
+    "Trimiterea e-mailului nu este configurată pe server. "
+    "Contactați administratorul."
+)
+
+
+def _hash_code(code: str) -> str:
+    # The code is a 6-digit secret with a 10-minute life; a plain hash is enough to keep it
+    # out of the store in clear, and hmac.compare_digest keeps the comparison constant-time.
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def _set_operator_password(host, port, username, current_password, new_password):
+    """
+    Connects AS the operator (which proves the current password once more) and changes
+    their own password. No default database, no service account, no privilege needed:
+    MariaDB lets any account change its own password.
+    Raises mysql.connector.Error on any refusal.
+    """
+    conn = None
+    try:
+        conn = mysql.connector.connect(
+            host=host, port=port, user=username, password=current_password,
+            connection_timeout=10,
+        )
+        cur = conn.cursor()
+        cur.execute("SET PASSWORD = PASSWORD(%s)", (new_password,))
+        conn.commit()
+    finally:
+        if conn is not None and conn.is_connected():
+            conn.close()
+
+
+@auth_bp.route("/api/auth/password/code", methods=["POST"])
+@require_session
+def auth_password_code():
+    """
+    Body: { "current_password": "<pass>" }
+    Checks the current password (rate-limited like login), then e-mails a one-time
+    code to the operator's address and keeps its hash on the session for _PWD_CODE_TTL.
+    Answer: { "email_masked": "a***@domain", "expires_in": 600 }
+    """
+    data = request.get_json(silent=True) or {}
+    current_password = data.get("current_password") or ""
+    if not current_password:
+        return jsonify({"error": "Introduceți parola actuală."}), 400
+
+    s = g.session
+    username = s.username
+    ip = request.remote_addr
+
+    if LIMITER.is_blocked(ip, username):
+        _log_action(username, s.db_name, "AUTH_BLOCKED", detalii="password/code",
+                    rezultat="EROARE", masina=s.pcname, ip=ip)
+        return jsonify({"error": _RATE_LIMIT_MSG}), 429
+
+    if not mailer.is_configured():
+        # Said BEFORE the password check: no point in spending a MariaDB login on a
+        # request that cannot go anywhere.
+        return jsonify({"error": _PWD_CHANGE_MSG_NOT_CONFIGURED}), 503
+
+    if not _verify_operator(username, current_password):
+        LIMITER.record_failure(ip, username)
+        _log_action(username, s.db_name, "AUTH_FAIL", detalii="password/code",
+                    rezultat="EROARE", masina=s.pcname, ip=ip)
+        return jsonify({"error": "Parola actuală este incorectă."}), 401
+    LIMITER.record_success(ip, username)
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    try:
+        mailer.send_password_code(username, code, _PWD_CODE_TTL // 60)
+    except mailer.MailNotConfigured:
+        return jsonify({"error": _PWD_CHANGE_MSG_NOT_CONFIGURED}), 503
+    except Exception as err:   # smtplib / socket: the operator must know nothing arrived
+        logger.error("password code mail failed for %s: %s", mailer.mask_address(username), err)
+        _log_action(username, s.db_name, "PASSWORD_CODE", detalii="mail failed",
+                    rezultat="EROARE", masina=s.pcname, ip=ip)
+        return jsonify({"error": "E-mailul cu codul nu a putut fi trimis. Reîncercați mai târziu."}), 502
+
+    # Only the hash is kept; a fresh request replaces the previous code.
+    STORE.put_note(g.session_token, _PWD_CODE_NOTE,
+                   {"hash": _hash_code(code), "attempts": 0, "issued_at": time.time()},
+                   _PWD_CODE_TTL)
+    _log_action(username, s.db_name, "PASSWORD_CODE", masina=s.pcname, ip=ip)
+    return jsonify({"email_masked": mailer.mask_address(username),
+                    "expires_in": _PWD_CODE_TTL}), 200
+
+
+@auth_bp.route("/api/auth/password/change", methods=["POST"])
+@require_session
+def auth_password_change():
+    """
+    Body: { "current_password", "code", "new_password" }
+    Verifies the code kept on the session, checks the new password, changes it on the
+    K-BOT server AS the operator, then best-effort on the legacy server.
+    Answer: { "ok": true, "legacy_updated": true|false }
+    """
+    data = request.get_json(silent=True) or {}
+    current_password = data.get("current_password") or ""
+    code = (data.get("code") or "").strip()
+    new_password = data.get("new_password") or ""
+
+    s = g.session
+    username = s.username
+    ip = request.remote_addr
+
+    if not current_password or not code or not new_password:
+        return jsonify({"error": "Completați parola actuală, codul primit și parola nouă."}), 400
+    if len(new_password) < _PWD_MIN_LENGTH:
+        return jsonify({"error": f"Parola nouă trebuie să aibă cel puțin {_PWD_MIN_LENGTH} caractere."}), 400
+    if new_password == current_password:
+        return jsonify({"error": "Parola nouă trebuie să difere de cea actuală."}), 400
+
+    note = STORE.get_note(g.session_token, _PWD_CODE_NOTE)
+    if note is None:
+        return jsonify({"error": "Codul a expirat sau nu a fost cerut. Cereți un cod nou."}), 400
+    if not hmac.compare_digest(note.get("hash", ""), _hash_code(code)):
+        attempts = int(note.get("attempts", 0)) + 1
+        if attempts >= _PWD_CODE_MAX_ATTEMPTS:
+            STORE.delete_note(g.session_token, _PWD_CODE_NOTE)
+            _log_action(username, s.db_name, "PASSWORD_CHANGE", detalii="code attempts exhausted",
+                        rezultat="EROARE", masina=s.pcname, ip=ip)
+            return jsonify({"error": "Prea multe coduri greșite. Cereți un cod nou."}), 400
+        remaining = _PWD_CODE_TTL - int(time.time() - float(note.get("issued_at", time.time())))
+        note["attempts"] = attempts
+        STORE.put_note(g.session_token, _PWD_CODE_NOTE, note, max(1, remaining))
+        return jsonify({"error": "Codul de confirmare este greșit."}), 400
+
+    # The code is right: change the password on the K-BOT server, as the operator.
+    kbot_host, kbot_port = kbot_server_address()
+    try:
+        _set_operator_password(kbot_host, kbot_port, username, current_password, new_password)
+    except mysql.connector.Error as err:
+        if getattr(err, "errno", None) == _ER_ACCESS_DENIED:
+            LIMITER.record_failure(ip, username)
+            _log_action(username, s.db_name, "AUTH_FAIL", detalii="password/change",
+                        rezultat="EROARE", masina=s.pcname, ip=ip)
+            return jsonify({"error": "Parola actuală este incorectă."}), 401
+        logger.error("password change failed for %s: %s", mailer.mask_address(username), err)
+        _log_action(username, s.db_name, "PASSWORD_CHANGE", detalii=str(err)[:200],
+                    rezultat="EROARE", masina=s.pcname, ip=ip)
+        return jsonify({"error": "Parola nu a putut fi schimbată pe server."}), 500
+
+    # Done on the authoritative server: the code is spent whatever happens next.
+    STORE.delete_note(g.session_token, _PWD_CODE_NOTE)
+
+    # Same account on the legacy server (Access clients): best effort, reported honestly.
+    legacy_updated = False
+    try:
+        legacy_host, legacy_port = legacy_server_address()
+        _set_operator_password(legacy_host, legacy_port, username, current_password, new_password)
+        legacy_updated = True
+    except Exception as err:
+        logger.warning("legacy password change skipped for %s: %s",
+                       mailer.mask_address(username), err)
+
+    _log_action(username, s.db_name, "PASSWORD_CHANGE",
+                detalii=("legacy ok" if legacy_updated else "legacy NOT updated"),
+                masina=s.pcname, ip=ip)
+    return jsonify({"ok": True, "legacy_updated": legacy_updated}), 200

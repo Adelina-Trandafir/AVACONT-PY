@@ -102,6 +102,15 @@ def kbot_server_address():
     return cfg["host"], cfg.get("port", 3306)
 
 
+def legacy_server_address():
+    """
+    (host, port) of the LEGACY server -- the counterpart of kbot_server_address(),
+    for the one route that logs in AS the operator on both machines: the password
+    change (slice 0072) keeps the two accounts aligned when it can.
+    """
+    return DB_CONFIG["host"], DB_CONFIG.get("port", 3306)
+
+
 def get_kbot_connection(db_name=None):
     """
     K-BOT server (DB_CONFIG_NEW) -- what KBot.App reads and writes.

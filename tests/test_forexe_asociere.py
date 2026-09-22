@@ -5,8 +5,9 @@
 # functions that need a cursor get the same scripted fake the ingest tests use.
 #
 # What is NOT covered here and cannot be: whether `_BLOCAJE_SQL` returns what the comment
-# above it claims on a real MariaDB. `FX_ORD.IDRR` / `IDRH` are 0 on every row of the
-# Access export, so the ordonantare half of the rule has never been seen finding anything.
+# above it claims on a real MariaDB. Since 20.09.2026 the rule is keyed on the angajament
+# (`FX_ORD.CodAngajament`) and on the lines in `FX_ORD_TBL`, not on `FX_ORD.IDRR` / `IDRH`,
+# which nobody writes; the SQL itself is still only read, never executed here.
 from datetime import datetime
 
 import pytest
@@ -69,36 +70,56 @@ def cmd(idrh, actiune, idrr=None, eticheta=None):
 # ===========================================================================
 # motive_blocare -- the rule itself, as a pure function
 # ===========================================================================
-def blocaj(ord_h=0, ord_h_nr=None, ord_r=0, ord_r_data=None):
-    return {"IDRH": 1, "ord_h": ord_h, "ord_h_nr": ord_h_nr, "ord_r": ord_r,
-            "ord_r_data": ord_r_data}
+def blocaj(ord_n=0, ord_nr=None, ord_data=None):
+    return {"IDRH": 1, "ord_n": ord_n, "ord_nr": ord_nr, "ord_data": ord_data}
 
 
 def test_nimic_nu_blocheaza_o_legatura_curata():
     assert A.motive_blocare(blocaj()) == []
 
 
-def test_ordonantare_pe_instantaneu_numeste_numarul():
-    motive = A.motive_blocare(blocaj(ord_h=2, ord_h_nr="14, 15"))
+def test_ordonantare_ulterioara_numeste_numarul_si_data():
+    motive = A.motive_blocare(blocaj(ord_n=2, ord_nr="14, 15",
+                                     ord_data=dt("2026-04-07 00:00:00")))
     assert len(motive) == 1
-    assert "14, 15" in motive[0]
-
-
-def test_ordonantare_pe_instantaneu_fara_numar_spune_totusi_ceva():
-    motive = A.motive_blocare(blocaj(ord_h=1, ord_h_nr=None))
-    assert motive == ["Pe acest instantaneu s-a construit o ordonanțare."]
-
-
-def test_ordonantare_pe_receptie_poarta_data():
-    motive = A.motive_blocare(blocaj(ord_r=1, ord_r_data=dt("2026-04-07 00:00:00")))
+    assert "nr. 14, 15" in motive[0]
     assert "07.04.2026" in motive[0]
+
+
+def test_ordonantare_ulterioara_fara_numar_spune_totusi_ceva():
+    motive = A.motive_blocare(blocaj(ord_n=1, ord_nr=None,
+                                     ord_data=dt("2026-04-07 00:00:00")))
+    assert motive == ["Angajamentul are o ordonanțare din 07.04.2026, "
+                      "ulterioară acestui instantaneu."]
 
 
 def test_ordonantare_fara_data_blocheaza_si_o_spune():
     """O ordonanțare fara data nu poate fi dovedita anterioara -> ramura conservatoare."""
-    motive = A.motive_blocare(blocaj(ord_r=1, ord_r_data=None))
+    motive = A.motive_blocare(blocaj(ord_n=1, ord_nr="9", ord_data=None))
     assert len(motive) == 1
     assert "fără dată" in motive[0]
+
+
+def test_coloanele_vechi_ord_h_si_ord_r_nu_mai_blocheaza():
+    """
+    20.09.2026: the rule moved from `FX_ORD.IDRR` / `IDRH` (which nobody writes) to the
+    angajament's `FX_ORD_TBL` lines. A row that still carries the old counters is not a
+    reason to block.
+    """
+    rand = blocaj()
+    rand["ord_h"] = 1
+    rand["ord_r"] = 1
+    assert A.motive_blocare(rand) == []
+
+
+def test_blocaje_sql_leaga_liniile_de_angajament_nu_de_idrr_idrh():
+    """Read-only guard on the SQL: the join that the 20.09.2026 fix is made of."""
+    sql = A._BLOCAJE_SQL
+    assert "FROM FX_ORD_TBL T JOIN FX_ORD O ON O.IDORDP = T.IDORDP" in sql
+    assert "O.CodAngajament = H.CodAngajament" in sql
+    assert "DATE(O.DataORD) >= DATE(H.DataH)" in sql
+    assert "O.IDRH = H.IDRH" not in sql
+    assert "O.IDRR = H.IDRR" not in sql
 
 
 def test_platile_nu_mai_blocheaza():
@@ -113,14 +134,11 @@ def test_platile_nu_mai_blocheaza():
     assert A.motive_blocare(rand) == []
 
 
-def test_motivele_vin_de_la_specific_la_general():
-    """Operatorul citeste primul mesaj; el trebuie sa fie cel care spune cel mai mult."""
-    motive = A.motive_blocare(blocaj(
-        ord_h=1, ord_h_nr="14",
-        ord_r=1, ord_r_data=dt("2026-04-07 00:00:00")))
-    assert len(motive) == 2
-    assert "ordonanțarea nr. 14" in motive[0]
-    assert "Recepția are o ordonanțare" in motive[1]
+def test_un_singur_motiv_pe_instantaneu():
+    """The rule has one clause now; one row never yields two sentences."""
+    motive = A.motive_blocare(blocaj(ord_n=3, ord_nr="14, 15, 16",
+                                     ord_data=dt("2026-04-07 00:00:00")))
+    assert len(motive) == 1
 
 
 # ===========================================================================
@@ -427,7 +445,7 @@ class FakeConnection:
             return self.tabele.get("receptii", [])
         # F32: `_INSTANTANEE_SQL` carries the alias `H` too, so the two `SELECT H.IDRH`
         # readers are told apart by the blocking counters only `_BLOCAJE_SQL` has.
-        if sql.startswith("SELECT H.IDRH") and " AS ord_h" in sql:
+        if sql.startswith("SELECT H.IDRH") and " AS ord_n" in sql:
             return self.tabele.get("blocaje", [])
         if sql.startswith("SELECT H.IDRH, H.Total FROM FX_Receptii_H H"):
             # `_DIF_H_SQL` (step 4d, slice 0065): the chain of one reception, by IDRR.
@@ -538,8 +556,8 @@ def test_post_cere_si_el_cursor_pe_dictionar(client, auth_headers, conn):
 def test_un_instantaneu_blocat_ajunge_la_client_cu_motive(client, auth_headers,
                                                           monkeypatch):
     c = baza_cu_un_lant()
-    c.tabele["blocaje"] = [{"IDRH": 5, "ord_h": 0, "ord_h_nr": None, "ord_r": 1,
-                            "ord_r_data": dt("2026-03-01 00:00:00")}]
+    c.tabele["blocaje"] = [{"IDRH": 5, "ord_n": 1, "ord_nr": "3",
+                            "ord_data": dt("2026-03-01 00:00:00")}]
     monkeypatch.setattr(A, "get_kbot_connection", lambda db=None: c)
 
     date = client.get(URL + "?cod=" + COD, headers=auth_headers).get_json()
@@ -628,8 +646,8 @@ def test_a_save_recomputes_dif_on_every_touched_chain(client, auth_headers, monk
 
 def test_post_pe_o_legatura_blocata_da_409(client, auth_headers, monkeypatch):
     c = baza_cu_un_lant()
-    c.tabele["blocaje"] = [{"IDRH": 5, "ord_h": 1, "ord_h_nr": "77", "ord_r": 0,
-                            "ord_r_data": None}]
+    c.tabele["blocaje"] = [{"IDRH": 5, "ord_n": 1, "ord_nr": "77",
+                            "ord_data": dt("2026-03-01 00:00:00")}]
     monkeypatch.setattr(A, "get_kbot_connection", lambda db=None: c)
 
     # Amprenta buna, ca sa treaca de paza de concurenta si sa cada exact pe blocaj.

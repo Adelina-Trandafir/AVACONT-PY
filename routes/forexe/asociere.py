@@ -66,8 +66,12 @@ CELE DOUA JUMATATI DE REGULA, asa cum le-a fixat operatorul:
   * granularitate: SE BLOCHEAZA DOAR INSTANTANEUL ATINS. Restul lantului aceleiasi
     recepții ramane editabil. Nu se inghetă recepția intreaga.
 
-CE BLOCHEAZA ACUM: doar o ordonantare -- construita chiar pe instantaneu (`FX_ORD.IDRH`)
-sau pe receptia lui, cu data ulterioara instantaneului (`FX_ORD.IDRR` + `DataORD`).
+CE BLOCHEAZA ACUM (operator, 20.09.2026): doar o ordonantare -- angajamentul are cel putin
+o LINIE de ordonantare (`FX_ORD_TBL`) al carei cap (`FX_ORD`, prin `IDORDP`) are `DataORD`
+in ziua instantaneului sau dupa ea. Legatura e pe `FX_ORD.CodAngajament`, NU pe
+`FX_ORD.IDRR` / `IDRH`: pe acelea nu scrie nimeni (exportul Access le are 0 peste tot,
+`ord_edit.py` nu le pune), asa ca regula cheiata pe ele nu bloca NIMIC pe o baza reala --
+defectul din 20.09.2026. Vezi `_BLOCAJE_SQL`.
 
 SI PE CE NU SE APLICA, DELIBERAT
 --------------------------------
@@ -177,29 +181,43 @@ _PLATI_SQL = (
 # ---------------------------------------------------------------------------
 # Blocajele, o singura interogare pentru tot angajamentul.
 #
+# REGULA (operator, 20.09.2026): un instantaneu e blocat cand angajamentul are CEL PUTIN O
+# LINIE DE ORDONANTARE (`FX_ORD_TBL`) cu data mai noua decat el. Data liniei e data capului
+# ei, `FX_ORD.DataORD` -- `FX_ORD_TBL` nu are nicio coloana de data si nici `IDRR` pe
+# MariaDB (vezi antet). Angajamentul se ia de pe CAP (`FX_ORD.CodAngajament`, NOT NULL),
+# exact cum leaga `ord.py` liniile de angajament; `FX_ORD_TBL.CodAngajament` e nullable.
+#
+# DE CE NU MAI E PE `FX_ORD.IDRR` / `IDRH`: prima varianta (0048-04) cauta o ordonantare
+# construita CHIAR pe instantaneu sau pe receptia lui, prin cele doua coloane. Nimeni nu le
+# scrie: exportul Access le are 0 peste tot, iar editorul K-BOT (`ord_edit.py`, `_INSERT_ORD`)
+# nu le pune deloc. Deci pe orice baza reala jumatatea aia nu gasea nimic si, dupa retragerea
+# platilor din 18.09.2026, NIMIC nu mai era blocat. Defectul raportat pe 20.09.2026.
+#
+# Comparatia e pe ZI (`DATE(...)`), nu pe datetime: o ordonantare din aceeasi zi cu
+# instantaneul i-a citit totalul (§1.3, «DataH <= data platii»), deci il ingheata; ora din
+# `DataH` nu are voie sa o lase sa treaca. `>=`, aceeasi fereastra pe care o fixase
+# operatorul pentru plati in 0048-04.
+#
 # `H.IDRR IS NOT NULL` in WHERE: un instantaneu neasezat nu are legatura, deci nu are ce
 # sa fie blocat (vezi nota «SI PE CE NU SE APLICA» din antet).
 #
-# Nu e nevoie de `O.IDRR <> 0` / `O.IDRH <> 0` ca sa scapam de santinela 0 a randurilor
-# vechi: `FX_Receptii_R.IDRR` si `FX_Receptii_H.IDRH` sunt chei primare Access, deci
-# incep de la 1 si nu pot fi niciodata 0. Un `FX_ORD` neancorat pur si simplu nu se
-# potriveste cu nimic.
-#
-# `O.DataORD IS NULL OR O.DataORD >= H.DataH`: o ordonantare fara data nu poate fi
-# dovedita anterioara, deci se considera ulterioara. Conservator, si e ramura care
-# blocheaza -- nu una care lasa sa treaca ceva nedovedit.
+# `O.DataORD IS NULL OR H.DataH IS NULL`: o data lipsa nu poate fi dovedita anterioara,
+# deci se considera ulterioara. Conservator, si e ramura care blocheaza -- nu una care
+# lasa sa treaca ceva nedovedit.
 #
 # NU se mai numara platile (18.09.2026): doar ordonantarile blocheaza. Vezi antetul.
 # ---------------------------------------------------------------------------
+_ORD_ULTERIOARE_SQL = (
+    "FROM FX_ORD_TBL T JOIN FX_ORD O ON O.IDORDP = T.IDORDP "
+    "WHERE O.CodAngajament = H.CodAngajament "
+    "  AND (O.DataORD IS NULL OR H.DataH IS NULL OR DATE(O.DataORD) >= DATE(H.DataH))"
+)
 _BLOCAJE_SQL = (
     "SELECT H.IDRH, "
-    " (SELECT COUNT(*) FROM FX_ORD O WHERE O.IDRH = H.IDRH) AS ord_h, "
+    " (SELECT COUNT(*) " + _ORD_ULTERIOARE_SQL + ") AS ord_n, "
     " (SELECT GROUP_CONCAT(DISTINCT O.NrORD ORDER BY O.NrORD SEPARATOR ', ') "
-    "    FROM FX_ORD O WHERE O.IDRH = H.IDRH) AS ord_h_nr, "
-    " (SELECT COUNT(*) FROM FX_ORD O WHERE O.IDRR = H.IDRR "
-    "    AND (O.DataORD IS NULL OR O.DataORD >= H.DataH)) AS ord_r, "
-    " (SELECT MIN(O.DataORD) FROM FX_ORD O WHERE O.IDRR = H.IDRR "
-    "    AND (O.DataORD IS NULL OR O.DataORD >= H.DataH)) AS ord_r_data "
+    + _ORD_ULTERIOARE_SQL + ") AS ord_nr, "
+    " (SELECT MIN(O.DataORD) " + _ORD_ULTERIOARE_SQL + ") AS ord_data "
     "FROM FX_Receptii_H H "
     "WHERE H.CodAngajament = %s AND H.IDRR IS NOT NULL"
 )
@@ -223,31 +241,27 @@ def motive_blocare(rand: dict) -> list:
     date, si de-asta regula se citeste intr-un singur loc in loc sa fie imprastiata prin
     SQL.
 
-    Lista goala inseamna «editabil». Ordinea e de la cel mai specific la cel mai general:
-    o ordonantare construita CHIAR pe acest instantaneu spune mai mult operatorului decat
-    «receptia are o ordonantare ulterioara», iar mesajul cel mai de sus e cel pe care il
-    vede intai. Doar ordonantarile blocheaza; platile nu (18.09.2026).
+    Lista goala inseamna «editabil». Un singur motiv posibil: angajamentul are linii de
+    ordonantare cu data mai noua decat instantaneul (`ord_n`), numite prin numerele
+    capetelor lor (`ord_nr`) si prin cea mai veche data dintre ele (`ord_data`). Doar
+    ordonantarile blocheaza; platile nu (18.09.2026).
     """
     motive = []
 
-    if int(rand.get("ord_h") or 0) > 0:
-        nr = (rand.get("ord_h_nr") or "").strip()
+    if int(rand.get("ord_n") or 0) > 0:
+        nr = (rand.get("ord_nr") or "").strip()
+        data = _zi(rand.get("ord_data"))
+        cap = ("Angajamentul are ordonanțarea nr. " + nr if nr
+               else "Angajamentul are o ordonanțare")
         motive.append(
-            "Pe acest instantaneu s-a construit ordonanțarea nr. " + nr + "."
-            if nr else
-            "Pe acest instantaneu s-a construit o ordonanțare."
-        )
-
-    if int(rand.get("ord_r") or 0) > 0:
-        data = _zi(rand.get("ord_r_data"))
-        motive.append(
-            "Recepția are o ordonanțare din " + data + ", ulterioară acestui instantaneu."
+            cap + " din " + data + ", ulterioară acestui instantaneu."
             if data else
-            "Recepția are o ordonanțare fără dată, care nu poate fi dovedită anterioară."
+            cap + " fără dată, care nu poate fi dovedită anterioară."
         )
 
     # Platile NU mai blocheaza (18.09.2026): un rand vechi care mai poarta `plati` /
-    # `plati_data` e ignorat aici, nu tradus in motiv.
+    # `plati_data` e ignorat aici, nu tradus in motiv. La fel `ord_h` / `ord_r` din prima
+    # varianta a regulii (0048-04).
     return motive
 
 

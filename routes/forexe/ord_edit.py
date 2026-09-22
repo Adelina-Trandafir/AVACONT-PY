@@ -482,6 +482,60 @@ def exista_ddf(cursor, cod: str) -> bool:
     return cursor.fetchone() is not None
 
 
+# Why the base query came back empty. `_SQL_BASE` INNER JOINs FX_Plati to FX_Extrase (and
+# FX_Extrase_H / FX_Indicatori), so a day whose bank statement was never downloaded yields
+# zero rows even when it is full of unordered payments. Counted straight on FX_Plati, with
+# the same «not yet ordered» predicate as the base query, so the message names the true
+# cause instead of claiming the day has no payments.
+_SQL_DIAG_ZI = (
+    "SELECT COUNT(*) AS Plati, "
+    "       COALESCE(SUM(EXISTS (SELECT 1 FROM FX_Extrase E "
+    "                             WHERE E.Referinta = P.Referinta_TREZOR)), 0) AS CuExtras "
+    "  FROM FX_Plati P "
+    " WHERE P.CodAngajament = %(cod)s "
+    "   AND DATE(P.Data_plata) = %(dt)s "
+    "   AND NOT EXISTS (SELECT 1 FROM FX_ORD_TBL_REC R WHERE R.IdPlataFX = P.IdPlataFX) "
+    "{filtru_plata}"
+)
+
+
+def motiv_zi_goala(cursor, cod: str, dt: date, id_plata_fx) -> tuple:
+    """(status, message) explaining why the base query returned no rows.
+
+    404 = there really is nothing to order; 409 = payments exist but the statement lines
+    they hang on are missing, so the operator has to download the extras first.
+    """
+    parametri = {"cod": cod, "dt": dt}
+    filtru = ""
+    if id_plata_fx is not None:
+        filtru = "  AND P.IdPlataFX = %(id_plata)s "
+        parametri["id_plata"] = int(id_plata_fx)
+    cursor.execute(_SQL_DIAG_ZI.format(filtru_plata=filtru), parametri)
+    row = cursor.fetchone() or {}
+    plati = int(row.get("Plati") or 0)
+    cu_extras = int(row.get("CuExtras") or 0)
+    zi = dt.strftime("%d.%m.%Y")
+
+    if plati == 0:
+        if id_plata_fx is not None:
+            return 404, (f"Plata #{int(id_plata_fx)} nu există pentru {cod} în data {zi} "
+                         f"sau este deja ordonanțată.")
+        return 404, f"Nu există plăți neordonanțate pentru {cod} în data {zi}."
+    if cu_extras == 0:
+        return 409, (f"Lipsește extrasul de cont pentru data {zi}: cele {plati} plăți "
+                     f"neordonanțate ale angajamentului {cod} nu au nicio linie în "
+                     f"extrase (FX_Extrase). Descărcați extrasele pentru ziua respectivă "
+                     f"și reîncercați.")
+    if cu_extras < plati:
+        return 409, (f"Extrasul de cont pentru data {zi} este incomplet: {plati - cu_extras} "
+                     f"din {plati} plăți neordonanțate ale angajamentului {cod} nu au linie "
+                     f"în extrase (FX_Extrase). Descărcați extrasele pentru ziua respectivă "
+                     f"și reîncercați.")
+    return 409, (f"Cele {plati} plăți neordonanțate ale angajamentului {cod} din data {zi} "
+                 f"au extras, dar nu au putut fi legate de indicator (FX_Indicatori) sau de "
+                 f"antetul extrasului (FX_Extrase_H).")
+
+
 def contor_parteneri_zi(cursor, cod: str, dt: date) -> int:
     """Numarul de ordonantari necesare pentru ziua data (1 = incape intr-una singura)."""
     cursor.execute(_SQL_PARTENERI_ZI, (cod, dt))
@@ -779,9 +833,10 @@ def post_ord_genereaza():
         randuri = citeste_baza(cursor, cod, dt, nume_unitate, id_plata_fx, kmatch)
 
         if not randuri:
-            return _json_utf8(
-                {"error": f"Nu există plăți neordonanțate pentru {cod} în data "
-                          f"{dt.strftime('%d.%m.%Y')}."}, 404)
+            # Empty is correct, but «no unordered payments» is only one of the reasons:
+            # a missing bank statement empties the INNER JOIN just as well. Say which.
+            status, mesaj = motiv_zi_goala(cursor, cod, dt, id_plata_fx)
+            return _json_utf8({"error": mesaj}, status)
 
         graf = construieste_graf(randuri, dic_banci, dic_part_ind, dic_receptii,
                                  dic_plati, dic_expl, cod, dt, avertismente)
