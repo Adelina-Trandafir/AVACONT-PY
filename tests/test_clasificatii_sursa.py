@@ -2,11 +2,11 @@
 # Run from the PYTHON folder:
 #   python -m pytest tests/test_clasificatii_sursa.py
 #
-# WHAT THEY GUARD. The script turns Clasificatii.Sursa from a GENERATED column into a
-# written one, on the template and on every unit database. It cannot be tried out: the
-# developer has no MariaDB. So everything that can be decided without a server is
-# decided here -- the SQL text, which databases are picked, and every refusal that
-# must stop a run before it touches a table.
+# WHAT THEY GUARD. The script turns Clasificatii.Sector, Sursa and SS from GENERATED
+# columns into written ones, on the template and on every unit database. It cannot be tried
+# out: the developer has no MariaDB. So everything that can be decided without a server is
+# decided here -- the SQL text, which databases are picked, and every refusal that must stop
+# a run before it touches a table.
 #
 # Nothing in this file connects anywhere: `connect`, `query` and `execute` are replaced.
 import sys
@@ -29,15 +29,21 @@ from scripts import clasificatii_sursa as cs        # noqa: E402
 
 # --------------------------------------------------------------- helpers
 
+ALL_THREE = ("Sector", "Sursa", "SS")
+
+# Where the three sit in the real table, so the ALTER can put them back.
+POSITIONS = {"Sector": "ClsfX", "Sursa": "Sector", "SS": "Sursa"}
+
+
 def _state(**kw):
-    base = dict(db="000_DEMO", exists=True, rows=10, sursa_generated=True,
-                sector_extended=False, ss_fk_name="Clasificatii__DefaSS",
-                ss_index_name="idx_SS", leftovers=())
+    base = dict(db="000_DEMO", exists=True, rows=10, generated=ALL_THREE,
+                ss_fk_name="Clasificatii__DefaSS", ss_index_name="idx_SS",
+                leftovers=(), positions=dict(POSITIONS))
     base.update(kw)
     return cs.TableState(**base)
 
 
-SCHEMATA = ["AVACONT_COMUN", "AVACONT_SURSA", "000_DEMO", "001_GR23", "101_CCDP",
+SCHEMATA = ["AVACONT_COMUN", "AVACONT_SURSA", "000_DEMO", "006_GR35", "050_GRSA",
             "mysql", "information_schema", "performance_schema", "sys", "FX_TEST"]
 
 
@@ -54,46 +60,73 @@ def _fake_query(schemata=None):
 
 # --------------------------------------------------------------- the ALTER text
 
-def test_single_alter_has_every_clause_in_order():
-    stmts = cs.alter_statements(_state())
-    assert len(stmts) == 1
-    sql = stmts[0]
-    # The order matters: the foreign key must go before the column it points at.
+def test_single_alter_drops_all_three_generated_columns():
+    sql = cs.alter_statements(_state())[0]
+    for column in ALL_THREE:
+        assert f"DROP COLUMN `{column}`" in sql
+
+
+def test_foreign_key_goes_before_the_column_it_points_at():
+    sql = cs.alter_statements(_state())[0]
     assert sql.index("DROP FOREIGN KEY") < sql.index("DROP COLUMN `SS`")
-    assert sql.index("DROP COLUMN `SS`") < sql.index("DROP COLUMN `Sursa`")
-    assert sql.index("DROP COLUMN `Sursa`") < sql.index("CHANGE COLUMN `Sursa_w`")
-    assert sql.index("CHANGE COLUMN `Sursa_w`") < sql.index("ADD COLUMN `SS`")
-    assert sql.index("ADD COLUMN `SS`") < sql.index("ADD CONSTRAINT")
+    assert sql.index("DROP COLUMN `SS`") < sql.index("CHANGE COLUMN `SS_w`")
+    assert sql.index("CHANGE COLUMN `SS_w`") < sql.index("ADD CONSTRAINT")
 
 
-def test_sursa_becomes_not_null_char_with_default_a():
+def test_no_generated_expression_is_created():
+    # The whole point of the rework: MariaDB 10.11 refused `concat(<case>, Sursa)` with
+    # error 1901, in a FRESH table, so nothing the script writes may be GENERATED.
     sql = cs.alter_statements(_state())[0]
+    assert "GENERATED" not in sql.upper()
+    assert "STORED" not in sql.upper()
+    assert " AS (" not in sql
+
+
+def test_the_three_columns_get_their_declared_types():
+    sql = cs.alter_statements(_state())[0]
+    assert "CHANGE COLUMN `Sector_w` `Sector` varchar(2) NOT NULL DEFAULT ''" in sql
     assert "CHANGE COLUMN `Sursa_w` `Sursa` char(1) NOT NULL DEFAULT 'A'" in sql
+    assert "CHANGE COLUMN `SS_w` `SS` varchar(3) NOT NULL" in sql
 
 
-def test_ss_stays_generated_and_keeps_its_foreign_key():
+def test_ss_gets_no_default_so_a_writer_that_forgets_it_fails_loudly():
     sql = cs.alter_statements(_state())[0]
-    assert "ADD COLUMN `SS` varchar(3) AS (concat(" in sql
-    assert "STORED" in sql
+    ss_clause = [c for c in sql.split(", ") if "`SS_w` `SS`" in c][0]
+    assert "DEFAULT" not in ss_clause
+
+
+def test_columns_are_put_back_where_they_were():
+    sql = cs.alter_statements(_state())[0]
+    assert "`Sector` varchar(2) NOT NULL DEFAULT '' AFTER `ClsfX`" in sql
+    assert "`Sursa` char(1) NOT NULL DEFAULT 'A' AFTER `Sector`" in sql
+    assert "`SS` varchar(3) NOT NULL AFTER `Sursa`" in sql
+
+
+def test_a_table_with_a_different_column_order_is_respected():
+    # The unit databases were not all built at once; the column before Sector may differ.
+    sql = cs.alter_statements(_state(positions={"Sector": "Clsf", "Sursa": "Sector",
+                                                "SS": "Sursa"}))[0]
+    assert "`Sector` varchar(2) NOT NULL DEFAULT '' AFTER `Clsf`" in sql
+
+
+def test_a_position_naming_a_dropped_column_falls_back_to_the_template_layout():
+    # Sector sitting after SS would name a column the same statement drops.
+    sql = cs.alter_statements(_state(positions={"Sector": "SS", "Sursa": "Sector",
+                                                "SS": "Sursa"}))[0]
+    assert "`Sector` varchar(2) NOT NULL DEFAULT '' AFTER `ClsfX`" in sql
+
+
+def test_the_index_and_the_foreign_key_come_back():
+    sql = cs.alter_statements(_state())[0]
+    assert "ADD KEY `idx_SS` (`SS`)" in sql
     assert "`AVACONT_COMUN`.`DefaSursaSector` (`SursaSector`)" in sql
-
-
-def test_sector_case_covers_the_eight_endings():
-    sql = cs.alter_statements(_state())[0]
-    # The four historical endings keep their old mapping ...
-    for ending, sector in (("'00'", "'01'"), ("'01'", "'01'"),
-                           ("'02'", "'02'"), ("'10'", "'02'")):
-        assert f"when {ending} then {sector}" in sql
-    # ... and the four new ones map to themselves.
-    for ending in ("'03'", "'04'", "'05'", "'08'"):
-        assert f"when {ending} then {ending}" in sql
 
 
 def test_split_alter_is_the_same_clauses_in_three_statements():
     one = cs.alter_statements(_state())[0]
     three = cs.alter_statements(_state(), split=True)
     assert len(three) == 3
-    for clause in ("DROP FOREIGN KEY", "CHANGE COLUMN `Sursa_w`", "ADD CONSTRAINT"):
+    for clause in ("DROP FOREIGN KEY", "CHANGE COLUMN `SS_w`", "ADD CONSTRAINT"):
         assert clause in one
         assert any(clause in s for s in three)
 
@@ -104,13 +137,10 @@ def test_missing_index_on_ss_drops_no_key():
     assert "ADD KEY `idx_SS`" in sql          # it is added back either way
 
 
-def test_index_is_dropped_under_the_name_the_server_uses():
-    sql = cs.alter_statements(_state(ss_index_name="SS_2"))[0]
+def test_index_and_key_are_dropped_under_the_names_the_server_uses():
+    sql = cs.alter_statements(_state(ss_index_name="SS_2",
+                                     ss_fk_name="Clasificatii_ibfk_4"))[0]
     assert "DROP KEY `SS_2`" in sql
-
-
-def test_foreign_key_is_dropped_under_the_name_the_server_uses():
-    sql = cs.alter_statements(_state(ss_fk_name="Clasificatii_ibfk_4"))[0]
     assert "DROP FOREIGN KEY `Clasificatii_ibfk_4`" in sql
 
 
@@ -118,6 +148,16 @@ def test_no_foreign_key_on_ss_is_refused():
     with pytest.raises(cs.MigrationError) as err:
         cs.alter_statements(_state(ss_fk_name=None))
     assert "cheie străină" in str(err.value)
+
+
+# --------------------------------------------------------------- the copy step
+
+def test_temp_columns_are_nullable_while_they_are_temporary():
+    add, update = cs.temp_column_statements("000_DEMO")
+    for column in ALL_THREE:
+        assert f"ADD COLUMN `{column}_w`" in add
+        assert f"`{column}_w` = `{column}`" in update
+    assert "NOT NULL" not in add               # filled by the UPDATE, tightened by the ALTER
 
 
 # --------------------------------------------------------------- verification SQL
@@ -136,7 +176,7 @@ def test_template_comes_first_then_the_unit_databases(monkeypatch):
     monkeypatch.setattr(cs, "query", _fake_query())
     dbs = cs.list_databases(object())
     assert dbs[0] == "AVACONT_SURSA"
-    assert dbs[1:] == ["000_DEMO", "001_GR23", "101_CCDP"]
+    assert dbs[1:] == ["000_DEMO", "006_GR35", "050_GRSA"]
 
 
 def test_common_and_system_databases_are_never_targets(monkeypatch):
@@ -164,39 +204,48 @@ def test_database_without_the_table_is_skipped(monkeypatch):
     monkeypatch.setattr(cs, "inspect", lambda conn, db: _state(db=db, exists=False))
     monkeypatch.setattr(cs, "dump_table", _no_write)
     monkeypatch.setattr(cs, "execute", _no_write)
-    assert cs.migrate_database(object(), "000_DEMO", "backup", False, lambda _m: None) == "skipped"
+    assert cs.migrate_database(object(), "000_DEMO", "backup", False,
+                               lambda _m: None) == "skipped"
 
 
 def test_already_migrated_database_is_skipped(monkeypatch):
-    monkeypatch.setattr(cs, "inspect",
-                        lambda conn, db: _state(db=db, sursa_generated=False,
-                                                sector_extended=True))
+    monkeypatch.setattr(cs, "inspect", lambda conn, db: _state(db=db, generated=()))
     monkeypatch.setattr(cs, "dump_table", _no_write)
     monkeypatch.setattr(cs, "execute", _no_write)
-    assert cs.migrate_database(object(), "000_DEMO", "backup", False, lambda _m: None) == "skipped"
-
-
-def test_leftovers_from_a_failed_run_stop_the_database(monkeypatch):
-    monkeypatch.setattr(cs, "inspect",
-                        lambda conn, db: _state(db=db, leftovers=("_snap_clsf",)))
-    monkeypatch.setattr(cs, "dump_table", _no_write)
-    monkeypatch.setattr(cs, "execute", _no_write)
-    with pytest.raises(cs.MigrationError) as err:
-        cs.migrate_database(object(), "000_DEMO", "backup", False, lambda _m: None)
-    assert "_snap_clsf" in str(err.value)
+    assert cs.migrate_database(object(), "000_DEMO", "backup", False,
+                               lambda _m: None) == "skipped"
 
 
 def test_half_migrated_database_stops_the_run(monkeypatch):
-    # Sursa already written but Sector still on the old CASE: nobody knows what happened
-    # in between, so the script refuses rather than guessing.
-    monkeypatch.setattr(cs, "inspect",
-                        lambda conn, db: _state(db=db, sursa_generated=False,
-                                                sector_extended=False))
+    # One of the three still generated: nobody knows what happened in between, so the
+    # script refuses rather than guessing.
+    monkeypatch.setattr(cs, "inspect", lambda conn, db: _state(db=db, generated=("SS",)))
     monkeypatch.setattr(cs, "dump_table", _no_write)
     monkeypatch.setattr(cs, "execute", _no_write)
     with pytest.raises(cs.MigrationError) as err:
         cs.migrate_database(object(), "000_DEMO", "backup", False, lambda _m: None)
     assert "intermediar" in str(err.value)
+
+
+def test_leftovers_stop_the_database_unless_asked_to_clean(monkeypatch):
+    monkeypatch.setattr(cs, "inspect",
+                        lambda conn, db: _state(db=db, leftovers=("SS_w", "_snap_clsf")))
+    monkeypatch.setattr(cs, "dump_table", _no_write)
+    monkeypatch.setattr(cs, "execute", _no_write)
+    with pytest.raises(cs.MigrationError) as err:
+        cs.migrate_database(object(), "000_DEMO", "backup", False, lambda _m: None)
+    assert "--clean-leftovers" in str(err.value)
+
+
+def test_cleanup_drops_the_temporary_columns_and_the_snapshot():
+    stmts = cs.cleanup_statements(_state(leftovers=("Sector_w", "SS_w", "_snap_clsf")))
+    joined = "\n".join(stmts)
+    assert "DROP COLUMN `Sector_w`" in joined
+    assert "DROP COLUMN `SS_w`" in joined
+    assert "DROP TABLE `000_DEMO`.`_snap_clsf`" in joined
+    # Never the real columns.
+    for column in ALL_THREE:
+        assert f"DROP COLUMN `{column}`" not in joined
 
 
 # --------------------------------------------------------------- the happy path
@@ -229,8 +278,8 @@ def test_successful_run_snapshots_copies_alters_verifies_and_drops(monkeypatch):
                                lambda _m: None) == "migrated"
     joined = "\n".join(rec.statements)
     assert "CREATE TABLE `000_DEMO`.`_snap_clsf`" in joined
-    assert "ADD COLUMN `Sursa_w` char(1) NULL" in joined
-    assert "SET `Sursa_w` = `Sursa`" in joined
+    assert "ADD COLUMN `SS_w`" in joined
+    assert "`SS_w` = `SS`" in joined
     assert "DROP FOREIGN KEY" in joined
     # The snapshot goes only at the very end, after the verification passed.
     assert rec.statements[-1] == "DROP TABLE `000_DEMO`.`_snap_clsf`"

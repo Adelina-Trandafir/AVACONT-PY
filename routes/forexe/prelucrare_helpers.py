@@ -30,6 +30,7 @@ OBSERVABLE BEHAVIOUR and says so in a comment, because the data already in
 MariaDB was produced by that behaviour. Deviations are called out one by one.
 """
 import hashlib
+import re
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
@@ -778,3 +779,92 @@ def is_stergere_receptie(descriere: Optional[str]) -> bool:
     treat as a deletion.
     """
     return (descriere or "").strip().lower() == DESCRIERE_STERGERE_RECEPTIE.lower()
+
+
+# ---------------------------------------------------------------------------
+# K-BOT id markers (slice 0076)
+# ---------------------------------------------------------------------------
+# When the operator saves in the FOREXE page, the K-BOT menu inside the page appends
+# a marker to the text they typed, naming the ids the save WILL become in K-BOT:
+#
+#   * a reservation's «Motiv» (the modal of a changed reservation row):
+#         "... (IDREV: 112)"            -> FX_DDF_REV.IDREV of the revision to come
+#   * a reception's «Descriere» (the reception form):
+#         "... (IDRH: 631; IDR: 2570)"  -> FX_Receptii_H.IDRH / FX_Receptii.IDR
+#
+# FOREXE copies the text into its history: the reservation's motive lands in
+# FX_Istoric.Descriere, the reception's description in the Observatii of the reception's
+# TOTAL row (the `(activ:true)` header, after its indicator rows). The ids are reserved
+# on the server BEFORE the save (routes/forexe/marcaj.py), so the ingest can insert with
+# them instead of guessing which history row became which record.
+#
+# The format is written HERE and nowhere else: marcaj.py composes it with
+# `compune_marcaj`, the ingest reads it with `extract_marcaj`. The page only carries
+# the text it is handed. `(IDREV:` never collides with the old «(REV:nn)» marker that
+# `extract_numar_rev` reads: that one needs "(" immediately before "REV".
+
+MARCAJ_CHEI = ("IDREV", "IDRH", "IDR")
+
+# One parenthesis holding one or more "KEY: number" pairs separated by ";".
+_MARCAJ_RE = re.compile(
+    r"\(\s*((?:ID(?:REV|RH|R))\s*:\s*\d+(?:\s*;\s*ID(?:REV|RH|R)\s*:\s*\d+)*)\s*\)",
+    re.IGNORECASE)
+_MARCAJ_PERECHE_RE = re.compile(r"(ID(?:REV|RH|R))\s*:\s*(\d+)", re.IGNORECASE)
+
+
+def compune_marcaj(**ids) -> str:
+    """
+    The marker text for the given ids, in the fixed key order IDREV, IDRH, IDR.
+
+    `compune_marcaj(IDREV=112)` -> "(IDREV: 112)";
+    `compune_marcaj(IDRH=631, IDR=2570)` -> "(IDRH: 631; IDR: 2570)".
+    An unknown key or a non-positive id raises: a marker that names nothing must not
+    reach the page.
+    """
+    for k in ids:
+        if k not in MARCAJ_CHEI:
+            raise ValueError(f"Cheie de marcaj necunoscută: {k}")
+    perechi = []
+    for k in MARCAJ_CHEI:
+        if k in ids:
+            v = int(ids[k])
+            if v <= 0:
+                raise ValueError(f"Marcajul {k} trebuie să fie pozitiv (a venit {v}).")
+            perechi.append(f"{k}: {v}")
+    if not perechi:
+        raise ValueError("Marcaj gol.")
+    return "(" + "; ".join(perechi) + ")"
+
+
+def extract_marcaj(txt: Optional[str]) -> dict:
+    """
+    The ids of the LAST marker in the text, as {"IDREV": n, "IDRH": n, "IDR": n} with
+    only the keys present. {} when the text carries none.
+
+    The LAST one, because an edited reception keeps its old description: the page
+    replaces the marker it finds, but a text edited by hand elsewhere could still carry
+    two, and the newest is always appended at the end.
+    """
+    if not txt:
+        return {}
+    gasite = list(_MARCAJ_RE.finditer(txt))
+    if not gasite:
+        return {}
+    out = {}
+    for m in _MARCAJ_PERECHE_RE.finditer(gasite[-1].group(1)):
+        out[m.group(1).upper()] = int(m.group(2))
+    return out
+
+
+def fara_marcaj(txt: Optional[str]) -> Optional[str]:
+    """
+    The text without any K-BOT marker, trimmed. None stays None, and a text that
+    carries no marker comes back EXACTLY as it was (not even trimmed): descriptions
+    stored before slice 0076 must not change shape because they passed through here.
+
+    What is stored as a description is what the operator wrote; the marker is a key,
+    and the key is already the record's own id.
+    """
+    if txt is None or not _MARCAJ_RE.search(txt):
+        return txt
+    return re.sub(r"\s{2,}", " ", _MARCAJ_RE.sub("", txt)).strip()

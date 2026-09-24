@@ -106,7 +106,10 @@ _SQL_ORDONANTARI = (
     # `FX_ORD_PDF.IDORDP` are cheie UNICA, deci cel mult un rand per ordonantare. Cele trei
     # coloane stau INAINTEA fragmentului optional `{cale_pdf}`, ca pozitiile fixe din
     # despachetarea de mai jos sa nu depinda de proba de schema.
-    "p.Sha256, p.Dimensiune, p.DataModif"
+    "p.Sha256, p.Dimensiune, p.DataModif, "
+    # Slice 0078 -- signer roles written by the signing upload (PUT .../ord/pdf/<id>).
+    # Also BEFORE `{cale_pdf}`, for the same reason as the three columns above.
+    "o.Semnatura"
     "{cale_pdf} "
     "FROM FX_ORD o "
     "LEFT JOIN FX_ORD_PDF p ON p.IDORDP = o.IDORDP "
@@ -251,8 +254,8 @@ def get_ord():
         for row in cursor.fetchall():
             (idordp, nr_ord, data_ord, incarcat, preluat,
              total_ord, part_ang, nume_partener,
-             pdf_sha, pdf_dim, pdf_modif) = row[:11]
-            cale_pdf = row[11] if are_cale else None
+             pdf_sha, pdf_dim, pdf_modif, semnatura) = row[:12]
+            cale_pdf = row[12] if are_cale else None
             ordonantari.append({
                 "idordp": int(idordp) if idordp is not None else None,
                 "nr_ord": int(nr_ord) if nr_ord is not None else 0,
@@ -273,6 +276,8 @@ def get_ord():
                 "pdf_sha256": pdf_sha,
                 "pdf_dimensiune": int(pdf_dim) if pdf_dim is not None else None,
                 "pdf_data_modif": _iso_dt(pdf_modif),
+                # Slice 0078 -- signer roles, e.g. "AB,Ordonator" (NULL/empty = unsigned).
+                "semnatura": semnatura,
             })
 
         # --- linii: FX_ORD_TBL, plate, cu beneficiarul lor (FX_ORD_PART) ---------------

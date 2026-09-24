@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Cereri de înregistrare · K-BOT</title>
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/inregistrare.css">
+  <link rel="stylesheet" href="/static/css/operator.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner op-wide">
+      <div class="brand">
+        <span class="brand-mark">K-BOT</span>
+        <span class="brand-title">Cereri de înregistrare</span>
+      </div>
+      <div class="op-user" id="op-user" hidden>
+        <span id="op-user-email"></span>
+        <button class="op-header-btn" id="btn-logout" type="button">Ieșire</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wizard op-wide">
+    <!-- sign-in: password -->
+    <section class="card op-narrow" id="panel-login" hidden aria-labelledby="h-login">
+      <h2 id="h-login" tabindex="-1">Autentificare operator</h2>
+      <p class="lead">Contul K-BOT, apoi un cod trimis pe e-mail.</p>
+      <form id="login-form" novalidate>
+        <label class="field-label" for="login-email">Adresa de e-mail</label>
+        <input id="login-email" class="text-input" type="email" autocomplete="username" maxlength="80">
+        <label class="field-label" for="login-pwd">Parola</label>
+        <input id="login-pwd" class="text-input" type="password" autocomplete="current-password" maxlength="128">
+        <div class="msg" role="alert" id="login-msg" hidden></div>
+        <div class="actions">
+          <span></span>
+          <button id="login-submit" class="btn btn-primary" type="submit">Continuă</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- sign-in: code -->
+    <section class="card op-narrow" id="panel-code" hidden aria-labelledby="h-code">
+      <h2 id="h-code" tabindex="-1">Codul primit pe e-mail</h2>
+      <p class="lead">Am trimis un cod la <strong id="code-email"></strong>.</p>
+      <form id="code-form" novalidate>
+        <label class="field-label" for="code-input">Cod</label>
+        <input id="code-input" class="text-input code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+        <div class="msg" role="alert" id="code-msg" hidden></div>
+        <div class="actions">
+          <button id="code-back" class="btn btn-secondary" type="button">Înapoi</button>
+          <button id="code-submit" class="btn btn-primary" type="submit">Intră</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- the list -->
+    <section class="card" id="panel-list" hidden aria-labelledby="h-list">
+      <div class="op-title-row">
+        <h2 id="h-list" tabindex="-1">Cereri</h2>
+        <button id="list-refresh" class="btn btn-secondary" type="button">Reîncarcă</button>
+      </div>
+      <div class="op-tabs" role="tablist" id="list-tabs"></div>
+      <div class="msg" role="alert" id="list-msg" hidden></div>
+      <div class="op-table-wrap">
+        <table class="op-table" id="list-table">
+          <thead>
+            <tr>
+              <th scope="col">Nr.</th>
+              <th scope="col">Data</th>
+              <th scope="col">Unitate</th>
+              <th scope="col">CF</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Rânduri</th>
+              <th scope="col">Stare</th>
+              <th scope="col">Baza</th>
+            </tr>
+          </thead>
+          <tbody id="list-body"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="list-empty" hidden>Nicio cerere în această stare.</p>
+    </section>
+
+    <!-- one request -->
+    <section class="card" id="panel-detail" hidden aria-labelledby="h-detail">
+      <div class="op-title-row">
+        <h2 id="h-detail" tabindex="-1"></h2>
+        <button id="detail-back" class="btn btn-secondary" type="button">Înapoi la listă</button>
+      </div>
+      <div class="msg" role="alert" id="detail-msg" hidden></div>
+
+      <dl class="kv op-kv" id="detail-kv"></dl>
+      <div class="msg msg-info" id="detail-anaf" hidden></div>
+      <div class="msg msg-error" id="detail-motiv" hidden></div>
+
+      <h3 class="op-h3">Surse-sector și CodProgram</h3>
+      <div class="op-table-wrap">
+        <table class="op-table">
+          <thead>
+            <tr>
+              <th scope="col">Sursă-sector</th>
+              <th scope="col">Denumire</th>
+              <th scope="col">IdUnitate</th>
+              <th scope="col">CodProgram</th>
+            </tr>
+          </thead>
+          <tbody id="detail-ss"></tbody>
+        </table>
+      </div>
+
+      <details class="op-codes">
+        <summary id="detail-f-sum"></summary>
+        <ul id="detail-f"></ul>
+      </details>
+      <details class="op-codes">
+        <summary id="detail-e-sum"></summary>
+        <ul id="detail-e"></ul>
+      </details>
+
+      <!-- approval: only for waiting and failed requests -->
+      <div id="detail-approve" hidden>
+        <h3 class="op-h3">Aprobare</h3>
+        <label class="field-label" for="db-name">Numele bazei noi</label>
+        <div class="field-row">
+          <input id="db-name" class="text-input op-dbname" maxlength="8" autocomplete="off" spellcheck="false">
+          <button id="db-name-reset" class="btn btn-secondary" type="button">Propunerea</button>
+        </div>
+        <p class="hint">Forma <strong>1nn_SSSS</strong>: cifra 1, două cifre de la 1 la 9, liniuță jos, patru litere. Numărul nu poate fi folosit de altă bază.</p>
+
+        <div class="op-plan" id="plan-box" aria-live="polite"></div>
+
+        <div class="actions">
+          <button id="plan-check" class="btn btn-secondary" type="button">Verifică din nou</button>
+          <button id="approve-btn" class="btn btn-primary" type="button">Aprobă</button>
+        </div>
+
+        <h3 class="op-h3">Respingere</h3>
+        <label class="field-label" for="reject-motiv">Motivul (îl primește solicitantul pe e-mail)</label>
+        <textarea id="reject-motiv" class="text-input op-textarea" rows="3" maxlength="2000"></textarea>
+        <div class="actions">
+          <span></span>
+          <button id="reject-btn" class="btn btn-danger" type="button">Respinge</button>
+        </div>
+      </div>
+
+      <!-- approved: the password link -->
+      <div id="detail-link" hidden>
+        <h3 class="op-h3">Linkul de parolă</h3>
+        <p class="lead" id="link-state"></p>
+        <div class="msg msg-info op-break" id="link-manual" hidden></div>
+        <div class="actions">
+          <span></span>
+          <button id="link-btn" class="btn btn-secondary" type="button">Trimite un link nou</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- a running approval -->
+    <section class="card" id="panel-job" hidden aria-labelledby="h-job">
+      <h2 id="h-job" tabindex="-1"></h2>
+      <p class="lead" id="job-state" aria-live="polite"></p>
+      <ol class="op-log" id="job-log"></ol>
+      <div class="msg" role="alert" id="job-msg" hidden></div>
+      <div class="actions">
+        <button id="job-list" class="btn btn-secondary" type="button">Înapoi la listă</button>
+        <button id="job-open" class="btn btn-primary" type="button">Deschide cererea</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/static/js/operator/operator.js"></script>
+</body>
+</html>

@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from mysql.connector import errorcode
 from utils.security import require_api_key
 from utils.database import get_db_connection
+from routes.clasificatii_ss import ss_values   # slice 0075-00: Sector/Sursa/SS are written now
 
 nom_bp = Blueprint('nomenclatoare', __name__)
 logger = logging.getLogger(__name__)
@@ -77,14 +78,17 @@ def save_clasificatii_complete():
         cursor = conn.cursor()
         try:
             conn.start_transaction()
-            sql_structura = "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            # Sector/Sursa/SS became WRITTEN columns in slice 0075-00 (MariaDB refuses a
+            # generated SS built from another column). ss_values reproduces the old
+            # generated expression, so this route behaves exactly as it did before.
+            sql_structura = "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire, Sector, Sursa, SS) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
             sql_buget = "INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, Trim1, Trim2, Trim3, Trim4) VALUES (%s, %s, %s, %s, %s, %s, %s)"
 
             inserted_count = 0
             for item in data_list:
                 s = item['structura']
                 b = item['buget']
-                cursor.execute(sql_structura, (s['IdClsfAcc'], s['IdUnitate'], s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'], s['Denumire']))
+                cursor.execute(sql_structura, (s['IdClsfAcc'], s['IdUnitate'], s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'], s['Denumire']) + ss_values(s['Capitol']))
                 new_id = cursor.lastrowid
                 cursor.execute(sql_buget, (new_id, b['IdUnitate'], b['An'], b['Trim1'], b['Trim2'], b['Trim3'], b['Trim4']))
                 inserted_count += 1

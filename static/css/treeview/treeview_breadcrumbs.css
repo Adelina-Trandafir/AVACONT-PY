@@ -1,0 +1,154 @@
+/**
+ * ========== TREEVIEW BREADCRUMB STYLES ==========
+ * Breadcrumb header cu path complet de părinți
+ */
+
+.treeview-breadcrumb {
+  display: none;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 2px solid #dee2e6;
+  /* padding: 6px 8px; */
+  padding-left: 2px;
+  font-size: 12px;
+  color: #495057;
+  user-select: none;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.treeview-breadcrumb.visible {
+  display: block;
+}
+
+/* Container pentru breadcrumb */
+.treeview-breadcrumb-content {
+  display: flex;
+  align-items: center;
+  /* gap: 6px; */
+  transition: padding-left 0.2s ease;
+  justify-content: flex-start;
+}
+
+/* Container pentru părinți (inițiale) */
+.treeview-breadcrumb-parents {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Span individual pentru fiecare părinte (inițiale) */
+.treeview-breadcrumb-parent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 22px;
+  /* padding: 0 6px; */
+  /* background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); */
+  color: #000000;
+  font-weight: 600;
+  font-size: 11px;
+  /* border-radius: 4px; */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); */
+  border-right: #dad8d8;
+  border-right-style: solid;
+  position: relative;
+}
+
+.treeview-breadcrumb-parent:hover {
+  background: linear-gradient(360deg, #ffffff 0%, #d2daff 100%);
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+
+.treeview-breadcrumb-parent:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Tooltip pentru inițiale (afișat automat cu title attribute) */
+.treeview-breadcrumb-parent::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: #2d3748;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.treeview-breadcrumb-parent:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+/* Container pentru părintele curent (📁 + text) */
+.treeview-breadcrumb-current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 8px;
+  /* border-radius: 4px; */
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 0;
+}
+
+.treeview-breadcrumb-current:hover {
+  background: linear-gradient(360deg, #ffffff 0%, #d2daff 100%);
+  /* box-shadow: 0 1px 1px rgba(0, 0, 0, 0.25); */
+}
+
+/* Icon pentru părintele curent */
+.treeview-breadcrumb-icon {
+  color: #f59e0b;
+  font-size: 14px;
+  flex-shrink: 0;
+  display: none;
+}
+
+/* Text pentru părintele curent */
+.treeview-breadcrumb-text {
+  font-weight: 600;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  font-size: 13px;
+}
+
+.treeview-breadcrumb-current:hover .treeview-breadcrumb-text {
+  color: #111827;
+}
+
+/* Animație pentru apariție */
+@keyframes breadcrumbFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.treeview-breadcrumb.visible {
+  animation: breadcrumbFadeIn 0.2s ease;
+}

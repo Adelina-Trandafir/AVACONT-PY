@@ -1,0 +1,285 @@
+/* Operator approval page (slice 0075-05). Builds on inregistrare.css. */
+
+.op-wide {
+  max-width: 1040px;
+}
+
+.op-narrow {
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ========== HEADER ========== */
+.op-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.op-user span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-header-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.op-header-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ========== TITLES, TABS ========== */
+.op-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.op-title-row h2 {
+  margin: 0;
+}
+
+.op-h3 {
+  margin: 24px 0 8px;
+  color: var(--primary-color-dark);
+  font-size: 16px;
+}
+
+.op-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.op-tab {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #374151;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.op-tab[aria-selected='true'] {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+.op-tab .op-count {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* ========== TABLES ========== */
+.op-table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.op-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.op-table th,
+.op-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef0f3;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.op-table th {
+  color: #6b7280;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.op-table tbody tr.op-row {
+  cursor: pointer;
+}
+
+.op-table tbody tr.op-row:hover,
+.op-table tbody tr.op-row:focus-visible {
+  background: var(--hover-bg);
+  outline: none;
+}
+
+.op-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.op-table .nowrap {
+  white-space: nowrap;
+}
+
+.op-table .text-input {
+  width: 150px;
+  height: 34px;
+}
+
+/* ========== STATES ========== */
+.op-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.op-badge-InAsteptare {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.op-badge-Esuata {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.op-badge-Aprobata {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.op-badge-Respinsa {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* ========== DETAIL ========== */
+.op-kv {
+  margin-top: 16px;
+}
+
+.op-codes {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid #eef0f3;
+  border-radius: 8px;
+}
+
+.op-codes summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.op-codes ul {
+  max-height: 280px;
+  margin: 8px 0 0;
+  padding: 0 0 0 4px;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 14px;
+}
+
+.op-codes li + li {
+  margin-top: 2px;
+}
+
+.op-codes code,
+.op-code {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 13px;
+}
+
+.op-dbname {
+  max-width: 160px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.op-dbname.is-invalid {
+  border-color: #dc2626;
+}
+
+.op-textarea {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 12px;
+  resize: vertical;
+}
+
+.op-plan {
+  margin-top: 16px;
+}
+
+.op-plan ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.op-break {
+  overflow-wrap: anywhere;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+/* ========== JOB LOG ========== */
+.op-log {
+  margin: 12px 0 0;
+  padding: 12px 12px 12px 36px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.op-log li.is-error {
+  color: #fca5a5;
+}
+
+.op-log li.is-undo {
+  color: #fcd34d;
+}
+
+.op-log:empty {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .op-user span {
+    display: none;
+  }
+
+  .op-table th,
+  .op-table td {
+    padding: 6px 8px;
+  }
+}

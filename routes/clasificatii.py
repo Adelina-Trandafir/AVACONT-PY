@@ -4,9 +4,9 @@ import re
 from flask import Blueprint, request, jsonify
 from mysql.connector import Error
 from utils.security import require_api_key
+from routes.clasificatii_ss import ss_values   # slice 0075-00: Sector/Sursa/SS are written now
 from config import DB_CONFIG  # Importam configurarea
 from typing import Any, Dict, cast
-import json
 
 DB_NAME_REGEX = re.compile(r'^[A-Za-z0-9_]+$')
 
@@ -62,9 +62,7 @@ def _to_int(value, field_name, required=False):
     try:
         return int(value)
     except Exception:
-        # Include the actual value and its type in the error
-        value_repr = repr(value)[:100]  # Limit to avoid huge error messages
-        raise ValueError(f"Camp invalid: {field_name} - valoare primita: {value_repr} (tip: {type(value).__name__})")
+        raise ValueError(f"Camp invalid: {field_name}")
 
 
 def _to_float(value, field_name, required=False):
@@ -82,9 +80,7 @@ def _to_float(value, field_name, required=False):
     try:
         return float(value)
     except Exception:
-        # Include the actual value and its type in the error
-        value_repr = repr(value)[:100]  # Limit to avoid huge error messages
-        raise ValueError(f"Camp invalid: {field_name} - valoare primita: {value_repr} (tip: {type(value).__name__})")
+        raise ValueError(f"Camp invalid: {field_name}")
 
 
 def _to_str(value, field_name, required=False, strip_value=True):
@@ -99,17 +95,13 @@ def _to_str(value, field_name, required=False, strip_value=True):
             raise ValueError(f"Camp obligatoriu lipsa: {field_name}")
         return None
 
-    # Store original value for error messages
-    original_value = value
     value = str(value)
 
     if strip_value:
         value = value.strip()
 
     if required and value == "":
-        # Show the original value that became empty after stripping
-        value_repr = repr(original_value)[:100]
-        raise ValueError(f"Camp obligatoriu lipsa: {field_name} - valoare primita: {value_repr}")
+        raise ValueError(f"Camp obligatoriu lipsa: {field_name}")
 
     return value
 
@@ -184,8 +176,11 @@ def insert():
             cursor = conn.cursor()
             conn.start_transaction()
             
-            sql_structura = """INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire, Sector, Sursa) 
-                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+            # Sector/Sursa/SS became WRITTEN columns in slice 0075-00 (MariaDB refuses a
+            # generated SS built from another column -- error 1901). derive_ss reproduces
+            # the old generated expression exactly, so this route behaves as it always did.
+            sql_structura = """INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire, Sector, Sursa, SS)
+                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             
             sql_buget = """INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, Trim1, Trim2, Trim3, Trim4) 
                            VALUES (%s, %s, %s, %s, %s, %s, %s)"""
@@ -197,7 +192,7 @@ def insert():
                 s = item['structura']
                 b = item['buget']
                 
-                val_s = (s['IdClsfAcc'], s['IdUnitate'], s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'], s['Denumire'], s['Sector'], s['Sursa'])
+                val_s = (s['IdClsfAcc'], s['IdUnitate'], s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'], s['Denumire']) + ss_values(s['Capitol'])
                 cursor.execute(sql_structura, val_s)
                 
                 new_id = cursor.lastrowid
@@ -481,6 +476,11 @@ def save_clasificatii_complete_upsert():
             LIMIT 1
         """
 
+        # Sector/Sursa/SS are WRITTEN since slice 0075-00 (see routes/clasificatii_ss.py).
+        # They MUST appear in the ON DUPLICATE KEY UPDATE list as well: this statement can
+        # change `Capitol`, and while the three were generated they followed it by
+        # themselves. Leaving them out would keep the old sector on a re-classified row --
+        # a row that still passes every foreign key and is wrong.
         sql_upsert_clsf_with_id = """
             INSERT INTO Clasificatii
             (
@@ -493,9 +493,10 @@ def save_clasificatii_complete_upsert():
                 Alineat,
                 Denumire,
                 Sector,
-                Sursa
+                Sursa,
+                SS
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 IdClsfAcc = VALUES(IdClsfAcc),
                 IdUnitate = VALUES(IdUnitate),
@@ -505,7 +506,8 @@ def save_clasificatii_complete_upsert():
                 Alineat = VALUES(Alineat),
                 Denumire = VALUES(Denumire),
                 Sector = VALUES(Sector),
-                Sursa = VALUES(Sursa)
+                Sursa = VALUES(Sursa),
+                SS = VALUES(SS)
         """
 
         sql_insert_clsf_no_id = """
@@ -519,9 +521,10 @@ def save_clasificatii_complete_upsert():
                 Alineat,
                 Denumire,
                 Sector,
-                Sursa
+                Sursa,
+                SS
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         sql_exists_buget = """
@@ -592,8 +595,6 @@ def save_clasificatii_complete_upsert():
                     "Articol": _to_str(s.get("Articol"), f"data[{idx}].structura.Articol", required=False),
                     "Alineat": _to_str(s.get("Alineat"), f"data[{idx}].structura.Alineat", required=False),
                     "Denumire": _to_str(s.get("Denumire"), f"data[{idx}].structura.Denumire", required=False, strip_value=False),
-                    "Sector": _to_str(s.get("Sector"), f"data[{idx}].structura.Sector", required=False),
-                    "Sursa": _to_str(s.get("Sursa"), f"data[{idx}].structura.Sursa", required=False)
                 }
 
                 # ----------------------------------------------------
@@ -643,10 +644,8 @@ def save_clasificatii_complete_upsert():
                             s_clean["Subcapitol"],
                             s_clean["Articol"],
                             s_clean["Alineat"],
-                            s_clean["Denumire"],
-                            s_clean["Sector"],
-                            s_clean["Sursa"]
-                        )
+                            s_clean["Denumire"]
+                        ) + ss_values(s_clean["Capitol"])
                     )
 
                     current_id_clsf = s_clean["IdClsf"]
@@ -675,10 +674,8 @@ def save_clasificatii_complete_upsert():
                             s_clean["Subcapitol"],
                             s_clean["Articol"],
                             s_clean["Alineat"],
-                            s_clean["Denumire"],
-                            s_clean["Sector"],
-                            s_clean["Sursa"]
-                        )
+                            s_clean["Denumire"]
+                        ) + ss_values(s_clean["Capitol"])
                     )
 
                     current_id_clsf = cursor.lastrowid
@@ -736,13 +733,11 @@ def save_clasificatii_complete_upsert():
                 mapping[mapping_key] = current_id_clsf
 
             except ValueError as e:
-                # Log the full item for debugging
                 logger.warning(
-                    "UPSERT CLASIFICATII invalid payload. db=%s, item=%s, err=%s, full_item=%s",
+                    "UPSERT CLASIFICATII invalid payload. db=%s, item=%s, err=%s",
                     db_name,
                     idx,
-                    str(e),
-                    json.dumps(item, default=str)  # Convert to JSON for readability
+                    str(e)
                 )
                 raise
 

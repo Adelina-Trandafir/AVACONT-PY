@@ -36,6 +36,8 @@ from routes.auth import auth_bp  # Importam Blueprint-ul de login al aplicatiei 
 from routes.forexe.seed import seed_bp
 from routes.migrare.migrare import migrare_bp  # felia 0044: migrarea prin fisier .accdb impins
 from routes.update import update_bp  # slice 0067: application update channel (public, read-only)
+from routes.inregistrare.inregistrare import inregistrare_bp  # felia 0075: pagina publica de inregistrare
+from routes.inregistrare.operator import operator_bp  # felia 0075-05: pagina operatorului (aprobarea cererilor)
 
 # 1. Initializam logger-ul global (ca sa scrie in fisierul .log)
 logger = setup_logger()
@@ -99,6 +101,8 @@ app.register_blueprint(auth_bp)  # Inregistram Blueprint-ul de login
 app.register_blueprint(seed_bp)
 app.register_blueprint(migrare_bp)
 app.register_blueprint(update_bp)
+app.register_blueprint(inregistrare_bp)  # Inregistrarea publica a unei unitati noi
+app.register_blueprint(operator_bp)  # Aprobarea cererilor de inregistrare
 
 logger.info("=== RUTE ÎNREGISTRATE ===")
 for rule in app.url_map.iter_rules():

@@ -35,6 +35,7 @@ import json
 import logging
 from typing import Dict, List, Optional, Tuple
 
+from .marcaj import LOCK_IDR, LOCK_IDRH, consuma_lacatul, id_marcaj_utilizabil
 from .prelucrare_helpers import (
     cod_ai,
     este_linie_receptie,
@@ -43,7 +44,9 @@ from .prelucrare_helpers import (
     extract_obs_value,
     extract_rezervare_definitiva,
     extract_text_after_label,
+    extract_marcaj,
     extract_text_between,
+    fara_marcaj,
     fx_extract_cod_indicator,
     fx_receptii_istoric_get_indent,
     get_hash_for_row_istoric,
@@ -381,7 +384,15 @@ def step3b_prelucreaza_observatii(cursor, cod: str,
             else:
                 tip_rand = "PLATA_PLATA"
 
-        idrev = _idrev_din_descriere(cursor, descr, contract)
+        # Slice 0076: the K-BOT marker «(IDREV: n)» the page appended to the reservation's
+        # motive names the revision directly, and it wins over the old «(REV:nn)». It is
+        # stored even when FX_DDF_REV has no such row YET: the revision is written later,
+        # from the DDF form, and the reservation is linked then (ddf_edit.py, the IDREV
+        # lock). FX_Istoric.IDREV has no foreign key; FX_Rezervari.IDREV has one, and step
+        # 3c/3d already writes NULL there, with a warning, while the revision is missing.
+        idrev = extract_marcaj(descr).get("IDREV") or extract_marcaj(obs).get("IDREV")
+        if idrev is None:
+            idrev = _idrev_din_descriere(cursor, descr, contract)
 
         cursor.execute(_OBS_UPDATE_SQL, (
             cod_indicator, cheie_ai, id_clsf, clsf,
@@ -654,11 +665,24 @@ _H_INSERT_SQL = (
     "(IDH, NrCrt, CodAngajament, DataH, Total, Descriere, EsteStergere, Sters) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, 0)"
 )
+# Slice 0076: the same row, with the IDRH the page reserved and wrote into the description.
+_H_INSERT_CU_ID_SQL = (
+    "INSERT INTO FX_Receptii_H "
+    "(IDRH, IDH, NrCrt, CodAngajament, DataH, Total, Descriere, EsteStergere, Sters) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)"
+)
 _REC_INSERT_SQL = (
     "INSERT INTO FX_Receptii "
     "(IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI, CodAngajament, CodIndicator, "
     " Data, Valoare, ValoareOrig, HASH, TipIntern) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+)
+# Slice 0076: the first line of a marked snapshot, with the IDR the page reserved.
+_REC_INSERT_CU_ID_SQL = (
+    "INSERT INTO FX_Receptii "
+    "(IDR, IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI, CodAngajament, CodIndicator, "
+    " Data, Valoare, ValoareOrig, HASH, TipIntern) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 _INDICATORI_VAZUTI_SQL = (
     "SELECT CodIndicator FROM FX_Receptii WHERE CodAngajament = %s GROUP BY CodIndicator"
@@ -774,24 +798,63 @@ def step4a_populeaza_receptii(cursor, cod: str,
                 tampon = []
                 continue
             descriere = extract_text_between(obs, "Receptie: ", ",")
-            cursor.execute(_H_INSERT_SQL, (
-                int(r["ID"]), nr_crt, str(r["CodAngajament"]), r["DataFX"],
-                float(r["Val_Receptie"] or 0), descriere,
-                1 if este_stergere else 0,
-            ))
-            idrh = int(cursor.lastrowid)
+            # Slice 0076 -- THE MARKER. The page appended «(IDRH: n; IDR: m)» to the
+            # reception's description before the save, and FOREXE copied the description
+            # into this total row. The ids were reserved on the server (marcaj.py), so the
+            # snapshot is born WITH them and nobody has to guess which history row became
+            # which snapshot. A marker whose id cannot be used (already in the table: the
+            # same history row read again; or never handed out by the counter) is ignored
+            # and said in the log -- the row is then written exactly as before.
+            marcaj = extract_marcaj(descriere) or extract_marcaj(obs)
+            descriere = fara_marcaj(descriere)
+            idrh_marcat = marcaj.get("IDRH")
+            if idrh_marcat is not None and not id_marcaj_utilizabil(cursor, LOCK_IDRH, idrh_marcat):
+                logger.warning("PRELUCRARE cod=%s: marcajul IDRH %s din randul de istoric %s "
+                               "nu se poate folosi (exista deja sau nu a fost rezervat) -- "
+                               "instantaneul primeste un id nou", cod, idrh_marcat, r["ID"])
+                idrh_marcat = None
+            if idrh_marcat is not None:
+                cursor.execute(_H_INSERT_CU_ID_SQL, (
+                    int(idrh_marcat), int(r["ID"]), nr_crt, str(r["CodAngajament"]),
+                    r["DataFX"], float(r["Val_Receptie"] or 0), descriere,
+                    1 if este_stergere else 0,
+                ))
+                idrh = int(idrh_marcat)
+                consuma_lacatul(cursor, LOCK_IDRH, idrh, cod)
+            else:
+                cursor.execute(_H_INSERT_SQL, (
+                    int(r["ID"]), nr_crt, str(r["CodAngajament"]), r["DataFX"],
+                    float(r["Val_Receptie"] or 0), descriere,
+                    1 if este_stergere else 0,
+                ))
+                idrh = int(cursor.lastrowid)
             nr_crt += 1
             antete += 1
 
+            # The FIRST line takes the marked IDR (the rest follow the counter, which the
+            # reservation already moved past it). Only under a snapshot that took its own
+            # marked IDRH: an IDR without its IDRH would name a line of a snapshot that is
+            # not the one the operator saved.
+            idr_marcat = marcaj.get("IDR") if idrh_marcat is not None else None
+            if idr_marcat is not None and not id_marcaj_utilizabil(cursor, LOCK_IDR, idr_marcat):
+                logger.warning("PRELUCRARE cod=%s: marcajul IDR %s nu se poate folosi -- "
+                               "prima linie primeste un id nou", cod, idr_marcat)
+                idr_marcat = None
             for linie in tampon:
                 ci = linie["CodIndicator"]
-                cursor.execute(_REC_INSERT_SQL, (
+                valori = (
                     idrh, linie["IDH"], linie["IdClsf"], linie["CodSSI"],
                     linie["Clsf"], linie["IdUnitate"], linie["CodAI"],
                     linie["CodAngajament"], ci, linie["Data"], linie["Valoare"],
                     linie["ValoareOrig"], linie["HASH"],
                     "VECHI" if ci in vazuti else "NOU",
-                ))
+                )
+                if idr_marcat is not None:
+                    cursor.execute(_REC_INSERT_CU_ID_SQL, (int(idr_marcat),) + valori)
+                    consuma_lacatul(cursor, LOCK_IDR, idr_marcat, cod)
+                    idr_marcat = None
+                else:
+                    cursor.execute(_REC_INSERT_SQL, valori)
                 vazuti.add(ci)
             tampon = []
 
@@ -1077,10 +1140,16 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
         # exista ca sa se decida, dupa umplerea tabelelor temporare, daca un rand real
         # trebuie inserat sau actualizat -- o decizie care aici nu exista. Cerinta
         # planului parinte 5.3 (400 la lipsa ei) e RETRASA pe 26.08.2026 din motivul asta.
+        # Slice 0076: the K-BOT marker «(IDRH: n; IDR: m)» the page appended to the
+        # description is a key, not part of what the operator wrote -- it is taken out
+        # before the identity hash and before the stored description, so a reception
+        # edited from K-BOT keeps the hash and the text it had.
+        descriere_r = fara_marcaj(
+            text_celula(rec.get("DescriereReceptie"), unde, "DescriereReceptie"))
         hash_ident = fx_receptii_h_get_hash_ident(
             cod, data_r,
             text_celula(rec.get("Tip"), unde, "Tip"),
-            text_celula(rec.get("DescriereReceptie"), unde, "DescriereReceptie"))
+            descriere_r)
 
         cursor.execute(_R_CANDIDATI_SQL, (cod, data_r))
         candidati = cursor.fetchall()
@@ -1115,7 +1184,8 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
         else:
             cursor.execute(_R_INSERT_SQL, (
                 nr_crt, cod, rec.get("Tip"), data_r, suma,
-                rec.get("DescriereReceptie"), hash_ident))
+                None if rec.get("DescriereReceptie") is None else descriere_r,
+                hash_ident))
             idrr = int(cursor.lastrowid)
             nascute.add(idrr)
             nr_crt += 1

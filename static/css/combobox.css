@@ -1,0 +1,246 @@
+/* ==============================================
+   MODULAR COMBOBOX – FULL-RESPONSIVE / ELASTIC
+   (dropdown-ul nu mai iese din spațiul părintelui)
+   ============================================== */
+
+.combobox-container{
+    position: relative;
+    width: 100%;
+    min-width: 0;                 /* permite comprimarea sub 200px */
+    display: inline-block;
+    max-width: 300px;
+}
+
+.combobox-arrow{
+    position: absolute;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #6b7280;
+    font-size: 15px;
+    /* z-index: 2; */
+}
+
+.combobox-container.readonly .combobox-input{cursor: pointer;min-height: 24px;}
+.combobox-container.readonly .combobox-input:hover{background: var(--green-hover-background);}
+
+.combobox-input{
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    box-sizing: border-box;
+    transition: all .2s ease;
+    outline: none;
+}
+.combobox-input:focus{
+    border-color: #4caf50;
+    box-shadow: 0 0 0 2px rgba(76,175,80,.15);
+}
+.combobox-input:disabled{
+    background: #f8f8f8 !important;
+    color: #999;
+    cursor: auto !important;
+}
+
+/* loader */
+.combobox-loader{
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #4caf50;
+    border-radius: 50%;
+    animation: combobox-spin .8s linear infinite;
+    display: none;
+}
+.combobox-loader.show{display: block;}
+@keyframes combobox-spin{
+    0%{transform: translateY(-50%) rotate(0deg);}
+    100%{transform: translateY(-50%) rotate(360deg);}
+}
+
+/* dropdown – ELASTIC FĂRĂ WIDTH FIX */
+.combobox-dropdown{
+    position: fixed;
+    /* z-index: 1010; */
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    box-shadow: 5px 5px 12px 1px rgba(0, 0, 0, .15);
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    transition: all .2s ease;
+    /* --- elastic --- */
+    /* width: auto !important; */
+    min-width: 0 !important;
+    max-width: clamp(180px, 100%, 320px);
+    /* left: 0 !important; */
+    /* right: auto !important; */
+    box-sizing: border-box;
+}
+.combobox-dropdown.visible{display: block;width: 100%;}
+.combobox-dropdown.show-above{box-shadow: 0 -4px 12px rgba(0,0,0,.15);}
+
+/* scrollbar subțire */
+.combobox-dropdown::-webkit-scrollbar{width: 6px;}
+.combobox-dropdown::-webkit-scrollbar-track{background: #f1f1f1;}
+.combobox-dropdown::-webkit-scrollbar-thumb{background: #c1c1c1; border-radius: 3px;}
+.combobox-dropdown::-webkit-scrollbar-thumb:hover{background: #a8a8a8;}
+
+/* opțiuni */
+.combobox-option{
+    display: flex;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+    color: #333;
+    transition: background-color .15s ease;
+    max-height: 32px;
+    align-items: center;
+}
+.combobox-option:last-child{border-bottom: none;}
+.combobox-option:hover,
+.combobox-option.highlighted{background: linear-gradient(90deg, var(--status-color-left), var(--status-color-right));}
+.combobox-option.selected{background: #e8f5e8; color: #2e7d32; font-weight: 500;}
+
+/* mesaje */
+.combobox-no-results{padding: 12px; text-align: center; color: #999; font-style: italic; font-size: 12px;}
+.combobox-error{padding: 12px; text-align: center; color: #f44336; font-size: 12px; background: #ffebee;}
+
+/* highlight text */
+.combobox-highlight{background: #fff3cd; font-weight: 500;}
+
+.show-only-icon {
+    flex: 0 0 28px !important;
+}
+
+.show-only-icon .combobox-container .combobox-arrow {
+  display: none !important;
+}
+
+.show-only-icon .combobox-container {width: 28px;}
+
+.show-only-icon .combobox-container .combobox-input {width: 0px;padding-left: 0 !important;border: none;}
+
+/* ===========================================================
+   RESPONSIVE – SE MICȘOREAZĂ CA LA CALENDAR
+   =========================================================== */
+@media (max-width: 400px){
+    .combobox-dropdown{
+        max-width: clamp(160px, 100%, 260px);
+        font-size: 11px;
+    }
+    .combobox-option{padding: 6px 8px; font-size: 11px;}
+}
+/* nu depășește ecranul */
+@media (max-width: 350px){
+    .combobox-dropdown{max-width: calc(100vw - 16px);}
+}
+
+/**
+ * ✨ COMBOBOX - PREFIX ICON STYLES
+ * Suport pentru iconițe prefix (steaguri, avatare, simboluri)
+ * 
+ * @version 1.0.0
+ * @description Stilizare pentru container prefix icon în combobox
+ */
+
+/* ========== PREFIX ICON CONTAINER ========== */
+.combobox-prefix-icon {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none; /* Hidden by default */
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  pointer-events: none;
+  /* z-index: 1; */
+}
+
+/* ========== CONTAINER CU PREFIX ICON ========== */
+.combobox-container.has-prefix-icon {
+  position: relative;
+  width: 100%;
+}
+
+.phone-country-selector:has(.combobox-input:hover) .combobox-prefix-icon {
+  filter: brightness(1.2);
+  /* transform: scale(1.1); */
+}
+
+/* ========== FLAG ICONS (flag-icons library) ========== */
+.combobox-prefix-icon .fi {
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== ALTERNATIVE: IMG FLAGS ========== */
+.combobox-prefix-icon img {
+  width: 24px;
+  height: auto;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== EMOJI FLAGS ========== */
+.combobox-prefix-icon .emoji-flag {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* ========== READONLY MODE ========== */
+/* Hover normal (activ) doar când părintele NU este disabled */
+.combobox-container:not(.disabled) .combobox-prefix-icon:hover {
+  background: var(--green-hover-background);
+  cursor: pointer;
+  filter: brightness(1.1);
+  border-radius: 3px;
+}
+
+/* Când părintele este disabled → neutralizăm complet hover-ul */
+.combobox-container.disabled .combobox-prefix-icon {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none; /* ✅ Blochează orice interacțiune vizuală sau click */
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 400px) {
+  .combobox-prefix-icon {
+    width: 36px;
+  }
+
+  .combobox-container.has-prefix-icon .combobox-input {
+    padding-left: 40px;
+  }
+
+  .combobox-prefix-icon .fi {
+    font-size: 18px;
+  }
+}
+
+/* ========== TRANSITIONS ========== */
+.combobox-prefix-icon {
+  transition: opacity 0.2s ease;
+  margin-right: 5px;
+}
+
+/* ========== DISABLED STATE ========== */
+.combobox-container.disabled .combobox-prefix-icon {
+  opacity: 0.5;
+}

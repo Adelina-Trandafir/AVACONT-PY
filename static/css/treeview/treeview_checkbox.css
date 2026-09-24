@@ -1,0 +1,59 @@
+/**
+ * ========== TREEVIEW CHECKBOX MODE (checkable: true) ==========
+ * Boxes drawn in CSS; state comes from treeview-checkable.js. `indeterminate` only
+ * appears on a branch box (option `branchChecks`, never on the top level).
+ */
+
+.treeview-check {
+  position: relative;
+  flex-shrink: 0;
+  align-self: flex-start;
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  margin-top: 3px;
+  margin-right: 6px;
+  border: 1.5px solid #9ca3af;
+  border-radius: 3px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.treeview-check:hover {
+  border-color: var(--primary-color);
+}
+
+.treeview-check.checked,
+.treeview-check.indeterminate {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.treeview-check.checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.treeview-check.indeterminate::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 5px;
+  height: 2px;
+  background: #ffffff;
+}
+
+/* The count sits in the placeholder (see treeview-checkable.js); darker once something is chosen. */
+.treeview-checkable.has-checks .treeview-input::placeholder {
+  color: #111827;
+  opacity: 1;
+}

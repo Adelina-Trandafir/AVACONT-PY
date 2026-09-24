@@ -131,6 +131,38 @@ def get_kbot_connection(db_name=None):
         raise
 
 
+def get_kbot_provisioning_connection(db_name=COMMON_DB):
+    """
+    K-BOT server, as the PROVISIONING account (slice 0075-03, plan 5.6, D18).
+
+    The one connection allowed to CREATE and DROP a unit database and to CREATE,
+    ALTER and DROP a MariaDB user. Its credentials are `DB_CONFIG_PROVIZIONARE` in
+    config.py -- same host and port as DB_CONFIG_NEW, a different account. Never
+    falls back to the service account: a job that creates users must fail loudly
+    when its own account is missing, not quietly run with AVACONT's rights.
+
+    Default database AVACONT_COMUN, because the free-name check (nume.used_prefixes)
+    reads `CAI` unqualified.
+    """
+    cfg = getattr(config, "DB_CONFIG_PROVIZIONARE", None)
+    if cfg is None:
+        raise RuntimeError(
+            "DB_CONFIG_PROVIZIONARE lipseste din config: contul de provizionare "
+            "nu este configurat."
+        )
+    cfg = _timeouts(dict(cfg))
+    if db_name:
+        cfg["database"] = db_name
+
+    try:
+        conn = mysql.connector.connect(**cfg)
+        conn.autocommit = False
+        return conn
+    except mysql.connector.Error as err:
+        logger.error(f"Eroare conectare cont provizionare (DB: {db_name}): {err}")
+        raise
+
+
 def get_kbot_comun_connection():
     """
     AVACONT_COMUN on the K-BOT server -- READING the login tables

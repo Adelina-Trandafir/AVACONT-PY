@@ -51,6 +51,13 @@ _SELECT = (
     "a.DataDefinitivare, a.Incarcat, a.Preluat, a.Salarii, a.ASCUNS, "
     "(SELECT GROUP_CONCAT(DISTINCT i.SS ORDER BY i.SS SEPARATOR ';') "
     " FROM FX_Indicatori i WHERE i.CodAngajament = a.CodAngajament) AS Surse, "
+    # Slice 0777: the moment the angajament was made, as FOREXE's own history says it --
+    # the FX_Istoric row «Angajament nou.» (Access literal, trailing dot; matched with or
+    # without it). DataFX is DATETIME and the tree sorts on it WITH the time part, so it is
+    # sent whole. MIN() keeps the subquery scalar should a second such row ever appear.
+    "(SELECT MIN(x.DataFX) FROM FX_Istoric x "
+    " WHERE x.CodAngajament = a.CodAngajament "
+    "   AND TRIM(TRAILING '.' FROM TRIM(x.Descriere)) = 'Angajament nou') AS DataAngajamentNou, "
     "EXISTS (SELECT 1 FROM FX_Indicatori i WHERE i.CodAngajament = a.CodAngajament) AS AreIndicatori, "
     "EXISTS (SELECT 1 FROM FX_Istoric x WHERE x.CodAngajament = a.CodAngajament) AS AreIstoric, "
     "EXISTS (SELECT 1 FROM FX_DDF_REV_SA r WHERE r.CodAngajament = a.CodAngajament) AS AreRevizii, "
@@ -78,8 +85,8 @@ _SELECT = (
 #            qFX_MAIN_TREE_DESCRIERE / qFX_MAIN_TREE_DATA (angajamentele fara indicatori).
 #            O oglindim cu „EXISTS(indicator pe SS) OR NOT EXISTS(niciun indicator)":
 #            filtrul SS ingusteaza DOAR angajamentele care CHIAR au indicatori; orfanii
-#            raman mereu vizibili. (Un singur %s in bloc -> tuplul de bind ramane
-#            (an, ss, include_hidden), neschimbat.)
+#            raman mereu vizibili. Slice 0777: a leading "%s = 1 OR" lifts the whole SS
+#            block when ss=* (all sources); bind tuple is (an, all_ss, ss, include_hidden).
 #   Ascuns : implicit exclude ASCUNS<>0; include_hidden=1 le readuce (btnOpt).
 #   Stare  : exclude Anulat/Suspendat. NU vine din qFX_MAIN_TREE (acela nu are WHERE
 #            deloc) — vine din qFX_MAIN_TREE_DATA:7 si mdl_FX_PopulareTree.md:253,
@@ -91,6 +98,7 @@ _SELECT = (
 _WHERE = (
     "WHERE (YEAR(a.DataCreare) = %s OR a.DataCreare IS NULL) "
     "AND ( "
+    "    %s = 1 OR "
     "    EXISTS (SELECT 1 FROM FX_Indicatori i "
     "            WHERE i.CodAngajament = a.CodAngajament AND i.SS = %s) "
     "    OR NOT EXISTS (SELECT 1 FROM FX_Indicatori i "
@@ -109,6 +117,10 @@ _ORDER = "ORDER BY a.Descriere"
 
 _SQL = _SELECT + _WHERE + _ORDER
 
+# The ss value that lifts the SS filter (slice 0777). Bind order of _SQL:
+# (an, all_ss, ss, include_hidden).
+ALL_SOURCES = "*"
+
 
 def _json_utf8(payload, status):
     """Raspuns JSON cu diacritice LITERALE (ensure_ascii=False): Descriere/Stare
@@ -122,9 +134,9 @@ def _json_utf8(payload, status):
 def get_tree():
     """Arborele de angajamente al bazei conectate, filtrat pe an + SS.
 
-    Query: an (obligatoriu, intreg), ss (obligatoriu), include_hidden (0/1, implicit 0).
+    Query: an (obligatoriu, intreg), ss (obligatoriu; "*" = all sources, slice 0777), include_hidden (0/1, implicit 0).
     Returneaza { db_name, count, rows: [ {CodAngajament, IDDF, Descriere, Stare,
-    DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, Surse,
+    DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
     AreDDF, ArePartener, AreOrd}, ... ] }.
     """
@@ -140,6 +152,10 @@ def get_tree():
     if ss is None or str(ss).strip() == "":
         return _json_utf8({"error": "Parametru lipsă: ss"}, 400)
     ss = str(ss).strip()
+    # Slice 0777: ss=* = every source. The tree sorted by creation date is a timeline of
+    # the whole year, not of one SS (operator, 23.09.2026) -- the client shows the SURSE
+    # column there so the operator still sees where each row belongs.
+    all_ss = 1 if ss == ALL_SOURCES else 0
 
     include_hidden = 1 if str(request.args.get("include_hidden", "0")).strip() == "1" else 0
 
@@ -150,10 +166,10 @@ def get_tree():
     try:
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
-        cursor.execute(_SQL, (an, ss, include_hidden))
+        cursor.execute(_SQL, (an, all_ss, ss, include_hidden))
         rows = []
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
-             salarii, ascuns, surse, are_indicatori, are_istoric, are_revizii,
+             salarii, ascuns, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
              are_rezervari, are_receptii, are_plati, are_ddf, are_partener,
              are_ord) in cursor.fetchall():
             rows.append({
@@ -168,6 +184,8 @@ def get_tree():
                 "Salarii": bool(salarii),
                 "Ascuns": bool(ascuns),
                 "Surse": surse,
+                # Full datetime (time included): the date sort orders on it (slice 0777).
+                "DataAngajamentNou": data_ang_nou.isoformat() if data_ang_nou is not None else None,
                 "AreIndicatori": bool(are_indicatori),
                 "AreIstoric": bool(are_istoric),
                 "AreRevizii": bool(are_revizii),

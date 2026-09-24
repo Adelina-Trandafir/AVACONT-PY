@@ -150,6 +150,12 @@ def _log_action(un, dc, actiune, tinta=None, detalii=None,
             conn.close()
 
 
+# Public names for the operator approval page (routes/inregistrare/operator.py,
+# slice 0075-05): the same identity check and the same audit journal, not copies.
+verify_operator = _verify_operator
+log_action = _log_action
+
+
 # ---------------------------------------------------------------------------
 # Token guard for post-login endpoints.
 # Rutele autentificate (logout / periods / last-ss) folosesc guard.require_session,

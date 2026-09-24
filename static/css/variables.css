@@ -1,0 +1,78 @@
+/* ========== DASHBOARD BASE ========== */
+:root {
+    /* Layout */
+    --header-height: 50px;
+    --modal-header-height: 40px;
+    --footer-height: 50px;
+    
+    /* Colors & Gradients */
+    --primary-color: #309eff;
+    --primary-color-dark: #004683;
+    --primary-gradient: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-color-dark) 100%);
+    --primary-btn-gradient: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+    --secondary-btn-gradient: linear-gradient(270deg, #ffffff 0%, #ffffff 100%);
+    --primary-btn-gradient-hover: linear-gradient(270deg, #b1fba7 0%, #ffffff 100%);
+    --secondary-btn-gradient-hover: linear-gradient(270deg, #ffffff 0%, #feb6b6 100%);
+    
+    /* Shadows */
+    --border-color: #bbbbbb;
+    
+    /* Panel Variables */
+    --panel-width: 300px;
+    --hover-bg: rgba(0, 93, 174, 0.08);
+    --panel-header-bg: linear-gradient(135deg, #005dae 0%, #005dae 100%);
+    --panel-shadow: 0 4px 20px rgb(0 0 0 / 17%);
+    --panel-body-background: white;
+        
+    /* Table Variables */
+    --table-tabs-height: 50px;
+    --table-tabs-backcolor-gradient: linear-gradient(180deg, #ffffff 0%, #dbdbdb 100%);
+    --table-tabs-backcolor-gradient-active: linear-gradient(180deg, var(--primary-color) 0%, #dbdbdb 30%, #ffffff 100%);
+    --table-tabs-backcolor-gradient-hover: linear-gradient(180deg, var(--primary-color) 0%, #ffffff 10%, #dbdbdb 100%);
+    --table-header-height: 40px;
+    --table-header-backcolor-gradient: linear-gradient(180deg, #ffffff 0%, #dbdbdb 100%);
+    --table-header-backcolor-gradient-reverse: linear-gradient(360deg, #ffffff 0%, #dbdbdb 100%);
+    --header-columns-height: 40px;
+    --row-normal-height: 30px;
+    --row-selected-height: 30px;
+    
+    /* Record Selector */
+    --record-selector-width: 25px;
+    --record-selector-bg: #f8f9fa;
+    --record-selector-border: #dee2e6;
+    
+    /* Selection States */
+    --selection-single-bg: #cce5ff;
+    --selection-single-color: #0056b3;
+    --selection-multi-bg: #e8ffee;
+    --selection-multi-color: #155724;
+    --indicator-active-bg: #007bff;
+    --indicator-active-border: #0056b3;
+    
+    /* Hover Backgrounds */
+    --green-hover-background: linear-gradient(270deg, #ecffeb 0%, #ccffc5 100%);
+    --green-hover-background-reversed: linear-gradient(90deg, #ecffeb 0%, #ccffc5 100%);
+    --red-hover-background: linear-gradient(90deg, #ffebeb 0%, #ffc5c5 100%);
+    
+    /* Status Colors */
+    --status-color-left: #e0ffe7;
+    --status-color-right: #bbffca;
+
+    /* Footer buttons */
+    --footer-btn-addlead: linear-gradient(90deg, #e4fbf0 0%, #4afff2 100%);
+    --footer-btn-addfeed: linear-gradient(90deg, #e4fbf0 0%, #daacfd 100%);
+    --footer-btn-modlead: linear-gradient(90deg, #e4fbf0 0%, #ffa967 100%);
+    --footer-btn-tralead: linear-gradient(90deg, #e4fbf0 0%, #5fffb3 100%);
+    
+    /* Modal Vars */
+    --modal-header-background: linear-gradient(135deg, #005dae 0%, #004683 100%);
+    --modal-border-radius-header: 12px 12px 0 0;
+    --modal-header-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --modal-header-font: bold 16px var(--modal-header-font-family);
+    --modal-header-font-color-light: #fff;
+    --modal-header-font-color-dark: #000;
+
+    /* Form controls */
+    --form-control-focus-border: #155724;
+    --form-control-focus-background: linear-gradient(270deg, #f1fff0 0%, #f3ffc5 100%);
+}

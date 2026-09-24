@@ -1,50 +1,60 @@
 """
-clasificatii_sursa.py -- make `Clasificatii.Sursa` a WRITTEN column (slice 0075-00).
+clasificatii_sursa.py -- make `Clasificatii.Sector`, `Sursa` and `SS` WRITTEN columns
+(slice 0075-00).
 
-WHY. `Clasificatii.Sector`, `Sursa` and `SS` are GENERATED from `right(Capitol, 2)`,
-and `SS` carries the foreign key into `AVACONT_COMUN.DefaSursaSector`. The CASE only
-knows the capitol endings 00/01/02/10, so the generated `SS` can be `01A`, `02A` or
-`02E` and nothing else -- while `DefaSursaSector` has fourteen values (`01D`, `01F`,
-`03A`, `08A`, ...). The source letter (A/C/D/E/F/G) cannot be read from the capitol at
-all, so it has to be stored. Decision D15/D19 in docs/PLAN_AutoProvisioning.md: `Sursa`
-becomes a plain `char(1) NOT NULL DEFAULT 'A'`, `Sector` keeps its CASE extended to
-03/04/05/08, and `SS = concat(<sector case>, Sursa)` stays generated so the foreign key
-keeps working.
+WHY. The three were GENERATED from `right(Capitol, 2)`, and `SS` carries the foreign key
+into `AVACONT_COMUN.DefaSursaSector`. The CASE only knew the capitol endings 00/01/02/10,
+so the generated `SS` could be `01A`, `02A` or `02E` and nothing else -- while
+DefaSursaSector has fourteen values (`01D`, `01F`, `03A`, `08A`, ...). The source letter
+(A/C/D/E/F/G) cannot be read from the capitol at all: `01A`, `01D`, `01F` and `01G` all end
+in `01`. It is operator input pretending to be derived, so it has to be stored.
 
-WHAT IT DOES, per database (AVACONT_SURSA first -- it is the template -- then every
-unit database, `NNN_*` in information_schema.SCHEMATA):
+WHY ALL THREE, AND WHY ONLY THESE THREE. The first attempt kept `SS` generated as
+`concat(<sector case>, Sursa)`. MariaDB 10.11 refuses that with **error 1901** -- proven on
+this server 22.09.2026 in a FRESH table, so it is the expression shape, not the ALTER:
+
+    Function or expression 'concat(case right(coalesce(`Capitol`,''),2) ... ,`Sursa`)'
+    cannot be used in the GENERATED ALWAYS AS clause of `SS`
+
+So `SS` cannot be generated from another column and must be written; `Sector` and `Sursa`
+are the halves of it and follow. The other six generated columns (`Clsf`, `Titlu`,
+`ClsfSal`, `ClsfF`, `ClsfE`, `ClsfX`) are left exactly as they are: they are pure functions
+of Capitol/Subcapitol/Articol/Alineat, every writer already supplies those four, and two of
+them carry foreign keys of their own. Generated, they CANNOT disagree with the base columns.
+Written, an UPDATE that changes `Capitol` and forgets `ClsfF` would produce a row that
+passes every foreign key and still lies. Decision of 22.09.2026.
+
+WHAT IT DOES, per database (AVACONT_SURSA first -- it is the template -- then every unit
+database, `NNN_*` in information_schema.SCHEMATA):
 
   1. mysqldump of `Clasificatii` alone, to <backup-dir>/<db>_Clasificatii_<stamp>.sql.
   2. Snapshot of the three columns: `_snap_clsf (IDClsf, Sector, Sursa, SS)`.
-  3. `ADD COLUMN Sursa_w char(1) NULL`, then `UPDATE ... SET Sursa_w = Sursa` -- the
-     values are COPIED, so nothing depends on how MariaDB converts a generated column.
-  4. One ALTER TABLE: drop the FK on SS, drop SS, drop the generated Sursa, rename
-     Sursa_w to Sursa (NOT NULL DEFAULT 'A'), redefine Sector with the extended CASE,
-     re-add SS (generated, STORED), its index and its foreign key.
-  5. Verify against the snapshot: same row count, and ZERO rows whose Sector, Sursa or
-     SS differ (`<=>`). A difference stops the run and prints the restore command; the
-     snapshot is dropped only after the check passes.
+  3. Three plain columns `Sector_w` / `Sursa_w` / `SS_w`, filled from the generated ones.
+     The values are COPIED, so nothing depends on how MariaDB treats the conversion.
+  4. One ALTER TABLE: drop the foreign key and its index, drop the three generated columns,
+     rename the three copies into their place with the right types and positions, put the
+     index and the foreign key back. No generated expression is created, so 1901 cannot
+     recur.
+  5. Verify against the snapshot: same row count, and ZERO rows whose Sector, Sursa or SS
+     differ (`<=>`). A difference stops the run and prints the restore command; the snapshot
+     is dropped only after the check passes.
 
-Why no existing row can change: today only the four capitol endings pass the foreign
-key (any other ending computes SS = '', which DefaSursaSector refuses), and for those
-four the extended CASE and the copied Sursa give exactly the old values. Step 5 proves
-it instead of trusting the argument.
+AFTER THIS, `SS` IS `NOT NULL` WITH NO DEFAULT and a live foreign key, so an INSERT that
+omits it fails loudly (1364) instead of quietly storing a wrong sector. Every writer must
+pass it -- see `routes/clasificatii_ss.py`, which holds the one rule they all share.
+Deploy those writers and run this in the same maintenance window: between the two, an insert
+into `Clasificatii` fails. Reads are unaffected throughout.
 
-There is no rollback: DDL commits implicitly. Recovery is the dump of step 1, restored
-by hand with the command the script prints (`--restore` prints it again).
-
-UNVERIFIED on MariaDB 10.11 (the developer has no server): that one ALTER TABLE may
-drop `Sursa` while `SS` -- whose expression inlines the same CASE, not the column --
-is dropped in the same statement. If the server refuses the single statement, run
-again with `--split-alter`: the same clauses in three statements (drop, rename/modify,
-re-add). Between them the table has no SS for a few seconds; the dump covers that.
+There is no rollback: DDL commits implicitly. Recovery is the dump of step 1, restored by
+hand with the command the script prints (`--restore` prints it again).
 
 Usage (from the PYTHON folder, with the venv):
-    python -m scripts.clasificatii_sursa --dry-run           # list, counts, state; writes nothing
-    python -m scripts.clasificatii_sursa                     # every database
-    python -m scripts.clasificatii_sursa --db AVACONT_SURSA  # one database
-    python -m scripts.clasificatii_sursa --split-alter       # see above
-    python -m scripts.clasificatii_sursa --restore --db 001_GR23 --file backup/001_GR23_Clasificatii_x.sql
+    python -m scripts.clasificatii_sursa --dry-run            # list, counts, state; writes nothing
+    python -m scripts.clasificatii_sursa                      # every database
+    python -m scripts.clasificatii_sursa --db AVACONT_SURSA   # one database
+    python -m scripts.clasificatii_sursa --clean-leftovers    # clear a failed run's temporaries
+    python -m scripts.clasificatii_sursa --split-alter        # step 4 in three statements
+    python -m scripts.clasificatii_sursa --restore --db 001_GR23 --file backup/001_GR23_...sql
 """
 
 import argparse
@@ -52,7 +62,7 @@ import os
 import shlex
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 import mysql.connector
@@ -64,23 +74,20 @@ from routes.schema_sync.schema_execute import find_dump_tool
 
 TABLE = "Clasificatii"
 SNAPSHOT = "_snap_clsf"
-TEMP_COLUMN = "Sursa_w"
 SS_INDEX = "idx_SS"
 SS_FK = "Clasificatii__DefaSS"
 COMMON_DB = "AVACONT_COMUN"
 
-# The sector CASE, extended. `00`/`01` -> 01 and `10` -> 02 are the historical rules;
-# 03/04/05/08 are the sectors DefaSursaSector knows and the old CASE did not.
-SECTOR_CASE_SQL = (
-    "case right(coalesce(`Capitol`,''),2) "
-    "when '00' then '01' when '01' then '01' "
-    "when '02' then '02' when '10' then '02' "
-    "when '03' then '03' when '04' then '04' when '05' then '05' when '08' then '08' "
-    "else '' end"
+# The three columns that stop being generated, in table order, each with the type it gets
+# and the column it must sit after. `SS` deliberately has NO default: a writer that forgets
+# it must fail (1364), not store a wrong sector.
+CONVERTED = (
+    ("Sector", "varchar(2) NOT NULL DEFAULT ''", "ClsfX"),
+    ("Sursa", "char(1) NOT NULL DEFAULT 'A'", "Sector"),
+    ("SS", "varchar(3) NOT NULL", "Sursa"),
 )
 
-# The eight endings the extended CASE maps; used by the state check only.
-EXTENDED_ENDINGS = ("'03'", "'04'", "'05'", "'08'")
+TEMP_SUFFIX = "_w"
 
 
 class MigrationError(RuntimeError):
@@ -92,15 +99,20 @@ class TableState:
     db: str
     exists: bool                 # Clasificatii exists in this database
     rows: int = 0
-    sursa_generated: bool = False
-    sector_extended: bool = False
+    generated: tuple = ()        # which of the three are still GENERATED
     ss_fk_name: str = None       # the FK constraint on SS, as the server names it
     ss_index_name: str = None    # the index on SS, as the server names it
-    leftovers: tuple = ()        # `_snap_clsf` / `Sursa_w` from an earlier, failed run
+    leftovers: tuple = ()        # `_snap_clsf` / `*_w` from an earlier, failed run
+    positions: dict = field(default_factory=dict)   # column -> the column it sits after
 
     @property
     def migrated(self) -> bool:
-        return self.exists and (not self.sursa_generated) and self.sector_extended
+        return self.exists and not self.generated
+
+    @property
+    def untouched(self) -> bool:
+        """True when all three are still generated: nothing structural has happened yet."""
+        return self.exists and len(self.generated) == len(CONVERTED)
 
 
 # ---------------------------------------------------------------------------
@@ -149,28 +161,37 @@ def list_databases(conn) -> list:
 
 def inspect(conn, db: str) -> TableState:
     cols = query(conn,
-                 "SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION "
+                 "SELECT COLUMN_NAME, EXTRA, ORDINAL_POSITION "
                  "FROM information_schema.COLUMNS "
-                 "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
+                 "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s "
+                 "ORDER BY ORDINAL_POSITION",
                  (db, TABLE))
     if not cols:
         return TableState(db=db, exists=False)
     by_name = {c["COLUMN_NAME"]: c for c in cols}
-    if "Sursa" not in by_name or "Sector" not in by_name or "Capitol" not in by_name:
+    order = [c["COLUMN_NAME"] for c in cols]
+
+    missing = [name for name, _type, _after in CONVERTED if name not in by_name]
+    if missing:
         raise MigrationError(
-            f"{db}.{TABLE} nu are coloanele Capitol/Sector/Sursa — structură necunoscută.")
+            f"{db}.{TABLE} nu are coloanele {', '.join(missing)} — structură necunoscută.")
 
     state = TableState(db=db, exists=True)
     state.rows = query(conn, f"SELECT COUNT(*) AS n FROM {q(db)}.{q(TABLE)}")[0]["n"]
-    state.sursa_generated = "GENERATED" in (by_name["Sursa"]["EXTRA"] or "").upper()
-    sector_expr = by_name["Sector"]["GENERATION_EXPRESSION"] or ""
-    state.sector_extended = all(e in sector_expr for e in EXTENDED_ENDINGS)
+    state.generated = tuple(
+        name for name, _type, _after in CONVERTED
+        if "GENERATED" in (by_name[name]["EXTRA"] or "").upper())
+
+    # The column each one currently sits after, so the ALTER puts them back where they were
+    # even if this table's order differs from the template's.
+    for name, _type, _after in CONVERTED:
+        idx = order.index(name)
+        state.positions[name] = order[idx - 1] if idx > 0 else None
 
     fk = query(conn,
-               "SELECT k.CONSTRAINT_NAME AS name "
-               "FROM information_schema.KEY_COLUMN_USAGE k "
-               "WHERE k.TABLE_SCHEMA = %s AND k.TABLE_NAME = %s AND k.COLUMN_NAME = 'SS' "
-               "AND k.REFERENCED_TABLE_NAME IS NOT NULL",
+               "SELECT CONSTRAINT_NAME AS name FROM information_schema.KEY_COLUMN_USAGE "
+               "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'SS' "
+               "AND REFERENCED_TABLE_NAME IS NOT NULL",
                (db, TABLE))
     state.ss_fk_name = fk[0]["name"] if fk else None
 
@@ -180,12 +201,10 @@ def inspect(conn, db: str) -> TableState:
                 (db, TABLE))
     state.ss_index_name = idx[0]["name"] if idx else None
 
-    leftovers = []
-    if TEMP_COLUMN in by_name:
-        leftovers.append(TEMP_COLUMN)
-    snap = query(conn, "SELECT 1 AS x FROM information_schema.TABLES "
-                       "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s", (db, SNAPSHOT))
-    if snap:
+    leftovers = [name + TEMP_SUFFIX for name, _t, _a in CONVERTED
+                 if name + TEMP_SUFFIX in by_name]
+    if query(conn, "SELECT 1 AS x FROM information_schema.TABLES "
+                   "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s", (db, SNAPSHOT)):
         leftovers.append(SNAPSHOT)
     state.leftovers = tuple(leftovers)
     return state
@@ -199,17 +218,26 @@ def alter_clauses(state: TableState) -> tuple:
     if not state.ss_fk_name:
         raise MigrationError(
             f"{state.db}.{TABLE}: nu există cheie străină pe SS — structura nu e cea așteptată.")
+
     drops = [f"DROP FOREIGN KEY {q(state.ss_fk_name)}"]
     if state.ss_index_name:
         drops.append(f"DROP KEY {q(state.ss_index_name)}")
-    drops += ["DROP COLUMN `SS`", "DROP COLUMN `Sursa`"]
+    # Reverse table order: SS, then Sursa, then Sector. Nothing depends on the order here
+    # (none of the three is referenced by another expression once SS stops being generated),
+    # but dropping the foreign key's own column first keeps the statement readable.
+    drops += [f"DROP COLUMN {q(name)}" for name, _t, _a in reversed(CONVERTED)]
 
-    changes = [
-        f"CHANGE COLUMN {q(TEMP_COLUMN)} `Sursa` char(1) NOT NULL DEFAULT 'A' AFTER `Sector`",
-        f"MODIFY COLUMN `Sector` varchar(2) AS ({SECTOR_CASE_SQL}) STORED",
-    ]
+    changes = []
+    for name, coltype, default_after in CONVERTED:
+        after = state.positions.get(name) or default_after
+        # A column that sat after one of the three being dropped: fall back to the layout
+        # the template has, so the ALTER never names a column that no longer exists.
+        if after in [n for n, _t, _a in CONVERTED]:
+            after = default_after
+        changes.append(
+            f"CHANGE COLUMN {q(name + TEMP_SUFFIX)} {q(name)} {coltype} AFTER {q(after)}")
+
     adds = [
-        f"ADD COLUMN `SS` varchar(3) AS (concat({SECTOR_CASE_SQL}, `Sursa`)) STORED AFTER `Sursa`",
         f"ADD KEY {q(SS_INDEX)} (`SS`)",
         f"ADD CONSTRAINT {q(SS_FK)} FOREIGN KEY (`SS`) "
         f"REFERENCES {q(COMMON_DB)}.`DefaSursaSector` (`SursaSector`) "
@@ -225,6 +253,29 @@ def alter_statements(state: TableState, split: bool = False) -> list:
     if split:
         return [head + ", ".join(drops), head + ", ".join(changes), head + ", ".join(adds)]
     return [head + ", ".join(drops + changes + adds)]
+
+
+def temp_column_statements(db: str) -> list:
+    """Step 3: the plain copies, added and filled. Nullable while they are temporary."""
+    table = f"{q(db)}.{q(TABLE)}"
+    adds = ", ".join(f"ADD COLUMN {q(name + TEMP_SUFFIX)} "
+                     f"{coltype.split(' NOT NULL')[0]} NULL"
+                     for name, coltype, _after in CONVERTED)
+    sets = ", ".join(f"{q(name + TEMP_SUFFIX)} = {q(name)}"
+                     for name, _t, _a in CONVERTED)
+    return [f"ALTER TABLE {table} {adds}", f"UPDATE {table} SET {sets}"]
+
+
+def cleanup_statements(state: TableState) -> list:
+    """Drop what a failed run left behind. Only ever called on an untouched table."""
+    stmts = []
+    temps = [name for name in state.leftovers if name != SNAPSHOT]
+    if temps:
+        stmts.append(f"ALTER TABLE {q(state.db)}.{q(TABLE)} " +
+                     ", ".join(f"DROP COLUMN {q(t)}" for t in temps))
+    if SNAPSHOT in state.leftovers:
+        stmts.append(f"DROP TABLE {q(state.db)}.{q(SNAPSHOT)}")
+    return stmts
 
 
 def verify_sql(db: str) -> tuple:
@@ -283,23 +334,29 @@ def restore_command(db: str, dump_path: str) -> str:
 # ---------------------------------------------------------------------------
 # One database
 # ---------------------------------------------------------------------------
-def migrate_database(conn, db: str, backup_dir: str, split: bool, say) -> str:
+def migrate_database(conn, db: str, backup_dir: str, split: bool, say,
+                     clean_leftovers: bool = False) -> str:
     """Steps 1-5 on one database. Returns 'migrated' | 'skipped'. Raises on failure."""
     state = inspect(conn, db)
     if not state.exists:
         say(f"{db}: fără tabel {TABLE} — sărit.")
         return "skipped"
-    if state.leftovers:
-        raise MigrationError(
-            f"{db}: rămășițe ale unei rulări anterioare ({', '.join(state.leftovers)}). "
-            f"Verificați starea tabelului și ștergeți-le de mână înainte de a relua.")
     if state.migrated:
-        say(f"{db}: Sursa este deja coloană scrisă și Sector are CASE-ul extins — sărit.")
+        say(f"{db}: Sector/Sursa/SS sunt deja coloane scrise — sărit.")
         return "skipped"
-    if not state.sursa_generated:
+    if not state.untouched:
         raise MigrationError(
-            f"{db}: Sursa nu este generată, dar Sector nu are CASE-ul extins — stare "
-            f"intermediară necunoscută. Nu se continuă.")
+            f"{db}: doar {', '.join(state.generated)} mai sunt generate — stare intermediară "
+            f"necunoscută. Nu se continuă; verificați tabelul de mână.")
+    if state.leftovers:
+        if not clean_leftovers:
+            raise MigrationError(
+                f"{db}: rămășițe ale unei rulări anterioare ({', '.join(state.leftovers)}). "
+                f"Tabelul este neatins, deci pot fi șterse: reluați cu --clean-leftovers.")
+        for stmt in cleanup_statements(state):
+            say(f"  curățare: {stmt}")
+            execute(conn, stmt)
+        state = inspect(conn, db)
 
     say(f"{db}: {state.rows} rânduri; FK pe SS = {state.ss_fk_name}, "
         f"index pe SS = {state.ss_index_name or '(niciunul)'}")
@@ -312,12 +369,12 @@ def migrate_database(conn, db: str, backup_dir: str, split: bool, say) -> str:
         # 2. snapshot
         execute(conn, f"CREATE TABLE {q(db)}.{q(SNAPSHOT)} AS "
                       f"SELECT IDClsf, Sector, Sursa, SS FROM {q(db)}.{q(TABLE)}")
-        # 3. copy the values into a written column
-        execute(conn, f"ALTER TABLE {q(db)}.{q(TABLE)} ADD COLUMN {q(TEMP_COLUMN)} char(1) NULL")
-        execute(conn, f"UPDATE {q(db)}.{q(TABLE)} SET {q(TEMP_COLUMN)} = `Sursa`")
+        # 3. copy the values into plain columns
+        for stmt in temp_column_statements(db):
+            execute(conn, stmt)
         # 4. the structural change
         for stmt in alter_statements(state, split):
-            say(f"  {stmt[:120]}{'…' if len(stmt) > 120 else ''}")
+            say(f"  {stmt[:140]}{'…' if len(stmt) > 140 else ''}")
             execute(conn, stmt)
         # 5. verify against the snapshot
         n_table, n_snap, n_diff = verify_sql(db)
@@ -346,12 +403,16 @@ def migrate_database(conn, db: str, backup_dir: str, split: bool, say) -> str:
 # ---------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Clasificatii.Sursa: din coloană generată în coloană scrisă (slice 0075-00).")
+        description="Clasificatii: Sector/Sursa/SS din coloane generate în coloane scrise "
+                    "(slice 0075-00).")
     p.add_argument("--dry-run", action="store_true",
                    help="listează bazele, numărul de rânduri și starea; nu modifică nimic")
     p.add_argument("--db", help="o singură bază (implicit: AVACONT_SURSA + toate unitățile)")
     p.add_argument("--backup-dir", default="backup",
                    help="folderul copiilor de siguranță (implicit: backup)")
+    p.add_argument("--clean-leftovers", action="store_true",
+                   help="șterge coloanele și instantaneul rămase de la o rulare eșuată "
+                        "(doar pe un tabel neatins) și continuă")
     p.add_argument("--split-alter", action="store_true",
                    help="ALTER-ul din pasul 4 în trei instrucțiuni, dacă serverul refuză una singură")
     p.add_argument("--restore", action="store_true",
@@ -390,15 +451,17 @@ def main(argv=None) -> int:
                         say(f"  {db:<16} fără tabel {TABLE}")
                         continue
                     status = ("migrat" if st.migrated else
-                              "de migrat" if st.sursa_generated else "stare necunoscută")
+                              "de migrat" if st.untouched else
+                              f"stare intermediară ({', '.join(st.generated)} generate)")
                     extra = f"; rămășițe: {', '.join(st.leftovers)}" if st.leftovers else ""
-                    say(f"  {db:<16} {st.rows:>7} rânduri  {status:<16} FK SS={st.ss_fk_name} "
+                    say(f"  {db:<16} {st.rows:>7} rânduri  {status:<22} FK SS={st.ss_fk_name} "
                         f"index SS={st.ss_index_name}{extra}")
                 return 0
 
             done = skipped = 0
             for db in targets:
-                result = migrate_database(conn, db, args.backup_dir, args.split_alter, say)
+                result = migrate_database(conn, db, args.backup_dir, args.split_alter, say,
+                                          clean_leftovers=args.clean_leftovers)
                 if result == "migrated":
                     done += 1
                 else:

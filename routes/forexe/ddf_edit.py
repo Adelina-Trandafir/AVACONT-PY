@@ -112,6 +112,7 @@ from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 
 from . import forexe_bp
+from .marcaj import LOCK_IDREV, consuma_lacatul, id_marcaj_utilizabil, idrev_tinut
 
 logger = logging.getLogger(__name__)
 
@@ -1795,20 +1796,43 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
     if rev_noua:
         _consuma_lacatul(cursor, _int0(sarcina.get("id_lock_numar_rev")),
                          LOCK_TIP_NUMARREV, dc, cod, numar_rev, token)
-        cursor.execute(
-            "INSERT INTO FX_DDF_REV "
-            "  (IDDF, CodAngajament, Tip, NumarRev, DataRev, Desc_Scurta, Desc_Lunga, "
-            "   Desc_Lunga_ANSI, Incarcat, Preluat, DC) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            (iddf, cod, _txt(revizie.get("tip")), numar_rev,
-             _zi_ceruta(revizie.get("data_rev"), "data_rev"),
-             _txt(revizie.get("desc_scurta")),
-             _txt(revizie.get("desc_lunga")),
-             _txt(revizie.get("desc_lunga_ansi")),
-             1 if revizie.get("incarcat") else 0,
-             1 if revizie.get("preluat") else 0,
-             dc))
-        idrev = _cheie_noua(cursor, "FX_DDF_REV")
+        valori_rev = (iddf, cod, _txt(revizie.get("tip")), numar_rev,
+                      _zi_ceruta(revizie.get("data_rev"), "data_rev"),
+                      _txt(revizie.get("desc_scurta")),
+                      _txt(revizie.get("desc_lunga")),
+                      _txt(revizie.get("desc_lunga_ansi")),
+                      1 if revizie.get("incarcat") else 0,
+                      1 if revizie.get("preluat") else 0,
+                      dc)
+        # Slice 0076: the IDREV the FOREXE page wrote into the reservation motives
+        # («(IDREV: n)», routes/forexe/marcaj.py) while this angajament's reservations were
+        # being edited. The revision written now is the one those motives named, so it is
+        # born with that number, and the lock goes. Without a held number (or one that can
+        # no longer be used) the counter gives the key, exactly as before.
+        idrev_marcat = idrev_tinut(cursor, g.session.db_name, cod)
+        if idrev_marcat is not None and not id_marcaj_utilizabil(cursor, LOCK_IDREV, idrev_marcat):
+            logger.warning("[forexe.ddf_edit] IDREV %s tinut pentru %s nu se poate folosi "
+                           "(exista deja sau nu a fost rezervat) -- revizia primeste un id nou",
+                           idrev_marcat, cod)
+            consuma_lacatul(cursor, LOCK_IDREV, idrev_marcat, cod)
+            idrev_marcat = None
+        if idrev_marcat is not None:
+            cursor.execute(
+                "INSERT INTO FX_DDF_REV "
+                "  (IDREV, IDDF, CodAngajament, Tip, NumarRev, DataRev, Desc_Scurta, Desc_Lunga, "
+                "   Desc_Lunga_ANSI, Incarcat, Preluat, DC) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (int(idrev_marcat),) + valori_rev)
+            idrev = int(idrev_marcat)
+            consuma_lacatul(cursor, LOCK_IDREV, idrev, cod)
+        else:
+            cursor.execute(
+                "INSERT INTO FX_DDF_REV "
+                "  (IDDF, CodAngajament, Tip, NumarRev, DataRev, Desc_Scurta, Desc_Lunga, "
+                "   Desc_Lunga_ANSI, Incarcat, Preluat, DC) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                valori_rev)
+            idrev = _cheie_noua(cursor, "FX_DDF_REV")
     else:
         cursor.execute(
             "UPDATE FX_DDF_REV SET "
@@ -1927,6 +1951,18 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
             f"UPDATE FX_Rezervari SET IDREV = %s, AreDDF = TRUE WHERE IDRZ IN ({sabloane})",
             (idrev,) + tuple(idrz))
         rezervari_legate = cursor.rowcount
+
+    # 8.1b Slice 0076: the reservations whose history rows carry this revision's number
+    # (the «(IDREV: n)» marker, stored by ingest step 3b in FX_Istoric.IDREV) and that the
+    # ingest could not link because the revision did not exist yet. Only the unlinked ones:
+    # a link made above, or by hand, is not moved.
+    if rev_noua:
+        cursor.execute(
+            "UPDATE FX_Rezervari R INNER JOIN FX_Istoric H ON H.ID = R.IDH "
+            "   SET R.IDREV = %s, R.AreDDF = TRUE "
+            " WHERE H.IDREV = %s AND R.CodAngajament = %s AND R.IDREV IS NULL",
+            (idrev, idrev, cod))
+        rezervari_legate += cursor.rowcount
 
     # 8.2 and 8.3 FX_Angajamente. The Descriere cascade is UNCONDITIONAL now (decision D10
     # replaces Access's `ModNume` gate). ObiectDDF is varchar(500) and Descriere is

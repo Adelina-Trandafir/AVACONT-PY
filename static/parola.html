@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Alegerea parolei · K-BOT</title>
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/inregistrare.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <div class="brand">
+        <span class="brand-mark">K-BOT</span>
+        <span class="brand-title">Alegerea parolei</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wizard">
+    <!-- checking the link -->
+    <section class="card" id="panel-check" aria-live="polite">
+      <h2>Se verifică linkul…</h2>
+    </section>
+
+    <!-- the link is dead -->
+    <section class="card" id="panel-dead" hidden>
+      <h2>Linkul nu mai este valabil</h2>
+      <div class="msg msg-error" role="alert" id="dead-msg"></div>
+    </section>
+
+    <!-- the form -->
+    <section class="card" id="panel-form" hidden aria-labelledby="h-form">
+      <h2 id="h-form" tabindex="-1">Alegeți parola</h2>
+      <p class="lead">Unitatea <strong id="form-unit"></strong> a fost aprobată.
+        Contul dumneavoastră este <strong id="form-user"></strong>.</p>
+
+      <form id="pwd-form" novalidate>
+        <label class="field-label" for="pwd-1">Parola nouă</label>
+        <input id="pwd-1" class="text-input" type="password" autocomplete="new-password" maxlength="128">
+        <p class="hint">Cel puțin 8 caractere.</p>
+
+        <label class="field-label" for="pwd-2">Repetați parola</label>
+        <input id="pwd-2" class="text-input" type="password" autocomplete="new-password" maxlength="128">
+
+        <div class="msg" role="alert" id="form-msg" hidden></div>
+        <div class="actions">
+          <span></span>
+          <button id="pwd-submit" class="btn btn-primary" type="submit">Salvează parola</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- done -->
+    <section class="card done-panel" id="panel-done" hidden aria-labelledby="h-done">
+      <div class="done-mark" aria-hidden="true">✓</div>
+      <h2 id="h-done" tabindex="-1">Parola a fost salvată</h2>
+      <p class="lead">Vă puteți autentifica în K-BOT cu adresa <strong id="done-user"></strong>
+        și parola aleasă.</p>
+      <p class="hint">Linkul din e-mail nu mai poate fi folosit.</p>
+    </section>
+  </main>
+
+  <script type="module" src="/static/js/inregistrare/parola.js"></script>
+</body>
+</html>

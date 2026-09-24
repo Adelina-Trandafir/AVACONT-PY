@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Înregistrare unitate nouă · K-BOT</title>
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/treeview/treeview.css">
+  <link rel="stylesheet" href="/static/css/combobox.css">
+  <link rel="stylesheet" href="/static/css/inregistrare.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <div class="brand">
+        <span class="brand-mark">K-BOT</span>
+        <span class="brand-title">Înregistrare unitate nouă</span>
+      </div>
+      <div id="session-timer" class="session-timer" hidden></div>
+    </div>
+  </header>
+
+  <main class="wizard">
+    <ol class="stepper" id="stepper">
+      <li data-step="1"><span class="step-num">1</span><span class="step-label">Date Unitate</span></li>
+      <li data-step="2"><span class="step-num">2</span><span class="step-label">E-mail</span></li>
+      <li data-step="3"><span class="step-num">3</span><span class="step-label">Surse</span></li>
+      <li data-step="4"><span class="step-num">4</span><span class="step-label">Clasificații</span></li>
+      <li data-step="5"><span class="step-num">5</span><span class="step-label">Trimitere</span></li>
+    </ol>
+
+    <!-- 1: fiscal code -> ANAF, then the unit name (editable) -->
+    <section class="card step-panel" data-step="1" aria-labelledby="h-1">
+      <h2 id="h-1" tabindex="-1">Date Unitate</h2>
+      <p class="lead">Introduceți codul de identificare fiscală. Datele unității se preiau automat de la ANAF.</p>
+
+      <label class="field-label" for="cf-input">Cod fiscal (CIF)</label>
+      <div class="field-row">
+        <input id="cf-input" class="text-input" type="text" inputmode="text" autocomplete="off"
+               spellcheck="false" maxlength="20" placeholder="ex. 12345678 sau RO12345678">
+        <button id="cf-search" class="btn btn-primary" type="button">Caută</button>
+      </div>
+
+      <div id="anaf-card" class="info-card" hidden>
+        <dl class="kv">
+          <dt>CUI</dt><dd id="anaf-cui"></dd>
+          <dt>Adresă</dt><dd id="anaf-adresa"></dd>
+          <dt>Nr. Reg. Com.</dt><dd id="anaf-regcom"></dd>
+        </dl>
+        <p class="hint">Verificați că datele de mai sus sunt ale unității dumneavoastră.</p>
+      </div>
+
+      <div id="name-block" hidden>
+        <label class="field-label" for="denumire-input">Denumirea unității</label>
+        <input id="denumire-input" class="text-input" type="text" autocomplete="organization" maxlength="255">
+        <p class="hint">Preluată de la ANAF. O puteți modifica dacă este cazul. Sunt permise litere, cifre, spații și virgule.</p>
+      </div>
+
+      <div class="msg" role="alert" hidden></div>
+      <div class="actions">
+        <span></span>
+        <button id="next-1" class="btn btn-primary" type="button" disabled>Continuă</button>
+      </div>
+    </section>
+
+    <!-- 2: e-mail + six-digit code -->
+    <section class="card step-panel" data-step="2" aria-labelledby="h-2" hidden>
+      <h2 id="h-2" tabindex="-1">Adresa de e-mail</h2>
+      <p class="lead">Adresa devine numele de utilizator în K-BOT. Vă trimitem un cod de 6 cifre ca să o confirmăm.</p>
+
+      <label class="field-label" for="email-input">E-mail</label>
+      <div class="field-row">
+        <input id="email-input" class="text-input" type="email" autocomplete="email"
+               spellcheck="false" maxlength="80" placeholder="nume@exemplu.ro">
+        <button id="code-send" class="btn btn-primary" type="button">Trimite codul</button>
+      </div>
+
+      <div id="code-box" class="sub-block" hidden>
+        <p id="code-note" class="hint"></p>
+        <label class="field-label" for="code-input">Codul primit pe e-mail</label>
+        <div class="field-row">
+          <input id="code-input" class="text-input code-input" type="text" inputmode="numeric"
+                 autocomplete="one-time-code" maxlength="6" placeholder="000000">
+          <button id="code-verify" class="btn btn-primary" type="button">Verifică</button>
+        </div>
+        <button id="code-resend" class="btn-link" type="button">Nu a sosit? Retrimite codul</button>
+      </div>
+
+      <div id="email-ok" class="ok-note" hidden>
+        <span id="email-ok-text"></span>
+        <button id="email-change" class="btn-link" type="button">Schimbă adresa</button>
+      </div>
+
+      <div class="msg" role="alert" hidden></div>
+      <div class="actions">
+        <button class="btn btn-secondary" type="button" data-back>Înapoi</button>
+        <button id="next-2" class="btn btn-primary" type="button" disabled>Continuă</button>
+      </div>
+    </section>
+
+    <!-- 3: sector-source -->
+    <section class="card step-panel" data-step="3" aria-labelledby="h-3" hidden>
+      <h2 id="h-3" tabindex="-1">Sursa și sectorul</h2>
+      <p class="lead">Alegeți sursa, apoi sectorul, și apăsați «Adaugă». Puteți adăuga oricâte perechi sursă-sector pentru care țineți contabilitatea.</p>
+
+      <span class="field-label" id="label-sursa">Sursa</span>
+      <div id="sursa-combo" class="combo-field"></div>
+
+      <span class="field-label" id="label-sector">Sectorul</span>
+      <div class="ss-pick">
+        <div id="sector-combo" class="combo-field combo-field-wide"></div>
+        <button id="ss-add" class="btn btn-secondary" type="button">Adaugă</button>
+      </div>
+
+      <span class="field-label" id="label-ss-list">Surse-sector alese</span>
+      <ul id="ss-list" class="ss-list" aria-labelledby="label-ss-list" hidden></ul>
+      <p id="ss-empty" class="hint">Nicio sursă-sector adăugată încă.</p>
+
+      <div class="msg" role="alert" hidden></div>
+      <div class="actions">
+        <button class="btn btn-secondary" type="button" data-back>Înapoi</button>
+        <button id="next-3" class="btn btn-primary" type="button">Continuă</button>
+      </div>
+    </section>
+
+    <!-- 4: the two classification trees -->
+    <section class="card step-panel" data-step="4" aria-labelledby="h-4" hidden>
+      <h2 id="h-4" tabindex="-1">Clasificațiile bugetare</h2>
+      <p class="lead">Bifați pozițiile folosite de unitate — oricâte, din oricare capitol. Un capitol se deschide cu un clic pe numele lui.</p>
+
+      <span class="field-label" id="label-f">Clasificația funcțională</span>
+      <p class="hint hint-above">Se bifează numai pozițiile de pe ultimul nivel.</p>
+      <div id="tree-f" class="field-control"></div>
+      <p id="count-f" class="hint"></p>
+
+      <span class="field-label" id="label-e">Clasificația economică</span>
+      <p class="hint hint-above">Bifarea unui articol bifează tot ce este sub el; titlurile doar se deschid.</p>
+      <div id="tree-e" class="field-control"></div>
+      <p id="count-e" class="hint"></p>
+
+      <p id="rows-note" class="rows-note" hidden></p>
+
+      <div class="msg" role="alert" hidden></div>
+      <div class="actions">
+        <button class="btn btn-secondary" type="button" data-back>Înapoi</button>
+        <button id="next-4" class="btn btn-primary" type="button">Continuă</button>
+      </div>
+    </section>
+
+    <!-- 5: year + summary + submit -->
+    <section class="card step-panel" data-step="5" aria-labelledby="h-5" hidden>
+      <h2 id="h-5" tabindex="-1">Verificare și trimitere</h2>
+      <p class="lead">Verificați datele de mai jos, alegeți anul și trimiteți cererea.</p>
+
+      <span class="field-label" id="label-an">Anul</span>
+      <div id="an-combo" class="combo-field"></div>
+
+      <dl id="summary" class="kv summary"></dl>
+
+      <div class="msg" role="alert" hidden></div>
+      <div class="actions">
+        <button class="btn btn-secondary" type="button" data-back>Înapoi</button>
+        <button id="submit" class="btn btn-primary" type="button">Trimite cererea</button>
+      </div>
+    </section>
+
+    <!-- 6: done -->
+    <section class="card step-panel done-panel" data-step="6" aria-labelledby="h-6" hidden>
+      <div class="done-mark" aria-hidden="true">✓</div>
+      <h2 id="h-6" tabindex="-1">Cererea a fost trimisă</h2>
+      <p class="lead">Veți primi un e-mail după aprobare.</p>
+      <p>Numărul cererii: <strong id="done-id"></strong></p>
+      <p class="hint">Păstrați acest număr pentru orice întrebare legată de cerere.</p>
+    </section>
+  </main>
+
+  <script src="/static/js/utils/css.js"></script>
+  <script src="/static/js/utils/z-max.js"></script>
+  <script type="module" src="/static/js/inregistrare/wizard.js"></script>
+</body>
+</html>

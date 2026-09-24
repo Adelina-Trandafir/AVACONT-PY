@@ -43,20 +43,32 @@ La DDF se tine cont ca PK-ul lui FX_DDF e COMPUS (IDDF, CUAL) — se ia randul d
 La ORD se foloseste `NrORD`-ul REAL — defectul Access «ORD_NR_0_…» (dictionar gol pe ramura
 «un singur document») NU se reproduce, aceeasi decizie ca in OrdPdfLocator.
 
-Aceasta ruta NU atinge `FX_DDF_REV.Semnatura` — scrierea inapoi a semnaturii apartine feliei
-de semnare (0021), care va chema PUT-ul de aici DUPA o semnare reusita si abia apoi isi va
-face propriul UPDATE.
+SIGNER ROLES (slice 0078): the PUT may carry `X-Semnatura` -- the signer roles found in the
+uploaded PDF, comma separated (DDF: A,B,Ordonator; ORD: AB,CD,Ordonator). When present, the
+parent's `Semnatura` column is updated in the SAME transaction as the PDF row, so a stored PDF
+can never exist without its roles (or the roles without the PDF). Absent header = column
+untouched.
+
+SHARED CHUNKS (slice 0078-05): when the unit database has `FX_PDF_BUCATI` and the `Bucati`
+column, the PDF is stored as an ordered list of content-defined chunks (utils/pdf_chunks.py);
+each distinct chunk is stored once per database. `Continut` stays NULL on those rows. Rows
+written before (with `Continut`) are still served as they are. The wire contract does not
+change: the client always sends and receives the whole, byte-identical file.
 
 NU se logheaza niciodata continutul blobului — doar dimensiuni si sume de control.
 """
+import base64
+import binascii
 import hashlib
 import json
 import logging
+from datetime import datetime
 
 from flask import request, g, current_app
 
 from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
+from utils import pdf_chunks
 
 from . import forexe_bp
 
@@ -73,21 +85,40 @@ H_SHA = "X-Sha256"
 # «-» inseamna «cred ca nu exista rand».
 H_SHA_PREC = "X-Sha-Precedent"
 NO_ROW = "-"
+# Slice 0078: signer roles found in the uploaded PDF, comma separated, ASCII.
+H_SEMN = "X-Semnatura"
+# Slice 0078-05: the shared chunk store (one per unit database).
+CHUNK_TABLE = "FX_PDF_BUCATI"
+# Digests per IN (...) query -- keeps each statement well under max_allowed_packet.
+CHUNK_BATCH = 200
 
 # Cele doua familii de documente, intr-o singura descriere: tabela de PDF-uri, coloana-cheie
 # si tabela parinte. Rutele sunt identice in afara acestor trei nume, deci logica sta o
 # singura data (regula casei: fara al doilea exemplar care se poate desincroniza).
+# Slice 0079: the signatures an upload ADDS and the computer it comes from -- base64 of UTF-8
+# JSON (a header is ASCII only; a signer name can carry diacritics). Written to SIGN_TABLE.
+H_SEMNATURI = "X-Semnaturi"
+H_STATIE = "X-Statie"
+SIGN_TABLE = "FX_PDF_SEMNATURI"
+SIGN_MAX_RECORDS = 50
+# Column widths of SIGN_TABLE (sql/0079_fx_pdf_semnaturi.sql): longer values are cut, not refused.
+_STATION_FIELDS = {"ip_local": 255, "calculator": 128, "utilizator_windows": 128,
+                   "sistem": 128, "versiune": 32}
+
 _DDF = {
     "tabela": "FX_DDF_PDF",
     "cheie": "IDREV",
     "parinte": "FX_DDF_REV",
     "eticheta": "ddf",
+    # Slice 0078: the signer roles a DDF can carry, in their canonical order.
+    "roluri": ("A", "B", "Ordonator"),
 }
 _ORD = {
     "tabela": "FX_ORD_PDF",
     "cheie": "IDORDP",
     "parinte": "FX_ORD",
     "eticheta": "ord",
+    "roluri": ("AB", "CD", "Ordonator"),
 }
 
 
@@ -116,6 +147,188 @@ def _sha_curent(cursor, spec, cheie: int):
         f"SELECT Sha256 FROM {spec['tabela']} WHERE {spec['cheie']} = %s LIMIT 1", (cheie,))
     row = cursor.fetchone()
     return row[0] if row else None
+
+
+def _parse_roles(spec, raw):
+    """Validate the `X-Semnatura` header. Returns (roles_text, error_text).
+
+    None header -> (None, None): the column is not touched. Otherwise every item must be one
+    of the family's roles, without duplicates; the result is rewritten in canonical order so
+    the column always reads the same way ("A,B,Ordonator", never "Ordonator,A,B").
+    """
+    if raw is None:
+        return None, None
+    items = [x.strip() for x in raw.split(",") if x.strip()]
+    if not items:
+        return None, f"Antetul {H_SEMN} este gol: lipsesc rolurile semnatarilor."
+    allowed = spec["roluri"]
+    unknown = [x for x in items if x not in allowed]
+    if unknown:
+        return None, (f"Rol de semnatar necunoscut pentru {spec['eticheta'].upper()}: "
+                      f"{', '.join(unknown)}.")
+    if len(set(items)) != len(items):
+        return None, f"Antetul {H_SEMN} repetă un rol de semnatar."
+    return ",".join(r for r in allowed if r in items), None
+
+
+def _decode_b64_json(raw, header):
+    """(value, None) or (None, error) for a base64-of-UTF-8-JSON header."""
+    try:
+        return json.loads(base64.b64decode(raw.strip(), validate=True).decode("utf-8")), None
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        return None, f"Antetul {header} nu este JSON codat base64."
+
+
+def _parse_sign_time(text):
+    """ISO 8601 with offset -> naive datetime in the SERVER's local time (like NOW() in the
+    other columns); "" -> None. Raises ValueError on anything else."""
+    if not text:
+        return None
+    moment = datetime.fromisoformat(text)
+    if moment.tzinfo is not None:
+        moment = moment.astimezone().replace(tzinfo=None)
+    return moment
+
+
+def _parse_audit(spec, raw_sigs, raw_station):
+    """Slice 0079: (records, station, None) or (None, None, error). No header = ([], {}, None).
+
+    Every record: camp (required), rol (one of the family's roles or ""), semnatar, data.
+    The station is informative: unknown keys are dropped, long values cut to the column."""
+    if raw_sigs is None or not raw_sigs.strip():
+        return [], {}, None
+    items, err = _decode_b64_json(raw_sigs, H_SEMNATURI)
+    if err:
+        return None, None, err
+    if not isinstance(items, list) or len(items) > SIGN_MAX_RECORDS:
+        return None, None, f"Antetul {H_SEMNATURI} trebuie să fie o listă de cel mult {SIGN_MAX_RECORDS} semnături."
+    records = []
+    for item in items:
+        if not isinstance(item, dict):
+            return None, None, f"Antetul {H_SEMNATURI} conține o semnătură fără câmpuri."
+        camp = str(item.get("camp") or "").strip()
+        rol = str(item.get("rol") or "").strip()
+        if not camp or len(camp) > 255:
+            return None, None, f"Antetul {H_SEMNATURI} conține o semnătură fără numele câmpului."
+        if rol and rol not in spec["roluri"]:
+            return None, None, f"Rol de semnatar necunoscut pentru {spec['eticheta'].upper()}: {rol}."
+        try:
+            data = _parse_sign_time(str(item.get("data") or "").strip())
+        except ValueError:
+            return None, None, f"Data semnăturii din câmpul {camp} nu este o dată validă."
+        records.append({"camp": camp, "rol": rol or None,
+                        "semnatar": (str(item.get("semnatar") or "").strip()[:255]) or None,
+                        "data": data})
+    station = {}
+    if raw_station and raw_station.strip():
+        value, err = _decode_b64_json(raw_station, H_STATIE)
+        if err:
+            return None, None, err
+        if isinstance(value, dict):
+            station = {k: (str(value.get(k) or "").strip()[:w] or None)
+                       for k, w in _STATION_FIELDS.items()}
+    return records, station, None
+
+
+def _has_sign_log(cursor) -> bool:
+    """Is slice 0079's table on this database? Probed per request, like the chunk store: until the
+    DDL has run, uploads work exactly as before and the records are only logged as skipped."""
+    cursor.execute(
+        "SELECT COUNT(*) FROM information_schema.TABLES "
+        " WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s", (SIGN_TABLE,))
+    row = cursor.fetchone()
+    return bool(row) and int(row[0]) == 1
+
+
+def _record_signatures(cursor, spec, cheie, records, station, sha) -> int:
+    """Writes one SIGN_TABLE row per record not already there (same document, field and time) --
+    a repeated upload (retry after a lost answer) never doubles a signature. Returns rows written.
+
+    Who and where come from the SERVER: the session's account and the request address. Only the
+    workstation details come from the client."""
+    cheie_col = spec["cheie"]
+    ip_public = (request.remote_addr or "")[:45] or None
+    un = (getattr(g.session, "username", "") or "")[:128]
+    written = 0
+    for r in records:
+        cursor.execute(
+            f"SELECT COUNT(*) FROM {SIGN_TABLE} "
+            f" WHERE {cheie_col} = %s AND Camp = %s AND DataSemnaturii <=> %s",
+            (cheie, r["camp"], r["data"]))
+        row = cursor.fetchone()
+        if row and int(row[0]) > 0:
+            continue
+        cursor.execute(
+            f"INSERT INTO {SIGN_TABLE} "
+            f"       ({cheie_col}, Camp, Rol, Semnatar, DataSemnaturii, DataInregistrarii, Sha256Pdf, "
+            f"        UN, IpPublic, IpLocal, NumeCalculator, UtilizatorWindows, SistemOperare, "
+            f"        VersiuneKbot) "
+            f"VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s)",
+            (cheie, r["camp"], r["rol"], r["semnatar"], r["data"], sha, un, ip_public,
+             station.get("ip_local"), station.get("calculator"),
+             station.get("utilizator_windows"), station.get("sistem"), station.get("versiune")))
+        written += 1
+    return written
+
+
+def _has_chunk_store(cursor, spec) -> bool:
+    """Is slice 0078-05's DDL applied on this database? Probed per request so the route keeps
+    working (whole-file storage, as in 0041) on a database the DDL has not reached yet."""
+    cursor.execute(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS "
+        " WHERE TABLE_SCHEMA = DATABASE() "
+        "   AND ((TABLE_NAME = %s AND COLUMN_NAME = 'Bucati') "
+        "     OR (TABLE_NAME = %s AND COLUMN_NAME = 'Continut'))",
+        (spec["tabela"], CHUNK_TABLE))
+    row = cursor.fetchone()
+    return bool(row) and int(row[0]) == 2
+
+
+def _fetch_chunks(cursor, digests):
+    """{digest: stored_bytes} for the given digests, in batches."""
+    found = {}
+    for i in range(0, len(digests), CHUNK_BATCH):
+        part = digests[i:i + CHUNK_BATCH]
+        marks = ", ".join(["%s"] * len(part))
+        cursor.execute(
+            f"SELECT Sha256, Continut FROM {CHUNK_TABLE} WHERE Sha256 IN ({marks})", tuple(part))
+        for digest, blob in cursor.fetchall():
+            found[bytes(digest)] = bytes(blob)
+    return found
+
+
+def _store_chunks(cursor, parts):
+    """Insert the chunks this database does not have yet. Returns (new_count, new_bytes).
+
+    Existing digests are asked for first, so repeated template chunks never travel to MariaDB
+    again. The insert still uses the no-op `ON DUPLICATE KEY UPDATE` (house pattern from
+    slice 0042, NOT `INSERT IGNORE`, which would also hide real errors) because a concurrent
+    upload may have added the same chunk in between.
+    """
+    distinct = {}
+    for digest, chunk in parts:
+        distinct.setdefault(digest, chunk)
+    digests = list(distinct)
+    have = set()
+    for i in range(0, len(digests), CHUNK_BATCH):
+        part = digests[i:i + CHUNK_BATCH]
+        marks = ", ".join(["%s"] * len(part))
+        cursor.execute(f"SELECT Sha256 FROM {CHUNK_TABLE} WHERE Sha256 IN ({marks})", tuple(part))
+        have.update(bytes(r[0]) for r in cursor.fetchall())
+    new_count = 0
+    new_bytes = 0
+    for digest in digests:
+        if digest in have:
+            continue
+        packed = pdf_chunks.compress(distinct[digest])
+        cursor.execute(
+            f"INSERT INTO {CHUNK_TABLE} (Sha256, Dimensiune, Continut, DataCreare) "
+            f"VALUES (%s, %s, %s, NOW()) "
+            f"ON DUPLICATE KEY UPDATE Sha256 = Sha256",
+            (digest, len(distinct[digest]), packed))
+        new_count += 1
+        new_bytes += len(packed)
+    return new_count, new_bytes
 
 
 def _nume_fisier_ddf(cursor, idrev: int) -> str:
@@ -170,14 +383,17 @@ def _descarca(spec, cheie: int):
     try:
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
+        chunked = _has_chunk_store(cursor, spec)
         cursor.execute(
-            f"SELECT Sha256, Dimensiune, Continut FROM {spec['tabela']} "
+            f"SELECT Sha256, Dimensiune, Continut{', Bucati' if chunked else ''} "
+            f"  FROM {spec['tabela']} "
             f" WHERE {spec['cheie']} = %s LIMIT 1", (cheie,))
         row = cursor.fetchone()
         if row is None:
             return _json_utf8({"error": "Nu există PDF semnat pentru acest document."}, 404)
 
-        sha, dimensiune, continut = row
+        sha, dimensiune, continut = row[:3]
+        bucati = row[3] if chunked else None
 
         # ETag-ul se compara ca valoare goala de ghilimele, cum il trimitem mai jos.
         if (request.headers.get("If-None-Match", "").strip().strip('"')) == sha:
@@ -187,8 +403,20 @@ def _descarca(spec, cheie: int):
                         db_name, spec["eticheta"], spec["cheie"], cheie)
             return resp
 
-        # `bytes(continut)` — conectorul poate intoarce bytearray; octetii raman identici.
-        octeti = bytes(continut)
+        if continut is not None:
+            # `bytes(continut)` — conectorul poate intoarce bytearray; octetii raman identici.
+            octeti = bytes(continut)
+        else:
+            # Slice 0078-05: rebuild from the shared chunks, then prove it is the same file.
+            # A mismatch is a server fault (500), NEVER corrupt bytes sent as a signed PDF.
+            digests = pdf_chunks.unpack_list(bucati)
+            octeti = pdf_chunks.rebuild(digests, lambda ds: _fetch_chunks(cursor, ds))
+            if _sha256(octeti) != sha:
+                logger.error("[forexe.pdf] %s: %s %s=%s rebuilt file does not match its sha",
+                             db_name, spec["eticheta"], spec["cheie"], cheie)
+                return _json_utf8(
+                    {"error": "PDF-ul stocat pe server este deteriorat (suma de control nu "
+                              "corespunde). Anunțați administratorul."}, 500)
         resp = current_app.response_class(octeti, status=200, mimetype="application/pdf")
         resp.headers["Content-Length"] = str(len(octeti))
         resp.headers["ETag"] = f'"{sha}"'
@@ -231,6 +459,13 @@ def _incarca(spec, cheie: int, nume_fisier_fn):
     sha_precedent = (request.headers.get(H_SHA_PREC) or "").strip().lower()
     if not sha_precedent:
         return _json_utf8({"error": f"Antet lipsă: {H_SHA_PREC}."}, 400)
+    semnatura, eroare_semn = _parse_roles(spec, request.headers.get(H_SEMN))
+    if eroare_semn:
+        return _json_utf8({"error": eroare_semn}, 400)
+    semnaturi, statie, eroare_audit = _parse_audit(
+        spec, request.headers.get(H_SEMNATURI), request.headers.get(H_STATIE))
+    if eroare_audit:
+        return _json_utf8({"error": eroare_audit}, 400)
 
     conn = None
     try:
@@ -273,24 +508,66 @@ def _incarca(spec, cheie: int, nume_fisier_fn):
                 {"error": "Nu s-a putut compune numele fișierului: lipsesc datele de antet."}, 409)
 
         # 6. Scrierea propriu-zisa, atomica sub cheia unica.
-        cursor.execute(
-            f"INSERT INTO {spec['tabela']} "
-            f"       ({spec['cheie']}, NumeFisier, Dimensiune, Sha256, Continut, DataModif) "
-            f"VALUES (%s, %s, %s, %s, %s, NOW()) "
-            f"ON DUPLICATE KEY UPDATE "
-            f"       NumeFisier = VALUES(NumeFisier), "
-            f"       Dimensiune = VALUES(Dimensiune), "
-            f"       Sha256     = VALUES(Sha256), "
-            f"       Continut   = VALUES(Continut), "
-            f"       DataModif  = NOW()",
-            (cheie, nume, len(octeti), sha_server, octeti))
+        if _has_chunk_store(cursor, spec):
+            # Slice 0078-05: only the chunks this database does not have yet are written;
+            # the row keeps the ordered list and `Continut` goes NULL.
+            parts = pdf_chunks.split(octeti)
+            new_count, new_bytes = _store_chunks(cursor, parts)
+            lista = pdf_chunks.pack_list(d for d, _ in parts)
+            cursor.execute(
+                f"INSERT INTO {spec['tabela']} "
+                f"       ({spec['cheie']}, NumeFisier, Dimensiune, Sha256, Continut, Bucati, "
+                f"        DataModif) "
+                f"VALUES (%s, %s, %s, %s, NULL, %s, NOW()) "
+                f"ON DUPLICATE KEY UPDATE "
+                f"       NumeFisier = VALUES(NumeFisier), "
+                f"       Dimensiune = VALUES(Dimensiune), "
+                f"       Sha256     = VALUES(Sha256), "
+                f"       Continut   = NULL, "
+                f"       Bucati     = VALUES(Bucati), "
+                f"       DataModif  = NOW()",
+                (cheie, nume, len(octeti), sha_server, lista))
+            stocare = f"{len(parts)} chunks, {new_count} new ({new_bytes} bytes)"
+        else:
+            logger.warning("[forexe.pdf] %s: %s not applied -- whole-file storage",
+                           db_name, CHUNK_TABLE)
+            cursor.execute(
+                f"INSERT INTO {spec['tabela']} "
+                f"       ({spec['cheie']}, NumeFisier, Dimensiune, Sha256, Continut, DataModif) "
+                f"VALUES (%s, %s, %s, %s, %s, NOW()) "
+                f"ON DUPLICATE KEY UPDATE "
+                f"       NumeFisier = VALUES(NumeFisier), "
+                f"       Dimensiune = VALUES(Dimensiune), "
+                f"       Sha256     = VALUES(Sha256), "
+                f"       Continut   = VALUES(Continut), "
+                f"       DataModif  = NOW()",
+                (cheie, nume, len(octeti), sha_server, octeti))
+            stocare = "whole file"
+
+        # 7. Slice 0078: the signer roles, in the SAME transaction as the PDF row.
+        if semnatura is not None:
+            cursor.execute(
+                f"UPDATE {spec['parinte']} SET Semnatura = %s WHERE {spec['cheie']} = %s",
+                (semnatura, cheie))
+
+        # 8. Slice 0079: the signature log, same transaction -- no PDF without its record.
+        inregistrate = 0
+        if semnaturi:
+            if _has_sign_log(cursor):
+                inregistrate = _record_signatures(cursor, spec, cheie, semnaturi, statie, sha_server)
+            else:
+                logger.warning("[forexe.pdf] %s: %s not applied -- %d signature record(s) skipped",
+                               db_name, SIGN_TABLE, len(semnaturi))
         conn.commit()
 
-        logger.info("[forexe.pdf] %s: %s %s=%s salvat (%s octeti, sha=%s…, nume=%s)",
+        logger.info("[forexe.pdf] %s: %s %s=%s salvat (%s octeti, sha=%s…, nume=%s, %s, "
+                    "roles=%s, signatures logged=%s/%s)",
                     db_name, spec["eticheta"], spec["cheie"], cheie,
-                    len(octeti), sha_server[:8], nume)
+                    len(octeti), sha_server[:8], nume, stocare, semnatura,
+                    inregistrate, len(semnaturi))
         return _json_utf8(
-            {"sha256": sha_server, "nume_fisier": nume, "dimensiune": len(octeti)}, 200)
+            {"sha256": sha_server, "nume_fisier": nume, "dimensiune": len(octeti),
+             "semnatura": semnatura, "semnaturi_inregistrate": inregistrate}, 200)
     except Exception as e:
         # Fara inghitire: se anuleaza tranzactia si se intoarce motivul.
         if conn is not None:

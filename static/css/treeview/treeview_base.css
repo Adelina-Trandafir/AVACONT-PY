@@ -1,0 +1,207 @@
+/**
+ * ========== TREEVIEW BASE STYLES ==========
+ * Container, Input, Arrow, Loader, Dropdown, Animations
+ */
+
+/* ========== CONTAINER PRINCIPAL ========== */
+.treeview-container {
+  position: relative;
+}
+
+.treeview {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #cdcdcd;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.treeview.hidden {
+  display: none !important;
+}
+
+/* ========== INPUT ========== */
+.treeview-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  outline: none;
+  transition: all 0.2s;
+  font: inherit;
+}
+
+.treeview-input:focus {
+  border-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+}
+
+.treeview-input:disabled {
+  cursor: auto !important;
+  opacity: 0.9;
+}
+
+.treeview-input:hover:not(:disabled) {
+  cursor: pointer;
+  background: var(--green-hover-background);
+}
+
+/* ========== ARROW ========== */
+.treeview-arrow {
+  pointer-events: all;
+  color: #666;
+  font-size: 15px;
+  transition: transform 0.2s, font-size 0.2s;
+  user-select: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-content: center;
+  cursor:pointer;
+}
+
+.treeview-container:not(.disabled) .treeview-arrow:hover {
+  background: var(--green-hover-background-reversed);
+  cursor: pointer;
+}
+
+.treeview-container.disabled .treeview-arrow {
+  background-color: #f8f9fa;
+  opacity: 0.9;
+  color: gray;
+  cursor: default;
+}
+
+/* ========== LOADER ========== */
+.treeview-loader {
+  position: absolute;
+  right: 35px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #4caf50;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: none;
+}
+
+.treeview-loader.show {
+  display: block;
+}
+
+/* ========== DROPDOWN ========== */
+.treeview-dropdown {
+  position: relative;
+  overflow-y: auto;
+  font-size: inherit;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+/* Scrollbar customization */
+.treeview-dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.treeview-dropdown::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.treeview-dropdown::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.treeview-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* ========== TREE FIRST ROW ========== */
+.treeview-input-mini-header {
+    font-size: 12px;
+    position: relative;
+    width: 100%;
+    padding: 2px;
+    padding-left: 8px;
+    color:black;
+  cursor:pointer;
+}
+
+.treeview-input-mini-header.disabled {
+  background-color: #f8f9fa;
+  opacity: 0.9 !important;
+  color:gray;
+}
+
+.treeview-container:not(.disabled) .treeview-input-mini-header:hover {
+  text-decoration: underline;
+  font-weight: bold;
+  background: var(--green-hover-background);
+  cursor: pointer;
+}
+
+.treeview-container.disabled .treeview-input-mini-header {
+  opacity: 0.9;
+  cursor: default;
+}
+
+/* ========== TREE CONTAINER ========== */
+.treeview-tree-container {
+  position: relative;
+  overflow-y: auto;
+}
+
+.treeview-dropdown:has(.treeview-search-wrapper) {
+  position: inherit;
+}
+
+.treeview-dropdown:not(:has(.treeview-search-wrapper)) .treeview-tree-container {
+  position: inherit;
+}
+
+.treeview-tree {
+  padding: 4px 0;
+}
+
+/* ========== ANIMATIONS ========== */
+@keyframes spin {
+  0% {
+    transform: translateY(-50%) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(251, 191, 36, 0);
+  }
+}

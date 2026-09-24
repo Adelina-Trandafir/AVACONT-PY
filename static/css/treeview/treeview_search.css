@@ -1,0 +1,123 @@
+/**
+ * ========== TREEVIEW SEARCH STYLES ==========
+ * Search wrapper, Search input, Highlighting, No results
+ */
+
+/* ========== SEARCH BOX ========== */
+.treeview-search-wrapper {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: baseline;
+  position: relative;
+  min-height: 24px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  font: inherit;
+  justify-content: space-between;
+}
+
+.treeview-search-input {
+  flex: 1;
+  border: none;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  font: inherit;
+  outline: none;
+  transition: all 0.2s;
+  padding: 4px;
+  padding-left: 12px;
+  border-bottom: 1px solid #dbdbdb;
+}
+
+.treeview-search-input:focus {
+  border-color: #3b82f6;
+}
+
+.treeview-search-clear {
+  position: absolute;
+  right: 4px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 2px;
+  transition: all 0.2s;
+  font: inherit;
+  align-items: center;
+}
+
+.treeview-search-clear:hover {
+  color: #ef4444;
+  transform: scale(1.2);
+}
+
+/* ========== SEARCH STYLING ========== */
+/* Items care match căutarea */
+.treeview-item.matched {
+  opacity: 1 !important;
+  background: linear-gradient(90deg, #fef3c7 0%, #fde68a 100%);
+}
+
+.treeview-item.matched .treeview-label {
+  color: #111827 !important;
+  font-weight: 600;
+}
+
+.treeview-item.matched:hover {
+  background: linear-gradient(90deg, #fde68a 0%, #fbbf24 100%);
+}
+
+/* Părinți care conțin rezultate */
+.treeview-item.parent-matched {
+  opacity: 1 !important;
+  color: #6b7280;
+}
+
+.treeview-item.parent-matched .treeview-label {
+  color: #4b5563;
+  font-weight: 500;
+}
+
+/* Items dimmed când nu match căutarea */
+.treeview-item.dimmed {
+  opacity: 0.2;
+  filter: grayscale(100%);
+}
+
+.treeview-item.dimmed:hover {
+  opacity: 0.3;
+  background: transparent;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ========== HIGHLIGHT TEXT ========== */
+.treeview-highlight {
+  background: #ffeb3b;
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+.treeview-highlight-local {
+  background: #fbbf24;
+  color: #000;
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-weight: 700;
+}
+
+/* ========== ERROR & NO RESULTS ========== */
+.treeview-error {
+  padding: 12px;
+  color: #d32f2f;
+  text-align: center;
+  font-size: 12px;
+}
+
+.treeview-no-results {
+  padding: 12px;
+  color: #666;
+  text-align: center;
+  font-size: 12px;
+  font-style: italic;
+}
