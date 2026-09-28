@@ -807,6 +807,8 @@ def capturi_receptiilor(cursor, cod: str, parteneri: list) -> list:
     """
     db_name = g.session.db_name
     if not _are_rec_img(cursor, db_name):
+        logger.info("[forexe.receptii.img] %s: tabela lipseste; ordonantarea lui %s fara capturi",
+                    db_name, cod)
         return []
     cursor.execute(
         "SELECT I.IDRDC AS id, I.Nume AS nume, I.IMG AS img "
@@ -816,6 +818,8 @@ def capturi_receptiilor(cursor, cod: str, parteneri: list) -> list:
         " ORDER BY I.IDRDC DESC LIMIT %s",
         (cod, CAPTURI_ORD_MAX))
     randuri = list(cursor.fetchall() or [])
+    logger.info("[forexe.receptii.img] %s: SELECT pentru %s -> %s captura(i) (IDRDC %s)",
+                db_name, cod, len(randuri), [r.get("id") for r in randuri])
     randuri.reverse()   # oldest of the pair first: «receptii», then «informatii complete»
 
     part_temp = 0

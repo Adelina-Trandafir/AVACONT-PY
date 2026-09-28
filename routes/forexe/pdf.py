@@ -428,6 +428,13 @@ def _descarca(spec, cheie: int):
     pe rutele de lista (GET /api/forexe/ddf, /ord).
     """
     db_name = g.session.db_name
+    # Operator, 28.09.2026: every request is logged on arrival. `If-None-Match` present = the
+    # client already holds a copy and is checking it again; absent = a first download.
+    etag_client = request.headers.get("If-None-Match", "").strip().strip('"')
+    logger.info("[forexe.pdf] %s: cerere descarcare %s %s=%s (%s)",
+                db_name, spec["eticheta"], spec["cheie"], cheie,
+                f"reverificare, copia clientului sha={etag_client[:8]}…" if etag_client
+                else "prima descarcare, fara copie la client")
     conn = None
     try:
         conn = get_kbot_connection(db_name)
@@ -439,16 +446,18 @@ def _descarca(spec, cheie: int):
             f" WHERE {spec['cheie']} = %s LIMIT 1", (cheie,))
         row = cursor.fetchone()
         if row is None:
+            logger.info("[forexe.pdf] %s: %s %s=%s -> 404 (nu exista PDF pe server)",
+                        db_name, spec["eticheta"], spec["cheie"], cheie)
             return _json_utf8({"error": "Nu există PDF semnat pentru acest document."}, 404)
 
         sha, dimensiune, continut = row[:3]
         bucati = row[3] if chunked else None
 
         # ETag-ul se compara ca valoare goala de ghilimele, cum il trimitem mai jos.
-        if (request.headers.get("If-None-Match", "").strip().strip('"')) == sha:
+        if etag_client == sha:
             resp = current_app.response_class(b"", status=304)
             resp.headers["ETag"] = f'"{sha}"'
-            logger.info("[forexe.pdf] %s: %s %s=%s -> 304 (cache valid)",
+            logger.info("[forexe.pdf] %s: %s %s=%s -> 304 (copia clientului e la zi, nu se trimite)",
                         db_name, spec["eticheta"], spec["cheie"], cheie)
             return resp
 

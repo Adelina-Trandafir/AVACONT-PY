@@ -13,6 +13,7 @@ env/
 
 # Logs
 *.log
+*.log_old
 
 # Cache
 cache/
@@ -41,3 +42,4 @@ backup/
 routes/pushed-accdb/
 routes/tmp-upload/
 updates/
+

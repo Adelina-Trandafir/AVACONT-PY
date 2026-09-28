@@ -833,6 +833,8 @@ def _capturi_rezervarilor(cursor, db_name: str, iddf: int, idrev: int) -> int:
     Returns how many were added. A database without `FX_Rezervarii_IMG` adds none.
     """
     if not _are_rez_img(cursor, db_name):
+        logger.info("[forexe.rezervari.img] %s: tabela lipseste; revizia %s fara capturi",
+                    db_name, idrev)
         return 0
     cursor.execute(
         "SELECT I.IDRZC AS id, I.Nume AS nume, I.IMG AS img "
@@ -842,6 +844,8 @@ def _capturi_rezervarilor(cursor, db_name: str, iddf: int, idrev: int) -> int:
         " ORDER BY I.IDRZC",
         (idrev,))
     capturi = cursor.fetchall() or []
+    logger.info("[forexe.rezervari.img] %s: SELECT pentru revizia %s -> %s captura(i) (IDRZC %s)",
+                db_name, idrev, len(capturi), [c.get("id") for c in capturi])
     if not capturi:
         return 0
 

@@ -45,6 +45,11 @@ from . import forexe_bp
 
 logger = logging.getLogger(__name__)
 
+# One tag per table, so every operation on it is found in api_server.log with one grep
+# (operator, 28.09.2026). ddf_edit.py / ord_edit.py use the same two when they read them.
+LOG_REZ = "[forexe.rezervari.img]"
+LOG_REC = "[forexe.receptii.img]"
+
 MAX_CAPTURA_BYTES = 16 * 1024 * 1024
 # JPEG (the client compresses: the pictures end up inside a PDF -- operator, 28.09.2026)
 # and PNG, should the client ever be switched back to it.
@@ -72,9 +77,18 @@ def _json_utf8(payload, status):
     return current_app.response_class(body, status=status, mimetype="application/json")
 
 
-def _in_tranzactie(treaba, eticheta: str):
-    """Run `treaba(cursor)` in ONE transaction; `Refuz` -> its status, anything else -> 500."""
+def _in_tranzactie(treaba, tag: str, eticheta: str):
+    """Run `treaba(cursor)` in ONE transaction; `Refuz` -> its status, anything else -> 500.
+
+    The arrival is logged BEFORE anything is read, so every request that reaches the route
+    leaves a line: no line means the request never got here.
+    """
     db_name = g.session.db_name
+    logger.info("%s %s: %s primita (%s octeti, cod=%s, moment=%s, nume=%s)",
+                tag, db_name, eticheta, request.content_length,
+                (request.headers.get(H_COD) or "-").strip(),
+                (request.headers.get(H_MOMENT) or "-").strip(),
+                (request.headers.get(H_NUME) or "-").strip())
     conn = None
     try:
         conn = get_kbot_connection(db_name)
@@ -84,17 +98,17 @@ def _in_tranzactie(treaba, eticheta: str):
             conn.start_transaction()
         rezultat = treaba(cursor)
         conn.commit()
-        logger.info("[forexe.capturi] %s: %s ok", db_name, eticheta)
+        logger.info("%s %s: %s ok -> %s", tag, db_name, eticheta, rezultat)
         return _json_utf8(rezultat, 200)
     except Refuz as e:
         if conn is not None:
             conn.rollback()
-        logger.warning("[forexe.capturi] %s: %s refuzat -- %s", db_name, eticheta, e)
+        logger.warning("%s %s: %s refuzata (%s) -- %s", tag, db_name, eticheta, e.status, e)
         return _json_utf8({"error": str(e)}, e.status)
     except Exception:
         if conn is not None:
             conn.rollback()
-        logger.exception("[forexe.capturi] %s: %s a esuat", db_name, eticheta)
+        logger.exception("%s %s: %s a esuat", tag, db_name, eticheta)
         return _json_utf8({"error": "Captura nu a putut fi salvată. Detalii în jurnalul serverului."}, 500)
     finally:
         if conn is not None:
@@ -187,18 +201,20 @@ def put_captura_rezervare(idrev):
         continut = _base64(octeti)
         existent = _exista_deja(cursor, "FX_Rezervarii_IMG", "IDRZ", idrz, continut)
         if existent > 0:
+            logger.info("%s idrev=%s idrz=%s: aceeasi captura exista deja (IDRZC=%s), nu se scrie",
+                        LOG_REZ, idrev, idrz, existent)
             return {"id": existent, "exista_deja": True, "idrz": idrz}
         cursor.execute(
             "INSERT INTO FX_Rezervarii_IMG (IDRZ, IMG, Nume) VALUES (%s, %s, %s)",
             (idrz, continut, nume))
         idrzc = int(cursor.lastrowid or 0)
+        logger.info("%s INSERT IDRZC=%s idrev=%s idrz=%s moment=%s nume=%s %s octeti",
+                    LOG_REZ, idrzc, idrev, idrz, moment or "-", nume, len(octeti))
         if idrzc <= 0:
-            raise RuntimeError("FX_Rezervarii_IMG nu a intors o cheie noua (AUTO_INCREMENT lipsa?)")
-        logger.info("[forexe.capturi] rezervare idrev=%s idrz=%s moment=%s %s octeti",
-                    idrev, idrz, moment or "-", len(octeti))
+            raise RuntimeError("INSERT FX_Rezervarii_IMG did not return a key")
         return {"id": idrzc, "exista_deja": False, "idrz": idrz}
 
-    return _in_tranzactie(treaba, f"captura rezervare idrev={idrev}")
+    return _in_tranzactie(treaba, LOG_REZ, f"PUT rezervare idrev={idrev}")
 
 
 # ---------------------------------------------------------------------------
@@ -234,15 +250,17 @@ def put_captura_receptie(idrh):
         continut = _base64(octeti)
         existent = _exista_deja(cursor, "FX_Receptii_IMG", "IDRR", idrr, continut)
         if existent > 0:
+            logger.info("%s idrh=%s idrr=%s: aceeasi captura exista deja (IDRDC=%s), nu se scrie",
+                        LOG_REC, idrh, idrr, existent)
             return {"id": existent, "exista_deja": True, "idrr": idrr}
         cursor.execute(
             "INSERT INTO FX_Receptii_IMG (IDRR, IDRH, IMG, Nume) VALUES (%s, %s, %s, %s)",
             (idrr, idrh, continut, nume))
         idrdc = int(cursor.lastrowid or 0)
+        logger.info("%s INSERT IDRDC=%s idrh=%s idrr=%s moment=%s nume=%s %s octeti",
+                    LOG_REC, idrdc, idrh, idrr, moment or "-", nume, len(octeti))
         if idrdc <= 0:
-            raise RuntimeError("FX_Receptii_IMG nu a intors o cheie noua (AUTO_INCREMENT lipsa?)")
-        logger.info("[forexe.capturi] receptie idrh=%s idrr=%s moment=%s %s octeti",
-                    idrh, idrr, moment or "-", len(octeti))
+            raise RuntimeError("INSERT FX_Receptii_IMG did not return a key")
         return {"id": idrdc, "exista_deja": False, "idrr": idrr}
 
-    return _in_tranzactie(treaba, f"captura receptie idrh={idrh}")
+    return _in_tranzactie(treaba, LOG_REC, f"PUT receptie idrh={idrh}")

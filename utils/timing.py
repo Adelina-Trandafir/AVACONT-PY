@@ -94,6 +94,37 @@ def enabled():
     return bool(getattr(config, "TIMING_ENABLED", True))
 
 
+LOG_BACKUPS = 5
+
+
+def log_path():
+    """Environment first, then config, then the default name. routes/logs.py
+    reads the file back from the same place (slice 0089)."""
+    return (os.environ.get("KBOT_TIMING_LOG")
+            or getattr(config, "TIMING_LOG_PATH", None)
+            or _DEFAULT_PATH)
+
+
+def _session_notes(run):
+    """Slice 0089: the login the request belongs to goes on the header FIRST
+    (session / user / dc), so routes/logs.py can hand an operator only their
+    own blocks, grouped by login. Routes that note dc/user themselves overwrite
+    the value in place. Only 8 characters of the token, as in api_server.log."""
+    try:
+        from flask import g, has_request_context
+        if not has_request_context():
+            return
+        session = getattr(g, "session", None)
+        token = getattr(g, "session_token", None) or ""
+        if session is None or not token:
+            return
+        run.notes["session"] = token[:8]
+        run.notes["user"] = session.username or "-"
+        run.notes["dc"] = session.db_name or "-"
+    except Exception:            # a stopwatch must never break a route
+        return
+
+
 def _log():
     """The dedicated logger, built once, never attached to the root one."""
     global _logger
@@ -108,11 +139,8 @@ def _log():
         # so api_server.log never sees a line of it.
         lg.propagate = False
         if not lg.handlers:
-            path = (os.environ.get("KBOT_TIMING_LOG")
-                    or getattr(config, "TIMING_LOG_PATH", None)
-                    or _DEFAULT_PATH)
-            handler = RotatingFileHandler(path, maxBytes=10 * 1024 * 1024,
-                                          backupCount=5, encoding="utf-8")
+            handler = RotatingFileHandler(log_path(), maxBytes=10 * 1024 * 1024,
+                                          backupCount=LOG_BACKUPS, encoding="utf-8")
             # No level, no logger name, no ip: every line here is one thing and
             # the timestamp is already in the header of each block.
             handler.setFormatter(logging.Formatter("%(message)s"))
@@ -385,6 +413,7 @@ def timed(label):
             if not enabled():
                 return fn(*args, **kw)
             run = _Run(label)
+            _session_notes(run)
             _local.run = run
             status = "?"
             try:
