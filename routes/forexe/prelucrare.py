@@ -84,7 +84,7 @@ from .prelucrare_unitate import (
     REASON_UNIT_CHOICE,
     UnitChoiceRequired,
     UnitChoiceTableMissing,
-    find_id_clsf_acc,
+    find_id_clsf,
     normalize_supplied_choices,
     resolve_units,
 )
@@ -232,13 +232,13 @@ _IND_EXISTS_SQL = (
 _IND_INSERT_SQL = (
     "INSERT INTO FX_Indicatori "
     "(CodAI, CodAngajament, CodIndicator, IdClsf, IndicatorFX, IdUnitate, SS, "
-    " Prevedere_Bugetara_Initiala, Credit_Bugetar_Initial, Angajament_Legal, "
+    " Credit_Bugetar, Credit_Bugetar_Initial, Angajament_Legal, "
     " Credit_Bugetar_Definitiv, NrCrt) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 # Ramura Edit din VBA atinge EXACT aceste patru coloane si nimic altceva.
 _IND_UPDATE_SQL = (
-    "UPDATE FX_Indicatori SET Prevedere_Bugetara_Initiala = %s, "
+    "UPDATE FX_Indicatori SET Credit_Bugetar = %s, "
     "Credit_Bugetar_Initial = %s, Angajament_Legal = %s, Credit_Bugetar_Definitiv = %s "
     "WHERE CodAngajament = %s AND CodIndicator = %s"
 )
@@ -320,8 +320,8 @@ def _step2_indicatori(cursor, cod: str, indicators: list, units: dict,
         key = (ind["ss"], ind["clsf_e"])
         id_unitate = units[key]
 
-        id_clsf = find_id_clsf_acc(cursor, id_unitate, ind["clsf_sal"],
-                                   ind["clsf_raw"], ind["cod_indicator"], warnings)
+        id_clsf = find_id_clsf(cursor, id_unitate, ind["clsf_sal"],
+                               ind["clsf_raw"], ind["cod_indicator"], warnings)
 
         # Cele patru celule de bani ale indicatorului. Scalare, si o cer explicit --
         # `parse_amount` peste o lista ar da tacut zero, adica un buget inventat.
@@ -347,7 +347,7 @@ def _step2_indicatori(cursor, cod: str, indicators: list, units: dict,
                 cod_ai(cod, ind["cod_indicator"]),
                 cod,
                 ind["cod_indicator"],
-                id_clsf,                 # None -> NULL, D19
+                id_clsf,                 # Clasificatii.IDClsf (0080-01); None -> NULL, D19
                 ind["clsf_sal"],         # IndicatorFX = clsfRaw din VBA
                 id_unitate,
                 ind["ss"],

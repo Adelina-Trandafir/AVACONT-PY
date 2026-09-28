@@ -77,8 +77,12 @@ TABLE_RECEPTII = "ListaReceptii_results"
 # Pe MariaDB clasificatia se ia prin SUBINTEROGARE SCALARA cu LIMIT 1, nu prin JOIN:
 # nomenclatorul are duplicate reale pe (IdClsfAcc, IdUnitate) -- MAPARE_NOMENCLATOARE.md
 # 3.2 -- si un JOIN ar multiplica randurile de indicator. E tiparul pe care rutele de
-# CITIRE il folosesc deja (routes/forexe/receptii.py); aici e la fel de sigur, fiindca
-# duplicatele difera doar prin `IDClsf`, iar `IDClsf` nu se scrie nicaieri (D7).
+# CITIRE il folosesc deja (routes/forexe/receptii.py).
+#
+# Slice 0080-01: `FX_Indicatori.IdClsf` is now the MariaDB key (Clasificatii.IDClsf); no
+# copy of the Access id is kept on the FX_ tables. The subqueries match on the primary
+# key, so a duplicate in the nomenclator can no longer multiply or mix rows; LIMIT 1
+# stays only as the scalar-subquery guard. Every row written below carries that key.
 #
 # `CodSSI` NU exista ca si coloana pe MariaDB (MAPARE_NOMENCLATOARE.md rand 261: «Memo,
 # 01A650402100101. No column on the target»). E `SS` lipit de `ClsfSal`, exact ce produce
@@ -91,11 +95,11 @@ TABLE_RECEPTII = "ListaReceptii_results"
 # lasa coloana goala si avertizeaza, nu sterge randul), si respecta regula casei: fara
 # no-op-uri tacute.
 _INDICATORI_SQL = (
-    "SELECT I.CodAI, I.CodIndicator, I.IdClsf, I.IdUnitate, I.SS, I.IndicatorFX, "
-    "  (SELECT C.Clsf FROM Clasificatii C "
-    "    WHERE C.IdUnitate = I.IdUnitate AND C.IdClsfAcc = I.IdClsf LIMIT 1) AS Clsf, "
+    "SELECT I.CodAI, I.CodIndicator, I.IdClsf, I.IdUnitate, I.SS, "
+    "  I.IndicatorFX, "
+    "  (SELECT C.Clsf FROM Clasificatii C WHERE C.IDClsf = I.IdClsf LIMIT 1) AS Clsf, "
     "  (SELECT CONCAT(C.SS, C.ClsfSal) FROM Clasificatii C "
-    "    WHERE C.IdUnitate = I.IdUnitate AND C.IdClsfAcc = I.IdClsf LIMIT 1) AS CodSSI, "
+    "    WHERE C.IDClsf = I.IdClsf LIMIT 1) AS CodSSI, "
     "  I.NrCrt "
     "FROM FX_Indicatori I WHERE I.CodAngajament = %s ORDER BY I.NrCrt"
 )
@@ -282,7 +286,8 @@ _NEPRELUCRATE_SQL = (
 # Ramura Edit din VBA reseteaza INTAI totul, apoi scrie. Se pastreaza intocmai: un rand
 # reprocesat nu are voie sa pastreze o valoare dintr-o parsare anterioara.
 _OBS_UPDATE_SQL = (
-    "UPDATE FX_Istoric SET CodIndicator = %s, CodAI = %s, IdClsf = %s, Clsf = %s, "
+    "UPDATE FX_Istoric SET CodIndicator = %s, CodAI = %s, IdClsf = %s, "
+    "Clsf = %s, "
     "Val_Receptie = %s, Val_Rezervare_I = %s, Val_Plata = %s, Val_Rezervare_D = %s, "
     "Val_AngLeg = %s, IdTrezor = %s, Doc = %s, Val_Rezervare_Dif = %s, "
     "Val_Rezervare_Ant = %s, IDREV = %s, TipRand = %s "
@@ -530,11 +535,10 @@ def _calculeaza_val_rezervare_dif(cursor, cod: str) -> None:
 #     o a doua scriere ar esua zgomotos oricum -- dar filtrul e cel care o previne.)
 _REZ_SELECT = (
     "SELECT H.ID, I.CodAI, I.CodAngajament, I.CodIndicator, I.IdClsf, "
-    "  DATE(H.DataFX) AS DataRezervare, I.Prevedere_Bugetara_Initiala AS R_CreditBug, "
+    "  DATE(H.DataFX) AS DataRezervare, I.Credit_Bugetar AS R_CreditBug, "
     "  H.Val_Rezervare_I AS R_Initiala, H.Val_AngLeg AS R_Definitiva, "
     "  {valoare} AS R_Valoare, H.Val_Rezervare_Ant, H.IDREV, "
-    "  (SELECT C.Clsf FROM Clasificatii C "
-    "    WHERE C.IdUnitate = I.IdUnitate AND C.IdClsfAcc = I.IdClsf LIMIT 1) AS ClsfSort "
+    "  (SELECT C.Clsf FROM Clasificatii C WHERE C.IDClsf = I.IdClsf LIMIT 1) AS ClsfSort "
     "FROM FX_Indicatori I INNER JOIN FX_Istoric H ON I.CodAI = H.CodAI "
     "WHERE H.ID NOT IN (SELECT IDH FROM FX_Rezervari WHERE IDH IS NOT NULL) "
     "  AND I.CodAngajament = %s AND H.TipRand = %s "
@@ -542,8 +546,8 @@ _REZ_SELECT = (
 )
 _REZ_INSERT_SQL = (
     "INSERT INTO FX_Rezervari "
-    "(IDH, CodAI, CodAngajament, CodIndicator, IdClsf, DataRezervare, R_CreditBug, "
-    " R_Initiala, R_Definitiva, R_Valoare, IDREV, EInitiala, R_Anterioara, "
+    "(IDH, CodAI, CodAngajament, CodIndicator, IdClsf, DataRezervare, "
+    " R_CreditBug, R_Initiala, R_Definitiva, R_Valoare, IDREV, EInitiala, R_Anterioara, "
     " EMicsorare, EMarire) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
@@ -651,8 +655,8 @@ def step3e_asociaza_idrev(cursor, cod: str) -> None:
 # PASUL 4a -- FX_Istoric_Populeaza_Receptii
 # ===========================================================================
 _RECEPTII_ISTORIC_SQL = (
-    "SELECT ID, HASH, CodAI, CodAngajament, CodIndicator, IdClsf, DataFX, TipRand, "
-    "       Descriere, Observatii, Val_Receptie "
+    "SELECT ID, HASH, CodAI, CodAngajament, CodIndicator, IdClsf, DataFX, "
+    "       TipRand, Descriere, Observatii, Val_Receptie "
     "FROM FX_Istoric "
     "WHERE CodAngajament = %s AND Prelucrat = 0 AND INSTR(COALESCE(TipRand,''), 'Receptie') <> 0 "
     "ORDER BY ID"
@@ -673,15 +677,15 @@ _H_INSERT_CU_ID_SQL = (
 )
 _REC_INSERT_SQL = (
     "INSERT INTO FX_Receptii "
-    "(IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI, CodAngajament, CodIndicator, "
-    " Data, Valoare, ValoareOrig, HASH, TipIntern) "
+    "(IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI, CodAngajament, "
+    " CodIndicator, Data, Valoare, ValoareOrig, HASH, TipIntern) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 # Slice 0076: the first line of a marked snapshot, with the IDR the page reserved.
 _REC_INSERT_CU_ID_SQL = (
     "INSERT INTO FX_Receptii "
-    "(IDR, IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI, CodAngajament, CodIndicator, "
-    " Data, Valoare, ValoareOrig, HASH, TipIntern) "
+    "(IDR, IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI, CodAngajament, "
+    " CodIndicator, Data, Valoare, ValoareOrig, HASH, TipIntern) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 _INDICATORI_VAZUTI_SQL = (
@@ -843,7 +847,8 @@ def step4a_populeaza_receptii(cursor, cod: str,
             for linie in tampon:
                 ci = linie["CodIndicator"]
                 valori = (
-                    idrh, linie["IDH"], linie["IdClsf"], linie["CodSSI"],
+                    idrh, linie["IDH"], linie["IdClsf"],
+                    linie["CodSSI"],
                     linie["Clsf"], linie["IdUnitate"], linie["CodAI"],
                     linie["CodAngajament"], ci, linie["Data"], linie["Valoare"],
                     linie["ValoareOrig"], linie["HASH"],
@@ -1287,8 +1292,8 @@ _PLATI_DEDUP_SQL = (
 )
 _PLATI_INSERT_SQL = (
     "INSERT INTO FX_Plati "
-    "(IDH, IdClsf, IdUnitate, CodAI, NrOP, CodAngajament, CodIndicator, Data_plata, "
-    " Indicator_IBAN, Clsf, Program, Referinta_TREZOR, Suma, Tip, Preluat) "
+    "(IDH, IdClsf, IdUnitate, CodAI, NrOP, CodAngajament, CodIndicator, "
+    " Data_plata, Indicator_IBAN, Clsf, Program, Referinta_TREZOR, Suma, Tip, Preluat) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)"
 )
 _PROGRAM_SQL = "SELECT CodProgram FROM Unitati WHERE IdUnitate = %s"
@@ -1403,7 +1408,8 @@ def step5_plati_incasari(cursor, cod: str, indicatori: Dict[str, dict],
             are_plati = True
 
         cursor.execute(_PLATI_INSERT_SQL, (
-            int(r["ID"]), ind["IdClsf"], id_unitate, cheie, nr_op, cod, cod_ind,
+            int(r["ID"]), ind["IdClsf"], id_unitate, cheie, nr_op,
+            cod, cod_ind,
             # VBA: rcPlati!Data_Plata = rcHis!DataFX -- data randului de ISTORIC, nu
             # cea din Observatii. `data:` e parsata doar ca sa fie VALIDATA (o data
             # neparsabila sare randul). Contraintuitiv, fidel, verificat in mdl_FX_Plati.

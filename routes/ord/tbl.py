@@ -52,10 +52,10 @@ def _add_tbl(cursor, idordp: int, token: str, tmp_to_real: dict) -> Tuple[dict, 
                 (IDORDP, IDORDPARTP, IDORDTBL,
                  CodAI, CodAngajament, CodIndicator, CodSSI,
                  TotalReceptii, PlatiAnt, Valoare, Ramas,
-                 IdClsf, IdClsfAcc, Explicatie, IDRP,
+                 IdClsf, Explicatie, IDRP,
                  CodPartener, IdPartener, IdUnitate)
             VALUES (%s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s)
         """, (
             idordp, idordpartp,
@@ -69,7 +69,7 @@ def _add_tbl(cursor, idordp: int, token: str, tmp_to_real: dict) -> Tuple[dict, 
             _strict_float(t["Valoare"],       "Valoare"),
             _strict_float(t["Ramas"],         "Ramas"),
             _opt_int(t.get("IdClsf"),         "IdClsf"),
-            _opt_int(t.get("IdClsfAcc"),      "IdClsfAcc"),
+            # IdClsfAcc from VBA is not kept (0080-04: only in Clasificatii.IdClsfAcc).
             _opt_str(t.get("Explicatie")),
             _opt_int(t.get("IDRP"),           "IDRP"),       # v5: IDRP, fara IDRD
             _opt_str(t.get("CodPartener")),                  # v8: mutat de pe PART
@@ -129,7 +129,7 @@ def _sync_tbl(cursor, token: str, idordp: int, tmp_to_real: dict) -> Tuple[dict,
             _strict_float(t["Valoare"],       "Valoare"),
             _strict_float(t["Ramas"],         "Ramas"),
             _opt_int(t.get("IdClsf"),         "IdClsf"),
-            _opt_int(t.get("IdClsfAcc"),      "IdClsfAcc"),
+            # IdClsfAcc from VBA is not kept (0080-04: only in Clasificatii.IdClsfAcc).
             _opt_str(t.get("Explicatie")),
             _opt_int(t.get("IDRP"),           "IDRP"),    # v5: IDRP, fara IDRD
             _opt_str(t.get("CodPartener")),               # v8: mutat de pe PART
@@ -144,7 +144,7 @@ def _sync_tbl(cursor, token: str, idordp: int, tmp_to_real: dict) -> Tuple[dict,
                 SET IDORDPARTP=%s, IDORDTBL=%s,
                     CodAI=%s, CodAngajament=%s, CodIndicator=%s, CodSSI=%s,
                     TotalReceptii=%s, PlatiAnt=%s, Valoare=%s, Ramas=%s,
-                    IdClsf=%s, IdClsfAcc=%s, Explicatie=%s, IDRP=%s,
+                    IdClsf=%s, Explicatie=%s, IDRP=%s,
                     CodPartener=%s, IdPartener=%s, IdUnitate=%s
                 WHERE IDORDTBLP=%s AND IDORDP=%s
             """, valori_date + (idordtblp, idordp))
@@ -164,10 +164,10 @@ def _sync_tbl(cursor, token: str, idordp: int, tmp_to_real: dict) -> Tuple[dict,
                     (IDORDP, IDORDPARTP, IDORDTBL,
                      CodAI, CodAngajament, CodIndicator, CodSSI,
                      TotalReceptii, PlatiAnt, Valoare, Ramas,
-                     IdClsf, IdClsfAcc, Explicatie, IDRP,
+                     IdClsf, Explicatie, IDRP,
                      CodPartener, IdPartener, IdUnitate)
                 VALUES (%s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s)
             """, (idordp,) + valori_date)
             new_idordtblp = cursor.lastrowid

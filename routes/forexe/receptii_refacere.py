@@ -104,8 +104,8 @@ logger = logging.getLogger(__name__)
 # Aceleasi coloane ca `_RECEPTII_ISTORIC_SQL` din pasul 4a, dar peste randurile DEJA
 # prelucrate: refacerea nu e o ingestie, e o completare a ce ar fi trebuit sa existe.
 _ISTORIC_PRELUCRAT_SQL = (
-    "SELECT ID, HASH, CodAI, CodAngajament, CodIndicator, IdClsf, DataFX, TipRand, "
-    "       Descriere, Observatii, Val_Receptie "
+    "SELECT ID, HASH, CodAI, CodAngajament, CodIndicator, IdClsf, DataFX, "
+    "       TipRand, Descriere, Observatii, Val_Receptie "
     "FROM FX_Istoric "
     "WHERE CodAngajament = %s AND Prelucrat = 1 "
     "  AND INSTR(COALESCE(TipRand,''), 'Receptie') <> 0 "
@@ -266,7 +266,8 @@ def refa_receptii(cursor, cod: str, aplica: bool) -> dict:
                     if aplica:
                         ci = linie["CodIndicator"]
                         cursor.execute(_REC_INSERT_SQL, (
-                            idrh, linie["IDH"], linie["IdClsf"], linie["CodSSI"],
+                            idrh, linie["IDH"], linie["IdClsf"],
+                            linie["CodSSI"],
                             linie["Clsf"], linie["IdUnitate"], linie["CodAI"],
                             linie["CodAngajament"], ci, linie["Data"], linie["Valoare"],
                             linie["ValoareOrig"], linie["HASH"],

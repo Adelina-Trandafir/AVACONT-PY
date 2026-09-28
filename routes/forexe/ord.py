@@ -33,16 +33,16 @@ CELE TREI CAPCANE ale familiei FX_ORD, tratate explicit:
    (vezi nota urmatoare), niciodata prin interogarea Access ca atare.
 
 3. INVERSIUNEA `IdClsf`. In `FX_ORD_TBL`, MariaDB `IdClsf` este FK-ul catre
-   `Clasificatii` (id-ul global/PY) iar `IdClsfAcc` este id-ul Access pastrat —
-   documentat in `routes/ord/sync_mdb_acc.py` (liniile 6-8) si in `sync_acc_mdb.py`.
-   INVERS fata de `FX_Indicatori`, unde `IdClsf` tine id-ul Access.
+   `Clasificatii` (id-ul global/PY). Since slice 0080-01 `FX_Indicatori` uses the same key,
+   so there is no inversion left; since 0080-04 the Access id lives only in
+   `Clasificatii.IdClsfAcc`.
 
 CLASIFICATIA (`clsf` / `descriere`) — de ce AMANDOUA drumurile, intr-un COALESCE:
   - Drumul DIRECT (`Clasificatii.IDClsf = t.IdClsf`) e cel documentat de sync-ul ORD si e
     acelasi tipar ca `FX_DDF_REV_SA` din routes/forexe/ddf.py: cheia e PK -> unica prin
     definitie, deci fara fan-out si fara predicat IdUnitate.
-  - Drumul de REZERVA (`FX_Indicatori` pe CodAI -> `Clasificatii.IdClsfAcc + IdUnitate`) e
-    cel VERIFICAT live in 0011-03 si folosit de plati.py / receptii.py.
+  - Drumul de REZERVA (`FX_Indicatori` pe CodAI -> `Clasificatii.IDClsf`) e cel folosit de
+    plati.py / receptii.py. Before slice 0080-01 it went through `IdClsfAcc + IdUnitate`.
   - Planul cerea „alege unul dupa o proba pe date reale". Proba pe date reale NU s-a putut
     face (ruta n-a atins niciodata o baza vie), deci se incearca intai directul si se cade
     pe cel verificat cand primul e NULL/gol — in loc sa se ghiceasca unul si sa iasa o
@@ -148,11 +148,11 @@ _SQL_LINII = (
     "COALESCE(NULLIF((SELECT c.Clsf FROM Clasificatii c "
     "                 WHERE c.IDClsf = t.IdClsf LIMIT 1), ''), "
     "         (SELECT c.Clsf FROM Clasificatii c "
-    "          WHERE c.IdClsfAcc = i.IdClsf AND c.IdUnitate = i.IdUnitate LIMIT 1)) AS Clsf, "
+    "          WHERE c.IDClsf = i.IdClsf LIMIT 1)) AS Clsf, "
     "COALESCE(NULLIF((SELECT c.Denumire FROM Clasificatii c "
     "                 WHERE c.IDClsf = t.IdClsf LIMIT 1), ''), "
     "         (SELECT c.Denumire FROM Clasificatii c "
-    "          WHERE c.IdClsfAcc = i.IdClsf AND c.IdUnitate = i.IdUnitate LIMIT 1)) AS Denumire, "
+    "          WHERE c.IDClsf = i.IdClsf LIMIT 1)) AS Denumire, "
     "t.TotalReceptii, t.PlatiAnt, t.Valoare, t.Ramas, "
     "p.DenBene, p.CodFiscal, p.ContIBAN, "
     "(SELECT GROUP_CONCAT(DISTINCT d.DocJust ORDER BY d.DocJust SEPARATOR ', ') "

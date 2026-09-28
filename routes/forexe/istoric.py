@@ -31,12 +31,11 @@ duplicate din nomenclator pentru afisare — doar ierarhia de filtrare atinge no
 trimite valoarea ISO COMPLETA (cu ora), NU trunchiata la zi. `_iso_dt` de aici pastreaza
 ora; NU se copiaza `_iso`-ul din ddf.py (care taie ora — corect acolo, gresit aici).
 
-Cheia de clasificatie (§2.5) — INVERS fata de DDF. `FX_Istoric_Prelucreaza_Observatii`
-scrie `Rs!IdClsf = rcInd!IdClsf` direct din FX_Indicatori, care tine id-ul ACCESS. Deci
-`FX_Istoric.IdClsf` se potriveste cu `Clasificatii.IdClsfAcc` (NU cu IDClsf, ca in DDF), si
-are nevoie de predicatul IdUnitate — pe care FX_Istoric nu-l are ca si coloana, deci vine
-prin FX_Indicatori pe CodAngajament, exact ca filtrul Access (bFilter_Click). Gresit
-inversata, cheia da un meniu de filtrare GOL, nu o eroare — de aceea e prinsa cu test.
+Cheia de clasificatie (§2.5). `FX_Istoric_Prelucreaza_Observatii` scrie `IdClsf` direct
+din FX_Indicatori. Since slice 0080-01 that is the MariaDB key (Clasificatii.IDClsf), the
+same as in DDF; no copy of the Access id is kept. Before 0080-01 it was the Access id,
+matched through `Clasificatii.IdClsfAcc` + an IdUnitate predicate taken from FX_Indicatori.
+A wrong key gives an EMPTY filter menu, not an error -- which is why a test pins it.
 
 Ierarhia `clasificatii` (§2.2) — asamblata din DOUA baze (nu exista echivalent MariaDB al
 lui `qFX_Clsf2026_Structura`, a carui definitie e pierduta):
@@ -54,9 +53,9 @@ lui `qFX_Clsf2026_Structura`, a carui definitie e pierduta):
   OBLIGATORII. `IdUnitate` se PASTREAZA: Clasificatii e un nomenclator partajat, nu o tabela
   `FX_` (regula drop-IdUnitate nu i se aplica — 0011-03; Status_migrare_5 §8).
 
-`clasificatii` se DEDUPLICA pe IdClsfAcc (§2.2): nomenclatorul are duplicate reale (0011-03
-a masurat perechi la (75,79/84/90/92/93)). E o LISTA, nu un lookup scalar, deci `LIMIT 1` NU
-se aplica — se grupeaza pe IdClsfAcc si se emite exact o intrare per valoare distincta.
+`clasificatii`: one entry per distinct `FX_Istoric.IdClsf`. Keyed on the primary key since
+0080-01, so the old de-duplication on the Access id (0011-03 measured real duplicates) is moot;
+the GROUP BY stays, it costs nothing and keeps the MAX() shape of the captions.
 
 Coloane FX_Istoric DELIBERAT ABSENTE de pe fir (§2.1): Utilizator, HASH, Prelucrat, DTQ,
 Val_Receptie_T, Rez_Ord. Niciuna nu apare pe formularul Access; ultimele doua exista in DDL
@@ -90,15 +89,13 @@ _SQL_RANDURI = (
 )
 
 # Ierarhia de filtrare (§2.2). Domeniul e din interogarea Access bFilter_Click: doar
-# clasificatiile prezente pe angajament (IdClsf din FX_Istoric = id ACCESS -> IdClsfAcc)
-# SI ale unitatii angajamentului (IdUnitate prin FX_Indicatori). GROUP BY c.IdClsfAcc
-# deduplica (§2.2): exact o intrare per valoare distincta, chiar cand nomenclatorul are
-# duplicate. Captiunile Subcapitol/Articol vin din AVACONT_COMUN prin nume calificat;
+# clasificatiile prezente pe angajament (FX_Istoric.IdClsf = Clasificatii.IDClsf since
+# slice 0080-01). One entry per distinct key (§2.2). Captiunile Subcapitol/Articol vin din AVACONT_COMUN prin nume calificat;
 # Alineat din Clasificatii.Denumire (decizie de operator). LEFT JOIN ca o captiune lipsa
 # sa nu stearga intrarea (dar o TABELA lipsa PICA — comportament cerut).
 _SQL_CLASIFICATII = (
     "SELECT "
-    "c.IdClsfAcc AS id_clsf, "
+    "c.IDClsf AS id_clsf, "
     "MAX(c.Clsf) AS clsf, "
     "MAX(c.Capitol) AS capitol, "
     "MAX(c.Subcapitol) AS subcapitol, "
@@ -110,9 +107,8 @@ _SQL_CLASIFICATII = (
     "FROM Clasificatii c "
     "LEFT JOIN AVACONT_COMUN.DefaClsfF df ON df.ClsfF = c.ClsfF "
     "LEFT JOIN AVACONT_COMUN.DefaArticol da ON da.Articol = c.Articol "
-    "WHERE c.IdClsfAcc IN (SELECT IdClsf FROM FX_Istoric WHERE CodAngajament = %s) "
-    "  AND c.IdUnitate IN (SELECT IdUnitate FROM FX_Indicatori WHERE CodAngajament = %s) "
-    "GROUP BY c.IdClsfAcc "
+    "WHERE c.IDClsf IN (SELECT IdClsf FROM FX_Istoric WHERE CodAngajament = %s) "
+    "GROUP BY c.IDClsf "
     "ORDER BY MAX(c.Capitol), MAX(c.Subcapitol), MAX(c.Articol), MAX(c.Alineat)"
 )
 
@@ -182,7 +178,7 @@ def get_istoric():
                 "data_fx": _iso_dt(data_fx),
                 # §2.4 — coloana denormalizata, citita direct (fara join).
                 "clsf": clsf,
-                # §2.5 — id ACCESS (= Clasificatii.IdClsfAcc); cheia meniului de filtrare.
+                # §2.5 — Clasificatii.IDClsf (0080-01); cheia meniului de filtrare.
                 "id_clsf": int(id_clsf) if id_clsf is not None else 0,
                 "tip_rand": tip_rand,
                 "cod_indicator": cod_indicator,
@@ -201,8 +197,8 @@ def get_istoric():
                 "idrev": int(idrev) if idrev is not None else None,
             })
 
-        # --- clasificatii: ierarhia de filtrare, deduplicata pe IdClsfAcc ---------------
-        cursor.execute(_SQL_CLASIFICATII, (cod, cod))
+        # --- clasificatii: ierarhia de filtrare, o intrare per IDClsf --------------------
+        cursor.execute(_SQL_CLASIFICATII, (cod,))
         clasificatii = []
         for (id_clsf, clsf, capitol, subcapitol, articol, alineat,
              den_subcapitol, den_articol, den_alineat) in cursor.fetchall():

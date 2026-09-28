@@ -116,12 +116,16 @@ def demo_rows():
         # Clsf/Titlu/SS sunt coloane GENERATED, deci NU se scriu. Componentele trebuie
         # sa existe in nomenclatoarele AVACONT_COMUN.Defa* (FK-uri pe coloanele generate);
         # se folosesc aceleasi valori reale ca la Sumar/Rezervari (65.02.04.02.20.01.03).
+        ids_clsf = []
         for _ in range(2):   # duplicat real pe (IdClsfAcc, IdUnitate)
             cur.execute(
                 "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
                 "Articol, Alineat, Denumire) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                 (CLSF_ACC, id_unitate, "65.02", "04.02", "20.01", "03", "Clasificație test"),
             )
+            ids_clsf.append(cur.lastrowid)
+        # 0080-01: the FX_ tables carry the MariaDB key in IdClsf (no Access id kept).
+        id_clsf_pk = ids_clsf[0]
         if id_unitate_alt is not None:   # vecin de alta unitate
             cur.execute(
                 "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
@@ -141,8 +145,8 @@ def demo_rows():
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "
             "IdUnitate, NrCrt, SS) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            # FX_Indicatori.IdClsf tine ID-UL ACCESS -> se umple cu IdClsfAcc, nu cu PK.
-            (cod_ai, COD, "IND-A", CLSF_ACC, id_unitate, 1, "02A"),
+            # 0080-01: IdClsf = Clasificatii.IDClsf; no Access id is kept.
+            (cod_ai, COD, "IND-A", id_clsf_pk, id_unitate, 1, "02A"),
         )
 
         # (IDRR, NRCRT, DataR, SumaAntet, Incarcat, Preluat)
@@ -182,7 +186,7 @@ def demo_rows():
                 "INSERT INTO FX_Receptii (IDR, IDRH, IdClsf, CodAI, CodAngajament, "
                 "CodIndicator, Clsf, Valoare, DIF, IdUnitate) "
                 "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                (idr, idrh, CLSF_ACC, cod_ai, COD, "IND-A", "65.02.04.02.20.01.03",
+                (idr, idrh, id_clsf_pk, cod_ai, COD, "IND-A", "65.02.04.02.20.01.03",
                  valoare, dif, id_unitate),
             )
 

@@ -51,9 +51,9 @@ setat, altfel primul, si LOGHEAZA un avertisment cand numarul e mai mare ca 1. N
 voie sa aleaga tacut.
 
 Clasificatia (`Clsf`) — NU are nevoie de tratamentul IdClsfAcc + IdUnitate din 0011-03:
-  - `routes/ddf/sync_acc_mdb.py` (liniile 7-8) documenteaza maparea:
-        Access.IdClsf   -> MariaDB.IdClsfAcc
+  - `routes/ddf/sync_acc_mdb.py` documenteaza maparea:
         Access.IdClsfPY -> MariaDB.IdClsf   (FK Clasificatii)
+        Access.IdClsf   -> not kept (since 0080-04 only in Clasificatii.IdClsfAcc)
     iar DDL-ul confirma: `FX_DDF_REV_SA_ibfk_4 FOREIGN KEY (IdClsf) REFERENCES
     Clasificatii (IDClsf)`. Pe ACEASTA tabela MariaDB.IdClsf tine deja CHEIA PRIMARA
     a nomenclatorului — INVERS fata de FX_Indicatori, unde IdClsf tine id-ul Access.
@@ -78,6 +78,8 @@ from flask import request, g, current_app
 from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 
+from .ddf_stare import are_stare_trimitere
+
 from . import forexe_bp
 
 logger = logging.getLogger(__name__)
@@ -89,7 +91,7 @@ _SQL_ANTET = (
     "SELECT "
     "IDDF, CodAngajament, CUAL, ObiectDDF, Comp, Program, "
     "DataCreare, DataDef, Stare, PartAng, CodFiscal, NumePartener, "
-    "Salarii, Incarcat, Preluat "
+    "Salarii, Incarcat, Preluat, Manual "
     "FROM FX_DDF "
     "WHERE CodAngajament = %s "
     "ORDER BY IDDF, CUAL"
@@ -107,13 +109,21 @@ _SQL_ANTET = (
 # Nota de modul de mai sus ramane adevarata pentru cele PATRU coloane Access (ArePDFDDF /
 # CalePDFDDF / AreDDF / CaleDDF): ele tot nu exista, iar serverul tot nu tine CAI de fisier —
 # tine CONTINUTUL PDF-ului semnat, iar `pdf_sha256` e semnalul de existenta.
+#
+# Slice 0081-01: two read-only additions for the revision state (KBot.Domain DdfRevisionStates):
+#   * `StareTrimitere` -- the send stage; the literal 0 where sql/0081 has not been run yet
+#     (`{stare}` below, chosen by `are_stare_trimitere`, never from the request);
+#   * `AreRezervari`   -- does any FX_Rezervari row point at the revision? A scalar EXISTS,
+#     so no fan-out. A revision with linked reservations is already in forexecab.
 _SQL_REVIZII = (
     "SELECT "
     "r.IDREV, r.IDDF, r.NumarRev, r.DataRev, r.Desc_Scurta, r.Desc_Lunga_ANSI, "
     "r.Tip, r.Incarcat, r.Preluat, r.Semnatura, "
     "COALESCE((SELECT SUM(sa.ValCur) FROM FX_DDF_REV_SA sa "
     "          WHERE sa.IDREV = r.IDREV), 0) AS TotalRevizie, "
-    "p.Sha256, p.Dimensiune, p.DataModif "
+    "p.Sha256, p.Dimensiune, p.DataModif, "
+    "{stare} AS StareTrimitere, "
+    "EXISTS (SELECT 1 FROM FX_Rezervari rz WHERE rz.IDREV = r.IDREV) AS AreRezervari "
     "FROM FX_DDF_REV r "
     "LEFT JOIN FX_DDF_PDF p ON p.IDREV = r.IDREV "
     "WHERE r.IDDF IN (SELECT IDDF FROM FX_DDF WHERE CodAngajament = %s) "
@@ -248,7 +258,7 @@ def get_ddf():
         antet = []
         for (iddf, cod_angajament, cual, obiect_ddf, comp, program,
              data_creare, data_def, stare, part_ang, cod_fiscal, nume_partener,
-             salarii, incarcat, preluat) in cursor.fetchall():
+             salarii, incarcat, preluat, manual) in cursor.fetchall():
             antet.append({
                 "iddf": int(iddf) if iddf is not None else None,
                 "cod_angajament": cod_angajament,
@@ -267,14 +277,18 @@ def get_ddf():
                 "salarii": bool(salarii),
                 "incarcat": bool(incarcat),
                 "preluat": bool(preluat),
+                # Slice 0081-02: created in K-BOT («Angajament nou»); gates «Definitiveaza» /
+                # «Deruleaza» in the Rezervari footer menu.
+                "manual": bool(manual),
             })
 
         # --- revizii: FX_DDF_REV, cu SUM(ValCur) real ----------------------------------
-        cursor.execute(_SQL_REVIZII, (cod,))
+        stare_sql = "r.StareTrimitere" if are_stare_trimitere(cursor, db_name) else "0"
+        cursor.execute(_SQL_REVIZII.format(stare=stare_sql), (cod,))
         revizii = []
         for (idrev, iddf, numar_rev, data_rev, desc_scurta, desc_lunga,
              tip, incarcat, preluat, semnatura, total_revizie,
-             pdf_sha, pdf_dim, pdf_modif) in cursor.fetchall():
+             pdf_sha, pdf_dim, pdf_modif, stare_trimitere, are_rezervari) in cursor.fetchall():
             revizii.append({
                 "idrev": int(idrev) if idrev is not None else None,
                 "iddf": int(iddf) if iddf is not None else None,
@@ -289,6 +303,9 @@ def get_ddf():
                 "incarcat": bool(incarcat),
                 "preluat": bool(preluat),
                 "semnatura": semnatura,
+                # Slice 0081-01: the send stage and the linked-reservation flag (see the SQL).
+                "stare_trimitere": int(stare_trimitere or 0),
+                "are_rezervari": bool(are_rezervari),
                 # SUM real peste sectiunea A — NU valoarea unei linii arbitrare (vezi nota).
                 "total_revizie": _num(total_revizie),
                 # Felia 0041 — PDF-ul SEMNAT stocat pe server. `pdf_sha256` non-null INSEAMNA

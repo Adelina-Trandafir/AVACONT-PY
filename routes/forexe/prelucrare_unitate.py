@@ -380,34 +380,34 @@ def resolve_units(cursor, indicators: List[dict], supplied, un: str,
 # The second lookup: the classification id, inside the resolved unit
 # ---------------------------------------------------------------------------
 # Access: FX_DicClsf("IdClsf", "ClsfSal", IdUnit)(clsfRaw) -- a dictionary of that
-# unit's classifications keyed by ClsfSal. D7 settles which id it is on MariaDB:
-# `IdClsfAcc`, the Access id, because that is what FX_Indicatori.IdClsf holds and
-# what every read route joins on.
+# unit's classifications keyed by ClsfSal. Slice 0080-01 changed what is kept: the FX_
+# tables now carry the MariaDB key (`IdClsf` = Clasificatii.IDClsf), like FX_ORD_TBL and
+# FX_DDF_REV_* already did, and no copy of the Access id (operator, 24.09.2026). Before
+# 0080-01 the Access id was written into `IdClsf` (D7).
 _ID_CLSF_SQL = (
-    "SELECT DISTINCT IdClsfAcc FROM Clasificatii "
+    "SELECT IDClsf, IdClsfAcc FROM Clasificatii "
     "WHERE IdUnitate = %s AND ClsfSal = %s"
 )
 
 
-def find_id_clsf_acc(cursor, id_unitate: int, clsf_sal: str,
-                     clsf_raw: str, cod_indicator: str,
-                     warnings: List[str]) -> Optional[int]:
+def find_id_clsf(cursor, id_unitate: int, clsf_sal: str,
+                 clsf_raw: str, cod_indicator: str,
+                 warnings: List[str]) -> Optional[int]:
     """
-    The `IdClsfAcc` for this ClsfSal inside this unit, or None.
+    `Clasificatii.IDClsf` for this ClsfSal inside this unit, or None.
 
     None is NOT an error -- decision D19. The Access line is
 
         If Not IsNull(IdClsf) Then RC!IdClsf = IdClsf
 
-    so a classification that does not resolve leaves the column unwritten and the
+    so a classification that does not resolve leaves the columns unwritten and the
     row is still saved. Ported, but with a warning instead of silence.
 
-    DISTINCT because the nomenclator has real duplicates on (IdClsfAcc, IdUnitate);
-    several rows carrying the SAME id are normal and collapse here. Several rows
-    carrying DIFFERENT ids are not normal -- the Access dictionary would have kept
-    whichever it read last, arbitrarily, and that is the one behaviour worth not
-    porting, because "arbitrary" here means the indicator lands on the wrong
-    classification.
+    More than one nomenclator row is an error. Before 0080-01 the lookup collapsed rows
+    sharing an `IdClsfAcc` (DISTINCT); with the MariaDB key stored, two rows are two
+    different keys and taking either would be arbitrary -- the indicator would land on
+    whichever row came first. The nomenclator gets fixed instead; the 0080-01 one-off
+    refuses to touch a database with such rows for the same reason.
     """
     cursor.execute(_ID_CLSF_SQL, (int(id_unitate), clsf_sal))
     rows = cursor.fetchall()
@@ -418,9 +418,9 @@ def find_id_clsf_acc(cursor, id_unitate: int, clsf_sal: str,
         )
         return None
     if len(rows) > 1:
-        ids = ", ".join(str(r["IdClsfAcc"]) for r in rows)
+        ids = ", ".join(f"{r['IDClsf']} (Access {r['IdClsfAcc']})" for r in rows)
         raise ValueError(
-            f"Clasificația «{clsf_raw}» are mai multe coduri la unitatea "
+            f"Clasificația «{clsf_raw}» apare de mai multe ori la unitatea "
             f"{id_unitate} ({ids}). Nomenclatorul trebuie corectat."
         )
-    return int(rows[0]["IdClsfAcc"])
+    return int(rows[0]["IDClsf"])

@@ -41,12 +41,13 @@ def prt_insert():
         for row in rows:
             cursor.execute("""
                 INSERT INTO FX_DDF_REV_PRT (
-                    IDDF, IDREV, IdClsf, IdClsfAcc,
+                    IDDF, IDREV, IdClsf,
                     DateFisier, Expl, Tip, CodAngajament
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 row.get('IDDF'),    row.get('IDREV'),
-                row.get('IdClsf'),  row.get('IdClsfAcc'),
+                # IdClsfAcc from VBA is not kept (0080-04: only in Clasificatii.IdClsfAcc).
+                row.get('IdClsf'),
                 row.get('DateFisier'), row.get('Expl'),
                 row.get('Tip'),        row.get('CodAngajament'),
             ))

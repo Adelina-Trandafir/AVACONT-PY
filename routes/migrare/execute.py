@@ -23,6 +23,8 @@
 import binascii
 import logging
 
+from utils import clsf_pair
+
 from . import accdb, parser, tables, validate
 
 # The driver's OWN escaping, so the SQL written into the dump folder is not a
@@ -155,6 +157,7 @@ def run(conn, db_name, fx_path, plan, report, force, only=None, replace=False,
             totals[table.name] = stats
 
             target_columns = schema.columns[table.name]
+            _refuse_idclsfacc(db_name, table.name, target_columns)
             pk_columns = schema.primary_key.get(table.name) or [table.primary_key]
             # The columns MariaDB will not let out of the INSERT. They are what
             # an «(nu se scrie)» correlation may NOT delete, so they are resolved
@@ -213,6 +216,10 @@ def run(conn, db_name, fx_path, plan, report, force, only=None, replace=False,
             if dump is not None:
                 dump.open_table(table.name, columns, skipped)
             batch = []
+            # Slice 0080-01: on the seven pair tables the Access `IdClsf` is looked up
+            # into `Clasificatii.IDClsf` row by row; see _clsf_resolver.
+            resolver, idclsf = _clsf_resolver(conn, db_name, table.name, rename,
+                                              target_columns, say)
 
             for row in accdb.iter_rows(fx_path, table.name):
                 stats["citite"] += 1
@@ -235,6 +242,9 @@ def run(conn, db_name, fx_path, plan, report, force, only=None, replace=False,
                 vrow, changes = parser.parse_row(vrow, target_columns)
                 if dump is not None and changes:
                     dump.parsed(table.name, _row_key(vrow, pk_columns), changes)
+                if resolver is not None:
+                    vrow[idclsf] = resolver.resolve(clsf_pair.pair_table(table.name),
+                                                    vrow, vrow.get(idclsf))
 
                 # BEFORE the row is judged: the column accepts NULL, so the
                 # emptied value passes `check_value` on its own terms.
@@ -271,6 +281,19 @@ def run(conn, db_name, fx_path, plan, report, force, only=None, replace=False,
                     # in the .sql files above it are missing.
                     dump.note(line)
 
+            # Slice 0080-01: a row whose Access classification did not resolve stops
+            # the table HERE, before the commit, so the caller's rollback takes every
+            # row of it back -- nothing half-classified is left behind.
+            if resolver is not None and resolver.problems:
+                for line in clsf_pair.describe_problems(resolver.problems):
+                    say(line)
+                    if dump is not None:
+                        dump.note(line)
+                raise ExecuteError(
+                    "«%s»: clasificații Access care nu duc la exact un rând din "
+                    "Clasificatii. Tabelul nu se scrie; corectați nomenclatorul și "
+                    "rulați din nou." % table.name)
+
             if not replace:
                 # Un tabel incheiat ramane scris chiar daca urmatorul pica.
                 conn.commit()
@@ -302,6 +325,55 @@ def run(conn, db_name, fx_path, plan, report, force, only=None, replace=False,
         raise
 
     return totals
+
+
+def _clsf_resolver(conn, db_name, table_name, rename, target_columns, say):
+    """
+    `(Resolver, target IdClsf name)` for a pair table whose Access `IdClsf` travels into
+    the target's `IdClsf`, else `(None, None)` (see utils/clsf_pair.py).
+
+    Since slice 0080-01 `IdClsf` on these seven tables is `Clasificatii.IDClsf` and no
+    copy of the Access id is kept (operator, 24.09.2026), so the value is translated
+    before the row is written. When the operator's «Corelatii coloane» feeds `IdClsf` from
+    another Access column, that is what he chose and nothing is translated.
+
+    A target whose `IdClsf` does not carry the 0080-01 marker is REFUSED: its existing
+    rows still hold Access ids, and the one-off would later read the keys written here as
+    Access ids too. `scripts/extrase_clsf_0080.py` converts it (an empty table in seconds).
+    """
+    pair = clsf_pair.pair_table(table_name)
+    if pair is None:
+        return None, None
+    names = dict((c.lower(), c) for c in target_columns)
+    idclsf = names.get("idclsf")
+    if idclsf is None or rename.get("idclsf") != idclsf:
+        return None, None
+    cursor = conn.cursor(dictionary=True)
+    try:
+        if table_name not in clsf_pair.converted_tables(cursor, db_name):
+            raise ExecuteError(
+                "«%s».IdClsf nu este convertit în baza «%s» (felia 0080-01). Rulați "
+                "întâi scripts/extrase_clsf_0080.py --db %s." % (table_name, db_name, db_name))
+        resolver = clsf_pair.Resolver(cursor)
+    finally:
+        cursor.close()
+    say("«%s»: IdClsf-ul Access se traduce în Clasificatii.IDClsf (după unitate)." % table_name)
+    return resolver, idclsf
+
+
+def _refuse_idclsfacc(db_name, table_name, target_columns):
+    """
+    Slice 0080-04: only `Clasificatii` keeps the Access classification id. A target table
+    that still has an `IdClsfAcc` column was not converted (on `FX_DDF_REV_SA` / `_SB` it is
+    NOT NULL, so every row would fail there anyway); `scripts/idclsfacc_0080_04.py` drops it.
+    """
+    if table_name.lower() == "clasificatii":
+        return
+    if any(c.lower() == "idclsfacc" for c in target_columns):
+        raise ExecuteError(
+            "«%s» mai are coloana «IdClsfAcc» în baza «%s» (felia 0080-04: id-ul Access stă "
+            "doar în Clasificatii). Rulați întâi scripts/idclsfacc_0080_04.py --db %s."
+            % (table_name, db_name, db_name))
 
 
 def _name_list(names):

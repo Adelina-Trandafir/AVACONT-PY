@@ -13,7 +13,7 @@ What goes on the wire:
                 one entry per table that was queried, in dependency order (parents
                 before children), rows as plain dicts keyed by the REAL column names.
   - `lookups` : the nomenclator rows the FX_ rows point at (Clasificatii by
-                IdClsfAcc + IdUnitate from FX_Indicatori, Parteneri by CodPartener
+                IDClsf from FX_Indicatori.IdClsf, Parteneri by CodPartener
                 from FX_DDF_REV_SA), so IdClsf / CodPartener can be read by a human.
   - `missing_tables` : child tables in the static chain that do not exist in this DC.
 
@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 _BINARY_TYPES = frozenset(("blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary"))
 
 # Table name prefixes / suffixes that are left out of the dump entirely.
-_EXCLUDED_PREFIXES = ("tmp", "FX_Extrase", "FX_Istoric")
+_EXCLUDED_PREFIXES = ("tmp", "FX_Extrase")
 _EXCLUDED_SUFFIXES = ("_IMG", "_PDF")
 
 # Preferred order for the discovery pass (parents / the well-known tables first);
@@ -94,14 +94,12 @@ _SQL_COLUMNS = (
     "ORDER BY TABLE_NAME, ORDINAL_POSITION"
 )
 
-# Nomenclator lookups. Clasificatii: FX_Indicatori.IdClsf is the ACCESS id, which
-# matches Clasificatii.IdClsfAcc (never IDClsf) and needs IdUnitate as well -- the
-# nomenclator is stored for several units in one DC (see sumar.py, R6).
+# Nomenclator lookups. Clasificatii: since slice 0080-01 FX_Indicatori.IdClsf is the
+# MariaDB key (Clasificatii.IDClsf); the Access id is Clasificatii.IdClsfAcc.
 _SQL_CLASIFICATII = (
     "SELECT C.* FROM Clasificatii C "
     "WHERE EXISTS (SELECT 1 FROM FX_Indicatori I "
-    "              WHERE I.CodAngajament = %s "
-    "                AND I.IdClsf = C.IdClsfAcc AND I.IdUnitate = C.IdUnitate) "
+    "              WHERE I.CodAngajament = %s AND I.IdClsf = C.IDClsf) "
     "ORDER BY C.IdUnitate, C.IdClsfAcc"
 )
 _SQL_PARTENERI = (

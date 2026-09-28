@@ -183,14 +183,21 @@ def selected(names):
 #
 #   * in Access, `IdClsf` points at a table in ANOTHER .accdb, while `IdClsfPY`
 #     carries the id of the MariaDB `Clasificatii` row;
-#   * in MariaDB the two swap names: `IdClsfAcc` holds the Access id and
-#     `IdClsf` holds the MariaDB one.
+#   * in MariaDB `IdClsf` holds the MariaDB one, and NO table but `Clasificatii` keeps
+#     the Access id (slice 0080-04, operator 25.09.2026: Clasificatii is the source of
+#     truth; it used to travel into an `IdClsfAcc` column on the ORD / DDF tables).
 #
-# Correlating by name alone would write each id straight into the other's
-# column. Each rule is applied ONLY when the target really has the column it
-# names — a table whose MariaDB side never grew an `IdClsfAcc` keeps the plain
-# one-to-one match. The operator sees the result in «Corelatii coloane» and can
-# override any row of it; what he arranges is what travels.
+# Correlating by name alone would write the Access id into the MariaDB key's column.
+# Each rule is applied ONLY when the target really has the column it names. The operator
+# sees the result in «Corelatii coloane» and can override any row of it; what he arranges
+# is what travels.
+#
+# Slice 0080-01: on the seven FX_ tables that had only `IdClsf` (FX_Extrase_H,
+# FX_Indicatori, FX_Istoric, FX_Plati, FX_Receptii, FX_Receptii_RHR, FX_Rezervari) that
+# column is now `Clasificatii.IDClsf` and NO `IdClsfAcc` is kept (operator, 24.09.2026). So
+# the rename below never applies to them (no target column): the Access `IdClsf` travels by
+# name and execute._clsf_resolver translates it row by row, stopping the table when a row
+# does not resolve (utils/clsf_pair.py).
 #
 # The routing columns (IdUnitate, DC, CodAngajament…) are NOT affected: routing
 # reads the row with its ACCESS names, before any of this.
@@ -204,7 +211,6 @@ def selected(names):
 # The Access `IDORDP` column (measured all zeros, 144/144 on FX_ORD_PART) is
 # left with no correlation at all and never travels -- see `default_rename_map`.
 COLUMN_RENAMES = {
-    "IdClsf": "IdClsfAcc",
     "IdClsfPY": "IdClsf",
     "IDORD": "IDORDP",
     "IDORDPART": "IDORDPARTP",
@@ -226,9 +232,7 @@ def default_rename_map(target_columns):
     applied = {}
     for access_name, target_name in COLUMN_RENAMES.items():
         exact = by_lower.get(target_name.lower())
-        # A rename applies only when the target really has the column it names:
-        # a table whose MariaDB side never grew an `IdClsfAcc` keeps the plain
-        # one-to-one match.
+        # A rename applies only when the target really has the column it names.
         if exact is not None:
             applied[access_name.lower()] = exact
 
@@ -239,8 +243,7 @@ def default_rename_map(target_columns):
     # say who owns that column. This is how the Access `IDORDP` column, which is
     # all zeros, stops travelling once `IDORD` claims `IDORDP`.
     #
-    # A name that is itself the SOURCE of a rename is left alone: `IdClsf` is
-    # both claimed (by `IdClsfPY`) and renamed (to `IdClsfAcc`), and popping it
+    # A name that is itself the SOURCE of a rename is left alone, or popping it
     # here would undo its own rule a line later.
     for owner, exact in applied.items():
         claimed = exact.lower()

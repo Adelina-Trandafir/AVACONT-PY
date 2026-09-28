@@ -240,9 +240,11 @@ def test_a_zero_valued_line_that_names_an_indicator_is_kept():
     P.step4a_populeaza_receptii(cur, COD, indicatori("AAB", "AA2"))
     linii = cur.inserts("FX_Receptii")
     assert len(linii) == 2
-    # _REC_INSERT_SQL: (IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI, CodAngajament,
-    #                   CodIndicator, Data, Valoare, ValoareOrig, HASH, TipIntern)
+    # _REC_INSERT_SQL: (IDRH, IDH, IdClsf, CodSSI, Clsf, IdUnitate, CodAI,
+    #                   CodAngajament, CodIndicator, Data, Valoare, ValoareOrig, HASH,
+    #                   TipIntern)  -- IdClsf = Clasificatii.IDClsf since slice 0080-01
     zero = next(p for p in linii if p[1] == 8)
+    assert zero[2] == 1200
     assert zero[8] == "AA2"
     assert zero[10] == 0.0
     assert zero[11] == 0.0
@@ -263,7 +265,7 @@ def test_a_zero_row_that_names_no_indicator_is_still_skipped():
         "SELECT MAX(NrCrt)": [],
     })
     assert P.step4a_populeaza_receptii(cur, COD, indicatori("AAB"))[0] == 1
-    assert [x[8] for x in cur.inserts("FX_Receptii")] == ["AAB"]
+    assert [x[9] for x in cur.inserts("FX_Receptii")] == ["AAB"]
 
 
 def test_a_header_with_no_line_rows_is_not_a_snapshot():

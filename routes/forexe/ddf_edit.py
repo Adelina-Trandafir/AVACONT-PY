@@ -12,6 +12,7 @@ is one unit, so there is NO `db_name` / `id_unitate` parameter anywhere):
     GET    /api/forexe/ddf/clasificatii                   -> the section-A combo source
     GET    /api/forexe/ddf/parteneri                      -> the header partner combo
     GET    /api/forexe/ddf/comp                           -> the compartment combo
+    GET    /api/forexe/ddf/surse-program                  -> program -> SS map (AVACONT_COMUN.DefaProgram)
     POST   /api/forexe/ddf/save                           -> the whole graph, one transaction
     DELETE /api/forexe/ddf/rev/<idrev>                    -> one revision
     DELETE /api/forexe/ddf/<iddf>                         -> the whole document
@@ -48,19 +49,16 @@ THE TRAPS OF THE FX_DDF FAMILY (read from the DDL, not deduced from names)
    `CUAL` rows fans every revision out. Every read filters `IDDF IN (SELECT ...)`. Same
    lesson as slice 0011-03, applied in 0020-01.
 
-2. THE CLASSIFICATION KEY POINTS BOTH WAYS, on different tables:
-     - `FX_DDF_REV_SA.IdClsf` / `_SB.IdClsf` = the MariaDB key `Clasificatii.IDClsf`
-       (confirmed by the foreign keys `FX_DDF_REV_SA_ibfk_4` and `tblDocFund_SB_ibfk_4`);
-     - `FX_Indicatori.IdClsf`, `FX_Rezervari.IdClsf`, `FX_Receptii.IdClsf` = the ACCESS id,
-       which matches `Clasificatii.IdClsfAcc`. None of those three has a foreign key, which
-       is the tell.
-   So Access's join `Clasificatii.IDClsf = FX_Indicatori.IdClsf` -- where both sides were
-   Access ids -- must be TRANSLATED here to
-   `C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate`, and the value written into
-   `FX_DDF_REV_SA.IdClsf` is `C.IDClsf`. Copying the Access join literally returns zero rows.
+2. THE CLASSIFICATION KEY. Since slice 0080-01 every FX_ table uses the same key:
+   `IdClsf` = the MariaDB key `Clasificatii.IDClsf` (on `FX_DDF_REV_SA`/`_SB` backed by the
+   foreign keys `FX_DDF_REV_SA_ibfk_4` and `tblDocFund_SB_ibfk_4`). Since 0080-04 no FX_
+   table keeps the Access id; it lives only in `Clasificatii.IdClsfAcc`. Before 0080-01
+   `FX_Indicatori`, `FX_Rezervari`, `FX_Receptii` (and four more) held the Access id in
+   `IdClsf`, so every join here had to be
+   `C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate`; now it is `C.IDClsf = I.IdClsf`.
 
-3. `IdClsfAcc` is `NOT NULL` on both `_SA` and `_SB`. The client never sends it; the server
-   resolves it from `Clasificatii`.
+3. `SS` and `CodSSI` are never taken from the client; the server resolves them from
+   `Clasificatii`.
 
 4. `Clasificatii` has NO `CodSSI` column, though Access did. It has `SS` (Sector+Sursa) and
    `ClsfSal`, both `GENERATED ... PERSISTENT`, so `CodSSI = CONCAT(SS, ClsfSal)`. Verified
@@ -101,6 +99,7 @@ column as the wire field `desc_lunga`, and `DdfXmlBuilder` puts that value into 
 XFA node `DescrieObFundRevizuireLung`. It is the PLAIN-TEXT rendition; `Desc_Lunga` is the
 RTF one, and the XFA cannot take RTF.
 """
+import base64
 import hashlib
 import json
 import logging
@@ -109,7 +108,7 @@ from datetime import date, datetime, timedelta
 from flask import request, g, current_app
 
 from routes.auth.guard import require_session
-from utils.database import get_kbot_connection
+from utils.database import get_kbot_connection, get_kbot_comun_connection
 
 from . import forexe_bp
 from .marcaj import LOCK_IDREV, consuma_lacatul, id_marcaj_utilizabil, idrev_tinut
@@ -373,8 +372,8 @@ def _antet_din_ddf(rand: dict, nou: bool) -> dict:
 #                                       it: `Clasificatii` holds several units per database
 #                                       (eight on 000_DEMO), and 0011-03 measured the cost of
 #                                       dropping it -- 67 rows where 25 were expected.
-#   `Clasificatii.IdClsf`            -> see trap 2 in the module docstring. The JOIN goes
-#                                       through `IdClsfAcc`; the VALUE emitted is `IDClsf`.
+#   `Clasificatii.IdClsf`            -> see trap 2 in the module docstring. The JOIN and
+#                                       the VALUE emitted are both `IDClsf`.
 #   `Clasificatii.CodSSI`            -> CONCAT(SS, ClsfSal); the column does not exist here.
 #
 # The WHERE clause carries a row-selection rule that is easy to miss and changes the result
@@ -387,7 +386,7 @@ _SQL_GEN_REZERVARI = (
     "  CASE WHEN R.EInitiala THEN 'Initiala' "
     "       WHEN R.EMarire   THEN 'Marire' "
     "       ELSE 'Micsorare' END                       AS TipOperatie, "
-    "  C.IdUnitate, C.Clsf, C.IDClsf, C.IdClsfAcc, C.SS, C.Denumire, "
+    "  C.IdUnitate, C.Clsf, C.IDClsf, C.SS, C.Denumire, "
     "  CONCAT(C.SS, C.ClsfSal)                         AS CodSSI, "
     "  R.DataRezervare, R.CodAI, R.CodAngajament, R.CodIndicator, "
     "  R.R_CreditBug                                   AS Buget, "
@@ -395,7 +394,7 @@ _SQL_GEN_REZERVARI = (
     "  SUM(CASE WHEN R.EInitiala THEN R.R_Initiala ELSE R.R_Valoare END) AS Suma "
     "FROM FX_Rezervari R "
     "JOIN FX_Indicatori I ON I.CodAI = R.CodAI "
-    "JOIN Clasificatii  C ON C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "JOIN Clasificatii  C ON C.IDClsf = I.IdClsf "
     "LEFT JOIN (SELECT IdClsf, SUM(ValCur) AS RezPrec "
     "             FROM FX_DDF_REV_SA WHERE CodAngajament = %s GROUP BY IdClsf) P "
     "       ON P.IdClsf = C.IDClsf "
@@ -408,7 +407,7 @@ _SQL_GEN_REZERVARI = (
     "        WHERE AreDDF = 0 AND CodAngajament = %s "
     "          AND DataRezervare = (SELECT MIN(DataRezervare) FROM FX_Rezervari "
     "                                 WHERE AreDDF = 0 AND CodAngajament = %s)) "
-    "GROUP BY C.IdUnitate, C.Clsf, C.IDClsf, C.IdClsfAcc, C.SS, C.ClsfSal, C.Denumire, "
+    "GROUP BY C.IdUnitate, C.Clsf, C.IDClsf, C.SS, C.ClsfSal, C.Denumire, "
     "         R.DataRezervare, R.CodAI, R.CodAngajament, R.CodIndicator, R.R_CreditBug, "
     "         P.RezPrec, R.EInitiala, R.EMarire, R.EMicsorare "
     "HAVING SUM(CASE WHEN R.EInitiala THEN R.R_Initiala ELSE R.R_Valoare END) <> 0 "
@@ -422,18 +421,18 @@ _SQL_GEN_INDICATORI = (
     "SELECT "
     "  ''                                              AS grp_idrz, "
     "  'Initiala'                                      AS TipOperatie, "
-    "  C.IdUnitate, C.Clsf, C.IDClsf, C.IdClsfAcc, C.SS, "
+    "  C.IdUnitate, C.Clsf, C.IDClsf, C.SS, "
     "  A.Descriere                                     AS Denumire, "
     "  CONCAT(C.SS, C.ClsfSal)                         AS CodSSI, "
     "  A.DataCreare                                    AS DataRezervare, "
     "  H.CodAI, H.CodAngajament, H.CodIndicator, "
-    "  I.Prevedere_Bugetara_Initiala                   AS Buget, "
+    "  I.Credit_Bugetar                                AS Buget, "
     "  0                                               AS ValPrec, "
     "  H.Val_Rezervare_I                               AS Suma "
     "FROM FX_Istoric H "
     "JOIN FX_Angajamente A ON A.CodAngajament = H.CodAngajament "
     "JOIN FX_Indicatori  I ON I.CodAI = H.CodAI "
-    "JOIN Clasificatii   C ON C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "JOIN Clasificatii   C ON C.IDClsf = I.IdClsf "
     "WHERE H.CodAngajament = %s AND H.TipRand = 'Rez_Initiala' "
     "ORDER BY C.Clsf"
 )
@@ -514,7 +513,6 @@ def _construieste_linii(randuri: list, cod: str, receptii: dict) -> tuple:
             "cod_angajament": cod,
             "cod_indicator": cod_ind,
             "id_clsf": _int0(r.get("IDClsf")),
-            "id_clsf_acc": _int0(r.get("IdClsfAcc")),
             "clsf": _txt(r.get("Clsf")),
             "ss": _txt(r.get("SS")),
             # The unit comes from the DATA (FX_Indicatori.IdUnitate through Clasificatii),
@@ -542,7 +540,6 @@ def _construieste_linii(randuri: list, cod: str, receptii: dict) -> tuple:
             "cod_angajament": cod,
             "cod_indicator": cod_ind,
             "id_clsf": _int0(r.get("IDClsf")),
-            "id_clsf_acc": _int0(r.get("IdClsfAcc")),
             "cod_ssi": _txt(r.get("CodSSI")),
             "ss": _txt(r.get("SS")),
             "id_unitate": _int0(r.get("IdUnitate")),
@@ -653,7 +650,7 @@ def post_ddf_genereaza():
             # no classification for them. Loud, and it names the likely cause.
             raise DateInvalide(
                 f"Sursa «{sursa}» are rânduri pentru «{cod}», dar niciunul nu s-a putut lega "
-                "de nomenclatorul de clasificații (Clasificatii.IdClsfAcc + IdUnitate). "
+                "de nomenclatorul de clasificații (Clasificatii.IDClsf). "
                 "Verificați clasificațiile indicatorilor înainte de a genera documentul."
             )
 
@@ -746,14 +743,14 @@ _SQL_DRAFT_REV = (
 
 _SQL_DRAFT_SA = (
     "SELECT IdSecA, IDDF, IDREV, CodAngajament, CodIndicator, CodPartener, IdPartener, "
-    "       IdClsfAcc, IdClsf, Clsf, ElementFund, ParametriiFund, ValPrec, ValCur, ValTot, "
+    "       IdClsf, Clsf, ElementFund, ParametriiFund, ValPrec, ValCur, ValTot, "
     "       PartInd, Ramane, IdUnitate, SS "
     "  FROM FX_DDF_REV_SA WHERE IDREV = %s ORDER BY Clsf, IdSecA"
 )
 
 _SQL_DRAFT_SB = (
     "SELECT IdSecB, IDDF, IDREV, CodAngajament, CodIndicator, CodPartener, IdPartener, "
-    "       IdClsfAcc, IdClsf, CodSSI, CA_Anterior, Inf1, CA_Curent, CB_Anterior, Inf2, "
+    "       IdClsf, CodSSI, CA_Anterior, Inf1, CA_Curent, CB_Anterior, Inf2, "
     "       CB_Curent, IdUnitate, SS "
     "  FROM FX_DDF_REV_SB WHERE IDREV = %s ORDER BY IdSecB"
 )
@@ -796,6 +793,108 @@ def _are_att_img(cursor, db_name: str) -> bool:
     return prezent
 
 
+# Operator, 28.09.2026: the pictures K-BOT takes in the FOREXE page are filed on the
+# reservation rows themselves (FX_Rezervarii_IMG, routes/forexe/capturi.py). The table came
+# over from Access empty; a database that has not got it must still be able to save a
+# document, so it is probed once, exactly like the blob table above.
+_SQL_ARE_REZ_IMG = (
+    "SELECT COUNT(*) AS n FROM information_schema.TABLES "
+    " WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'FX_Rezervarii_IMG'"
+)
+
+_REZ_IMG_PREZENT = {}
+
+
+def _are_rez_img(cursor, db_name: str) -> bool:
+    if db_name in _REZ_IMG_PREZENT:
+        return _REZ_IMG_PREZENT[db_name]
+    try:
+        cursor.execute(_SQL_ARE_REZ_IMG, (db_name,))
+        prezent = int((cursor.fetchone() or {}).get("n") or 0) > 0
+    except Exception:
+        logger.warning("[forexe.ddf_edit] %s: proba FX_Rezervarii_IMG a esuat; "
+                       "se presupune ca lipseste", db_name, exc_info=True)
+        prezent = False
+    _REZ_IMG_PREZENT[db_name] = prezent
+    return prezent
+
+
+def _capturi_rezervarilor(cursor, db_name: str, iddf: int, idrev: int) -> int:
+    """
+    The captures of this revision's reservations become its `PrtScr = 1` attachments -- the
+    rows `Table4` of the final PDF draws (slice 0081-05), which the ALOP guide asks for
+    (p.11-14, example p.41).
+
+    The picture is not moved: `FX_Rezervarii_IMG` keeps it on the reservation, where it
+    belongs and where a later revision of the same reservation can still find it. What is
+    written here is the revision's own copy, and only once -- the file name carries the
+    moment it was taken, so a name already attached to this revision is skipped.
+
+    Returns how many were added. A database without `FX_Rezervarii_IMG` adds none.
+    """
+    if not _are_rez_img(cursor, db_name):
+        return 0
+    cursor.execute(
+        "SELECT I.IDRZC AS id, I.Nume AS nume, I.IMG AS img "
+        "  FROM FX_Rezervarii_IMG I "
+        " INNER JOIN FX_Rezervari R ON R.IDRZ = I.IDRZ "
+        " WHERE R.IDREV = %s AND I.IMG IS NOT NULL AND I.IMG <> '' "
+        " ORDER BY I.IDRZC",
+        (idrev,))
+    capturi = cursor.fetchall() or []
+    if not capturi:
+        return 0
+
+    cursor.execute(
+        "SELECT CaleFisier AS nume FROM FX_DDF_REV_ATT WHERE IDREV = %s AND PrtScr = 1",
+        (idrev,))
+    deja = {(r.get("nume") or "") for r in (cursor.fetchall() or [])}
+
+    are_blob = _are_att_img(cursor, db_name)
+    adaugate = 0
+    for c in capturi:
+        nume = (c.get("nume") or "").strip() or f"captura_{_int0(c.get('id'))}.jpg"
+        if nume in deja:
+            continue
+        brut = c.get("img") or ""
+        try:
+            octeti = base64.b64decode(brut, validate=False)
+        except Exception:
+            # A picture nobody can decode is said, and the document is saved without it:
+            # the save is the operator's work, the picture is evidence we can take again.
+            logger.warning("[forexe.ddf_edit] %s: captura %s a rezervarii nu se poate decoda; "
+                           "revizia %s se salveaza fara ea", db_name, c.get("id"), idrev,
+                           exc_info=True)
+            continue
+        if not octeti:
+            continue
+        cursor.execute(
+            "INSERT INTO FX_DDF_REV_ATT (IDDF, IDREV, CaleFisier, PrtScr) VALUES (%s, %s, %s, 1)",
+            (iddf, idrev, nume[:255]))
+        id_rev_att = _cheie_noua(cursor, "FX_DDF_REV_ATT")
+        if are_blob:
+            cursor.execute(
+                "INSERT INTO FX_DDF_REV_ATT_IMG "
+                "       (IdRevAtt, NumeFisier, TipMime, Dimensiune, Sha256, Continut, DataModif) "
+                "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+                # The type is read from the bytes (`_tip_fisier`), never from the name: the
+                # captures are JPEG since 28.09.2026 and PNG before that.
+                (id_rev_att, nume[:255], _tip_fisier(octeti, nume) or "image/jpeg",
+                 len(octeti), _sha256(octeti), octeti))
+        else:
+            # A database without sql/0051_ddf_rev_att_img.sql: the old column, base64,
+            # which the generation read route serves as it is.
+            cursor.execute("UPDATE FX_DDF_REV_ATT SET DateFisier = %s WHERE IdRevAtt = %s",
+                           (brut, id_rev_att))
+        deja.add(nume)
+        adaugate += 1
+
+    if adaugate:
+        logger.info("[forexe.ddf_edit] %s: revizia %s a preluat %s captura(i) din FOREXE",
+                    db_name, idrev, adaugate)
+    return adaugate
+
+
 def _linie_a_din_rand(r: dict) -> dict:
     return {
         "temp_id": 0,
@@ -803,7 +902,6 @@ def _linie_a_din_rand(r: dict) -> dict:
         "cod_angajament": _txt(r.get("CodAngajament")),
         "cod_indicator": _txt(r.get("CodIndicator")),
         "id_clsf": _int0(r.get("IdClsf")),
-        "id_clsf_acc": _int0(r.get("IdClsfAcc")),
         "clsf": _txt(r.get("Clsf")),
         "ss": _txt(r.get("SS")),
         "id_unitate": _int0(r.get("IdUnitate")),
@@ -830,7 +928,6 @@ def _linie_b_din_rand(r: dict) -> dict:
         "cod_angajament": _txt(r.get("CodAngajament")),
         "cod_indicator": _txt(r.get("CodIndicator")),
         "id_clsf": _int0(r.get("IdClsf")),
-        "id_clsf_acc": _int0(r.get("IdClsfAcc")),
         "cod_ssi": _txt(r.get("CodSSI")),
         "ss": _txt(r.get("SS")),
         "id_unitate": _int0(r.get("IdUnitate")),
@@ -967,27 +1064,24 @@ def get_ddf_draft(iddf, idrev):
 # removes this slice's dependency on AVACONT_COMUN.DefaTitlu2, which does not exist on the
 # server yet. They come back with the tree picker, not before.
 _SQL_CLSF_PE_ANGAJAMENT = (
-    "SELECT C.IDClsf, C.IdClsfAcc, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
-    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IdClsfAcc)           AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
+    "SELECT C.IDClsf, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
+    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(SUM(i.Credit_Bugetar), 0) FROM FX_Indicatori i          WHERE i.CodAngajament = %s AND i.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
     "  FROM Clasificatii C "
     " WHERE C.IDClsf IN (SELECT CC.IDClsf FROM Clasificatii CC "
-    "                      JOIN FX_Indicatori I ON CC.IdClsfAcc = I.IdClsf "
-    "                                          AND CC.IdUnitate = I.IdUnitate "
+    "                      JOIN FX_Indicatori I ON CC.IDClsf = I.IdClsf "
     "                     WHERE I.CodAngajament = %s) "
     " ORDER BY C.Clsf"
 )
 
 _SQL_CLSF_ACELASI_TITLU = (
-    "SELECT C.IDClsf, C.IdClsfAcc, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
-    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IdClsfAcc)           AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 3 AS SortOrd "
+    "SELECT C.IDClsf, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
+    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(SUM(i.Credit_Bugetar), 0) FROM FX_Indicatori i          WHERE i.CodAngajament = %s AND i.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 3 AS SortOrd "
     "  FROM Clasificatii C "
     " WHERE C.Titlu IN (SELECT CC.Titlu FROM Clasificatii CC "
-    "                     JOIN FX_Indicatori I ON CC.IdClsfAcc = I.IdClsf "
-    "                                         AND CC.IdUnitate = I.IdUnitate "
+    "                     JOIN FX_Indicatori I ON CC.IDClsf = I.IdClsf "
     "                    WHERE I.CodAngajament = %s GROUP BY CC.Titlu) "
     "   AND C.IDClsf NOT IN (SELECT CC.IDClsf FROM Clasificatii CC "
-    "                          JOIN FX_Indicatori I ON CC.IdClsfAcc = I.IdClsf "
-    "                                              AND CC.IdUnitate = I.IdUnitate "
+    "                          JOIN FX_Indicatori I ON CC.IDClsf = I.IdClsf "
     "                         WHERE I.CodAngajament = %s) "
     " ORDER BY C.Clsf"
 )
@@ -998,8 +1092,8 @@ _SQL_CLSF_ACELASI_TITLU = (
 # Access arithmetic over a fixed-width string; here `Titlu` is a real generated column
 # (`left(Articol, 2)`), so the client passes it as a parameter and no substring is computed.
 _SQL_CLSF_MANUAL = (
-    "SELECT C.IDClsf, C.IdClsfAcc, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
-    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IdClsfAcc)           AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
+    "SELECT C.IDClsf, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
+    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(SUM(i.Credit_Bugetar), 0) FROM FX_Indicatori i          WHERE i.CodAngajament = %s AND i.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
     "  FROM Clasificatii C "
     " WHERE (%s IS NULL OR C.Titlu = %s) "
     " ORDER BY C.Clsf"
@@ -1009,7 +1103,6 @@ _SQL_CLSF_MANUAL = (
 def _clsf_din_rand(r: dict) -> dict:
     return {
         "id_clsf": _int0(r.get("IDClsf")),
-        "id_clsf_acc": _int0(r.get("IdClsfAcc")),
         "clsf": _txt(r.get("Clsf")),
         "denumire": _txt(r.get("Denumire")),
         "ss": _txt(r.get("SS")),
@@ -1018,13 +1111,17 @@ def _clsf_din_rand(r: dict) -> dict:
         "id_unitate": _int0(r.get("IdUnitate")),
         "sort_ord": _int0(r.get("SortOrd")),
         # The three values `cmbClsf_AfterUpdate` looked up one at a time, precomputed here so
-        # picking a classification costs the client no round trip. `val_rec` keys on
-        # `IdClsfAcc` because `FX_Receptii.IdClsf` holds the ACCESS id (trap 2), while
-        # `val_prec` keys on `IDClsf` because `FX_DDF_REV_SA.IdClsf` holds the MariaDB one.
+        # picking a classification costs the client no round trip. Both key on `IDClsf`:
+        # `FX_DDF_REV_SA.IdClsf` and, since slice 0080-01, `FX_Receptii.IdClsf` hold the
+        # MariaDB key.
         "val_prec": _num(r.get("ValPrec")),
         "val_rec": _num(r.get("ValRec")),
         # Empty = no indicator exists for this classification yet, so the client mints one.
         "cod_indicator": _txt(r.get("CodIndicator")),
+        # Slice 0081-12 (operator, 26.09.2026): the budget of a line NOT generated from a
+        # reservation is the angajament's FX_Indicatori.Credit_Bugetar for the classification.
+        # Display only, like the reservation path's R_CreditBug.
+        "buget": _num(r.get("Buget")),
     }
 
 
@@ -1052,12 +1149,13 @@ def get_ddf_clasificatii():
         cursor = conn.cursor(dictionary=True)
 
         if manual:
-            cursor.execute(_SQL_CLSF_MANUAL, (cod, cod, cod, titlu, titlu))
+            # Four `cod`: ValPrec, ValRec, CodIndicator, Buget -- then the Titlu pair.
+            cursor.execute(_SQL_CLSF_MANUAL, (cod, cod, cod, cod, titlu, titlu))
             randuri = [_clsf_din_rand(r) for r in cursor.fetchall()]
         else:
-            cursor.execute(_SQL_CLSF_PE_ANGAJAMENT, (cod, cod, cod, cod))
+            cursor.execute(_SQL_CLSF_PE_ANGAJAMENT, (cod, cod, cod, cod, cod))
             grup1 = [_clsf_din_rand(r) for r in cursor.fetchall()]
-            cursor.execute(_SQL_CLSF_ACELASI_TITLU, (cod, cod, cod, cod, cod))
+            cursor.execute(_SQL_CLSF_ACELASI_TITLU, (cod, cod, cod, cod, cod, cod))
             grup3 = [_clsf_din_rand(r) for r in cursor.fetchall()]
 
             randuri = list(grup1)
@@ -1065,7 +1163,6 @@ def get_ddf_clasificatii():
             if grup1 and grup3:
                 randuri.append({
                     "id_clsf": CLSF_SEPARATOR_ID,
-                    "id_clsf_acc": 0,
                     "clsf": CLSF_SEPARATOR_CLSF,
                     "denumire": CLSF_SEPARATOR_DENUMIRE,
                     "ss": "",
@@ -1094,6 +1191,10 @@ def get_ddf_clasificatii():
 # angajament's own indicators, because the SESSION HAS NO UNIT ID: every session is minted
 # with `id_unitate = 0` and nothing reads it.
 #
+# Slice 0081-10: an angajament being created in K-BOT («Angajament nou», code «!...») has no
+# indicators yet, so the unit predicate matched nothing and the combo came up empty. With no
+# indicator to scope by, every unit of this database is offered (the database is one DC).
+#
 # `CodFiscal` is authoritative, not `CodPartener`: one CodFiscal can map to several
 # IdUnitate, hence to several CodPartener / IdPartener rows. `FX_DDF` stores only CodFiscal
 # and NumePartener -- it has no IdPartener column at all.
@@ -1105,8 +1206,10 @@ _SQL_PARTENERI = (
     " WHERE P.Tip = '1' "
     "   AND COALESCE(P.Ascuns, 0) = 0 "
     "   AND COALESCE(P.CodFiscal, '') <> '' "
-    "   AND P.IdUnitate IN (SELECT DISTINCT I.IdUnitate FROM FX_Indicatori I "
-    "                        WHERE I.CodAngajament = %s AND I.IdUnitate IS NOT NULL) "
+    "   AND (P.IdUnitate IN (SELECT DISTINCT I.IdUnitate FROM FX_Indicatori I "
+    "                         WHERE I.CodAngajament = %s AND I.IdUnitate IS NOT NULL) "
+    "        OR NOT EXISTS (SELECT 1 FROM FX_Indicatori I "
+    "                        WHERE I.CodAngajament = %s AND I.IdUnitate IS NOT NULL)) "
     " GROUP BY P.CodFiscal "
     " ORDER BY NumePartener"
 )
@@ -1130,7 +1233,7 @@ def get_ddf_parteneri():
     try:
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute(_SQL_PARTENERI, (cod,))
+        cursor.execute(_SQL_PARTENERI, (cod, cod))
         parteneri = [{
             "cod_fiscal": _txt(r.get("CodFiscal")),
             "nume_partener": _txt(r.get("NumePartener")),
@@ -1179,6 +1282,42 @@ def get_ddf_comp():
     except Exception as e:
         logger.error(f"[forexe.ddf_edit] comp: {e}", exc_info=True)
         return _json_utf8({"error": f"Eroare la citirea compartimentelor: {e}"}, 500)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+# THE PROGRAM -> SOURCE / SECTOR MAP (slice 0081-09).
+#
+# A section-A line takes its SS (Sursa + Sectorul, the `DefaSursaSector.SursaSector` code and
+# `Clasificatii.SS`) from the document's program: `AVACONT_COMUN.DefaProgram` lists, per
+# program, the SSs it may use (0000000000 -> 02A, 02E; 0000002510 -> 01A). Common to every
+# unit, so it is read from AVACONT_COMUN and returned whole -- a handful of rows; the client
+# keeps the ones of the header's program.
+_SQL_SURSE_PROGRAM = (
+    "SELECT P.Program, CONCAT(P.Sursa, P.Sectorul) AS SS, S.Denumire "
+    "  FROM DefaProgram P "
+    "  LEFT JOIN DefaSursaSector S ON S.Sursa = P.Sursa AND S.Sectorul = P.Sectorul "
+    " ORDER BY P.Program, P.Sursa, P.Sectorul"
+)
+
+
+@forexe_bp.route("/api/forexe/ddf/surse-program", methods=["GET"])
+@require_session
+def get_ddf_surse_program():
+    """Every (program, SS, caption) row of AVACONT_COMUN.DefaProgram."""
+    conn = None
+    try:
+        conn = get_kbot_comun_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(_SQL_SURSE_PROGRAM)
+        randuri = [{"program": _txt(r.get("Program")),
+                    "ss": _txt(r.get("SS")),
+                    "denumire": _txt(r.get("Denumire"))} for r in cursor.fetchall()]
+        return _json_utf8({"surse": randuri}, 200)
+    except Exception as e:
+        logger.error(f"[forexe.ddf_edit] surse-program: {e}", exc_info=True)
+        return _json_utf8({"error": f"Eroare la citirea surselor programelor: {e}"}, 500)
     finally:
         if conn is not None:
             conn.close()
@@ -1512,8 +1651,8 @@ def _valideaza_graf(cursor, sarcina: dict) -> dict:
             motive.append(f"Element de fundamentare lipsă pe rândul {i} din secțiunea A.")
         if _num(a.get("val_cur")) == 0.0:
             motive.append(f"Valoarea curentă este 0 pe rândul {i} din secțiunea A.")
-        # `IdClsf` is a foreign key to Clasificatii and `IdClsfAcc` is NOT NULL, so a zero
-        # here stops the transaction with an errno that names nothing.
+        # `IdClsf` is a foreign key to Clasificatii, so a zero here stops the transaction
+        # with an errno that names nothing.
         if _int0(a.get("id_clsf")) <= 0:
             motive.append(f"Clasificația lipsește pe rândul {i} din secțiunea A.")
         if _int0(a.get("id_unitate")) <= 0:
@@ -1544,11 +1683,11 @@ def _valideaza_graf(cursor, sarcina: dict) -> dict:
 
 
 def _rezolva_clasificatii(cursor, linii_a: list, linii_b: list) -> dict:
-    """`IdClsfAcc`, `SS` and `CodSSI` for every classification in the graph.
+    """`Clsf`, `SS` and `CodSSI` for every classification in the graph.
 
-    The client sends only `IDClsf`, the MariaDB key. `IdClsfAcc` is NOT NULL on both `_SA`
-    and `_SB`, `CodSSI` has no column in `Clasificatii` at all (it is `CONCAT(SS, ClsfSal)`),
-    and none of the three may be trusted from the client -- so all three are read here.
+    The client sends only `IDClsf`, the MariaDB key. `CodSSI` has no column in
+    `Clasificatii` at all (it is `CONCAT(SS, ClsfSal)`), and none of the three may be
+    trusted from the client -- so all three are read here.
     """
     id_uri = {_int0(x.get("id_clsf")) for x in list(linii_a) + list(linii_b)}
     id_uri.discard(0)
@@ -1557,7 +1696,7 @@ def _rezolva_clasificatii(cursor, linii_a: list, linii_b: list) -> dict:
 
     sabloane = ", ".join(["%s"] * len(id_uri))
     cursor.execute(
-        f"SELECT IDClsf, IdClsfAcc, Clsf, SS, CONCAT(SS, ClsfSal) AS CodSSI, IdUnitate "
+        f"SELECT IDClsf, Clsf, SS, CONCAT(SS, ClsfSal) AS CodSSI, IdUnitate "
         f"  FROM Clasificatii WHERE IDClsf IN ({sabloane})", tuple(id_uri))
     gasite = {int(r["IDClsf"]): r for r in cursor.fetchall()}
 
@@ -1571,16 +1710,16 @@ def _rezolva_clasificatii(cursor, linii_a: list, linii_b: list) -> dict:
 
 _SQL_SA_INSERT = (
     "INSERT INTO FX_DDF_REV_SA "
-    "  (IDDF, IDREV, CodAngajament, CodIndicator, CodPartener, IdPartener, IdClsfAcc, "
+    "  (IDDF, IDREV, CodAngajament, CodIndicator, CodPartener, IdPartener, "
     "   IdClsf, Clsf, ElementFund, ParametriiFund, ValPrec, ValCur, ValTot, PartInd, "
     "   Ramane, IdUnitate, SS) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 
 _SQL_SA_UPDATE = (
     "UPDATE FX_DDF_REV_SA SET "
     "  IDDF = %s, IDREV = %s, CodAngajament = %s, CodIndicator = %s, CodPartener = %s, "
-    "  IdPartener = %s, IdClsfAcc = %s, IdClsf = %s, Clsf = %s, ElementFund = %s, "
+    "  IdPartener = %s, IdClsf = %s, Clsf = %s, ElementFund = %s, "
     "  ParametriiFund = %s, ValPrec = %s, ValCur = %s, ValTot = %s, PartInd = %s, "
     "  Ramane = %s, IdUnitate = %s, SS = %s "
     "WHERE IdSecA = %s"
@@ -1588,16 +1727,16 @@ _SQL_SA_UPDATE = (
 
 _SQL_SB_INSERT = (
     "INSERT INTO FX_DDF_REV_SB "
-    "  (IDDF, IDREV, CodAngajament, CodIndicator, CodPartener, IdPartener, IdClsfAcc, "
+    "  (IDDF, IDREV, CodAngajament, CodIndicator, CodPartener, IdPartener, "
     "   IdClsf, CodSSI, CA_Anterior, Inf1, CA_Curent, CB_Anterior, Inf2, CB_Curent, "
     "   IdUnitate, SS) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 
 _SQL_SB_UPDATE = (
     "UPDATE FX_DDF_REV_SB SET "
     "  IDDF = %s, IDREV = %s, CodAngajament = %s, CodIndicator = %s, CodPartener = %s, "
-    "  IdPartener = %s, IdClsfAcc = %s, IdClsf = %s, CodSSI = %s, CA_Anterior = %s, "
+    "  IdPartener = %s, IdClsf = %s, CodSSI = %s, CA_Anterior = %s, "
     "  Inf1 = %s, CA_Curent = %s, CB_Anterior = %s, Inf2 = %s, CB_Curent = %s, "
     "  IdUnitate = %s, SS = %s "
     "WHERE IdSecB = %s"
@@ -1719,7 +1858,6 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
 
         for a in linii_a:
             cod_ai = f"{cod}-{_txt(a.get('cod_indicator'))}"
-            clsf = clasificatii.get(_int0(a.get("id_clsf")), {})
             val_cur = _num(a.get("val_cur"))
             cursor.execute(
                 "INSERT INTO FX_Indicatori "
@@ -1730,10 +1868,10 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
                 "  Credit_Bugetar_Initial = VALUES(Credit_Bugetar_Initial), "
                 "  Angajament_Legal = VALUES(Angajament_Legal), "
                 "  Credit_Bugetar_Definitiv = VALUES(Credit_Bugetar_Definitiv)",
-                # NOTE the key space: FX_Indicatori.IdClsf holds the ACCESS id (trap 2), so
-                # what goes in here is IdClsfAcc, NOT the IDClsf the section-A line carries.
+                # Since 0080-01 FX_Indicatori.IdClsf is the MariaDB key, like section A.
                 (cod_ai, cod, _txt(a.get("cod_indicator")),
-                 _int0(clsf.get("IdClsfAcc")), _int0(a.get("id_unitate")),
+                 _int0(a.get("id_clsf")),
+                 _int0(a.get("id_unitate")),
                  val_cur, val_cur, val_cur))
 
     # ---- 3: FX_DDF -----------------------------------------------------------------------
@@ -1858,7 +1996,6 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
             iddf, idrev, cod, _txt(a.get("cod_indicator")),
             _txt(a.get("cod_partener")) or None,
             _int0(a.get("id_partener")) or None,
-            _int0(clsf.get("IdClsfAcc")),
             _int0(a.get("id_clsf")),
             _txt(clsf.get("Clsf")),
             _txt(a.get("element_fund")),
@@ -1888,7 +2025,6 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
             iddf, idrev, cod, _txt(b.get("cod_indicator")),
             _txt(b.get("cod_partener")) or None,
             _int0(b.get("id_partener")) or None,
-            _int0(clsf.get("IdClsfAcc")),
             _int0(b.get("id_clsf")),
             # CodSSI is resolved here, never taken from the client.
             _txt(clsf.get("CodSSI")),
@@ -1964,6 +2100,14 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
             (idrev, idrev, cod))
         rezervari_legate += cursor.rowcount
 
+    # 8.1c Operator, 28.09.2026: the captures K-BOT took in the FOREXE page while the
+    # operator was making these very reservations. They were filed on the reservation rows
+    # (FX_Rezervarii_IMG, routes/forexe/capturi.py); the revision that shows them is born
+    # here, so here is where they become its PrtScr attachments -- the ones Table4 of the
+    # final PDF draws (slice 0081-05). Done AFTER section 7's delete pass, so nothing this
+    # step writes is swept by it.
+    capturi_legate = _capturi_rezervarilor(cursor, g.session.db_name, iddf, idrev)
+
     # 8.2 and 8.3 FX_Angajamente. The Descriere cascade is UNCONDITIONAL now (decision D10
     # replaces Access's `ModNume` gate). ObiectDDF is varchar(500) and Descriere is
     # varchar(255), so the value is truncated HERE, explicitly, rather than by MariaDB.
@@ -1986,6 +2130,7 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
         "numar_rev": numar_rev,
         "harta": {"linii_a": harta_a, "linii_b": harta_b, "att": harta_att},
         "rezervari_legate": rezervari_legate,
+        "capturi_legate": capturi_legate,
         "obiect_trunchiat": len(obiect) > LUNGIME_DESCRIERE_ANGAJAMENT,
     }
 

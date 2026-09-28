@@ -112,12 +112,16 @@ def demo_rows():
         # Clsf/Titlu/SS sunt coloane GENERATED, deci NU se scriu. Componentele trebuie
         # sa existe in nomenclatoarele AVACONT_COMUN.Defa* (FK-uri pe coloanele generate);
         # se folosesc aceleasi valori reale ca la Sumar (65.02.04.02.20.01.03).
+        ids_clsf = []
         for _ in range(2):   # duplicat real pe (IdClsfAcc, IdUnitate)
             cur.execute(
                 "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
                 "Articol, Alineat, Denumire) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                 (CLSF_ACC, id_unitate, "65.02", "04.02", "20.01", "03", "Clasificație test"),
             )
+            ids_clsf.append(cur.lastrowid)
+        # 0080-01: the FX_ tables carry the MariaDB key in IdClsf (no Access id kept).
+        id_clsf_pk = ids_clsf[0]
         if id_unitate_alt is not None:   # vecin de alta unitate
             cur.execute(
                 "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
@@ -137,8 +141,8 @@ def demo_rows():
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "
             "IdUnitate, SS) VALUES (%s,%s,%s,%s,%s,%s)",
-            # FX_Indicatori.IdClsf tine ID-UL ACCESS -> se umple cu IdClsfAcc, nu cu PK.
-            (cod_ai, COD, "IND-A", CLSF_ACC, id_unitate, "02A"),
+            # 0080-01: IdClsf = Clasificatii.IDClsf; no Access id is kept.
+            (cod_ai, COD, "IND-A", id_clsf_pk, id_unitate, "02A"),
         )
 
         # (IDRZ, DataRezervare, R_CreditBug, R_Initiala, R_Valoare, R_Definitiva,
@@ -153,10 +157,10 @@ def demo_rows():
         for (idrz, data, cbug, rin, rval, rdef, ei, em, emi, addf) in rezervari:
             cur.execute(
                 "INSERT INTO FX_Rezervari (IDRZ, CodAI, CodAngajament, CodIndicator, "
-                "IdClsf, DataRezervare, R_CreditBug, R_Initiala, R_Valoare, R_Definitiva, "
-                "EInitiala, EMarire, EMicsorare, AreDDF) "
+                "IdClsf, DataRezervare, R_CreditBug, R_Initiala, R_Valoare, "
+                "R_Definitiva, EInitiala, EMarire, EMicsorare, AreDDF) "
                 "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                (idrz, cod_ai, COD, "IND-A", CLSF_ACC, data, cbug, rin, rval, rdef,
+                (idrz, cod_ai, COD, "IND-A", id_clsf_pk, data, cbug, rin, rval, rdef,
                  ei, em, emi, addf),
             )
         conn.commit()

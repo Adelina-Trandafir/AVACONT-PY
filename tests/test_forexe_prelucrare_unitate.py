@@ -13,7 +13,7 @@ import mysql.connector
 from routes.forexe.prelucrare_unitate import (
     UnitChoiceRequired,
     UnitChoiceTableMissing,
-    find_id_clsf_acc,
+    find_id_clsf,
     find_unit_candidates,
     load_remembered_choices,
     normalize_supplied_choices,
@@ -32,7 +32,7 @@ class FakeCursor:
     `candidates` maps (SS, ClsfE) -> list of Clasificatii/Unitati rows.
     `remembered` is the FX_Alegeri_Unitate content, or the string "missing" to make
     the table look absent (errno 1146, what the driver really raises).
-    `clsf` maps (IdUnitate, ClsfSal) -> list of IdClsfAcc rows.
+    `clsf` maps (IdUnitate, ClsfSal) -> list of {IDClsf, IdClsfAcc} rows.
     Every statement executed is recorded in `.executed` so a test can assert that a
     write happened -- or, just as important, that it did NOT.
     """
@@ -60,7 +60,7 @@ class FakeCursor:
                 raise mysql.connector.Error(msg="no such table", errno=1146)
             self.remembered[(params[0], params[1])] = params[2]
             self._result = []
-        elif "SELECT DISTINCT IdClsfAcc" in sql:
+        elif "SELECT IDClsf, IdClsfAcc FROM Clasificatii" in sql:
             self._result = list(self.clsf.get((params[0], params[1]), []))
         else:                                    # pragma: no cover - guard
             raise AssertionError(f"unexpected SQL: {sql}")
@@ -323,13 +323,13 @@ def test_load_remembered_rethrows_other_driver_errors_unchanged():
 
 
 # ---------------------------------------------------------------------------
-# find_id_clsf_acc
+# find_id_clsf (slice 0080-01: the MariaDB key, Clasificatii.IDClsf)
 # ---------------------------------------------------------------------------
-def test_classification_found_returns_the_access_id():
-    cur = FakeCursor(clsf={(76, "650402200101"): [{"IdClsfAcc": 1204}]})
+def test_classification_found_returns_the_mariadb_key():
+    cur = FakeCursor(clsf={(76, "650402200101"): [{"IDClsf": 88, "IdClsfAcc": 1204}]})
     warnings = []
-    got = find_id_clsf_acc(cur, 76, "650402200101", "raw", "AAB", warnings)
-    assert got == 1204 and warnings == []
+    got = find_id_clsf(cur, 76, "650402200101", "raw", "AAB", warnings)
+    assert got == 88 and warnings == []
 
 
 def test_classification_not_found_is_none_plus_a_warning_not_an_error():
@@ -337,14 +337,15 @@ def test_classification_not_found_is_none_plus_a_warning_not_an_error():
     # the row anyway. Ported, but the operator is told.
     cur = FakeCursor(clsf={})
     warnings = []
-    got = find_id_clsf_acc(cur, 76, "650402200101", "02E- 65...", "AAB", warnings)
+    got = find_id_clsf(cur, 76, "650402200101", "02E- 65...", "AAB", warnings)
     assert got is None
     assert len(warnings) == 1 and "AAB" in warnings[0]
 
 
-def test_conflicting_classification_ids_raise_instead_of_picking_one():
-    cur = FakeCursor(clsf={(76, "650402200101"): [{"IdClsfAcc": 1204},
-                                                  {"IdClsfAcc": 1301}]})
+def test_two_nomenclator_rows_raise_instead_of_picking_one():
+    # Even when they share the Access id: with the MariaDB key stored they are two keys.
+    cur = FakeCursor(clsf={(76, "650402200101"): [{"IDClsf": 88, "IdClsfAcc": 1204},
+                                                  {"IDClsf": 91, "IdClsfAcc": 1204}]})
     with pytest.raises(ValueError) as err:
-        find_id_clsf_acc(cur, 76, "650402200101", "raw", "AAB", [])
-    assert "1204" in str(err.value) and "1301" in str(err.value)
+        find_id_clsf(cur, 76, "650402200101", "raw", "AAB", [])
+    assert "88" in str(err.value) and "91" in str(err.value)

@@ -59,10 +59,14 @@ e goala pe toate randurile. Aici hash-ul SE SCRIE (formula lui Access, neschimba
 decizia ramane pe cheia naturala: coloana are nevoie de o rulare completa inainte sa se
 poata sprijini cineva pe ea.
 
-`DataDoc` este TEXT in `FX_Extrase`, nu data -- Access scria acolo o data printr-un camp
-Text, deci a iesit in formatul scurt al masinii: `dd.MM.yyyy` (confirmat in exportul
-tabelei). Se scrie in acelasi format, altfel randurile noi nu s-ar mai compara cu cele
-vechi si ar arata altfel in vederea Plati, care afiseaza coloana ca sir brut.
+`DataDoc` is a DATE column since slice 0080-01 (the one-off `scripts/extrase_clsf_0080.py`
+converted the old text values -- `dd.MM.yyyy`, `dd/MM/yyyy` and `yyyy-mm-dd hh:mm:ss`, mixed
+in one database -- and changed the type). It is written as a date and compared as a date.
+The HASH still uses the Access text form `dd.MM.yyyy`, so the string stays the one Access
+would have produced.
+
+CLASIFICATIA ANTETULUI -- since 0080-01 `FX_Extrase_H.IdClsf` = Clasificatii.IDClsf, like
+every FX_ table; no copy of the Access id is kept.
 
 UNDE STAU NOMENCLATOARELE (si de ce nu se ghicesc)
 --------------------------------------------------
@@ -320,7 +324,7 @@ class _Nomenclatoare:
         self.avertismente = []
         self._sursa_pentru_prefix = self._incarca_surse()
         self._unitate_pentru_sursa = self._incarca_unitati()
-        self._clsf = {}      # (id_unitate) -> {ClsfSal: IdClsfAcc}
+        self._clsf = {}      # (id_unitate) -> {ClsfSal: IDClsf}
         self._clsf_v = None  # toata baza, fara unitate: {Capitol+SubCapitol+Paragraf: IdClsfV}
         self._parteneri = {}  # (id_unitate) -> {CodFiscal: CodPartener}
         self._indicatori = None  # {f"{CodAngajament}!{IdClsf}": CodAI}
@@ -369,6 +373,10 @@ class _Nomenclatoare:
         """SS-ul contului, din primele lui 3 caractere. None = nu s-a putut afla."""
         if self._sursa_pentru_prefix is None or not cont:
             return None
+        # Operator, 25.09.2026: a "500" prefix is really 4 characters, 5005 = 02A and
+        # 5006 = 01A. They get a unit, never a classification (the ClsfSal rule is unchanged).
+        if cont[:3] == "500":
+            return SURSA_500X.get(cont[:4])
         return self._sursa_pentru_prefix.get(cont[:3])
 
     def unitate_pentru_sursa(self, sursa):
@@ -380,29 +388,35 @@ class _Nomenclatoare:
     # -- clasificatii -----------------------------------------------------
     def clsf_pentru(self, id_unitate: int, clsf_sal: str):
         """
-        ClsfSal -> id de clasificatie, pentru unitatea data.
+        ClsfSal -> `Clasificatii.IDClsf` for the given unit, or None.
 
-        Se intoarce `IdClsfAcc`, NU `IDClsf`. Motivul e decizia blocata din STATUS:
-        `FX_Indicatori.IdClsf` tine id-ul ACCESS, verificat pe date reale in 0011-03,
-        si toate tabelele FX_ urmeaza aceeasi conventie. `FX_Extrase_H.IdClsf` e citit
-        astazi doar de rapoarte care il compara cu FX_Indicatori, deci trebuie sa fie
-        din aceeasi familie.
+        The MariaDB key since slice 0080-01, what every FX_ table now carries in `IdClsf`.
+        `FX_Indicatori.IdClsf` is the MariaDB key as well, so `indicator_pentru` below
+        keeps matching on it.
 
         Predicatul IdUnitate RAMANE: `Clasificatii` e nomenclator comun si tine randuri
-        pentru mai multe unitati in aceeasi baza.
+        pentru mai multe unitati in aceeasi baza. A ClsfSal that appears on more than one
+        row of the unit keeps the first one (Access `FindFirst`) and puts a warning in
+        the response: the extras is still imported, but the operator learns the
+        nomenclator has a duplicate.
         """
         harta = self._clsf.get(id_unitate)
         if harta is None:
             self._cursor.execute(
-                "SELECT ClsfSal, IdClsfAcc FROM Clasificatii WHERE IdUnitate = %s",
+                "SELECT ClsfSal, IDClsf FROM Clasificatii "
+                "WHERE IdUnitate = %s ORDER BY IDClsf",
                 (id_unitate,),
             )
             harta = {}
-            for (cs, ida) in self._cursor.fetchall():
-                # Primul castiga, ca `FindFirst` din Access: nomenclatorul are
-                # duplicate reale pe (IdClsfAcc, IdUnitate) -- vezi 0011-03.
-                if cs is not None and str(cs) not in harta:
-                    harta[str(cs)] = int(ida)
+            for (cs, idc) in self._cursor.fetchall():
+                if cs is None:
+                    continue
+                if str(cs) in harta:
+                    self.avertismente.append(
+                        f"Clasificația «{cs}» apare de mai multe ori la unitatea "
+                        f"{id_unitate}; s-a folosit prima (id {harta[str(cs)]}).")
+                    continue
+                harta[str(cs)] = int(idc)
             self._clsf[id_unitate] = harta
         return harta.get(clsf_sal)
 
@@ -602,11 +616,10 @@ def import_extrase():
                 for (nume, data_ex) in cursor.fetchall()
             }
             cursor.execute(_E_EXISTENTE_SQL)
-            # DataDoc e TEXT in tabela; `str(...) if not None` o pastreaza asa si de
-            # partea asta, ca perechea (citit, scris) sa se compare intre ele si nu o
-            # data cu un sir.
+            # DataDoc is a DATE since 0080-01; `_zi` folds a driver datetime to a date
+            # so the pair (read, written) compares like with like.
             operatiuni_vazute = {
-                (None if dd is None else str(dd), nd, cui, _f(sd), _f(sc))
+                (_zi(dd), nd, cui, _f(sd), _f(sc))
                 for (dd, nd, cui, sd, sc) in cursor.fetchall()
             }
 
@@ -698,13 +711,23 @@ def _f(v) -> float:
 
 def _data_doc_text(d):
     """
-    Data documentului in forma in care traieste coloana: TEXT `dd.MM.yyyy`, sau None.
-
-    Nu e o alegere de stil. `FX_Extrase.DataDoc` e `varchar`, iar randurile scrise de
-    Access poarta formatul scurt al masinii romanesti. Orice alt format ar rupe atat
-    compararea cu ele (deduplicarea), cat si afisarea din vederea Plati.
+    The document date as Access wrote it into its text column, `dd.MM.yyyy`, or None.
+    Used ONLY for the HASH (the Access formula hashed the text); the column itself is a
+    DATE since slice 0080-01.
     """
     return None if d is None else d.strftime("%d.%m.%Y")
+
+
+def _zi(v):
+    """A DATE/DATETIME value from the driver as a plain date (None stays None)."""
+    if v is None:
+        return None
+    return v.date() if isinstance(v, datetime) else v
+
+
+# The 4-character sources behind a "500" account prefix (operator, 25.09.2026).
+# Mirrored by ExtrasHeaderRules.Source500X in the VB migrator.
+SURSA_500X = {"5005": "02A", "5006": "01A"}
 
 
 def _scrie_antet(cursor, nom: _Nomenclatoare, cont_ext, idexf: int, avertismente):
@@ -769,8 +792,8 @@ def _scrie_operatiune(cursor, nom: _Nomenclatoare, cont_misc, idexh: int,
     d = parse_cont_misc(cont_misc)
 
     data_banca = parse_data_yyyymmdd(d.get("databan"))
-    # DataDoc pleaca spre baza ca TEXT `dd.MM.yyyy` -- vezi antetul fisierului.
-    data_doc = _data_doc_text(parse_data_yyyymmdd(d.get("datadoc")))
+    # DataDoc is a DATE column; the Access text form is kept for the hash only.
+    data_doc = parse_data_yyyymmdd(d.get("datadoc"))
     nr_doc = null_if_empty(d.get("nrdoc"))
 
     # Referinta = ce sta inaintea primei liniute din explicatii.
@@ -810,7 +833,8 @@ def _scrie_operatiune(cursor, nom: _Nomenclatoare, cont_misc, idexh: int,
         idexh, cod_ai, data_banca, data_doc, nr_doc, referinta, referinta_dest,
         platitor_nume, platitor_cui, platitor_iban, suma_debit, suma_credit,
         null_if_empty(explicatii), cod_contract, rand_contract, cod_program,
-        hash_operatiune(data_doc, nr_doc, platitor_cui, suma_debit, suma_credit),
+        hash_operatiune(_data_doc_text(data_doc), nr_doc, platitor_cui,
+                        suma_debit, suma_credit),
         cod_partener, id_unitate,
     ))
     return True

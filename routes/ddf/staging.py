@@ -307,7 +307,7 @@ def _commit_add_sa(cursor, token: str, final_iddf, final_idrev):
     reva_map: List[Dict] = []
     # --- FX_DDF_REV_SA : ADAUGAT IdUnitate, SS ---
     cursor.execute("""
-            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, IdClsfAcc, Clsf,
+            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, Clsf,
                    ElementFund, ParametriiFund, ValPrec, ValCur, ValTot,
                    PartInd, CodAngajament, CodIndicator, Ramane
             FROM stg_RevA WHERE Token = %s
@@ -316,14 +316,14 @@ def _commit_add_sa(cursor, token: str, final_iddf, final_idrev):
         cursor.execute("""
                 INSERT INTO FX_DDF_REV_SA (
                     IDDF, IDREV, IdPartener, CodPartener, IdUnitate, SS,
-                    IdClsf, IdClsfAcc, Clsf,
+                    IdClsf, Clsf,
                     ElementFund, ParametriiFund, ValPrec, ValCur, ValTot,
                     PartInd, CodAngajament, CodIndicator, Ramane
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
             final_iddf, final_idrev,
             row['IdPartener'], row['CodPartener'], row['IdUnitate'], row['SS'],
-            row['IdClsf'], row['IdClsfAcc'], row['Clsf'],
+            row['IdClsf'], row['Clsf'],
             row['ElementFund'], row['ParametriiFund'],
             row['ValPrec'], row['ValCur'], row['ValTot'],
             row['PartInd'], row['CodAngajament'], row['CodIndicator'], row['Ramane'],
@@ -337,7 +337,7 @@ def _commit_add_sb(cursor, token: str, final_iddf, final_idrev):
     revb_map: List[Dict] = []
     # --- FX_DDF_REV_SB : ADAUGAT IdUnitate, SS ---
     cursor.execute("""
-            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, IdClsfAcc, CodSSI,
+            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, CodSSI,
                    CodAngajament, CodIndicator,
                    CA_Anterior, Inf1, CA_Curent, CB_Anterior, Inf2, CB_Curent
             FROM stg_RevB WHERE Token = %s
@@ -346,14 +346,14 @@ def _commit_add_sb(cursor, token: str, final_iddf, final_idrev):
         cursor.execute("""
                 INSERT INTO FX_DDF_REV_SB (
                     IDDF, IDREV, IdPartener, CodPartener, IdUnitate, SS,
-                    IdClsf, IdClsfAcc, CodSSI,
+                    IdClsf, CodSSI,
                     CodAngajament, CodIndicator,
                     CA_Anterior, Inf1, CA_Curent, CB_Anterior, Inf2, CB_Curent
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
             final_iddf, final_idrev,
             row['IdPartener'], row['CodPartener'], row['IdUnitate'], row['SS'],
-            row['IdClsf'], row['IdClsfAcc'], row['CodSSI'],
+            row['IdClsf'], row['CodSSI'],
             row['CodAngajament'], row['CodIndicator'],
             row['CA_Anterior'], row['Inf1'], row['CA_Curent'],
             row['CB_Anterior'], row['Inf2'], row['CB_Curent'],
@@ -522,7 +522,6 @@ def _commit_mod_sa(cursor, token: str, final_iddf, final_idrev):
                 f.IdUnitate      = s.IdUnitate,
                 f.SS             = s.SS,
                 f.IdClsf         = s.IdClsf,
-                f.IdClsfAcc      = s.IdClsfAcc,
                 f.Clsf           = s.Clsf,
                 f.ElementFund    = s.ElementFund,
                 f.ParametriiFund = s.ParametriiFund,
@@ -539,7 +538,7 @@ def _commit_mod_sa(cursor, token: str, final_iddf, final_idrev):
 
     # ADAUGAT IdUnitate, SS la SELECT + INSERT
     cursor.execute("""
-            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, IdClsfAcc, Clsf,
+            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, Clsf,
                    ElementFund, ParametriiFund, ValPrec, ValCur, ValTot,
                    PartInd, CodAngajament, CodIndicator, Ramane
             FROM stg_RevA WHERE Token = %s AND IdSecA <= 0
@@ -548,14 +547,14 @@ def _commit_mod_sa(cursor, token: str, final_iddf, final_idrev):
         cursor.execute("""
                 INSERT INTO FX_DDF_REV_SA (
                     IDDF, IDREV, IdPartener, CodPartener, IdUnitate, SS,
-                    IdClsf, IdClsfAcc, Clsf,
+                    IdClsf, Clsf,
                     ElementFund, ParametriiFund, ValPrec, ValCur, ValTot,
                     PartInd, CodAngajament, CodIndicator, Ramane
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
             final_iddf, final_idrev,
             row['IdPartener'], row['CodPartener'], row['IdUnitate'], row['SS'],
-            row['IdClsf'], row['IdClsfAcc'], row['Clsf'],
+            row['IdClsf'], row['Clsf'],
             row['ElementFund'], row['ParametriiFund'],
             row['ValPrec'], row['ValCur'], row['ValTot'],
             row['PartInd'], row['CodAngajament'], row['CodIndicator'], row['Ramane'],
@@ -586,7 +585,6 @@ def _commit_mod_sb(cursor, token: str, final_iddf, final_idrev):
                 f.IdUnitate     = s.IdUnitate,
                 f.SS            = s.SS,
                 f.IdClsf        = s.IdClsf,
-                f.IdClsfAcc     = s.IdClsfAcc,
                 f.CodSSI        = s.CodSSI,
                 f.CodAngajament = s.CodAngajament,
                 f.CodIndicator  = s.CodIndicator,
@@ -602,7 +600,7 @@ def _commit_mod_sb(cursor, token: str, final_iddf, final_idrev):
 
     # ADAUGAT IdUnitate, SS la SELECT + INSERT
     cursor.execute("""
-            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, IdClsfAcc, CodSSI,
+            SELECT TmpID, IdPartener, CodPartener, IdUnitate, SS, IdClsf, CodSSI,
                    CodAngajament, CodIndicator,
                    CA_Anterior, Inf1, CA_Curent, CB_Anterior, Inf2, CB_Curent
             FROM stg_RevB WHERE Token = %s AND IdSecB <= 0
@@ -611,14 +609,14 @@ def _commit_mod_sb(cursor, token: str, final_iddf, final_idrev):
         cursor.execute("""
                 INSERT INTO FX_DDF_REV_SB (
                     IDDF, IDREV, IdPartener, CodPartener, IdUnitate, SS,
-                    IdClsf, IdClsfAcc, CodSSI,
+                    IdClsf, CodSSI,
                     CodAngajament, CodIndicator,
                     CA_Anterior, Inf1, CA_Curent, CB_Anterior, Inf2, CB_Curent
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
             final_iddf, final_idrev,
             row['IdPartener'], row['CodPartener'], row['IdUnitate'], row['SS'],
-            row['IdClsf'], row['IdClsfAcc'], row['CodSSI'],
+            row['IdClsf'], row['CodSSI'],
             row['CodAngajament'], row['CodIndicator'],
             row['CA_Anterior'], row['Inf1'], row['CA_Curent'],
             row['CB_Anterior'], row['Inf2'], row['CB_Curent'],

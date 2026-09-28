@@ -105,8 +105,8 @@ def demo_rows():
       - un rand cu Val_Rezervare_Dif NEGATIV -> semnul se pastreaza pe fir;
       - un rand-plata cu ora reala 19:21:32 -> data_fx pastreaza componenta de timp (§2.3);
       - Descriere/Observatii cu diacritice -> ensure_ascii=False.
-    Toate randurile au IdClsf = CLSF_ACC (id ACCESS), deci clasificatia se rezolva prin
-    IdClsfAcc, NU prin IDClsf (cheia inversa fata de DDF — §2.5).
+    Since slice 0080-01 every row carries IdClsf = the nomenclator PK (id_clsf_pk) and
+    IdClsfAcc = CLSF_ACC (the Access id); the menu resolves on the PK.
 
     Nomenclatorul e insamantat DELIBERAT cu DOUA randuri pe acelasi IdClsfAcc (duplicat real,
     ca la 0011-03), ca sa dovedeasca dedup-ul: endpoint-ul trebuie sa intoarca O SINGURA
@@ -144,13 +144,12 @@ def demo_rows():
                 (cod, descriere, "În derulare", DB_NAME, "2026-01-17"),
             )
 
-        # FX_Indicatori: poarta IdUnitate + IdClsf (id ACCESS = IdClsfAcc) pentru predicatul
-        # de unitate al ierarhiei de clasificatii (exact ca bFilter_Click din Access).
+        # FX_Indicatori: since 0080-01 IdClsf = PK; no Access id is kept.
         cod_ai = f"{COD}-AI-A"
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "
             "IdUnitate, NrCrt, SS) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (cod_ai, COD, "IND-A", CLSF_ACC, id_unitate, 1, "02A"),
+            (cod_ai, COD, "IND-A", id_clsf_pk, id_unitate, 1, "02A"),
         )
 
         # (ID, DataFX, Clsf, TipRand, val_rez_i, val_rez_dif, val_receptie, val_plata, descr, obs)
@@ -172,7 +171,7 @@ def demo_rows():
                 "Val_Rezervare_Dif, Val_Receptie, Val_Plata, TipRand, IdTrezor, Doc, "
                 "Prelucrat, Rez_Ord) "
                 "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                (rid, None, CLSF_ACC, cod_ai, COD, "IND-A", data_fx,
+                (rid, None, id_clsf_pk, cod_ai, COD, "IND-A", data_fx,
                  "pytest-op", descr, obs, vri, 0.0, 0.0, 0.0, vdif, vrec, vpl, tip,
                  "", "", 1, 0),
             )
@@ -278,8 +277,8 @@ def test_clasificatii_scoped_to_present_idclsf_and_unit(client, auth_headers, de
     ale unitatii angajamentului. CLSF_OTHER exista in nomenclator dar nu e referit -> absent."""
     clasificatii = _body(client.get(f"{URL}?cod={COD}", headers=auth_headers))["clasificatii"]
     ids = {c["id_clsf"] for c in clasificatii}
-    assert CLSF_ACC in ids
-    assert CLSF_OTHER not in ids, "o clasificatie nereferita de istoric a intrat in meniu"
+    assert demo_rows._istoric_test_id_clsf_pk in ids
+    assert len(ids) == 1, "o clasificatie nereferita de istoric a intrat in meniu"
     for c in clasificatii:
         assert set(c.keys()) == set(CLSF_KEYS)
 
@@ -287,27 +286,25 @@ def test_clasificatii_scoped_to_present_idclsf_and_unit(client, auth_headers, de
 def test_no_fan_out_one_entry_per_id_clsf(client, auth_headers, demo_rows):
     """§8.9: nomenclatorul are DOUA randuri pe CLSF_ACC -> exact O intrare, nu doua.
 
-    E o lista, nu un lookup scalar, deci LIMIT 1 nu se aplica: GROUP BY IdClsfAcc.
+    Keyed on the PK since 0080-01, so the duplicate cannot enter the menu at all.
     """
     clasificatii = _body(client.get(f"{URL}?cod={COD}", headers=auth_headers))["clasificatii"]
     ids = [c["id_clsf"] for c in clasificatii]
-    assert ids.count(CLSF_ACC) == 1
+    assert ids.count(demo_rows._istoric_test_id_clsf_pk) == 1
     assert len(ids) == len(set(ids)), "fan-out: un id_clsf apare de mai multe ori"
 
 
-def test_key_resolves_via_idclsfacc_not_idclsf(client, auth_headers, demo_rows):
-    """§8.10: intrarea se rezolva prin IdClsfAcc, NU prin IDClsf (cheia inversa fata de DDF).
-
-    FX_Istoric.IdClsf = CLSF_ACC (id ACCESS). PK-ul generat (IDClsf) e diferit, deci o
-    cheie inversata ar intoarce ZERO intrari — nu o eroare. Construim exact acest caz.
+def test_key_resolves_via_the_pk_not_idclsfacc(client, auth_headers, demo_rows):
+    """§8.10, turned round by slice 0080-01: FX_Istoric.IdClsf is the nomenclator PK and
+    the menu carries it. The Access id (CLSF_ACC) must NOT be what travels as id_clsf.
     """
     conn = demo_rows
     id_clsf_pk = conn._istoric_test_id_clsf_pk
     assert id_clsf_pk != CLSF_ACC, "fixture invalid: IDClsf coincide cu IdClsfAcc"
     clasificatii = _body(client.get(f"{URL}?cod={COD}", headers=auth_headers))["clasificatii"]
     ids = {c["id_clsf"] for c in clasificatii}
-    assert CLSF_ACC in ids, "cheia s-a rezolvat pe IDClsf, nu pe IdClsfAcc -> meniu gol"
-    assert id_clsf_pk not in ids, "id_clsf poarta PK-ul nomenclatorului, nu id-ul Access"
+    assert id_clsf_pk in ids, "cheia nu s-a rezolvat pe PK -> meniu gol"
+    assert CLSF_ACC not in ids, "id_clsf poarta id-ul Access, nu PK-ul nomenclatorului"
 
 
 def test_diacritics_are_literal(client, auth_headers, demo_rows):

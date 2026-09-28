@@ -35,7 +35,7 @@ ROW_KEYS = (
     "CodAngajament", "IDDF", "Descriere", "Stare", "DataCreare", "DataDefinitivare",
     "Incarcat", "Preluat", "Salarii", "Ascuns", "Surse",
     "AreIndicatori", "AreIstoric", "AreRevizii", "AreRezervari", "AreReceptii",
-    "ArePlati", "AreDDF", "ArePartener", "AreOrd",
+    "ArePlati", "AreDDF", "ArePartener", "AreOrd", "AreExtrase",
 )
 
 

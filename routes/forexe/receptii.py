@@ -41,14 +41,10 @@ Sursa Access (verificata in export, NU reghicita):
 
 Join-ul clasificatiei — aceleasi decizii ca la Sumar (felia 0011-03), NU se reghicesc:
   - Se trece prin FX_Indicatori (join pe CodAI), NU prin FX_Receptii.IdClsf/Clsf
-    (denormalizat, poate fi gol pe date reale). `FX_Indicatori.IdClsf` este VERIFICAT
-    ca id Access (= Clasificatii.IdClsfAcc) in 0011-03.
-  - Clasificatii se citeste prin SUBINTEROGARE SCALARA cu LIMIT 1, nu prin join:
-    nomenclatorul are duplicate reale pe (IdClsfAcc, IdUnitate), deci un join ar
-    multiplica randurile. Subinterogarea garanteaza UN Clsf per linie, indiferent de
-    duplicate, si pastreaza „fara clasificatie -> gol".
-  - Predicatul IdUnitate RAMANE la nomenclator (regula „drop IdUnitate" e doar pentru
-    tabelele FX_).
+    (denormalizat, poate fi gol pe date reale). Since slice 0080-01
+    `FX_Indicatori.IdClsf` is Clasificatii.IDClsf.
+  - Clasificatii se citeste prin SUBINTEROGARE SCALARA cu LIMIT 1, care pastreaza „fara
+    clasificatie -> gol". Pe cheia primara nu mai are nevoie de predicatul IdUnitate.
 
 ANTETUL E RADACINA INTEROGARII, NU RECEPTIA (felia 0062). Pana la 0062 se pornea din
 FX_Receptii_R cu INNER JOIN pe H, ca in qFX_MAIN_REC_TREE. Operatorul a constatat insa ca
@@ -90,8 +86,8 @@ logger = logging.getLogger(__name__)
 
 # STUPID FACUT DE CLAUDE!!!!
 # Un rand per FX_Receptii (IDR) al angajamentului, cu antetul (H) si receptia (R) purtate.
-# Clsf prin subinterogare scalara (LIMIT 1) cheiata pe FX_Indicatori.IdClsf (= id Access)
-# + IdUnitate. Ordinea reproduce arborele Access (R.NRCRT, R.DataR, H.NrCrt, H.DataH),
+# Clsf prin subinterogare scalara (LIMIT 1) cheiata pe FX_Indicatori.IdClsf (= Clasificatii.IDClsf
+# since 0080-01). Ordinea reproduce arborele Access (R.NRCRT, R.DataR, H.NrCrt, H.DataH),
 # cu Rc.IDR ca tiebreaker stabil intre refresh-uri.
 # _SQL_RECEPTII = (
 #     "SELECT "
@@ -103,10 +99,10 @@ logger = logging.getLogger(__name__)
 #     "H.Descriere AS DescriereH, "
 #     "Rc.IDR, Rc.IdClsf, Rc.CodIndicator, I.NrCrt AS NrCrtInd, Rc.Valoare, Rc.DIF, "
 #     "(SELECT C.Clsf FROM Clasificatii C "
-#     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+#     "  WHERE C.IDClsf = I.IdClsf "
 #     "  LIMIT 1) AS Clsf, "
 #     "(SELECT C.Denumire FROM Clasificatii C "
-#     "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+#     "  WHERE C.IDClsf = I.IdClsf "
 #     "  LIMIT 1) AS Denumire "
 #     "FROM FX_Receptii_H H "
 #     "LEFT JOIN FX_Receptii_R R ON R.IDRR = H.IDRR "
@@ -127,10 +123,10 @@ _SQL_RECEPTII = (
     # the value from THAT indicator's line in THIS header (Rc, matched on CodAI too).
     "Rc.IDR, I.IdClsf, RHR.CodIndicator, I.NrCrt AS NrCrtInd, Rc.Valoare, Rc.DIF, "
     "(SELECT C.Clsf FROM Clasificatii C "
-    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  WHERE C.IDClsf = I.IdClsf "
     "  LIMIT 1) AS Clsf, "
     "(SELECT C.Denumire FROM Clasificatii C "
-    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  WHERE C.IDClsf = I.IdClsf "
     "  LIMIT 1) AS Denumire "
     "FROM FX_Receptii_R R "
     "INNER JOIN FX_Receptii_RHR RHR ON R.IDRR = RHR.IDRR "

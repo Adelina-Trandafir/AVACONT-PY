@@ -39,7 +39,7 @@ CLSF_ACC = 990001
 
 # Cheile pe care contractul de fir le promite (oglindesc SumarRow pe partea VB.NET).
 ROW_KEYS = (
-    "clsf", "cod_indicator", "partener",
+    "clsf", "cod_indicator", "partener", "credit_bug",
     "total_rezervari", "total_receptii", "total_plati",
     "total_revizii", "total_ordonantari",
 )
@@ -139,12 +139,15 @@ def demo_rows():
         # duplicate in productie ((75,79), (75,84), (75,90), (75,92), (75,93) — fiecare
         # de doua ori), iar un JOIN ar multiplica randul-indicator. Fixtura reproduce
         # defectul, ca testul sa demonstreze ca subinterogarea scalara il rezolva.
+        ids_clsf = []
         for _ in range(2):
             cur.execute(
                 "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
                 "Articol, Alineat, Denumire) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                 (CLSF_ACC, id_unitate, "65.02", "04.02", "20.01", "03", "Clasificație test"),
             )
+            ids_clsf.append(cur.lastrowid)
+        id_clsf_pk = ids_clsf[0]
         # ACELASI IdClsfAcc sub ALTA unitate: nu are voie sa produca un rand in plus.
         if id_unitate_alt is not None:
             cur.execute(
@@ -170,10 +173,9 @@ def demo_rows():
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "
             "IdUnitate, SS) VALUES (%s,%s,%s,%s,%s,%s)",
-            # ATENTIE: FX_Indicatori.IdClsf tine ID-UL ACCESS, deci se umple cu
-            # IdClsfAcc, NU cu PK-ul MariaDB (lastrowid). Numele coloanei minte —
-            # asta a fost defectul 0011-03.
-            (f"{COD}-AI-A", COD, "IND-A", CLSF_ACC, id_unitate, "02A"),
+            # Since 0080-01 FX_Indicatori.IdClsf is the MariaDB key (lastrowid); no Access
+            # id is kept. Until then the column name lied (defect 0011-03).
+            (f"{COD}-AI-A", COD, "IND-A", id_clsf_pk, id_unitate, "02A"),
         )
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "

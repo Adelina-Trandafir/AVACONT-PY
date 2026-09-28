@@ -4,8 +4,9 @@
 # Cate un IDORDP per request.
 #
 # Mapari non-triviale Access -> JSON:
-#   TBL: Access.IdClsf   -> JSON.IdClsfAcc -> MariaDB.IdClsfAcc
-#        Access.IdClsfPY -> JSON.IdClsf    -> MariaDB.IdClsf (FK Clasificatii)
+#   TBL: Access.IdClsfPY -> JSON.IdClsf    -> MariaDB.IdClsf (FK Clasificatii)
+#        Access.IdClsf   -> JSON.IdClsfAcc -> not kept (0080-04: only in
+#                           Clasificatii.IdClsfAcc)
 #   TBL: IDORDPARTP rezolvat in VBA prin JOIN FX_ORD_TBL x FX_ORD_PART
 #   TBL_REC: IDORDTBLP rezolvat in VBA prin JOIN x FX_ORD_TBL
 #   ATT/DOC: IDORDPARTP rezolvat in VBA prin JOIN x FX_ORD_PART
@@ -107,10 +108,10 @@ def _insert_ord_one(cursor, data: dict):
         cursor.execute("""
             INSERT INTO FX_ORD_TBL
                 (IDORDTBLP, IDORDTBL, IDORDP, IDORDPARTP, IDRP,
-                 IdClsf, IdClsfAcc, CodAI, CodAngajament, CodIndicator, CodSSI,
+                 IdClsf, CodAI, CodAngajament, CodIndicator, CodSSI,
                  TotalReceptii, PlatiAnt, Valoare, Ramas, Explicatie)
             VALUES (%s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s)
         """, (
             _strict_pos_int(t["IDORDTBLP"],       "tbl.IDORDTBLP"),
@@ -119,7 +120,6 @@ def _insert_ord_one(cursor, data: dict):
             _strict_pos_int(t["IDORDPARTP"],      "tbl.IDORDPARTP"),
             _opt_int(t.get("IDRP"),               "tbl.IDRP"),
             _strict_pos_int(t["IdClsf"],          "tbl.IdClsf"),
-            _strict_int(t["IdClsfAcc"],           "tbl.IdClsfAcc"),
             _opt_str(t.get("CodAI")),
             _opt_str(t.get("CodAngajament")),
             _opt_str(t.get("CodIndicator")),

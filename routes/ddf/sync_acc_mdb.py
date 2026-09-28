@@ -4,8 +4,9 @@
 # Cate un IDDF per request.
 #
 # Mapari coloana Access -> coloana MariaDB (non-triviale):
-#   SA/SB/PRT: Access.IdClsf   -> JSON.IdClsfAcc -> MariaDB.IdClsfAcc
-#              Access.IdClsfPY -> JSON.IdClsf    -> MariaDB.IdClsf (FK Clasificatii)
+#   SA/SB/PRT: Access.IdClsfPY -> JSON.IdClsf    -> MariaDB.IdClsf (FK Clasificatii)
+#              Access.IdClsf   -> JSON.IdClsfAcc -> not kept (0080-04: only in
+#                                 Clasificatii.IdClsfAcc)
 #   SA/SB: Access.IdUnitate -> JSON.IdUnitate -> MariaDB.IdUnitate
 #          Access.SS        -> JSON.SS        -> MariaDB.SS
 #          Access.IdSalarii -> JSON.IdSalarii -> MariaDB.IdSalarii
@@ -122,14 +123,14 @@ def _insert_ddf_one(cursor, data: dict):
                     (IdSecA, IDDF, IDREV,
                      IdUnitate, CodAngajament, CodIndicator,
                      CodPartener, IdPartener,
-                     IdClsfAcc, IdClsf, Clsf,
+                     IdClsf, Clsf,
                      ElementFund, ParametriiFund,
                      ValPrec, ValCur, ValTot,
                      PartInd, Ramane, SS)
                 VALUES (%s, %s, %s,
                         %s, %s, %s,
                         %s, %s,
-                        %s, %s, %s,
+                        %s, %s,
                         %s, %s,
                         %s, %s, %s,
                         %s, %s, %s)
@@ -141,7 +142,6 @@ def _insert_ddf_one(cursor, data: dict):
                 _opt_str(sa.get("CodIndicator")),
                 _opt_str(sa.get("CodPartener")),
                 _opt_int(sa.get("IdPartener"),   "sa.IdPartener"),
-                _strict_int(sa["IdClsfAcc"],     "sa.IdClsfAcc"),
                 _strict_pos_int(sa["IdClsf"],    "sa.IdClsf"),
                 _opt_str(sa.get("Clsf")),
                 _opt_str(sa.get("ElementFund")),
@@ -161,13 +161,13 @@ def _insert_ddf_one(cursor, data: dict):
                     (IdSecB, IDDF, IDREV,
                      CodAngajament, CodIndicator, CodPartener,
                      IdUnitate, IdPartener,
-                     IdClsfAcc, IdClsf, CodSSI,
+                     IdClsf, CodSSI,
                      CA_Anterior, Inf1, CA_Curent,
                      CB_Anterior, Inf2, CB_Curent, SS)
                 VALUES (%s, %s, %s,
                         %s, %s, %s,
                         %s, %s,
-                        %s, %s, %s,
+                        %s, %s,
                         %s, %s, %s,
                         %s, %s, %s, %s)
             """, (
@@ -178,7 +178,6 @@ def _insert_ddf_one(cursor, data: dict):
                 _opt_str(sb.get("CodPartener")),
                 _opt_int(sb.get("IdUnitate"),    "sb.IdUnitate"),
                 _opt_int(sb.get("IdPartener"),   "sb.IdPartener"),
-                _strict_int(sb["IdClsfAcc"],     "sb.IdClsfAcc"),
                 _strict_pos_int(sb["IdClsf"],    "sb.IdClsf"),
                 _opt_str(sb.get("CodSSI")),
                 _opt_float(sb.get("CA_Anterior"), "sb.CA_Anterior"),
@@ -195,15 +194,14 @@ def _insert_ddf_one(cursor, data: dict):
             cursor.execute("""
                 INSERT INTO FX_DDF_REV_PRT
                     (IDREVP, IDDF, IDREV,
-                     IdClsfAcc, IdClsf,
+                     IdClsf,
                      CodAngajament, DateFisier, Expl, Tip)
                 VALUES (%s, %s, %s,
-                        %s, %s,
+                        %s,
                         %s, %s, %s, %s)
             """, (
                 _strict_pos_int(prt["IDREVP"],   "prt.IDREVP"),
                 iddf, idrev,
-                _opt_int(prt.get("IdClsfAcc"),   "prt.IdClsfAcc"),
                 _opt_int(prt.get("IdClsf"),      "prt.IdClsf"),
                 _opt_str(prt.get("CodAngajament")),
                 prt.get("DateFisier"),

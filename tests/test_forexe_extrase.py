@@ -18,6 +18,7 @@ try:
         _cheie_suma,
         _cstr_double_vba,
         _data_doc_text,
+        _Nomenclatoare,
         hash_fisier,
         hash_operatiune,
         parse_cont_misc,
@@ -78,8 +79,8 @@ def test_parse_data_yyyymmdd():
 
 
 def test_data_doc_pleaca_spre_baza_ca_text_romanesc():
-    # `FX_Extrase.DataDoc` e varchar, iar randurile scrise de Access poarta formatul
-    # scurt al masinii romanesti. Confirmat in exportul tabelei: "30.12.2025".
+    # The Access text form, used for the HASH only since 0080-01 (the column is a DATE).
+    # Confirmed in the Access table export: "30.12.2025".
     assert _data_doc_text(date(2025, 12, 30)) == "30.12.2025"
     assert _data_doc_text(None) is None
 
@@ -146,6 +147,23 @@ def test_hash_operatiune_pastreaza_cheia_iban_goala():
     assert h == hash_operatiune("30.12.2025", "0100088028", "23308833", 0.00, 792.00)
     # ...iar o suma diferita e alt rand.
     assert h != hash_operatiune("30.12.2025", "0100088028", "23308833", 0.0, 793.0)
+
+
+def _nomenclatoare_fara_baza(ss_by_sss):
+    # Only the source lookup is exercised, so the loaders (which need a cursor) are skipped.
+    nom = object.__new__(_Nomenclatoare)
+    nom._sursa_pentru_prefix = ss_by_sss
+    return nom
+
+
+def test_sursa_500x_se_citeste_pe_4_caractere():
+    # Operator, 25.09.2026: 5005 = 02A, 5006 = 01A; the "500" prefix is not in DefaSSS.
+    nom = _nomenclatoare_fara_baza({"23A": "01A", "24A": "02A", "5005": "5005", "5006": "5006"})
+    assert nom.sursa_pentru_cont("500529164800") == "02A"
+    assert nom.sursa_pentru_cont("500629164800") == "01A"
+    assert nom.sursa_pentru_cont("500729164800") is None
+    assert nom.sursa_pentru_cont("23A65030210010129164800") == "01A"
+    assert nom.sursa_pentru_cont("24A65040120013029164800") == "02A"
 
 
 # ---------------------------------------------------------------------------

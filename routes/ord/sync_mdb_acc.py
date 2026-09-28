@@ -4,7 +4,8 @@
 #
 # JSON-ul returnat foloseste NUMELE COLOANELOR DIN ACCESS unde difera:
 #   MariaDB.IdClsf    -> JSON.IdClsfPY  (Access column name in FX_ORD_TBL)
-#   MariaDB.IdClsfAcc -> JSON.IdClsf    (Access column name in FX_ORD_TBL)
+#   Clasificatii.IdClsfAcc (through IdClsf) -> JSON.IdClsf  (Access column name in
+#   FX_ORD_TBL). Since slice 0080-04 FX_ORD_TBL keeps no copy of the Access id.
 #
 # FK-uri Access recuperate prin JOIN:
 #   FX_ORD_PART.IDORD      : JOIN FX_ORD_PART x FX_ORD pe IDORDP
@@ -73,7 +74,8 @@ def _read_ord_one(cursor, idordp: int):
     tbl_rows = _rows(cursor, """
         SELECT t.IDORDTBLP, t.IDORDTBL, t.IDORDP, t.IDORDPARTP, t.IDRP,
                t.IdClsf    AS IdClsfPY,
-               t.IdClsfAcc AS IdClsf,
+               (SELECT C.IdClsfAcc FROM Clasificatii C
+                 WHERE C.IDClsf = t.IdClsf) AS IdClsf,
                t.CodAI, t.CodAngajament, t.CodIndicator, t.CodSSI,
                t.TotalReceptii, t.PlatiAnt, t.Valoare, t.Ramas, t.Explicatie,
                p.IDORDPART,

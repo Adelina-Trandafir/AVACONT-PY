@@ -29,12 +29,9 @@ Sursa Access (verificata in export, NU reghicita):
 
 Clasificatia (clsf/denumire) — acelasi drum ca Sumar 0011-03 / Recepții 0015, NU se
 reghiceste (contrazice SCHITA planului, care cheia direct pe P.IdClsf):
-  - Se trece prin FX_Indicatori (join pe CodAI, PK -> 1:1, fara fan-out), fiindca
-    `FX_Indicatori.IdClsf` este VERIFICAT ca id Access (= Clasificatii.IdClsfAcc) in
-    0011-03; directia lui `FX_Plati.IdClsf` NU e verificata live.
-  - Clasificatii se citeste prin SUBINTEROGARE SCALARA cu LIMIT 1 (nomenclatorul are
-    duplicate reale pe (IdClsfAcc, IdUnitate); un join ar multiplica randurile), cu
-    predicatul IdUnitate PASTRAT la nomenclator.
+  - Se trece prin FX_Indicatori (join pe CodAI, PK -> 1:1, fara fan-out). Since slice
+    0080-01 `FX_Indicatori.IdClsf` is Clasificatii.IDClsf.
+  - Clasificatii se citeste prin SUBINTEROGARE SCALARA cu LIMIT 1, pe cheia primara.
   - Se intorc AMANDOUA: `clsf`/`denumire` din nomenclator + `clsf_plata` = coloana bruta
     `FX_Plati.Clsf`; clientul cade pe `clsf_plata` cand `clsf` e gol, ca o plata sa nu
     ramana fara clasificatie afisata.
@@ -63,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 # Un rand per FX_Plati al angajamentului, cu extrasul (FX_Extrase) purtat pe rand.
 # clsf/denumire prin subinterogari scalare (LIMIT 1) cheiate pe FX_Indicatori.IdClsf
-# (= id Access) + IdUnitate. are_ord contra unui derivat DISTINCT. Ordinea reproduce
+# (= Clasificatii.IDClsf since 0080-01). are_ord contra unui derivat DISTINCT. Ordinea reproduce
 # arborele si alegerea celei mai vechi zile ne-ordonantate: Data_plata crescator, apoi
 # IdPlataFX ca tiebreaker stabil intre refresh-uri.
 _SQL = (
@@ -72,10 +69,10 @@ _SQL = (
     "P.Data_plata, P.Suma, P.Tip, P.Incarcat, P.Preluat, "
     "P.Referinta_TREZOR, P.Clsf AS clsf_plata, "
     "(SELECT C.Clsf FROM Clasificatii C "
-    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  WHERE C.IDClsf = I.IdClsf "
     "  LIMIT 1) AS clsf, "
     "(SELECT C.Denumire FROM Clasificatii C "
-    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  WHERE C.IDClsf = I.IdClsf "
     "  LIMIT 1) AS denumire, "
     "(orc.IdPlataFX IS NOT NULL) AS are_ord, "
     "E.IDFXE, E.DataBanca, E.DataDoc, E.NrDoc AS nr_doc_extras, "
@@ -100,14 +97,24 @@ def _json_utf8(payload, status):
 
 def _iso(value):
     """DateTime -> 'YYYY-MM-DD' (ISO) sau None. Data_plata/DataBanca sunt DATETIME in schema,
-    dar vederea grupeaza/afiseaza pe zi — .date() taie ora deterministic. DataDoc e TEXT in
-    FX_Extrase, deci nu trece pe aici (ramane string brut)."""
+    dar vederea grupeaza/afiseaza pe zi — .date() taie ora deterministic. DataDoc nu trece
+    pe aici: vezi `_data_doc`."""
     if value is None:
         return None
     try:
         return value.date().isoformat()
     except AttributeError:
         return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _data_doc(value):
+    """`FX_Extrase.DataDoc` -> 'dd.MM.yyyy' or None. A DATE column since slice 0080-01; the
+    wire keeps the text the client already shows as-is (it was the raw varchar before)."""
+    if value is None:
+        return None
+    if hasattr(value, "strftime"):
+        return value.strftime("%d.%m.%Y")
+    return str(value)
 
 
 def _num(value):
@@ -174,7 +181,7 @@ def get_plati():
                 # Extrasul bancar (LEFT JOIN) — toate NULL cand plata nu are extras asociat.
                 "idfxe": int(idfxe) if idfxe is not None else None,
                 "data_banca": _iso(data_banca),
-                "data_doc": data_doc,          # TEXT in FX_Extrase — string brut, nu data
+                "data_doc": _data_doc(data_doc),   # DATE since 0080-01, sent as dd.MM.yyyy
                 "nr_doc_extras": nr_doc_extras,
                 "referinta": referinta,
                 "platitor_nume": platitor_nume,

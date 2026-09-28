@@ -3,7 +3,8 @@
 # GET /api/ddf/sync_mdb_acc?iddf=Y -> JSON complet cu DDF + REV + SA/SB/PRT/ATT
 #
 # JSON-ul returnat foloseste NUMELE COLOANELOR DIN ACCESS, nu din MariaDB:
-#   MariaDB.IdClsfAcc -> JSON.IdClsf    (Access column name)
+#   Clasificatii.IdClsfAcc (through IdClsf) -> JSON.IdClsf  (Access column name). Since
+#   slice 0080-04 the FX_DDF_REV_* tables keep no copy of the Access id.
 #   MariaDB.IdClsf    -> JSON.IdClsfPY  (Access column name)
 # Astfel VBA poate folosi json("IdClsf") direct pentru rs!IdClsf.
 
@@ -65,7 +66,8 @@ def _read_ddf_one(cursor, iddf: int):
             SELECT IdSecA, IDDF, IDREV,
                    IdUnitate, CodAngajament, CodIndicator,
                    CodPartener, IdPartener,
-                   IdClsfAcc AS IdClsf,
+                   (SELECT C.IdClsfAcc FROM Clasificatii C
+                     WHERE C.IDClsf = FX_DDF_REV_SA.IdClsf) AS IdClsf,
                    IdClsf    AS IdClsfPY,
                    Clsf, ElementFund, ParametriiFund,
                    ValPrec, ValCur, ValTot,
@@ -78,7 +80,8 @@ def _read_ddf_one(cursor, iddf: int):
             SELECT IdSecB, IDDF, IDREV,
                    CodAngajament, CodIndicator, CodPartener,
                    IdUnitate, IdPartener,
-                   IdClsfAcc AS IdClsf,
+                   (SELECT C.IdClsfAcc FROM Clasificatii C
+                     WHERE C.IDClsf = FX_DDF_REV_SB.IdClsf) AS IdClsf,
                    IdClsf    AS IdClsfPY,
                    CodSSI,
                    CA_Anterior, Inf1, CA_Curent,
@@ -89,7 +92,8 @@ def _read_ddf_one(cursor, iddf: int):
 
         prt_rows = _rows(cursor, """
             SELECT IDREVP, IDDF, IDREV,
-                   IdClsfAcc AS IdClsf,
+                   (SELECT C.IdClsfAcc FROM Clasificatii C
+                     WHERE C.IDClsf = FX_DDF_REV_PRT.IdClsf) AS IdClsf,
                    IdClsf    AS IdClsfPY,
                    CodAngajament, DateFisier, Expl, Tip
             FROM FX_DDF_REV_PRT

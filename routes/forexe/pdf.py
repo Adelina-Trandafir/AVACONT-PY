@@ -47,7 +47,8 @@ SIGNER ROLES (slice 0078): the PUT may carry `X-Semnatura` -- the signer roles f
 uploaded PDF, comma separated (DDF: A,B,Ordonator; ORD: AB,CD,Ordonator). When present, the
 parent's `Semnatura` column is updated in the SAME transaction as the PDF row, so a stored PDF
 can never exist without its roles (or the roles without the PDF). Absent header = column
-untouched.
+untouched. Slice 0081-01: `X-Semnatura: -` = "no signature" -> the column becomes '' (the
+final DDF PDF, uploaded unsigned over the signed interim one). An empty header is refused.
 
 SHARED CHUNKS (slice 0078-05): when the unit database has `FX_PDF_BUCATI` and the `Bucati`
 column, the PDF is stored as an ordered list of content-defined chunks (utils/pdf_chunks.py);
@@ -158,6 +159,12 @@ def _parse_roles(spec, raw):
     """
     if raw is None:
         return None, None
+    # Slice 0081-01: "-" (the same "nothing" marker as X-Sha-Precedent's NO_ROW) means "this
+    # PDF carries NO signature" and writes ''. The final DDF PDF is uploaded this way, so the
+    # A signed on the interim PDF does not survive onto a document nobody has signed yet.
+    # An EMPTY header stays refused below: empty is a client mistake, "-" is a statement.
+    if raw.strip() == NO_ROW:
+        return "", None
     items = [x.strip() for x in raw.split(",") if x.strip()]
     if not items:
         return None, f"Antetul {H_SEMN} este gol: lipsesc rolurile semnatarilor."

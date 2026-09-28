@@ -29,16 +29,10 @@ Sursa Access:
 Clasificatia (Clsf/Denumire) — aceleasi decizii ca la Sumar (felia 0011-03), NU se
 reghicesc:
   - Se trece prin FX_Indicatori (join pe CodAI), NU prin FX_Rezervari.IdClsf. Motiv:
-    `FX_Indicatori.IdClsf` este VERIFICAT ca id Access (= Clasificatii.IdClsfAcc) pe
-    date reale in 0011-03; directia cheii `FX_Rezervari.IdClsf` nu a fost verificata
-    live, deci nu ne bazam pe ea pentru eticheta. qFX_REZERVARI_TREE face exact acelasi
-    drum (RZ INNER JOIN FX_Indicatori ON CodAI, apoi Clasificatii).
-  - Clasificatii se citeste prin SUBINTEROGARE SCALARA cu LIMIT 1, nu prin join:
-    nomenclatorul are duplicate reale pe (IdClsfAcc, IdUnitate) (vezi 0011-03), deci un
-    join ar multiplica randurile-rezervare. Subinterogarea garanteaza UN rand per
-    rezervare indiferent de duplicate, si pastreaza „fara clasificatie -> gol".
-  - Predicatul IdUnitate RAMANE la nomenclator: baza per-unitate tine Clasificatii
-    pentru MAI MULTE unitati (regula „drop IdUnitate" e doar pentru tabelele FX_).
+    qFX_REZERVARI_TREE face exact acelasi drum (RZ INNER JOIN FX_Indicatori ON CodAI,
+    apoi Clasificatii). Since slice 0080-01 `FX_Indicatori.IdClsf` is Clasificatii.IDClsf.
+  - Clasificatii se citeste prin SUBINTEROGARE SCALARA cu LIMIT 1, care pastreaza „fara
+    clasificatie -> gol". Pe cheia primara nu mai are nevoie de predicatul IdUnitate.
 
 LEFT JOIN FX_Indicatori (nu INNER, desi Access foloseste INNER): o rezervare nu are
 voie sa DISPARA pentru ca ii lipseste indicatorul/eticheta — ar disparea bani din
@@ -67,17 +61,17 @@ from . import forexe_bp
 logger = logging.getLogger(__name__)
 
 # Un rand per FX_Rezervari al angajamentului. Clsf/Denumire prin subinterogari scalare
-# (LIMIT 1) cheiate pe FX_Indicatori.IdClsf (= id Access) + IdUnitate. Ordinea reproduce
+# (LIMIT 1) cheiate pe FX_Indicatori.IdClsf (= Clasificatii.IDClsf since 0080-01). Ordinea reproduce
 # arborele: data crescator, apoi clasificatie, apoi IDRZ (stabil intre refresh-uri).
 _SQL = (
     "SELECT R.IDRZ, R.CodIndicator, R.DataRezervare, "
     "R.R_CreditBug, R.R_Initiala, R.R_Valoare, R.R_Definitiva, "
     "R.EInitiala, R.EMarire, R.EMicsorare, R.AreDDF, "
     "(SELECT C.Clsf FROM Clasificatii C "
-    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  WHERE C.IDClsf = I.IdClsf "
     "  LIMIT 1) AS Clsf, "
     "(SELECT C.Denumire FROM Clasificatii C "
-    "  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate "
+    "  WHERE C.IDClsf = I.IdClsf "
     "  LIMIT 1) AS Denumire "
     "FROM FX_Rezervari R "
     "LEFT JOIN FX_Indicatori I ON I.CodAI = R.CodAI "

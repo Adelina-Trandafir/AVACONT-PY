@@ -314,9 +314,11 @@ def sa_patch():
     BLOCKED: set = {
         'IdSecA', 'IDDF', 'IDREV', 'db_name',
     }
+    # IdClsfAcc is no longer a column (slice 0080-04: only in Clasificatii.IdClsfAcc), so
+    # a VBA payload carrying it is simply not applied.
     ALLOWED: set = {
         'IdPartener', 'CodPartener', 'IdUnitate', 'SS',
-        'IdClsf', 'IdClsfAcc', 'Clsf',
+        'IdClsf', 'Clsf',
         'ElementFund', 'ParametriiFund',
         'ValPrec', 'ValCur', 'ValTot',
         'PartInd', 'CodAngajament', 'CodIndicator', 'Ramane',

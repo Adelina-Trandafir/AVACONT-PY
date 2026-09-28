@@ -71,7 +71,10 @@ _SELECT = (
     "EXISTS (SELECT 1 FROM FX_DDF d "
     "        WHERE d.CodAngajament = a.CodAngajament AND d.PartAng = 1) AS ArePartener, "
     "EXISTS (SELECT 1 FROM FX_DDF d JOIN FX_ORD o ON o.IDDF = d.IDDF "
-    "        WHERE d.CodAngajament = a.CodAngajament) AS AreOrd "
+    "        WHERE d.CodAngajament = a.CodAngajament) AS AreOrd, "
+    # Slice 0080-02: the Extrase view -- a bank operation carrying this angajament in
+    # CodContract (FX_Extrase.CodContract = CodAngajament).
+    "EXISTS (SELECT 1 FROM FX_Extrase e WHERE e.CodContract = a.CodAngajament) AS AreExtrase "
     "FROM FX_Angajamente a "
 )
 
@@ -138,7 +141,7 @@ def get_tree():
     Returneaza { db_name, count, rows: [ {CodAngajament, IDDF, Descriere, Stare,
     DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
-    AreDDF, ArePartener, AreOrd}, ... ] }.
+    AreDDF, ArePartener, AreOrd, AreExtrase}, ... ] }.
     """
     an_raw = request.args.get("an")
     if an_raw is None or str(an_raw).strip() == "":
@@ -171,7 +174,7 @@ def get_tree():
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
              salarii, ascuns, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
              are_rezervari, are_receptii, are_plati, are_ddf, are_partener,
-             are_ord) in cursor.fetchall():
+             are_ord, are_extrase) in cursor.fetchall():
             rows.append({
                 "CodAngajament": cod,
                 "IDDF": iddf,
@@ -195,6 +198,7 @@ def get_tree():
                 "AreDDF": bool(are_ddf),
                 "ArePartener": bool(are_partener),
                 "AreOrd": bool(are_ord),
+                "AreExtrase": bool(are_extrase),
             })
         logger.info("[forexe.tree] %s: an=%s ss=%s include_hidden=%s -> %s randuri",
                     db_name, an, ss, include_hidden, len(rows))

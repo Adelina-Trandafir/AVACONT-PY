@@ -731,12 +731,13 @@ def verifica_etichetele(decizii: List[dict]) -> Dict[str, dict]:
 
     * fiecare eticheta e DECLARATA de exact o `reconstituire`;
     * fiecare eticheta folosita altundeva e declarata;
-    * fiecare lant reconstituit contine EXACT o `stergere`.
+    * each reconstructed chain holds AT MOST one `stergere`.
 
-    Ultima regula nu e pedanterie. O receptie reconstituita exista TOCMAI fiindca a fost
-    stearsa (F26); un lant fara stergere inseamna ca operatorul a grupat gresit, iar
-    rezultatul ar fi o receptie care nu apare niciodata in `ListaReceptii` si nu se poate
-    reconcilia cu nimic. Mai bine se opreste rularea.
+    Starting a reception does NOT mean it was deleted (operator, 25.09.2026, overturning
+    the F26 reading that a reconstructed reception exists only because it was deleted).
+    A chain with no `stergere` is a live reception; one with a `stergere` is deleted, and
+    that row must be the last one (checked in `materializeaza_reconstituite`). A chain may
+    be a single snapshot: its `reconstituire` row is then the whole chain.
     """
     declarate: Dict[str, dict] = {}
     for d in decizii:
@@ -761,11 +762,10 @@ def verifica_etichetele(decizii: List[dict]) -> Dict[str, dict]:
     for et in declarate:
         stergeri = [d for d in decizii
                     if d["receptie_noua"] == et and d["actiune"] == ACTIUNE_STERGERE]
-        if len(stergeri) != 1:
+        if len(stergeri) > 1:
             raise DecizieInvalida(
-                f"Lanțul reconstituit «{et}» are {len(stergeri)} rânduri de ștergere; "
-                f"trebuie exact unul. O recepție reconstituită există tocmai pentru că "
-                f"a fost ștearsă."
+                f"Recepția nouă «{et}» are {len(stergeri)} rânduri de ștergere; "
+                f"o recepție se șterge o singură dată."
             )
     return declarate
 
@@ -778,8 +778,11 @@ _R_INSERT_RECONST_SQL = (
     "INSERT INTO FX_Receptii_R "
     "(NRCRT, CodAngajament, Tip, DataR, SumaAntet, Descriere, TipReceptie, HASH, "
     " Preluat, Sters, Reconstituit) "
-    "VALUES (%s, %s, NULL, %s, %s, %s, 'NOU', NULL, 1, 1, 1)"
+    "VALUES (%s, %s, NULL, %s, %s, %s, 'NOU', NULL, 1, 0, 1)"
 )
+# Sters = 0 at birth (operator, 25.09.2026): a started reception is live. The chain's
+# "stergere" row, when the operator marks one, sets Sters = 1 through
+# _R_MARCHEAZA_STEARSA_SQL like on any other reception.
 _RHR_INSERT_SQL = (
     "INSERT INTO FX_Receptii_RHR "
     "(IDRR, CodAngajament, CodIndicator, CodAI, IdClsf, IdUnitate, CodSSI, "
@@ -818,11 +821,11 @@ def materializeaza_reconstituite(cursor, cod: str, decizii: List[dict],
 
     NIMIC NU SE INVENTEAZA. Fiecare camp are o sursa in istoric:
       DataR      <- DataH al CELUI MAI VECHI instantaneu din lant
-      SumaAntet  <- `Total` al randului de stergere (cat valora cand a plecat)
-      Descriere  <- `Receptie: <text>` al randului de stergere
+      SumaAntet  <- `Total` of the stergere row if there is one, else of the last snapshot
+      Descriere  <- the description of that same row
       NrCrt      <- MAX+1 pe angajament, ca peste tot
-      Sters = 1, Reconstituit = 1, HASH = NULL (nu exista bloc de payload de hasuit)
-      RHR        <- liniile pe indicator ale ULTIMULUI instantaneu DINAINTEA stergerii
+      Sters = 0 (set to 1 only by a stergere row), Reconstituit = 1, HASH = NULL
+      RHR        <- lines of the last snapshot that has any, the stergere row excluded
       CreditBugetar <- un rand RHR existent cu acelasi CodAI
 
     `Preluat`, `Incarcat` si `TipReceptie` se pun EXACT ca la o receptie nou inserata de
@@ -853,14 +856,17 @@ def materializeaza_reconstituite(cursor, cod: str, decizii: List[dict],
                 if d["receptie_noua"] == eticheta]
         lant.sort(key=lambda x: (x["data_h"], x["idrh"]))
 
-        stergerea = next(d for d in decizii
-                         if d["receptie_noua"] == eticheta
-                         and d["actiune"] == ACTIUNE_STERGERE)
-        inst_stergere = dupa_ancora[ancora(stergerea)]
+        # The "stergere" row is optional: without one the reception is live, and the
+        # last snapshot of the chain is what it is written from.
+        stergerea = next((d for d in decizii
+                          if d["receptie_noua"] == eticheta
+                          and d["actiune"] == ACTIUNE_STERGERE), None)
+        stearsa = stergerea is not None
+        inst_stergere = dupa_ancora[ancora(stergerea)] if stearsa else lant[-1]
 
         # Stergerea trebuie sa fie ULTIMUL instantaneu al lantului. Daca nu e, gruparea
         # e gresita: nimic nu se poate intampla cu o receptie dupa ce a fost stearsa.
-        if lant[-1]["idrh"] != inst_stergere["idrh"]:
+        if stearsa and lant[-1]["idrh"] != inst_stergere["idrh"]:
             raise DecizieInvalida(
                 f"Lanțul reconstituit «{eticheta}»: rândul de ștergere "
                 f"({inst_stergere['data_h']}) nu este ultimul din lanț. O recepție nu "
@@ -875,15 +881,17 @@ def materializeaza_reconstituite(cursor, cod: str, decizii: List[dict],
         nr_crt += 1
         rezolvate[eticheta] = idrr
         journal.line("reconstituire «%s» -> recepția %s: NrCrt %s, DataR %s (primul "
-                     "instantaneu), SumaAntet %.2f (rândul de ștergere), %d "
-                     "instantanee în lanț",
+                     "instantaneu), SumaAntet %.2f (%s), %d instantanee în lanț",
                      eticheta, idrr, nr_crt - 1, journal.moment(lant[0]["data_h"]),
-                     inst_stergere["total"], len(lant))
+                     inst_stergere["total"],
+                     "rândul de ștergere" if stearsa else "ultimul instantaneu, nu e ștearsă",
+                     len(lant))
 
         # Liniile: ultimul instantaneu DINAINTEA stergerii care are linii. Randul de
         # stergere nu are (F21), deci se merge inapoi pana la primul care are.
         sursa = None
-        for inst in reversed(lant[:-1]):
+        # A live chain has no deletion row, so its last snapshot counts too.
+        for inst in (reversed(lant[:-1]) if stearsa else reversed(lant)):
             if inst["linii"]:
                 sursa = inst
                 break

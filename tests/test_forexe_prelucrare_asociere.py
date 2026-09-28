@@ -311,18 +311,12 @@ def test_a_label_declared_twice_is_rejected():
     assert "declarată de două ori" in str(e.value)
 
 
-def test_a_reconstructed_chain_without_a_deletion_is_rejected():
-    """
-    O receptie reconstituita exista TOCMAI fiindca a fost stearsa (F26). Un lant fara
-    stergere inseamna ca operatorul a grupat gresit, si ar produce o receptie care nu
-    apare niciodata in ListaReceptii si nu se reconciliaza cu nimic.
-    """
+def test_a_started_chain_without_a_deletion_is_a_live_reception():
+    """Starting a reception does not mean it was deleted (operator, 25.09.2026)."""
     decizii = A.normalizeaza_decizii([
         dec(31, "reconstituire", "2026-01-01 10:00:00", eticheta="R1"),
         dec(34, "asociat", "2026-02-01 10:00:00", eticheta="R1")])
-    with pytest.raises(DecizieInvalida) as e:
-        A.verifica_etichetele(decizii)
-    assert "0 rânduri de ștergere" in str(e.value)
+    assert list(A.verifica_etichetele(decizii)) == ["R1"]
 
 
 def test_a_reconstructed_chain_with_two_deletions_is_rejected():
@@ -340,6 +334,13 @@ def test_a_well_formed_reconstructed_chain_passes():
         dec(31, "reconstituire", "2026-01-01 10:00:00", eticheta="R1"),
         dec(34, "asociat", "2026-02-01 10:00:00", eticheta="R1"),
         dec(38, "stergere", "2026-03-01 10:00:00", eticheta="R1")])
+    assert list(A.verifica_etichetele(decizii)) == ["R1"]
+
+
+def test_a_single_snapshot_chain_needs_no_deletion_row():
+    """An H turned into an R (operator, 25.09.2026): its one row is the whole chain."""
+    decizii = A.normalizeaza_decizii([
+        dec(31, "reconstituire", "2026-01-01 10:00:00", eticheta="R1")])
     assert list(A.verifica_etichetele(decizii)) == ["R1"]
 
 

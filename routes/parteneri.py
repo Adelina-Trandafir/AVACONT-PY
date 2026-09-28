@@ -85,12 +85,11 @@ def upsert_parteneri_coduri():
             # Daca valorile sunt identice cu cele din DB, MariaDB nu va face nicio schimbare (rowcount 0).
             sql = """
                 INSERT INTO Parteneri_Coduri (
-                    IdPartener, CodPartener, IdClsf, IdClsfAcc, CodAng, CodInd, ContBancar
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    IdPartener, CodPartener, IdClsf, CodAng, CodInd, ContBancar
+                ) VALUES (%s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     CodAng = VALUES(CodAng),
                     CodInd = VALUES(CodInd),
-                    IdClsfAcc = VALUES(IdClsfAcc),
                     ContBancar = VALUES(ContBancar),
                     CodPartener = VALUES(CodPartener)
             """
@@ -100,8 +99,8 @@ def upsert_parteneri_coduri():
                 params_list.append((
                     item.get('IdPartener'),
                     item.get('CodPartener'),
+                    # IdClsfAcc is not kept (0080-04: only in Clasificatii.IdClsfAcc).
                     item.get('IdClsf'),
-                    item.get('IdClsfAcc'),
                     item.get('CodAng'),
                     item.get('CodInd'),
                     item.get('ContBancar')

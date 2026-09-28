@@ -67,3 +67,22 @@ class TestParseAudit:
         station = _b64({"versiune": "9" * 100})
         _, st, err = pdf_route._parse_audit(pdf_route._DDF, _b64([{"camp": "f"}]), station)
         assert err is None and len(st["versiune"]) == 32
+
+
+@pytest.mark.skipif(pdf_route is None, reason=_skip_reason or "n/a")
+class TestParseRolesNoSignature:
+    """Slice 0081-01: `X-Semnatura: -` writes '' (the final DDF PDF, unsigned)."""
+
+    def test_dash_means_no_signature(self):
+        assert pdf_route._parse_roles(pdf_route._DDF, "-") == ("", None)
+        assert pdf_route._parse_roles(pdf_route._DDF, " - ") == ("", None)
+
+    def test_absent_header_leaves_the_column(self):
+        assert pdf_route._parse_roles(pdf_route._DDF, None) == (None, None)
+
+    def test_empty_header_is_still_refused(self):
+        roles, err = pdf_route._parse_roles(pdf_route._DDF, "")
+        assert roles is None and err
+
+    def test_roles_are_canonical(self):
+        assert pdf_route._parse_roles(pdf_route._DDF, "Ordonator,B,A") == ("A,B,Ordonator", None)

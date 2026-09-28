@@ -104,9 +104,9 @@ def _patch_tbl(cursor, idordp: int, rows: list) -> list:
                 (IDORDP, IDORDPARTP, IDORDTBL,
                  CodAI, CodAngajament, CodIndicator, CodSSI,
                  TotalReceptii, PlatiAnt, Valoare, Ramas,
-                 IdClsf, IdClsfAcc, Explicatie, IDRP)
+                 IdClsf, Explicatie, IDRP)
             VALUES (%s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s)
         """, (
             idordp, idordpartp,
             _strict_pos_int(r.get("IDORDTBL"),    "IDORDTBL"),
@@ -119,7 +119,7 @@ def _patch_tbl(cursor, idordp: int, rows: list) -> list:
             _strict_float(r.get("Valoare"),       "Valoare"),
             _strict_float(r.get("Ramas"),         "Ramas"),
             _opt_int(r.get("IdClsf"),             "IdClsf"),
-            _opt_int(r.get("IdClsfAcc"),          "IdClsfAcc"),
+            # IdClsfAcc from VBA is not kept (0080-04: only in Clasificatii.IdClsfAcc).
             _opt_str(r.get("Explicatie")),
             _opt_int(r.get("IDRP"),               "IDRP"),    # v5: IDRP, fara IDRD
         ))

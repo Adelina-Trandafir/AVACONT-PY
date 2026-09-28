@@ -125,12 +125,16 @@ def demo_rows():
         # Clsf/Titlu/SS sunt coloane GENERATED, deci NU se scriu. Componentele trebuie sa
         # existe in nomenclatoarele AVACONT_COMUN.Defa* (FK-uri pe coloanele generate); se
         # folosesc aceleasi valori reale ca la Sumar/Rezervari/Recepții.
+        ids_clsf = []
         for _ in range(2):   # duplicat real pe (IdClsfAcc, IdUnitate)
             cur.execute(
                 "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
                 "Articol, Alineat, Denumire) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                 (CLSF_ACC, id_unitate, "65.02", "04.02", "20.01", "03", "Clasificație test"),
             )
+            ids_clsf.append(cur.lastrowid)
+        # 0080-01: the FX_ tables carry the MariaDB key in IdClsf (no Access id kept).
+        id_clsf_pk = ids_clsf[0]
         if id_unitate_alt is not None:   # vecin de alta unitate
             cur.execute(
                 "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, "
@@ -150,8 +154,8 @@ def demo_rows():
         cur.execute(
             "INSERT INTO FX_Indicatori (CodAI, CodAngajament, CodIndicator, IdClsf, "
             "IdUnitate, NrCrt, SS) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            # FX_Indicatori.IdClsf tine ID-UL ACCESS -> se umple cu IdClsfAcc, nu cu PK.
-            (cod_ai, COD, "IND-A", CLSF_ACC, id_unitate, 1, "02A"),
+            # 0080-01: IdClsf = Clasificatii.IDClsf; no Access id is kept.
+            (cod_ai, COD, "IND-A", id_clsf_pk, id_unitate, 1, "02A"),
         )
 
         # (IdPlataFX, NrOP, Data_plata, Suma, Tip, Incarcat, Preluat, Referinta_TREZOR, Clsf)
@@ -183,7 +187,7 @@ def demo_rows():
             "INSERT INTO FX_Extrase (IDFXE, DataBanca, DataDoc, NrDoc, Referinta, "
             "platitor_nume, platitor_cui, platitor_iban, suma_debit, suma_credit, "
             "Explicatii, IdUnitate) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            (9900173, "2026-01-19", "19.01.2026", "0100088028", REF3,
+            (9900173, "2026-01-19", "2026-01-19", "0100088028", REF3,   # DataDoc: DATE (0080-01)
              "FURNIZOR TEST SRL", "23308833", "RO21BRDE450SV39876344500",
              3065.12, 0.0, "Explicație extras", id_unitate),
         )
@@ -319,7 +323,7 @@ def test_bank_statement_present_and_absent(client, auth_headers, demo_rows):
     by = _by_id(client.get(f"{URL}?cod={COD}", headers=auth_headers))
     assert by[9900173]["idfxe"] == 9900173
     assert by[9900173]["platitor_nume"] == "FURNIZOR TEST SRL"
-    assert by[9900173]["data_doc"] == "19.01.2026"      # TEXT, nu data ISO
+    assert by[9900173]["data_doc"] == "19.01.2026"      # DATE column, wire keeps dd.MM.yyyy
     assert by[9900171]["idfxe"] is None
     assert by[9900171]["platitor_nume"] is None
 

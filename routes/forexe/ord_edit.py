@@ -48,9 +48,9 @@ CELE SASE CAPCANE ALE FAMILIEI FX_ORD (citite din DDL, nu deduse din nume)
    `FX_Indicatori.CodAI`. Plus `IdPartener` -> `Parteneri` si `IdUnitate` (NOT NULL) ->
    `Unitati`. De aceea se valideaza pe NUME inainte de INSERT (vezi `valideaza_graf`).
 5. INVERSIUNEA `IdClsf`: pe `FX_ORD_TBL`, MariaDB `IdClsf` e cheia straina catre
-   `Clasificatii` (id-ul global) iar `IdClsfAcc` tine id-ul Access — INVERS fata de
-   `FX_Indicatori`, unde `IdClsf` tine id-ul Access. In Access, cele doua se numeau
-   `IdClsfPY` (global) si `IdClsf` (Access).
+   `Clasificatii` (id-ul global). In Access, cele doua se numeau `IdClsfPY` (global) si
+   `IdClsf` (Access). Since slice 0080-04 no FX_ table keeps the Access id: it lives only in
+   `Clasificatii.IdClsfAcc` (operator, 25.09.2026: Clasificatii is the source of truth).
 6. `ClasificatiiG` si `ParteneriG` NU EXISTA in MariaDB; `FX_ORD_ATT` nu are coloana `Nume`
    (numele fisierului sta in `FX_ORD_ATT_IMG.NumeFisier`, felia asta). Si nu exista
    `GROUP BY IdUnitate` pe tabelele `FX_`; `IdUnitate` e relicva acolo — dar
@@ -82,6 +82,7 @@ Fara `Format(..., "0.00")` nicaieri: sumele calatoresc ca numere JSON si se form
 doar la marginea interfetei, cu `ro-RO`. Toate raspunsurile folosesc `ensure_ascii=False`,
 iar mesajele de eroare sunt in romana cu diacritice literale.
 """
+import base64
 import hashlib
 import json
 import logging
@@ -371,10 +372,8 @@ def populeaza_part_sel(cursor, cod: str, dt: date) -> list:
 # `qFX_ORD_BASE`, tradusa pe MariaDB. Ce s-a schimbat si de ce:
 #
 #  * `ClasificatiiG` nu exista (capcana 6). Clasificatia se ia prin SUBINTEROGARI SCALARE
-#    cu LIMIT 1 pe `Clasificatii` (`IdClsfAcc` = id-ul Access din `FX_Plati.IdClsf`,
-#    `IdUnitate` = al indicatorului) — nomenclatorul are duplicate reale pe
-#    (IdClsfAcc, IdUnitate), iar un JOIN ar multiplica randurile (MAPARE_NOMENCLATOARE §3.2).
-#    Acesta e tiparul folosit deja de routes/forexe/prelucrare_pasi.py.
+#    pe `Clasificatii`, dupa cheia primara: since slice 0080-01 `FX_Plati.IdClsf` is
+#    `Clasificatii.IDClsf` and FX_Plati keeps no Access id (nor does FX_ORD_TBL, 0080-04).
 #  * `CodSSI` nu e coloana pe MariaDB: se CALCULEAZA, `CONCAT(C.SS, C.ClsfSal)` — exact ce
 #    face `read_indicatori` din prelucrare_pasi.py, care ruleaza azi.
 #  * `IdClsfPY` din Access devine `Clasificatii.IDClsf` (capcana 5).
@@ -395,7 +394,7 @@ _SQL_BASE = (
     "       THEN %(nume_unit)s ELSE E.platitor_nume END AS Beneficiar, "
     "  P.Suma AS Valoare, "
     "  DATE(P.Data_plata) AS Data, "
-    "  P.IdPlataFX, P.IdClsf AS IdClsfAcc, P.CodAngajament, P.CodIndicator, "
+    "  P.IdPlataFX, P.IdClsf, P.CodAngajament, P.CodIndicator, "
     "  COALESCE(E.platitor_iban, H.CodIBAN) AS Beneficiar_IBAN, "
     "  E.platitor_cui AS Beneficiar_CUI, "
     "  SUBSTRING(E.Explicatii, 15) AS Descriere, "
@@ -403,14 +402,10 @@ _SQL_BASE = (
     "  H.CodIBAN AS IBAN_UNIT, "
     "  (CHAR_LENGTH(COALESCE(E.platitor_cui, '')) >= 13) AS PJ, "
     "  I.IdUnitate, "
-    "  (SELECT C.IDClsf   FROM Clasificatii C "
-    "    WHERE C.IdClsfAcc = P.IdClsf AND C.IdUnitate = I.IdUnitate LIMIT 1) AS IdClsf, "
-    "  (SELECT C.Clsf     FROM Clasificatii C "
-    "    WHERE C.IdClsfAcc = P.IdClsf AND C.IdUnitate = I.IdUnitate LIMIT 1) AS Clsf, "
-    "  (SELECT C.Denumire FROM Clasificatii C "
-    "    WHERE C.IdClsfAcc = P.IdClsf AND C.IdUnitate = I.IdUnitate LIMIT 1) AS Denumire, "
+    "  (SELECT C.Clsf     FROM Clasificatii C WHERE C.IDClsf = P.IdClsf LIMIT 1) AS Clsf, "
+    "  (SELECT C.Denumire FROM Clasificatii C WHERE C.IDClsf = P.IdClsf LIMIT 1) AS Denumire, "
     "  (SELECT CONCAT(C.SS, C.ClsfSal) FROM Clasificatii C "
-    "    WHERE C.IdClsfAcc = P.IdClsf AND C.IdUnitate = I.IdUnitate LIMIT 1) AS CodSSI "
+    "    WHERE C.IDClsf = P.IdClsf LIMIT 1) AS CodSSI "
     "FROM FX_Plati P "
     "JOIN FX_Extrase   E ON P.Referinta_TREZOR = E.Referinta "
     "JOIN FX_Extrase_H H ON H.IDEXH = E.IDFXH "
@@ -661,10 +656,10 @@ def construieste_graf(randuri: list, dic_banci: dict, dic_part_ind: dict,
         receptii = dic_receptii.get(cod_indicator, 0.0)
         plati_ant = plati_curente.get(cod_indicator, 0.0)
 
-        if r["IdClsf"] is None:
+        if r["IdClsf"] is None or r["Clsf"] is None:
             avertismente.append(
                 f"Plata {r['IdPlataFX']} ({cod_indicator}) nu are clasificație în "
-                f"nomenclator (id Access {r['IdClsfAcc']}, unitatea {r['IdUnitate']}); "
+                f"nomenclator (IdClsf {r['IdClsf']}, unitatea {r['IdUnitate']}); "
                 f"linia rămâne, dar ordonanțarea nu se poate salva până nu e completată.")
         if r["IdUnitate"] is None:
             avertismente.append(
@@ -697,9 +692,8 @@ def construieste_graf(randuri: list, dic_banci: dict, dic_part_ind: dict,
             "cod_angajament": _txt(r["CodAngajament"]),
             "cod_indicator": cod_indicator,
             "cod_ssi": _txt(r["CodSSI"]),
-            # capcana 5: `IdClsf` = cheia MariaDB, `IdClsfAcc` = id-ul Access.
+            # capcana 5: `IdClsf` = cheia MariaDB (Clasificatii.IDClsf).
             "id_clsf": _int_or_none(r["IdClsf"]),
-            "id_clsf_acc": _int_or_none(r["IdClsfAcc"]),
             "clsf": _txt(r["Clsf"]),
             "denumire": _txt(r["Denumire"]),
             "id_unitate": _int_or_none(r["IdUnitate"]),
@@ -773,6 +767,95 @@ def construieste_graf(randuri: list, dic_banci: dict, dic_part_ind: dict,
     }
 
 
+# Operator, 28.09.2026: the captures K-BOT took in the FOREXE page when the operator saved a
+# reception (routes/forexe/capturi.py -> FX_Receptii_IMG). The guide asks the ordonantare for
+# two of them - «Captura cu receptii» and «Captura cu sectiunea Informatii complete contract»
+# (p.21-22) - and they are taken as a pair, one after the other, so the NEWEST pair of the
+# angajament is the state this ordonantare is written against.
+CAPTURI_ORD_MAX = 2
+
+_SQL_ARE_REC_IMG = (
+    "SELECT COUNT(*) AS n FROM information_schema.TABLES "
+    " WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'FX_Receptii_IMG'"
+)
+
+_REC_IMG_PREZENT = {}
+
+
+def _are_rec_img(cursor, db_name: str) -> bool:
+    """Exista `FX_Receptii_IMG` pe baza asta? Proba se face O SINGURA DATA per baza."""
+    if db_name in _REC_IMG_PREZENT:
+        return _REC_IMG_PREZENT[db_name]
+    try:
+        cursor.execute(_SQL_ARE_REC_IMG, (db_name,))
+        prezent = int((cursor.fetchone() or {}).get("n") or 0) > 0
+    except Exception:
+        logger.warning("[forexe.ord_edit] %s: proba FX_Receptii_IMG a esuat; "
+                       "se presupune ca lipseste", db_name, exc_info=True)
+        prezent = False
+    _REC_IMG_PREZENT[db_name] = prezent
+    return prezent
+
+
+def capturi_receptiilor(cursor, cod: str, parteneri: list) -> list:
+    """The newest pair of FOREXE captures of this angajament, as PROPOSED attachments.
+
+    They carry their bytes inline (`continut`, base64): nothing is written yet, and the
+    editor has to be able to SHOW them before the operator saves. They hang off the first
+    partner, like a capture pasted by hand does (`Table2` of `SubformCaptura` is written per
+    partner). The operator can delete them in the editor - they are a proposal, not a rule.
+    """
+    db_name = g.session.db_name
+    if not _are_rec_img(cursor, db_name):
+        return []
+    cursor.execute(
+        "SELECT I.IDRDC AS id, I.Nume AS nume, I.IMG AS img "
+        "  FROM FX_Receptii_IMG I "
+        " INNER JOIN FX_Receptii_R R ON R.IDRR = I.IDRR "
+        " WHERE R.CodAngajament = %s AND I.IMG IS NOT NULL AND I.IMG <> '' "
+        " ORDER BY I.IDRDC DESC LIMIT %s",
+        (cod, CAPTURI_ORD_MAX))
+    randuri = list(cursor.fetchall() or [])
+    randuri.reverse()   # oldest of the pair first: «receptii», then «informatii complete»
+
+    part_temp = 0
+    if parteneri:
+        part_temp = int(parteneri[0].get("temp_id") or 0)
+
+    atasamente = []
+    urmator = -1
+    for r in randuri:
+        brut = r.get("img") or ""
+        try:
+            octeti = base64.b64decode(brut, validate=False)
+        except Exception:
+            logger.warning("[forexe.ord_edit] %s: captura %s a receptiei nu se poate decoda; "
+                           "ordonantarea se genereaza fara ea", db_name, r.get("id"),
+                           exc_info=True)
+            continue
+        if not octeti:
+            continue
+        atasamente.append({
+            "temp_id": urmator,
+            "idordattp": 0,
+            "part_temp_id": part_temp,
+            "idordpartp": 0,
+            "nume_fisier": (r.get("nume") or f"captura_{r.get('id')}.jpg")[:255],
+            # The one deduction of the file, further down: the type is read from the bytes,
+            # never taken from the name (Access did the same, over base64).
+            "tip_mime": _tip_imagine(octeti) or "image/jpeg",
+            "dimensiune": len(octeti),
+            "sha256": _sha256(octeti),
+            "data_modif": None,
+            "continut": brut,
+        })
+        urmator -= 1
+    if atasamente:
+        logger.info("[forexe.ord_edit] %s: ordonantarea lui %s pleaca cu %s captura(i) din FOREXE",
+                    db_name, cod, len(atasamente))
+    return atasamente
+
+
 @forexe_bp.route("/api/forexe/ord/genereaza", methods=["POST"])
 @require_session
 def post_ord_genereaza():
@@ -841,6 +924,10 @@ def post_ord_genereaza():
         graf = construieste_graf(randuri, dic_banci, dic_part_ind, dic_receptii,
                                  dic_plati, dic_expl, cod, dt, avertismente)
         graf["cod"] = cod
+        # Operator, 28.09.2026: the two pictures the guide asks for (p.21-22) are already in
+        # the database - K-BOT took them in the FOREXE page when the operator saved the
+        # reception - so the new ordonantare opens with them instead of asking for PrtScr.
+        graf["atasamente"] = capturi_receptiilor(cursor, cod, graf["parteneri"])
         graf["avertismente"] = avertismente
 
         logger.info("[forexe.ord_edit] %s: genereaza cod=%s data=%s -> parteneri=%s linii=%s",
@@ -886,19 +973,19 @@ _SQL_DRAFT_PART = (
 
 # Clasificatia se rezolva prin DOUA drumuri, intr-un COALESCE, exact ca in
 # routes/forexe/ord.py: direct (`Clasificatii.IDClsf = t.IdClsf`) si, cand acela e gol, prin
-# `FX_Indicatori` (`IdClsfAcc + IdUnitate`) — drumul verificat live in felia 0011-03.
+# `FX_Indicatori` (`C.IDClsf = I.IdClsf`; the MariaDB key there too since slice 0080-01).
 _SQL_DRAFT_TBL = (
     "SELECT T.IDORDTBLP, T.IDORDPARTP, T.CodAI, T.CodAngajament, T.CodIndicator, T.CodSSI, "
     "       T.TotalReceptii, T.PlatiAnt, T.Valoare, T.Ramas, T.Explicatie, "
-    "       T.IdClsf, T.IdClsfAcc, T.IdUnitate, T.CodPartener, T.IdPartener, "
+    "       T.IdClsf, T.IdUnitate, T.CodPartener, T.IdPartener, "
     "       COALESCE(NULLIF((SELECT C.Clsf FROM Clasificatii C "
     "                         WHERE C.IDClsf = T.IdClsf LIMIT 1), ''), "
     "                (SELECT C.Clsf FROM Clasificatii C "
-    "                  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate LIMIT 1)) AS Clsf, "
+    "                  WHERE C.IDClsf = I.IdClsf LIMIT 1)) AS Clsf, "
     "       COALESCE(NULLIF((SELECT C.Denumire FROM Clasificatii C "
     "                         WHERE C.IDClsf = T.IdClsf LIMIT 1), ''), "
     "                (SELECT C.Denumire FROM Clasificatii C "
-    "                  WHERE C.IdClsfAcc = I.IdClsf AND C.IdUnitate = I.IdUnitate LIMIT 1)) AS Denumire "
+    "                  WHERE C.IDClsf = I.IdClsf LIMIT 1)) AS Denumire "
     "  FROM FX_ORD_TBL T "
     "  LEFT JOIN FX_Indicatori I ON I.CodAI = T.CodAI "
     " WHERE T.IDORDP = %s ORDER BY T.IDORDTBLP"
@@ -1013,7 +1100,6 @@ def get_ord_draft(idordp):
             "cod_indicator": _txt(r["CodIndicator"]),
             "cod_ssi": _txt(r["CodSSI"]),
             "id_clsf": _int_or_none(r["IdClsf"]),
-            "id_clsf_acc": _int_or_none(r["IdClsfAcc"]),
             "clsf": _txt(r["Clsf"]),
             "denumire": _txt(r["Denumire"]),
             "id_unitate": _int_or_none(r["IdUnitate"]),
@@ -1314,13 +1400,13 @@ _UPDATE_PART = (
 _INSERT_TBL = (
     "INSERT INTO FX_ORD_TBL (IDORDTBL, IDORDP, IDORDPARTP, CodAI, CodAngajament, "
     "                        CodIndicator, CodSSI, TotalReceptii, PlatiAnt, Valoare, Ramas, "
-    "                        IdClsfAcc, Explicatie, IdClsf, CodPartener, IdPartener, IdUnitate) "
-    "VALUES (NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    "                        Explicatie, IdClsf, CodPartener, IdPartener, IdUnitate) "
+    "VALUES (NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
 _UPDATE_TBL = (
     "UPDATE FX_ORD_TBL SET IDORDPARTP = %s, CodAI = %s, CodAngajament = %s, "
     "                      CodIndicator = %s, CodSSI = %s, TotalReceptii = %s, "
-    "                      PlatiAnt = %s, Valoare = %s, Ramas = %s, IdClsfAcc = %s, "
+    "                      PlatiAnt = %s, Valoare = %s, Ramas = %s, "
     "                      Explicatie = %s, IdClsf = %s, CodPartener = %s, "
     "                      IdPartener = %s, IdUnitate = %s "
     " WHERE IDORDTBLP = %s AND IDORDP = %s"
@@ -1570,7 +1656,7 @@ def _scrie_graf(cursor, sarcina: dict) -> dict:
             _txt(l.get("cod_ssi")),
             _num(l.get("total_receptii")), _num(l.get("plati_ant")),
             _num(l.get("valoare")), _num(l.get("ramas")),
-            _int_or_none(l.get("id_clsf_acc")), _txt(l.get("explicatie")),
+            _txt(l.get("explicatie")),
             _int_or_none(l.get("id_clsf")),
             _txt(l.get("cod_partener")) or None, _int_or_none(l.get("id_partener")),
             _int_or_none(l.get("id_unitate")),

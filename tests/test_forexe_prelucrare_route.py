@@ -127,7 +127,7 @@ class FakeCursor:
         elif "INSERT INTO FX_Alegeri_Unitate" in sql:
             self.conn.remembered[(params[0], params[1])] = params[2]
             self._result = []
-        elif "SELECT DISTINCT IdClsfAcc" in sql:
+        elif "SELECT IDClsf, IdClsfAcc FROM Clasificatii" in sql:
             self._result = list(self.conn.clsf.get((params[0], params[1]), []))
         elif sql.startswith("UPDATE FX_Extrase"):
             # Pasul 8. Cele doua instructiuni raporteaza pe rand cate randuri au atins.
@@ -245,7 +245,7 @@ def test_malformed_alegeri_returns_400(client, auth_headers):
 def _fake_unit():
     return FakeConnection(
         candidates={("02E", "200101"): [unit(76, "ENERGETIC ISJ")]},
-        clsf={(76, "650402200101"): [{"IdClsfAcc": 1204}]})
+        clsf={(76, "650402200101"): [{"IDClsf": 88, "IdClsfAcc": 1204}]})
 
 
 def test_the_default_mode_is_the_proposal_and_it_never_commits(client, auth_headers,
@@ -434,7 +434,7 @@ def test_resending_with_the_choice_writes_it(client, auth_headers, fake_db):
     conn = fake_db(FakeConnection(
         candidates={("02E", "200101"): [unit(75, "SC29 LOCAL"),
                                         unit(76, "ENERGETIC ISJ")]},
-        clsf={(76, "650402200101"): [{"IdClsfAcc": 1204}]}))
+        clsf={(76, "650402200101"): [{"IDClsf": 88, "IdClsfAcc": 1204}]}))
     r = client.post(URL, headers=auth_headers, data=payload(
         rows=[indicator_row()],
         alegeri=[{"ss": "02E", "clsfe": "200101", "id_unitate": 76,
@@ -454,7 +454,7 @@ def test_resending_with_the_choice_writes_it(client, auth_headers, fake_db):
 def test_the_ticked_box_stores_the_choice(client, auth_headers, fake_db):
     conn = fake_db(FakeConnection(
         candidates={("02E", "200101"): [unit(75, "a"), unit(76, "b")]},
-        clsf={(76, "650402200101"): [{"IdClsfAcc": 1204}]}))
+        clsf={(76, "650402200101"): [{"IDClsf": 88, "IdClsfAcc": 1204}]}))
     r = client.post(URL, headers=auth_headers, data=payload(
         rows=[indicator_row()],
         alegeri=[{"ss": "02E", "clsfe": "200101", "id_unitate": 76,
@@ -467,7 +467,7 @@ def test_a_stored_choice_means_no_question_at_all(client, auth_headers, fake_db)
     conn = fake_db(FakeConnection(
         candidates={("02E", "200101"): [unit(75, "a"), unit(76, "b")]},
         remembered={("02E", "200101"): 76},
-        clsf={(76, "650402200101"): [{"IdClsfAcc": 1204}]}))
+        clsf={(76, "650402200101"): [{"IDClsf": 88, "IdClsfAcc": 1204}]}))
     r = client.post(URL, headers=auth_headers, data=payload(rows=[indicator_row()]))
     # Nicio intrebare: 200, si niciun `alegeri_necesare` in corp.
     assert r.status_code == 200

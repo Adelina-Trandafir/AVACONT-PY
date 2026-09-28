@@ -486,8 +486,10 @@ _H_IGNORA_SQL = (
 _R_MARCHEAZA_STEARSA_SQL = "UPDATE FX_Receptii_R SET Sters = 1 WHERE IDRR = %s"
 # Desprinderea randului de stergere lasa recepția «nestearsa» din nou: steagul de pe R nu
 # e o parere, e umbra unui instantaneu anume, iar daca acela pleaca umbra pleaca cu el.
+# Reconstructed receptions too (operator, 25.09.2026): starting one no longer means it was
+# deleted, so its Sters follows its deletion row like everyone else's.
 _R_DEMARCHEAZA_SQL = (
-    "UPDATE FX_Receptii_R SET Sters = 0 WHERE IDRR = %s AND Reconstituit = 0 "
+    "UPDATE FX_Receptii_R SET Sters = 0 WHERE IDRR = %s "
     "  AND NOT EXISTS (SELECT 1 FROM (SELECT IDRH FROM FX_Receptii_H "
     "                                 WHERE IDRR = %s AND EsteStergere = 1) X)"
 )
@@ -513,6 +515,16 @@ def _lanturi_rezultate(comenzi: list, instantanee: list, tinta) -> dict:
 
     afectate = set()
     mutari = {}     # idrh -> noul IDRR (0 = niciunul)
+    # The deletion flag AFTER the commands: a row un-marked (or marked) in this save must be
+    # seen with its new flag, or a former deletion row moved to a new reception would still
+    # be read as one.
+    stergere_noua = {c["idrh"]: c["actiune"] == ACTIUNE_STERGERE for c in comenzi}
+
+    def _cu_steag(inst):
+        if inst["idrh"] not in stergere_noua:
+            return inst
+        return dict(inst, stergere=stergere_noua[inst["idrh"]])
+
     for c in comenzi:
         inst = dupa_idrh[c["idrh"]]
         if inst["idrr"]:
@@ -529,10 +541,10 @@ def _lanturi_rezultate(comenzi: list, instantanee: list, tinta) -> dict:
         lant = []
         for inst in acum.get(idrr, []):
             if mutari.get(inst["idrh"], idrr) == idrr:
-                lant.append(inst)
+                lant.append(_cu_steag(inst))
         for idrh, nou in mutari.items():
             if nou == idrr and dupa_idrh[idrh]["idrr"] != idrr:
-                lant.append(dupa_idrh[idrh])
+                lant.append(_cu_steag(dupa_idrh[idrh]))
         lanturi[idrr] = lant
     return lanturi
 
