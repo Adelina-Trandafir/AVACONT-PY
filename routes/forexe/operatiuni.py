@@ -3,7 +3,8 @@
 The «Operatiuni necorectate» of the FOREXE landing page (slice 0084).
 
     POST /api/forexe/operatiuni/necorectate
-        { "operatiuni": [ { "program": "0000000000",
+        { "operatiuni": [ { "angajament": "ERRRRRRRRRR",   (slice 0088)
+                            "program": "0000000000",
                             "ssi": "02A-65.04.01.20.01.03",
                             "referinta_trezor": "TZ521102457328",
                             "nr_doc": "964887316/280",
@@ -11,7 +12,16 @@ The «Operatiuni necorectate» of the FOREXE landing page (slice 0084).
                             "tip": "Incasare",          (as the page wrote it)
                             "suma": -368.00,
                             "probleme": null | "..." }, ... ] }
-        -> 200 { "primite", "inserate", "existente", "avertismente": [...] }
+        -> 200 { "primite", "inserate", "existente", "avertismente": [...],
+                 "noi": [IDFXP, ...] }          (slice 0088: the rows inserted by THIS call)
+
+    GET  /api/forexe/operatiuni/necorelate      (slice 0088)
+        -> 200 { "operatiuni": [ { "idfxp", "angajament", "program", "ss", "clsf_sal",
+                                   "ssi", "referinta_trezor", "nr_doc", "data_plata",
+                                   "tip", "suma", "probleme" }, ... ] }
+        The «ERRRRRRRRRR» operations (NULL = saved before 0088, taken as ERR) that no CAB
+        correction note covers yet (FX_NoteCAB_Corectii on ReferintaTrezor + NrDoc). This is
+        what the menu «Operatiuni necorelate» shows -- FOREXE is not read again for it.
 
 K-BOT reads the table right after every FOREXE login and sends every row it saw. Only rows
 that are NOT in FX_Operatiuni yet are inserted; the key is (ReferintaTrezor, NrDoc) --
@@ -30,7 +40,8 @@ MAPPING (MariaDB_Schema/AVACONT_SURSA.sql, FX_Operatiuni)
   * Suma            -- the column is added by the operator (26.09.2026: "Adaug eu Suma"); the
                        live schema dump of 22.09 does not have it yet.
 
-NEXT (not here): correlating these operations with the angajamente in the database.
+Slice 0088: the ERR ones are correlated with angajamente through CAB correction notes
+(routes/forexe/note_cab.py).
 """
 import json
 import logging
@@ -59,8 +70,21 @@ _SQL_UNITATE = "SELECT IdUnitate FROM Unitati WHERE SursaSector = %s"
 _SQL_CLSF = "SELECT IDClsf FROM Clasificatii WHERE IdUnitate = %s AND ClsfSal = %s"
 _SQL_INSERT = (
     "INSERT INTO FX_Operatiuni "
-    "(Program, IdClsf, CodSSI, ReferintaTrezor, NrDoc, DataPlata, Tip, Suma, Probleme) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    "(Program, CodAngajament, IdClsf, CodSSI, ReferintaTrezor, NrDoc, DataPlata, Tip, Suma, "
+    " Probleme) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+)
+_ERR = "ERRRRRRRRRR"
+# Clasificatii joined on its primary key: never more than one row per operation.
+_SQL_NECORELATE = (
+    "SELECT O.IDFXP, O.CodAngajament, O.Program, C.SS, C.ClsfSal, C.Clsf, O.ReferintaTrezor, "
+    "       O.NrDoc, O.DataPlata, O.Tip, O.Suma, O.Probleme "
+    "  FROM FX_Operatiuni O "
+    "  LEFT JOIN Clasificatii C ON C.IDClsf = O.IdClsf "
+    " WHERE (O.CodAngajament IS NULL OR O.CodAngajament = %s) "
+    "   AND NOT EXISTS (SELECT 1 FROM FX_NoteCAB_Corectii K "
+    "                    WHERE K.ReferintaTrezor = O.ReferintaTrezor AND K.NrDoc = O.NrDoc) "
+    " ORDER BY O.DataPlata, O.IDFXP"
 )
 
 
@@ -112,6 +136,7 @@ def _id_clsf(cursor, id_unitate: int, clsf_sal: str):
 
 def _prelucreaza(cursor, operatiuni: list) -> dict:
     inserate = 0
+    noi = []
     existente = 0
     avertismente = []
     unitati = {}
@@ -180,13 +205,15 @@ def _prelucreaza(cursor, operatiuni: list) -> dict:
             continue
 
         probleme = _text(rand, "probleme") or None
-        cursor.execute(_SQL_INSERT, (program, ids[0], ss + clsf_sal, referinta, nr_doc,
-                                     data_plata, _text(rand, "tip"), suma,
+        angajament = _text(rand, "angajament")[:11] or None
+        cursor.execute(_SQL_INSERT, (program, angajament, ids[0], ss + clsf_sal, referinta,
+                                     nr_doc, data_plata, _text(rand, "tip"), suma,
                                      probleme[:255] if probleme else None))
         inserate += 1
+        noi.append(cursor.lastrowid)
 
     return {"primite": len(operatiuni), "inserate": inserate, "existente": existente,
-            "avertismente": avertismente}
+            "avertismente": avertismente, "noi": noi}
 
 
 @forexe_bp.route("/api/forexe/operatiuni/necorectate", methods=["POST"])
@@ -219,6 +246,37 @@ def post_operatiuni_necorectate():
                 logger.warning("[forexe.operatiuni] rollback esuat", exc_info=True)
         logger.error("[forexe.operatiuni] %s: %s", db_name, e, exc_info=True)
         return _json_utf8({"error": f"Eroare la salvarea operațiunilor necorectate: {e}"}, 500)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+@forexe_bp.route("/api/forexe/operatiuni/necorelate", methods=["GET"])
+@require_session
+def get_operatiuni_necorelate():
+    """The ERR operations no correction note covers yet (slice 0088)."""
+    db_name = g.session.db_name
+    conn = None
+    try:
+        conn = get_kbot_connection(db_name)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(_SQL_NECORELATE, (_ERR,))
+        rows = []
+        for r in cursor.fetchall():
+            ss = r["SS"] or ""
+            rows.append({
+                "idfxp": r["IDFXP"], "angajament": r["CodAngajament"] or _ERR,
+                "program": r["Program"], "ss": ss, "clsf_sal": r["ClsfSal"] or "",
+                "ssi": f"{ss}-{r['Clsf']}" if r["Clsf"] else ss,
+                "referinta_trezor": r["ReferintaTrezor"], "nr_doc": r["NrDoc"],
+                "data_plata": r["DataPlata"].isoformat() if r["DataPlata"] else None,
+                "tip": r["Tip"], "suma": float(r["Suma"]) if r["Suma"] is not None else None,
+                "probleme": r["Probleme"],
+            })
+        return _json_utf8({"operatiuni": rows}, 200)
+    except Exception as e:
+        logger.error("[forexe.operatiuni] necorelate %s: %s", db_name, e, exc_info=True)
+        return _json_utf8({"error": f"Eroare la citirea operațiunilor necorelate: {e}"}, 500)
     finally:
         if conn is not None:
             conn.close()

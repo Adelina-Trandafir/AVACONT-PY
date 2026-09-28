@@ -7,6 +7,9 @@ Rute:
     PUT  /api/forexe/ddf/pdf/<idrev>    -> inlocuieste-sau-insereaza randul
     GET  /api/forexe/ord/pdf/<idordp>   -> octetii PDF-ului semnat al ordonantarii
     PUT  /api/forexe/ord/pdf/<idordp>   -> inlocuieste-sau-insereaza randul
+    GET  /api/forexe/nc/pdf/<idnc>      -> the PDF of a CAB correction note (slice 0088)
+    PUT  /api/forexe/nc/pdf/<idnc>      -> replace-or-insert (the note's PDF is stored from its
+                                           creation, unsigned, with `X-Semnatura: -`)
 
 Scope: baza conectata ESTE unitatea (o baza MariaDB = o unitate), deci nu exista parametru
 db_name / id_unitate — baza vine din sesiune (g.session.db_name), exact ca la toate
@@ -120,6 +123,14 @@ _ORD = {
     "parinte": "FX_ORD",
     "eticheta": "ord",
     "roluri": ("AB", "CD", "Ordonator"),
+}
+# Slice 0088: the «Nota contabila corectie CAB» (F1135) -- two signature fields, S1 and S2.
+_NC = {
+    "tabela": "FX_NoteCAB_PDF",
+    "cheie": "IDNC",
+    "parinte": "FX_NoteCAB",
+    "eticheta": "nc",
+    "roluri": ("S1", "S2"),
 }
 
 
@@ -245,6 +256,27 @@ def _has_sign_log(cursor) -> bool:
         " WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s", (SIGN_TABLE,))
     row = cursor.fetchone()
     return bool(row) and int(row[0]) == 1
+
+
+def _sign_log_accepts(cursor, spec) -> bool:
+    """Can SIGN_TABLE take a row for this family? It needs the key column AND a document check
+    that names it: slice 0088 adds IDNC and replaces the 0079 check («IDREV or IDORDP»). A database
+    where only half of that DDL ran (column there, old check kept) refuses every note signature
+    with error 4025 and, since the log shares the PDF's transaction, the PDF itself."""
+    col = spec["cheie"]
+    cursor.execute(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS "
+        " WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+        (SIGN_TABLE, col))
+    row = cursor.fetchone()
+    if not row or int(row[0]) != 1:
+        return False
+    cursor.execute(
+        "SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS "
+        " WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = %s "
+        "   AND CONSTRAINT_NAME = 'CK_FX_PDF_SEMNATURI_DOC'", (SIGN_TABLE,))
+    row = cursor.fetchone()
+    return row is None or col.lower() in str(row[0]).lower()
 
 
 def _record_signatures(cursor, spec, cheie, records, station, sha) -> int:
@@ -373,6 +405,16 @@ def _nume_fisier_ord(cursor, idordp: int) -> str:
         return None
     nr_ord, cod = row
     return f"ORD_NR_{nr_ord}_{cod}.PDF"
+
+
+def _nume_fisier_nc(cursor, idnc: int) -> str:
+    """NOTA_CAB_{NrNota}_{An}.PDF (slice 0088) -- the same name the client gives the file."""
+    cursor.execute("SELECT NrNota, An FROM FX_NoteCAB WHERE IDNC = %s LIMIT 1", (idnc,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    nr_nota, an = row
+    return f"NOTA_CAB_{nr_nota}_{an}.PDF"
 
 
 # ---------------------------------------------------------------------------------------
@@ -560,8 +602,12 @@ def _incarca(spec, cheie: int, nume_fisier_fn):
         # 8. Slice 0079: the signature log, same transaction -- no PDF without its record.
         inregistrate = 0
         if semnaturi:
-            if _has_sign_log(cursor):
+            if _has_sign_log(cursor) and _sign_log_accepts(cursor, spec):
                 inregistrate = _record_signatures(cursor, spec, cheie, semnaturi, statie, sha_server)
+            elif _has_sign_log(cursor):
+                logger.warning("[forexe.pdf] %s: %s does not accept %s yet (run sql/0088 again) "
+                               "-- %d signature record(s) skipped",
+                               db_name, SIGN_TABLE, spec["cheie"], len(semnaturi))
             else:
                 logger.warning("[forexe.pdf] %s: %s not applied -- %d signature record(s) skipped",
                                db_name, SIGN_TABLE, len(semnaturi))
@@ -620,3 +666,17 @@ def get_ord_pdf(idordp):
 def put_ord_pdf(idordp):
     """Inlocuieste-sau-insereaza PDF-ul semnat al unei ordonantari."""
     return _incarca(_ORD, idordp, _nume_fisier_ord)
+
+
+@forexe_bp.route("/api/forexe/nc/pdf/<int:idnc>", methods=["GET"])
+@require_session
+def get_nc_pdf(idnc):
+    """The PDF of a CAB correction note (raw bytes, slice 0088)."""
+    return _descarca(_NC, idnc)
+
+
+@forexe_bp.route("/api/forexe/nc/pdf/<int:idnc>", methods=["PUT"])
+@require_session
+def put_nc_pdf(idnc):
+    """Replace-or-insert the PDF of a CAB correction note (slice 0088)."""
+    return _incarca(_NC, idnc, _nume_fisier_nc)

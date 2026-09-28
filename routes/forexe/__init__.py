@@ -116,3 +116,6 @@ from . import parteneri_edit  # noqa: E402,F401
 # there (operator, 28.09.2026): PUT /api/forexe/capturi/rezervare/<idrev> and
 # /api/forexe/capturi/receptie/<idrh> -> FX_Rezervarii_IMG / FX_Receptii_IMG.
 from . import capturi  # noqa: E402,F401
+# note_cab.py = the «Nota contabila corectie CAB» (F1135) K-BOT makes for the ERRRRRRRRRR
+# operations of «Operatiuni necorectate» (slice 0088); its PDF goes through pdf.py (family _NC).
+from . import note_cab  # noqa: E402,F401
