@@ -372,7 +372,8 @@ def _step2_indicatori(cursor, cod: str, indicators: list, units: dict,
 # ---------------------------------------------------------------------------
 # Conducta -- IDENTICA in ambele faze
 # ---------------------------------------------------------------------------
-def _ruleaza_pasii(cursor, cod, scalari, tabele, db_name, un, supplied, warnings):
+def _ruleaza_pasii(cursor, cod, scalari, tabele, db_name, un, supplied, warnings,
+                   receptii_incomplete=None):
     """
     Pasii 1..5, 7 si 8, in ordinea impusa de cheile straine.
 
@@ -451,7 +452,7 @@ def _ruleaza_pasii(cursor, cod, scalari, tabele, db_name, un, supplied, warnings
         raise ValueError(f"«{TABLE_RECEPTII}» trebuie să fie o listă.")
     with timing.stage("pas 4b receptii R"):
         r_scrise, rhr_scrise, ancore_receptii = step4b_receptii_prelucrare(
-            cursor, cod, randuri_receptii, indicatori)
+            cursor, cod, randuri_receptii, indicatori, receptii_incomplete)
     scrise["FX_Receptii_R"] = r_scrise
     scrise["FX_Receptii_RHR"] = rhr_scrise
     are["Receptii"] = (r_scrise + rhr_scrise) > 0
@@ -600,12 +601,27 @@ def post_prelucrare():
                 "cod": cod,
             }, 409)
 
+        # Slice 0091: receptions whose `Detaliu` arrived cut (step 4b left their lines
+        # alone). Same payload in both phases, so both phases find the same ones.
+        receptii_incomplete = []
         with timing.stage("pasii 1-8"):
             scrise, are, index_la_id, ancore_receptii = _ruleaza_pasii(
-                cursor, cod, scalari, tabele, db_name, un, supplied, warnings)
+                cursor, cod, scalari, tabele, db_name, un, supplied, warnings,
+                receptii_incomplete)
+        idrr_incomplete = {x["idrr"] for x in receptii_incomplete}
+        # What the client shows the operator and uses to offer the refresh: the reception
+        # named by its date and sum, never by IDRR (a new one's IDRR dies with phase one).
+        incomplete_raspuns = [{
+            "data_r": x["data_r"].strftime("%d.%m.%Y") if hasattr(x["data_r"], "strftime")
+            else str(x["data_r"]),
+            "suma": round(float(x["suma"] or 0), 2),
+            "motiv": x["motiv"],
+        } for x in receptii_incomplete]
 
         with timing.stage("citeste receptii"):
             receptii = citeste_receptii(cursor, cod, ancore_receptii)
+        for r in receptii:
+            r["detaliu_incomplet"] = r["idrr"] in idrr_incomplete
         with timing.stage("citeste instantanee"):
             instantanee = citeste_instantanee(cursor, cod, index_la_id, warnings)
 
@@ -679,6 +695,7 @@ def post_prelucrare():
                     # rulare anulata.
                     "scrise": scrise_propuse,
                     "avertismente": warnings,
+                    "receptii_incomplete": incomplete_raspuns,
                 }
             # DERULARE INAPOI NECONDITIONATA. Nu e o cale de eroare: e chiar contractul.
             journal.section("sfârșitul propunerii")
@@ -702,7 +719,7 @@ def post_prelucrare():
         # --- PASUL 4c, FAZA DOI: se aplica deciziile, se ignora automatul ------
         with timing.stage("pas 4c aplica decizii"):
             numarat = aplica_decizii(cursor, cod, decizii, instantanee, receptii,
-                                     warnings, ancore_receptii)
+                                     warnings, ancore_receptii, idrr_incomplete)
         scrise["asocieri"] = numarat
 
         # F28: doua sau mai multe reconstituiri pe acelasi angajament fac gruparea
@@ -730,6 +747,7 @@ def post_prelucrare():
             "are": are,
             "scrise": scrise,
             "avertismente": warnings,
+            "receptii_incomplete": incomplete_raspuns,
         }, 200)
 
     except UnitChoiceRequired as err:

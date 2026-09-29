@@ -68,6 +68,16 @@ class RateLimiter:
             self._by_ip.pop(ip, None)
             self._by_pair.pop((ip, username), None)
 
+    def reset_user(self, username):
+        """Drop every (IP, username) bucket for this user, lock included.
+        Returns how many buckets were removed. Per-IP buckets are untouched:
+        they are shared by everyone behind that IP, not owned by one user."""
+        with self._lock:
+            keys = [k for k in self._by_pair if k[1] == username]
+            for k in keys:
+                del self._by_pair[k]
+            return len(keys)
+
 
 # STARE IN-PROCESS (verificat 2026-07-15). Contoarele traiesc in dict-urile
 # _by_ip / _by_pair ale acestei instante, in memoria procesului. Consecinte:

@@ -119,3 +119,6 @@ from . import capturi  # noqa: E402,F401
 # note_cab.py = the «Nota contabila corectie CAB» (F1135) K-BOT makes for the ERRRRRRRRRR
 # operations of «Operatiuni necorectate» (slice 0088); its PDF goes through pdf.py (family _NC).
 from . import note_cab  # noqa: E402,F401
+# pdf_banc.py = PUT /api/forexe/banc/pdf/<tip>/<iddoc>: the signing benches' server mirror (slice
+# 0078-05), ONLY for 000_DEMO -> KBOT_BANC_PDF (sql/0078_05_kbot_banc_pdf.sql). Bench only.
+from . import pdf_banc  # noqa: E402,F401

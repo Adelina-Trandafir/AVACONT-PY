@@ -439,6 +439,28 @@ def setup_database():
         return jsonify({"error": str(outer_e)}), 500
 
 
+@admin_bp.route('/api/admin/login/reset', methods=['POST'])
+@require_api_key
+def login_reset():
+    """
+    Clears the failed-login counters (and any lockout) for one operator.
+    Body: { "username": "<email>" }. The name is normalised exactly like
+    /api/auth/login (strip + lower) so it hits the same key.
+    Counters are in-process (routes/auth/ratelimit.py), so this only works
+    against the running server -- a script on the box cannot reach them.
+    """
+    from routes.auth.ratelimit import LIMITER
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip().lower()
+    if not username:
+        return jsonify({"error": "Lipsește utilizatorul."}), 400
+
+    removed = LIMITER.reset_user(username)
+    logger.info("LOGIN_RESET un=%s buckets=%s ip=%s", username, removed, request.remote_addr)
+    return jsonify({"ok": True, "username": username, "cleared": removed}), 200
+
+
 @admin_bp.route('/api/admin/receptii/refacere', methods=['POST'])
 @require_api_key
 def receptii_refacere_admin():

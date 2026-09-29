@@ -1001,6 +1001,14 @@ def marcheaza_reconstituirile_nesigure(cursor, cod: str,
 # ===========================================================================
 # Validarile de plasare (F14, F15, F16 -- si F13, retras ca veto, ramas semn)
 # ===========================================================================
+# F14 PAUSED (29.09.2026, operator request). Reception lines (`RHR`) turned out to be
+# incomplete on some receptions (017_SCNB, AAB2DH3X6SK: receptions 84/86/90 miss indicators
+# their own snapshots name), so the subset check refused correct placements. While paused,
+# F14 only writes to the journal and to `avertismente` (when the caller passes one); it no
+# longer refuses. F16 is unchanged. Set back to False to restore the veto.
+F14_PAUSED = True
+
+
 def _indicatori_receptie(rec: dict) -> Set[str]:
     return {l["cod_indicator"] for l in rec["rhr"] if l["cod_indicator"]}
 
@@ -1013,7 +1021,8 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
                         receptii: Dict[int, dict],
                         f15_ca_avertisment: bool = False,
                         avertismente: Optional[List[str]] = None,
-                        id_stabil: bool = True) -> None:
+                        id_stabil: bool = True,
+                        detaliu_incomplet: Optional[Set[int]] = None) -> None:
     """
     Toate regulile care pot spune «nu acolo», rulate pe tabloul REZULTAT.
 
@@ -1059,6 +1068,12 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
     o gaseste nicaieri in lista -- exact plangerea din 09.09.2026, si acelasi defect ca
     «Recepția 188 nu există pe acest angajament» din felia 0056. Cu False, receptia se
     numeste prin data si valoarea ei, adica prin chiar textul randului din formular.
+
+    `detaliu_incomplet` (slice 0091) names the receptions whose `Detaliu` arrived cut in
+    THIS run: step 4b left their lines as they were, so the lines F14 and F15 compare
+    against are known to be wrong or stale. For those receptions only, F14 and F15 write a
+    warning instead of refusing -- the placement is the operator's, the lines are fixed by
+    refreshing the reception. F16 speaks only about snapshots and stays a veto.
     """
     if f15_ca_avertisment and avertismente is None:
         raise ValueError(
@@ -1072,6 +1087,11 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
         lant = sorted(lant, key=lambda x: (x["data_h"], x["idrh"]))
 
         ind_rec = _indicatori_receptie(rec)
+        # Slice 0091: this run's Detaliu for the reception arrived cut -- F14/F15 only warn.
+        incomplet = idrr in (detaliu_incomplet or set())
+        if incomplet:
+            journal.line("recepția %s are detaliul tăiat în rularea asta: F14 și F15 doar "
+                         "semnalează", idrr)
 
         # The whole chain as the rules below see it, plus the reception it has to
         # close on. Everything a refusal talks about is on these lines.
@@ -1094,13 +1114,26 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
             # si cad la zero, insa nu dispar din bloc.
             if ind_inst and not ind_inst <= ind_rec:
                 lipsa = ", ".join(sorted(ind_inst - ind_rec))
-                journal.line("F14 CADE pe IDRH %s: instantaneul are {%s}, recepția "
-                             "are {%s}", inst["idrh"], ", ".join(sorted(ind_inst)),
-                             ", ".join(sorted(ind_rec)))
-                raise DecizieInvalida(
-                    f"Instantaneul de la {inst['data_h']} numește indicatorii {lipsa}, "
-                    f"pe care {nume.lower()} nu îi are."
-                )
+                if F14_PAUSED or incomplet:
+                    journal.line("F14 (%s, nu refuză) pe IDRH %s: instantaneul are "
+                                 "{%s}, recepția are {%s}",
+                                 "detaliu tăiat" if incomplet else "ÎN PAUZĂ", inst["idrh"],
+                                 ", ".join(sorted(ind_inst)), ", ".join(sorted(ind_rec)))
+                    if avertismente is not None:
+                        avertismente.append(
+                            f"Instantaneul de la {inst['data_h']} numește indicatorii "
+                            f"{lipsa}, pe care {nume.lower()} nu îi are ("
+                            + ("detaliul recepției a venit incomplet din FOREXE"
+                               if incomplet else "verificare în pauză")
+                            + ", asocierea s-a păstrat).")
+                else:
+                    journal.line("F14 CADE pe IDRH %s: instantaneul are {%s}, recepția "
+                                 "are {%s}", inst["idrh"], ", ".join(sorted(ind_inst)),
+                                 ", ".join(sorted(ind_rec)))
+                    raise DecizieInvalida(
+                        f"Instantaneul de la {inst['data_h']} numește indicatorii "
+                        f"{lipsa}, pe care {nume.lower()} nu îi are."
+                    )
 
             # --- F16, multimile doar cresc, de-a lungul lantului ordonat dupa DataH.
             if ind_inst and not precedente <= ind_inst:
@@ -1117,7 +1150,8 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
             if ind_inst:
                 precedente = precedente | ind_inst
 
-        journal.line("F14 și F16 trec pe toate cele %d instantanee ale lanțului",
+        journal.line("F14 și F16 trec pe toate cele %d instantanee ale lanțului"
+                     + (" (F14 în pauză)" if F14_PAUSED else ""),
                      len(lant))
 
         # --- F15, capatul lantului --------------------------------------------
@@ -1136,6 +1170,13 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
             """Veto in ingestie, semnalare in editorul de oricand. Vezi docstring-ul."""
             if f15_ca_avertisment:
                 avertismente.append(mesaj)
+            elif incomplet:
+                # Slice 0091: the reception's lines are the stale ones, not the chain.
+                journal.line("F15 doar semnalează: detaliul recepției a venit tăiat")
+                if avertismente is not None:
+                    avertismente.append(
+                        mesaj + " Detaliul recepției a venit incomplet din FOREXE; "
+                        "reîmprospătați recepția.")
             else:
                 raise DecizieInvalida(mesaj)
 
@@ -1271,7 +1312,8 @@ _H_MEMBRI_LANT_SQL = (
 
 def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict],
                    receptii: List[dict], warnings: List[str],
-                   ancore: Optional[Dict[int, int]] = None) -> Dict[str, int]:
+                   ancore: Optional[Dict[int, int]] = None,
+                   detaliu_incomplet: Optional[Set[int]] = None) -> Dict[str, int]:
     """
     Faza a doua a pasului 4c. Aplica `decizii` si ignora complet trecerea automata.
 
@@ -1279,6 +1321,9 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     `step4b_receptii_prelucrare` DIN RULAREA ASTA. Prin ele se rezolva deciziile care
     numesc o receptie prin `rand_receptie`; vezi docstring-ul pasului 4b pentru de ce
     `idrr`-ul din propunere nu are voie sa fie numele.
+
+    `detaliu_incomplet` = the IDRRs whose `Detaliu` arrived cut in this run (slice 0091);
+    see `valideaza_plasarile`.
 
     Intoarce numaratorile scrise.
     """
@@ -1373,7 +1418,8 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     # numesc prin data si valoare, adica prin chiar textul randului din formular.
     # `warnings` ramane trecut ca F15 sa aiba unde scrie daca vreodata coboara si aici;
     # acum e veto (`f15_ca_avertisment` implicit False), deci lista nu se atinge.
-    valideaza_plasarile(lanturi, toate, avertismente=warnings, id_stabil=False)
+    valideaza_plasarile(lanturi, toate, avertismente=warnings, id_stabil=False,
+                        detaliu_incomplet=detaliu_incomplet)
 
     # --- scrierea ---------------------------------------------------------------
     numarat = {"asociat": 0, "ignorat": 0, "stergere": 0, "reconstituit": len(noi)}

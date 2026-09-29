@@ -35,6 +35,8 @@ import json
 import logging
 from typing import Dict, List, Optional, Tuple
 
+from utils import asociere_log as journal
+
 from .marcaj import LOCK_IDR, LOCK_IDRH, consuma_lacatul, id_marcaj_utilizabil
 from .prelucrare_helpers import (
     cod_ai,
@@ -1069,8 +1071,69 @@ def cere_lista(valoare, unde: str, coloana: str, gol_permis: bool = False):
     )
 
 
+# The columns every COMPLETE row of a reception's `Detaliu` carries. A row missing one of
+# them was read while the FOREXE page was still arriving (slice 0091).
+_DETALIU_COLOANE_VALORI = ("Credit_bugetar_rezervat_definitiv", "Valoare_nereceptionata",
+                           "Valoare")
+
+
+def _rand_detaliu_intreg(det) -> bool:
+    """A `Detaliu` row that arrived whole: an object with every value column filled."""
+    if not isinstance(det, dict):
+        return False
+    for c in _DETALIU_COLOANE_VALORI:
+        v = det.get(c)
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return False
+    return True
+
+
+def detaliu_incomplet(detalii: list, suma: float, nr_indicatori: int) -> Optional[str]:
+    """
+    Why this reception's `Detaliu` cannot be trusted, or None when it looks whole.
+
+    Slice 0091 (29.09.2026, 017_SCNB / AAB2DH3X6SK): the robot read the reception page
+    while FOREXE was still sending it. The table stopped anywhere in its fixed order
+    (AA6, AA7, AA3, AA4, AA5, AAB, AA2) -- even in the middle of a cell
+    ("01A- 65. 03. 02." for "01A- 65. 03. 02. 10. 01. 01") -- and step 4b wrote the
+    stump into `RHR` as if it were the reception. Three signs, any one is enough:
+
+      1. a row without one of the value columns (the cut went through that row);
+      2. the lines do not add up to the reception's own `Suma`;
+      3. fewer indicators than the angajament has. Every complete reception in that
+         payload listed ALL seven, zeros included; a missing tail with zero values (the
+         301,00 reception lost AA4, AA5, AAB, AA2) passes the first two signs and is caught
+         only here. ASSUMPTION from that one angajament: FOREXE lists every indicator on
+         every reception.
+
+    The answer is the text the operator reads, in Romanian.
+    """
+    if not detalii:
+        return "detaliul a venit gol"
+    for det in detalii:
+        if not _rand_detaliu_intreg(det):
+            cod_ind = det.get("Cod") if isinstance(det, dict) else None
+            return (f"rândul «{cod_ind if isinstance(cod_ind, str) else '?'}» a venit "
+                    f"fără valori (pagina era încă în încărcare)")
+
+    from .prelucrare_helpers import parse_loose_number
+    total = 0.0
+    for det in detalii:
+        total += parse_loose_number(str(det.get("Valoare")))
+    if round(total, 2) != round(float(suma or 0), 2):
+        return f"liniile adună {total:.2f}, recepția valorează {float(suma or 0):.2f}"
+
+    coduri = {str(det.get("Cod") or "").strip() for det in detalii}
+    coduri.discard("")
+    if nr_indicatori > 0 and len(coduri) < nr_indicatori:
+        return f"are {len(coduri)} indicatori din cei {nr_indicatori} ai angajamentului"
+    return None
+
+
 def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
-                               indicatori: Dict[str, dict]) -> Tuple[int, int, Dict[int, int]]:
+                               indicatori: Dict[str, dict],
+                               incomplete: Optional[List[dict]] = None
+                               ) -> Tuple[int, int, Dict[int, int]]:
     """
     Aduce `FX_Receptii_R` / `FX_Receptii_RHR` la zi din payload.
 
@@ -1098,6 +1161,14 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
     Se numara receptia ca «nascuta acum» dupa IDRR, nu dupa ramura care a rulat: doua
     randuri de payload din aceeasi zi se potrivesc pe acelasi rand, deci al doilea poate
     ajunge, prin potrivire, pe o receptie pe care tocmai a inserat-o primul.
+
+    CUT `Detaliu` (slice 0091). A row whose `Detaliu` fails `detaliu_incomplet` does not
+    touch the reception's lines: an EXISTING reception keeps its header and its `RHR`
+    exactly as they were (a new sum over old lines would leave a header its lines do not
+    add up to -- the slice 0060 trap); a NEW reception is still created, since its
+    snapshots need somewhere to go, with only the rows that arrived whole. Each such row
+    is appended to `incomplete` ({idrr, data_r, suma, motiv}) so the caller can exempt the
+    reception from F14/F15 and tell the operator to refresh it.
     """
     from .prelucrare_helpers import (
         fx_receptii_h_get_hash_ident, fx_receptii_parse_ro_date, parse_loose_number,
@@ -1109,6 +1180,8 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
     cursor.execute(_RHR_INDICATORI_VAZUTI_SQL, (cod,))
     vazuti = {str(r["CodIndicator"]) for r in cursor.fetchall()
               if r["CodIndicator"] is not None}
+    nr_indicatori = len({str(v.get("CodIndicator") or "") for v in indicatori.values()
+                         if v.get("CodIndicator")})
 
     cursor.execute(_MAX_NRCRT_R_SQL, (cod,))
     row = cursor.fetchone()
@@ -1160,7 +1233,19 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
         candidati = cursor.fetchall()
         gasit = candidati[0] if candidati else None
 
-        if gasit is not None:
+        motiv = detaliu_incomplet(detalii, suma, nr_indicatori)
+        if motiv is not None:
+            journal.line("DETALIU TĂIAT pe rândul %d din ListaReceptii (%s, %.2f): %s -- %s",
+                         i, data_r, suma, motiv,
+                         "recepția rămâne neatinsă" if gasit is not None
+                         else "recepția se creează doar cu rândurile întregi")
+
+        if gasit is not None and motiv is not None:
+            idrr = int(gasit["IDRR"])
+            if incomplete is not None:
+                incomplete.append({"idrr": idrr, "data_r": data_r, "suma": suma,
+                                   "motiv": motiv})
+        elif gasit is not None:
             idrr = int(gasit["IDRR"])
             if round(float(gasit["SumaAntet"] or 0), 2) != round(suma, 2):
                 cursor.execute(_R_UPDATE_SUMA_SQL, (suma, idrr))
@@ -1195,8 +1280,14 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
             nascute.add(idrr)
             nr_crt += 1
             r_scrise += 1
+            if motiv is not None and incomplete is not None:
+                incomplete.append({"idrr": idrr, "data_r": data_r, "suma": suma,
+                                   "motiv": motiv})
 
             for det in detalii:
+                # Cut Detaliu: only the rows that arrived whole become lines.
+                if motiv is not None and not _rand_detaliu_intreg(det):
+                    continue
                 d = _detaliu(det, cod, indicatori, f"{TABLE_RECEPTII}[{i}]")
                 cursor.execute(_RHR_INSERT_SQL, (
                     idrr, cod, d["CodIndicator"], d["CodAI"], d["IdClsf"],

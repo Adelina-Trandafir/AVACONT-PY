@@ -6,6 +6,9 @@ from flask import request, has_request_context, g
 # rotated copies .1 .. .5), so both sides take the name from here.
 SERVER_LOG_PATH = 'api_server.log'
 SERVER_LOG_BACKUPS = 5
+# Slice 0089: lines of the old Access/VBA client (X-Api-Key, no bearer) go here
+# instead, so their traffic no longer pushes K-BOT history out of the rotation.
+VBA_LOG_PATH = 'api_server_vba.log'
 
 
 class RequestIPFilter(logging.Filter):
@@ -45,13 +48,47 @@ class SessionTagFilter(logging.Filter):
         return True
 
 
+def is_legacy_request():
+    """
+    True for a request of the old Access/VBA client: it sends `X-Api-Key` and no
+    `Authorization` header. The same test `require_session_or_api_key` uses to
+    pick the legacy path. Outside a request (startup, background work) -> False.
+    """
+    if not has_request_context():
+        return False
+    try:
+        headers = request.headers
+        return bool(headers.get('X-Api-Key')) and not headers.get('Authorization')
+    except Exception:              # the split must never lose a line
+        return False
+
+
+class LegacySplitFilter(logging.Filter):
+    """
+    Slice 0089: sends each line to exactly one of the two files. `legacy=True`
+    accepts only lines of old VBA requests (api_server_vba.log); `legacy=False`
+    accepts everything else (api_server.log: K-BOT, AUTH_*, startup).
+    """
+    def __init__(self, legacy):
+        super().__init__()
+        self.legacy = legacy
+
+    def filter(self, record):
+        return is_legacy_request() == self.legacy
+
+
+def _file_handler(path, formatter, *filters):
+    handler = RotatingFileHandler(path, maxBytes=10*1024*1024,
+                                  backupCount=SERVER_LOG_BACKUPS)
+    handler.setFormatter(formatter)
+    for f in filters:
+        handler.addFilter(f)
+    return handler
+
+
 def setup_logger():
     log_formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(ip)s - %(session_tag)s%(message)s')
-
-    log_handler = RotatingFileHandler(SERVER_LOG_PATH, maxBytes=10*1024*1024,
-                                      backupCount=SERVER_LOG_BACKUPS)
-    log_handler.setFormatter(log_formatter)
 
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
@@ -60,9 +97,12 @@ def setup_logger():
         ip_filter = RequestIPFilter()
         session_filter = SessionTagFilter()
 
-        log_handler.addFilter(ip_filter)
-        log_handler.addFilter(session_filter)
-        logger.addHandler(log_handler)
+        # Two files, same format, complementary filters: every line lands in
+        # exactly one of them. The console keeps seeing everything.
+        logger.addHandler(_file_handler(SERVER_LOG_PATH, log_formatter,
+                                        LegacySplitFilter(False), ip_filter, session_filter))
+        logger.addHandler(_file_handler(VBA_LOG_PATH, log_formatter,
+                                        LegacySplitFilter(True), ip_filter, session_filter))
 
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(log_formatter)
