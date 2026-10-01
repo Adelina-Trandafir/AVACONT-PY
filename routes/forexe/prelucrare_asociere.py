@@ -59,6 +59,10 @@ ACTIUNE_IGNORAT = "ignorat"
 ACTIUNE_STERGERE = "stergere"
 ACTIUNE_RECONSTITUIRE = "reconstituire"
 ACTIUNI = (ACTIUNE_ASOCIAT, ACTIUNE_IGNORAT, ACTIUNE_STERGERE, ACTIUNE_RECONSTITUIRE)
+# The fifth one. It has a meaning only on a snapshot that already HAS a link, so a decision
+# may carry it only when it is anchored on `idrh` (a correction, see `ancora`). The anytime
+# editor (routes/forexe/asociere.py) imports the name from here.
+ACTIUNE_DESPRINS = "desprins"
 
 
 class DecizieInvalida(ValueError):
@@ -89,11 +93,21 @@ class StareModificata(Exception):
 # descarcare. Un instantaneu ramas neasezat dintr-o rulare mai veche nu-si mai gasea
 # indicele si ramanea, prin constructie, de nerezolvat din descarcare. Acum are un nume.
 #
+#   ("idrh", n)  `FX_Receptii_H.IDRH` (operator, 01.10.2026). For a CORRECTION: a snapshot
+#                that was already written before this run (the "context" of the proposal),
+#                which the operator moves while placing the download. Its IDRH is a real
+#                key that existed before phase one, so the rollback does not touch it.
+#                Carried as `ancora_idrh`, never as `idrh`: every snapshot dictionary has
+#                an `idrh`, and that one is NOT a name on the rows still to be placed.
+#
 # Ancora se CALCULEAZA din dictionar, nu se stocheaza: editorul de oricand
 # (routes/forexe/asociere.py) pune `rand_istoric = idrh` ca alias pe ambele laturi si
 # imprumuta functiile de aici neschimbat.
 def ancora(x: dict) -> Tuple[str, int]:
-    """Ancora unui instantaneu sau a unei decizii: («rand», indice) sau («idh», ID)."""
+    """Ancora unui instantaneu sau a unei decizii: («rand», n), («idh», n) sau («idrh», n)."""
+    scris = x.get("ancora_idrh")
+    if scris is not None:
+        return ("idrh", int(scris))
     rand = x.get("rand_istoric")
     if rand is not None:
         return ("rand", int(rand))
@@ -105,8 +119,12 @@ def ancora(x: dict) -> Tuple[str, int]:
 
 
 def ancora_text(a: Tuple[str, int]) -> str:
-    """Cum se numeste ancora in mesaje si in jurnal: «rândul 3» / «istoric 5786»."""
-    return f"rândul {a[1]}" if a[0] == "rand" else f"istoric {a[1]}"
+    """Cum se numeste ancora in mesaje si in jurnal: «rândul 3» / «istoric 5786» / «instantaneul 63»."""
+    if a[0] == "rand":
+        return f"rândul {a[1]}"
+    if a[0] == "idrh":
+        return f"instantaneul {a[1]}"
+    return f"istoric {a[1]}"
 
 
 def _ancora_jurnal(x: dict):
@@ -386,22 +404,35 @@ def citeste_instantanee(cursor, cod: str, index_la_id: Dict[int, int],
     return out
 
 
-# Frazele puse pe un instantaneu care nu e blocat de nicio ordonantare si de nicio plata,
-# dar nici nu se poate misca DE AICI: in ingestie deciziile acopera doar randurile de
-# asezat, si nimic altceva. Doua cazuri, si nu se confunda -- unul are o legatura scrisa,
-# celalalt n-are cu ce sa fie rezolvat acum.
-MOTIV_CONTEXT = (
-    "Legătura este deja scrisă. Se corectează în editorul de asociere, nu în timpul "
-    "descărcării."
-)
+# The sentence put on a snapshot that no ordonantare freezes but that still cannot be
+# moved from the download: it was born in THIS run and has no anchor, so its IDRH dies
+# with the rollback of phase one and nothing can name it in phase two.
+# (`MOTIV_CONTEXT` -- "the link is already written, correct it in the anytime editor" --
+# is gone since 01.10.2026: an already written link is corrected right here.)
 MOTIV_FARA_ISTORIC = (
     "Nu poate fi numit din descărcare: fie nu are rând de istoric, fie împarte rândul "
     "cu alt instantaneu neașezat. Se așază în editorul de asociere."
 )
 
 
+_IDRH_SCRISE_SQL = "SELECT IDRH FROM FX_Receptii_H WHERE CodAngajament = %s"
+
+
+def citeste_idrh_scrise(cursor, cod: str) -> Set[int]:
+    """
+    The IDRHs the angajament has BEFORE the run writes anything.
+
+    Called first thing in both phases, before steps 1-8. These are the only snapshots a
+    correction may name by `idrh`: they existed before phase one, so its rollback leaves
+    their key alone and phase two finds the same row under the same number.
+    """
+    cursor.execute(_IDRH_SCRISE_SQL, (cod,))
+    return {int(r["IDRH"]) for r in cursor.fetchall()}
+
+
 def citeste_instantanee_context(cursor, cod: str, de_decis: Set[int],
-                                blocaje: Dict[int, List[str]]) -> List[dict]:
+                                blocaje: Dict[int, List[str]],
+                                idrh_scrise: Set[int]) -> List[dict]:
     """
     RESTUL instantaneelor angajamentului: tot ce nu e de decis in rularea asta.
 
@@ -417,10 +448,21 @@ def citeste_instantanee_context(cursor, cod: str, de_decis: Set[int],
     fiindca F15 si F16 se refera la lant, nu la ce se adauga acum. Pana la felia asta,
     formularul era singurul care nu vedea ce vede vetoul.
 
-    SE ARATA, NU SE MISCA. Toate ies cu `blocat = True`: acoperirea ceruta de
-    `verifica_acoperirea` e exact multimea de decis, iar o decizie pentru un rand din
-    afara ei e respinsa (si pe drept -- ar rescrie tacut legaturi vechi la fiecare
-    descarcare). Corectarea unei legaturi vechi ramane treaba editorului de oricand.
+    THEY CAN BE MOVED, UNLESS AN ORDONANTARE FREEZES THEM (operator, 01.10.2026: "I need
+    to edit ANY reception when new data is downloaded, as long as there is no ordonantare
+    for it"). Until then every row here left with `blocat = True`, so a wrong old link
+    could not be corrected while placing the download -- and since F15 judges the whole
+    chain, that old link could make the download itself impossible to save. Now:
+
+      * a placed row is blocked only by the rule of the anytime editor (`blocaje`, from
+        `asociere.citeste_blocaje`: an ordonantare dated on or after the snapshot's day);
+      * a row born in THIS run that is not in `de_decis` (no history row, or a duplicate)
+        stays blocked with `MOTIV_FARA_ISTORIC` -- its IDRH does not survive the rollback;
+      * everything else is free. Silence still means "leave it as it is": coverage is
+        asked only for `de_decis`, and a moved row travels back as a decision anchored on
+        `idrh` (see `ancora`, `verifica_corecturile`).
+
+    `idrh_scrise` = `citeste_idrh_scrise`, read before the steps ran.
 
     `de_decis` sunt IDRH-urile intoarse de `citeste_instantanee`. Complementul lor, nu un
     filtru SQL paralel: asa nu poate exista un rand pe care sa nu-l ia niciuna dintre cele
@@ -447,9 +489,11 @@ def citeste_instantanee_context(cursor, cod: str, de_decis: Set[int],
         if idrh in de_decis:
             continue
         idrr = int(r["IDRR"]) if r["IDRR"] is not None else 0
-        motive = list(blocaje.get(idrh, []))
-        if not motive:
-            motive = [MOTIV_CONTEXT if idrr else MOTIV_FARA_ISTORIC]
+        if idrh not in idrh_scrise:
+            motive = [MOTIV_FARA_ISTORIC]
+        else:
+            # An unplaced row has no link, so nothing to freeze (same as the anytime editor).
+            motive = list(blocaje.get(idrh, [])) if idrr else []
         out.append({
             "idrh": idrh,
             "idrr": idrr,
@@ -461,17 +505,22 @@ def citeste_instantanee_context(cursor, cod: str, de_decis: Set[int],
             "stergere": bool(r["EsteStergere"]),
             # F17: marcat de operator ca «nu consemneaza nicio schimbare».
             "ignorat": bool(r["Sters"]),
-            "blocat": True,
+            "blocat": bool(motive),
             "motive": motive,
             "linii": linii.get(idrh, []),
         })
 
-    journal.section("instantaneele deja așezate, doar arătate (%d)" % len(out))
+    journal.section("instantaneele scrise dinainte (%d; se pot muta cele neblocate)"
+                    % len(out))
     journal.table(
-        ("IDRH", "IDRR", "DataH", "Total", "tip", "stergere", "ignorat", "linii"),
+        ("IDRH", "IDRR", "DataH", "Total", "tip", "stergere", "ignorat", "blocat",
+         "linii"),
         [(i["idrh"], i["idrr"], i["data_h"], i["total"], i["tip_receptie"],
-          i["stergere"], i["ignorat"], journal.sume_pe_indicator(i["linii"]))
-         for i in out])
+          i["stergere"], i["ignorat"], i["blocat"],
+          journal.sume_pe_indicator(i["linii"])) for i in out])
+    for i in out:
+        if i["motive"]:
+            journal.line("IDRH %s blocat: %s", i["idrh"], " ".join(i["motive"]))
     return out
 
 
@@ -578,26 +627,32 @@ def normalizeaza_decizii(brut) -> List[dict]:
     for i, item in enumerate(brut):
         if not isinstance(item, dict):
             raise DecizieInvalida(f"«decizii»[{i}] nu este un obiect.")
-        # Ancora: EXACT una dintre `rand_istoric` (F24) si `idh` (F34). `null` e absenta,
-        # nu o valoare -- clientul .NET scrie null pe campul pe care nu l-a pus.
+        # Ancora: EXACT una dintre `rand_istoric` (F24), `idh` (F34) si `idrh` (a
+        # correction on a snapshot written before this run). `null` e absenta, nu o
+        # valoare -- clientul .NET scrie null pe campul pe care nu l-a pus.
         rand = item.get("rand_istoric")
         idh = item.get("idh")
-        if (rand is None) == (idh is None):
+        scris = item.get("idrh")
+        if sum(x is not None for x in (rand, idh, scris)) != 1:
             raise DecizieInvalida(
-                f"«decizii»[{i}]: trebuie exact una dintre «rand_istoric» și «idh»."
+                f"«decizii»[{i}]: trebuie exact una dintre «rand_istoric», «idh» și "
+                f"«idrh»."
             )
         try:
             rand = None if rand is None else int(rand)
             idh = None if idh is None else int(idh)
+            scris = None if scris is None else int(scris)
         except (TypeError, ValueError) as err:
             raise DecizieInvalida(
-                f"«decizii»[{i}]: «rand_istoric» / «idh» nu este un număr."
+                f"«decizii»[{i}]: «rand_istoric» / «idh» / «idrh» nu este un număr."
             ) from err
         actiune = str(item.get("actiune") or "").strip()
-        if actiune not in ACTIUNI:
+        # «desprins» only on a correction: a row still to be placed has no link to drop.
+        permise = ACTIUNI + (ACTIUNE_DESPRINS,) if scris is not None else ACTIUNI
+        if actiune not in permise:
             raise DecizieInvalida(
                 f"«decizii»[{i}]: «actiune» «{actiune}» nu este cunoscută "
-                f"(permise: {', '.join(ACTIUNI)})."
+                f"(permise: {', '.join(permise)})."
             )
         data_h = item.get("data_h")
         if not data_h:
@@ -644,14 +699,16 @@ def normalizeaza_decizii(brut) -> List[dict]:
                 raise DecizieInvalida(
                     f"«decizii»[{i}] (reconstituire): «idrr» / «rand_receptie» nu au "
                     f"sens — recepția încă nu există.")
-        else:   # ignorat
+        else:   # ignorat, desprins
             if any(tinte):
                 raise DecizieInvalida(
-                    f"«decizii»[{i}] (ignorat): nu poate purta o recepție.")
+                    f"«decizii»[{i}] ({actiune}): nu poate purta o recepție.")
 
         out.append({
             "rand_istoric": rand,
             "idh": idh,
+            # None on a row to place; the real IDRH on a correction. See `ancora`.
+            "ancora_idrh": scris,
             "actiune": actiune,
             "data_h": str(data_h),
             "idrr": idrr,
@@ -722,6 +779,54 @@ def verifica_acoperirea(decizii: List[dict], instantanee: List[dict]) -> Dict[in
             f"({', '.join(ancora_text(x) for x in sorted(lipsa)[:20])}"
             f"{'…' if len(lipsa) > 20 else ''})."
         )
+    return vazute
+
+
+def este_corectura(d: dict) -> bool:
+    """A decision anchored on `idrh`: it moves a snapshot written before this run."""
+    return d.get("ancora_idrh") is not None
+
+
+def verifica_corecturile(corecturi: List[dict], context: List[dict]) -> Dict[int, dict]:
+    """
+    The corrections of this save, checked against the snapshots written before the run.
+
+    Returns {IDRH: snapshot}. NO coverage is asked here, unlike `verifica_acoperirea`:
+    for an already written link silence means "leave it as it is", which is a true answer.
+
+    Everything else RAISES, on the server, whatever the form already knows:
+      * the row must be one of the context rows -- never one still to be placed, and
+        never one of another angajament;
+      * once per save;
+      * `data_h` must match, so a stale decision file fails loudly;
+      * the link must not be frozen -- an ordonantare may have appeared between the
+        proposal and the save, and the client has no way to know.
+    """
+    dupa_idrh = {i["idrh"]: i for i in context}
+    vazute: Dict[int, dict] = {}
+    for d in corecturi:
+        idrh = d["ancora_idrh"]
+        inst = dupa_idrh.get(idrh)
+        if inst is None:
+            raise DecizieInvalida(
+                f"Instantaneul {idrh} nu este printre cele deja scrise ale acestui "
+                f"angajament."
+            )
+        if idrh in vazute:
+            raise DecizieInvalida(
+                f"Instantaneul {idrh} apare de două ori în «decizii».")
+        if not _acelasi_moment(d["data_h"], inst["data_h"]):
+            raise DecizieInvalida(
+                f"Instantaneul {idrh}: «data_h» trimisă ({d['data_h']}) nu se potrivește "
+                f"cu cea din bază ({inst['data_h']}). Reluați descărcarea."
+            )
+        if inst["blocat"]:
+            raise DecizieInvalida(
+                f"Legătura instantaneului de la {inst['data_h']} nu mai poate fi "
+                f"modificată — " + " ".join(inst["motive"])
+            )
+        vazute[idrh] = inst
+    journal.line("corecturi: %d pe instantanee scrise dinainte", len(corecturi))
     return vazute
 
 
@@ -1022,7 +1127,8 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
                         f15_ca_avertisment: bool = False,
                         avertismente: Optional[List[str]] = None,
                         id_stabil: bool = True,
-                        detaliu_incomplet: Optional[Set[int]] = None) -> None:
+                        detaliu_incomplet: Optional[Set[int]] = None,
+                        f15_doar_semn: Optional[Set[int]] = None) -> None:
     """
     Toate regulile care pot spune «nu acolo», rulate pe tabloul REZULTAT.
 
@@ -1074,6 +1180,12 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
     against are known to be wrong or stale. For those receptions only, F14 and F15 write a
     warning instead of refusing -- the placement is the operator's, the lines are fixed by
     refreshing the reception. F16 speaks only about snapshots and stays a veto.
+
+    `f15_doar_semn` (01.10.2026) names the receptions that only LOSE snapshots in this
+    save -- a correction took one off them and nothing was put on. For those F15 writes a
+    warning instead of refusing, for the very reason the anytime editor lowers it: a chain
+    whose last snapshot was taken off does not close by definition, and a veto there would
+    forbid exactly the correction. A reception that GAINS a snapshot keeps the veto.
     """
     if f15_ca_avertisment and avertismente is None:
         raise ValueError(
@@ -1091,6 +1203,11 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
         incomplet = idrr in (detaliu_incomplet or set())
         if incomplet:
             journal.line("recepția %s are detaliul tăiat în rularea asta: F14 și F15 doar "
+                         "semnalează", idrr)
+        # 01.10.2026: the reception only loses snapshots in this save -- F15 only warns.
+        doar_pierde = idrr in (f15_doar_semn or set())
+        if doar_pierde:
+            journal.line("recepția %s doar pierde instantanee în salvarea asta: F15 doar "
                          "semnalează", idrr)
 
         # The whole chain as the rules below see it, plus the reception it has to
@@ -1170,6 +1287,10 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
             """Veto in ingestie, semnalare in editorul de oricand. Vezi docstring-ul."""
             if f15_ca_avertisment:
                 avertismente.append(mesaj)
+            elif doar_pierde:
+                journal.line("F15 doar semnalează: recepția doar a pierdut instantanee")
+                if avertismente is not None:
+                    avertismente.append(mesaj)
             elif incomplet:
                 # Slice 0091: the reception's lines are the stale ones, not the chain.
                 journal.line("F15 doar semnalează: detaliul recepției a venit tăiat")
@@ -1293,6 +1414,22 @@ _H_IGNORA_SQL = (
     "UPDATE FX_Receptii_H SET IDRR = NULL, Sters = 1 WHERE IDRH = %s"
 )
 _R_MARCHEAZA_STEARSA_SQL = "UPDATE FX_Receptii_R SET Sters = 1 WHERE IDRR = %s"
+# The three statements a CORRECTION needs on top of the ones above. The same text as in
+# routes/forexe/asociere.py (`_H_DESPRINDE_SQL`, `_H_IGNORA_SQL`, `_R_DEMARCHEAZA_SQL`):
+# that file imports from this one, so they cannot be borrowed the other way round.
+# A row that already had a link may be the deletion row of its chain, hence
+# `EsteStergere = 0` on both, and the reception it leaves loses its `Sters` with it.
+_H_DESPRINDE_SCRIS_SQL = (
+    "UPDATE FX_Receptii_H SET IDRR = NULL, Sters = 0, EsteStergere = 0 WHERE IDRH = %s"
+)
+_H_IGNORA_SCRIS_SQL = (
+    "UPDATE FX_Receptii_H SET IDRR = NULL, Sters = 1, EsteStergere = 0 WHERE IDRH = %s"
+)
+_R_DEMARCHEAZA_SQL = (
+    "UPDATE FX_Receptii_R SET Sters = 0 WHERE IDRR = %s "
+    "  AND NOT EXISTS (SELECT 1 FROM (SELECT IDRH FROM FX_Receptii_H "
+    "                                 WHERE IDRR = %s AND EsteStergere = 1) X)"
+)
 _H_TIP_SQL = "UPDATE FX_Receptii_H SET TipReceptie = %s, HASH = %s WHERE IDRH = %s"
 # F32: un antet gol nu e in lant, deci nu poate fi «ultimul» si nu ia `Final`.
 _H_LANT_SQL = (
@@ -1313,9 +1450,18 @@ _H_MEMBRI_LANT_SQL = (
 def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict],
                    receptii: List[dict], warnings: List[str],
                    ancore: Optional[Dict[int, int]] = None,
-                   detaliu_incomplet: Optional[Set[int]] = None) -> Dict[str, int]:
+                   detaliu_incomplet: Optional[Set[int]] = None,
+                   context: Optional[List[dict]] = None) -> Dict[str, int]:
     """
     Faza a doua a pasului 4c. Aplica `decizii` si ignora complet trecerea automata.
+
+    `decizii` holds TWO kinds of rows since 01.10.2026, told apart by their anchor:
+      * placements -- anchored on `rand_istoric` / `idh`, one for EVERY snapshot in
+        `instantanee` (coverage is mandatory, `verifica_acoperirea`);
+      * corrections -- anchored on `idrh`, for snapshots written before this run that the
+        operator moved while placing the download. Partial by nature; checked against
+        `context` (= `citeste_instantanee_context`) by `verifica_corecturile`. Without
+        `context` any correction is refused: it names nothing.
 
     `ancore` = {indice in ListaReceptii -> IDRR}, cele intoarse de
     `step4b_receptii_prelucrare` DIN RULAREA ASTA. Prin ele se rezolva deciziile care
@@ -1327,8 +1473,6 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
 
     Intoarce numaratorile scrise.
     """
-    dupa_ancora = {ancora(i): i for i in instantanee}
-
     journal.section("hotărârile operatorului (%d)" % len(decizii))
     journal.table(
         ("ancora", "acțiune", "IDRR", "rand_receptie", "receptie_noua", "data_h"),
@@ -1337,11 +1481,21 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     journal.line("ancore din pasul 4b (rând ListaReceptii -> IDRR): %s",
                  dict(sorted((ancore or {}).items())) or "(niciuna)")
 
-    verifica_acoperirea(decizii, instantanee)
+    corecturi = [d for d in decizii if este_corectura(d)]
+    verifica_acoperirea([d for d in decizii if not este_corectura(d)], instantanee)
+    corectate = verifica_corecturile(corecturi, context or [])
+
+    # One picture for everything below: the rows to place under their own anchor, the
+    # corrected ones under ("idrh", n). The labels, the chains and the writes then treat
+    # both kinds alike.
+    toate_inst = list(instantanee) + [
+        dict(i, ancora_idrh=i["idrh"]) for i in corectate.values()]
+    dupa_ancora = {ancora(i): i for i in toate_inst}
+
     etichete = verifica_etichetele(decizii)
 
     # 4c-bis mai intai: dupa asta fiecare eticheta e un IDRR real.
-    noi = materializeaza_reconstituite(cursor, cod, decizii, instantanee,
+    noi = materializeaza_reconstituite(cursor, cod, decizii, toate_inst,
                                        etichete, warnings)
 
     # Tabloul receptiilor se reciteste, ca sa contina si cele tocmai create.
@@ -1372,17 +1526,37 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     # --- se construiesc lanturile REZULTATE si se valideaza INAINTE de a scrie ------
     journal.section("ce vrea să facă rularea")
     lanturi: Dict[int, List[dict]] = {}
+    # The receptions that GAIN a snapshot. The rest of `lanturi` only lose some to a
+    # correction, and for those F15 warns instead of refusing (see `valideaza_plasarile`).
+    castiga: Set[int] = set()
     for d in decizii:
+        inst = dupa_ancora[ancora(d)]
+        corectura = este_corectura(d)
+        vechi = (inst.get("idrr") or 0) if corectura else 0
+        # The reception a corrected row leaves is touched too: its chain changes, so its
+        # `Final` / `Partial` and its `Sters` are redone and its chain is checked.
+        if vechi and vechi in toate:
+            lanturi.setdefault(vechi, [])
         if d["actiune"] == ACTIUNE_IGNORAT:
             journal.line("%s (IDRH %s): IGNORAT -- IDRR gol, Sters = 1",
-                         _ancora_jurnal(d), dupa_ancora[ancora(d)]["idrh"])
+                         _ancora_jurnal(d), inst["idrh"])
             continue
-        inst = dupa_ancora[ancora(d)]
+        if d["actiune"] == ACTIUNE_DESPRINS:
+            journal.line("%s (IDRH %s): DESPRINS de recepția %s -- IDRR gol, Sters = 0",
+                         _ancora_jurnal(d), inst["idrh"], vechi or "(niciuna)")
+            continue
         idrr_tinta = _tinta(d)
-        journal.line("%s (IDRH %s, %s, total %.2f): %s -> recepția %s",
+        journal.line("%s (IDRH %s, %s, total %.2f): %s -> recepția %s%s",
                      _ancora_jurnal(d), inst["idrh"], journal.moment(inst["data_h"]),
-                     inst["total"], d["actiune"].upper(), idrr_tinta)
+                     inst["total"], d["actiune"].upper(), idrr_tinta,
+                     (" (era pe %s)" % (vechi or "niciuna")) if corectura else "")
+        if corectura:
+            # The deletion flag AFTER the correction, as in the anytime editor: a former
+            # deletion row moved elsewhere must not be read as one any more.
+            inst = dict(inst, stergere=d["actiune"] == ACTIUNE_STERGERE)
         lanturi.setdefault(idrr_tinta, []).append(inst)
+        if not corectura or idrr_tinta != vechi:
+            castiga.add(idrr_tinta)
 
     # Instantaneele DEJA asociate ale acelorasi receptii fac parte din lant si ele --
     # F15 si F16 se refera la lantul intreg, nu doar la ce se adauga acum.
@@ -1391,6 +1565,9 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
         for r in cursor.fetchall():
             idrh = int(r["IDRH"])
             if any(x["idrh"] == idrh for x in lanturi[idrr]):
+                continue
+            # A corrected row is where its correction puts it, not where the table has it.
+            if idrh in corectate:
                 continue
             cursor.execute(
                 "SELECT CodIndicator, CodAI, CodSSI, IdClsf, Valoare FROM FX_Receptii "
@@ -1416,21 +1593,31 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     # tranzactiei asteia, deci numarul nu e un nume pe care operatorul sa-l poata cauta --
     # «Recepția 235» nu exista nicaieri in lista lui (plangere, 09.09.2026). Mesajele o
     # numesc prin data si valoare, adica prin chiar textul randului din formular.
-    # `warnings` ramane trecut ca F15 sa aiba unde scrie daca vreodata coboara si aici;
-    # acum e veto (`f15_ca_avertisment` implicit False), deci lista nu se atinge.
+    # `warnings` is where F15 writes when it only warns: on a reception whose detail came
+    # cut (slice 0091) and on one that only loses snapshots to a correction (01.10.2026).
+    # Everywhere else it stays a veto (`f15_ca_avertisment` implicit False).
     valideaza_plasarile(lanturi, toate, avertismente=warnings, id_stabil=False,
-                        detaliu_incomplet=detaliu_incomplet)
+                        detaliu_incomplet=detaliu_incomplet,
+                        f15_doar_semn=set(lanturi) - castiga)
 
     # --- scrierea ---------------------------------------------------------------
-    numarat = {"asociat": 0, "ignorat": 0, "stergere": 0, "reconstituit": len(noi)}
+    numarat = {"asociat": 0, "ignorat": 0, "stergere": 0, "desprins": 0,
+               "reconstituit": len(noi)}
     for d in decizii:
         inst = dupa_ancora[ancora(d)]
+        if d["actiune"] == ACTIUNE_DESPRINS:
+            # Only a correction can carry it (`normalizeaza_decizii`).
+            cursor.execute(_H_DESPRINDE_SCRIS_SQL, (inst["idrh"],))
+            numarat["desprins"] += 1
+            continue
+
         if d["actiune"] == ACTIUNE_IGNORAT:
             # F17 / 1.6: o salvare care nu a consemnat nicio schimbare. `Sters = 1` pe
             # instantaneu, `IDRR` lasat gol. A ignora nu pierde nimic; a forta pe o
             # receptie injecteaza o valoare falsa in cronologia ei, la acea data, si
             # verificarea de capat de lant NU o prinde daca aterizeaza la mijloc.
-            cursor.execute(_H_IGNORA_SQL, (inst["idrh"],))
+            cursor.execute(_H_IGNORA_SCRIS_SQL if este_corectura(d) else _H_IGNORA_SQL,
+                           (inst["idrh"],))
             numarat["ignorat"] += 1
             continue
 
@@ -1453,6 +1640,13 @@ def aplica_decizii(cursor, cod: str, decizii: List[dict], instantanee: List[dict
     # --- Final / Partial, o singura data per receptie ---------------------------
     journal.section("ce s-a scris")
     journal.line("legături: %s", numarat)
+    # A reception whose deletion row was taken off by a correction is no longer deleted:
+    # the flag on R is the shadow of that one snapshot (same statement as the anytime editor).
+    if corecturi:
+        for idrr in sorted(lanturi):
+            cursor.execute(_R_DEMARCHEAZA_SQL, (idrr, idrr))
+            if cursor.rowcount:
+                journal.line("recepția %s nu mai are rând de ștergere: Sters = 0", idrr)
     for idrr in sorted(lanturi):
         recalculeaza_final(cursor, idrr)
 

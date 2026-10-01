@@ -925,9 +925,15 @@ def step4a_populeaza_receptii(cursor, cod: str,
 # CIOCNIRE, nu o identificare. Fara `Sters = 0` mai jos, o receptie creata azi in aceeasi
 # zi calendaristica in care fusese creata una stearsa in martie s-ar potrivi peste aceea
 # si i-ar suprascrie tacut valorile.
+# Same-day receptions (operator, 30.09.2026): ordered by `RangZi` (NULL last, i.e. rows
+# written before the column), then `IDRR`. `_potriveste_ziua` decides which is which.
 _R_CANDIDATI_SQL = (
-    "SELECT IDRR, DataR, SumaAntet FROM FX_Receptii_R "
-    "WHERE CodAngajament = %s AND Sters = 0 AND DATE(DataR) = %s"
+    "SELECT IDRR, DataR, SumaAntet, NrCrtForexe, RangZi FROM FX_Receptii_R "
+    "WHERE CodAngajament = %s AND Sters = 0 AND DATE(DataR) = %s "
+    "ORDER BY RangZi IS NULL, RangZi, IDRR"
+)
+_R_UPDATE_POZITIE_SQL = (
+    "UPDATE FX_Receptii_R SET NrCrtForexe = %s, RangZi = %s WHERE IDRR = %s"
 )
 _RHR_SNAP_SQL = (
     "SELECT IDRHR, CodIndicator, Valoare FROM FX_Receptii_RHR WHERE IDRR = %s"
@@ -938,8 +944,8 @@ _MAX_NRCRT_R_SQL = (
 _R_INSERT_SQL = (
     "INSERT INTO FX_Receptii_R "
     "(NRCRT, CodAngajament, Tip, DataR, SumaAntet, Descriere, TipReceptie, HASH, "
-    " Preluat, Sters, Reconstituit) "
-    "VALUES (%s, %s, %s, %s, %s, %s, 'NOU', %s, 1, 0, 0)"
+    " Preluat, Sters, Reconstituit, NrCrtForexe, RangZi) "
+    "VALUES (%s, %s, %s, %s, %s, %s, 'NOU', %s, 1, 0, 0, %s, %s)"
 )
 _R_UPDATE_SUMA_SQL = (
     "UPDATE FX_Receptii_R SET SumaAntet = %s, TipReceptie = 'EDIT' WHERE IDRR = %s"
@@ -1130,6 +1136,99 @@ def detaliu_incomplet(detalii: list, suma: float, nr_indicatori: int) -> Optiona
     return None
 
 
+def _intreg_optional(v) -> Optional[int]:
+    """A positive int from the payload, or None (absent, empty, not a number)."""
+    try:
+        n = int(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _potriveste_ziua(randuri_zi: List[dict], candidati: List[dict]) -> Dict[int, Optional[dict]]:
+    """
+    Which existing reception each FOREXE row of ONE DAY is (operator, 30.09.2026).
+
+    `randuri_zi` = [{"i", "suma", "rang"}] ordered by rank; `candidati` = the day's
+    non-deleted `FX_Receptii_R` rows. Returns {payload index: candidate row or None = new}.
+
+    Until now the first candidate of the date was taken for EVERY row of that date, so two
+    receptions of the same day collapsed into one row (the second overwrote the first).
+    The tie breaker is `RangZi`, the rank among the day's receptions in FOREXE list order,
+    stamped by K-BOT on every row before anything is dropped. Only the order WITHIN the day
+    is used: the whole-list position shifts when a reception with another date is added or
+    deleted, the order of one day's receptions does not (ASSUMPTION: FOREXE keeps a fixed
+    order among receptions of the same date).
+
+      1. rank: the candidate with the same stored `RangZi`;
+      2. value wins over rank: when that candidate has another value, and a candidate of
+         the day that no row claimed has EXACTLY the row's value, the row takes it (a
+         same-day reception deleted on the site shifts the ranks after it);
+      3. legacy rows (`RangZi` NULL, written before the column): exact value first, then
+         in IDRR order;
+      4. what is left is a new reception.
+
+    A candidate with a stored rank is never taken by value alone (step 3 is legacy only):
+    «Receptie Editata» sends ONE row for a new reception, and a same-day, same-value older
+    reception must not swallow it.
+    """
+    def val(x) -> float:
+        return round(float(x or 0), 2)
+
+    ales: Dict[int, Optional[dict]] = {r["i"]: None for r in randuri_zi}
+    luati: set = set()
+
+    def liber(c) -> bool:
+        return int(c["IDRR"]) not in luati
+
+    # 1. rank
+    for r in randuri_zi:
+        if r["rang"] is None:
+            continue
+        for c in candidati:
+            if liber(c) and _intreg_optional(c.get("RangZi")) == r["rang"]:
+                ales[r["i"]] = c
+                luati.add(int(c["IDRR"]))
+                break
+
+    # 2. value wins over rank
+    for r in randuri_zi:
+        c = ales[r["i"]]
+        if c is None or val(c.get("SumaAntet")) == val(r["suma"]):
+            continue
+        for alt in candidati:
+            if liber(alt) and val(alt.get("SumaAntet")) == val(r["suma"]):
+                journal.line("recepția %s și rândul %d din ListaReceptii: rangul %s cade pe "
+                             "altă valoare (%.2f), valoarea %.2f e pe recepția %s -- se ia "
+                             "valoarea", c["IDRR"], r["i"], r["rang"],
+                             val(c.get("SumaAntet")), val(r["suma"]), alt["IDRR"])
+                luati.discard(int(c["IDRR"]))
+                ales[r["i"]] = alt
+                luati.add(int(alt["IDRR"]))
+                break
+
+    # 3. legacy rows: exact value first, then IDRR order
+    vechi = sorted((c for c in candidati if _intreg_optional(c.get("RangZi")) is None),
+                   key=lambda x: int(x["IDRR"]))
+    for r in randuri_zi:
+        if ales[r["i"]] is not None:
+            continue
+        for c in vechi:
+            if liber(c) and val(c.get("SumaAntet")) == val(r["suma"]):
+                ales[r["i"]] = c
+                luati.add(int(c["IDRR"]))
+                break
+    for r in randuri_zi:
+        if ales[r["i"]] is not None:
+            continue
+        for c in vechi:
+            if liber(c):
+                ales[r["i"]] = c
+                luati.add(int(c["IDRR"]))
+                break
+    return ales
+
+
 def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
                                indicatori: Dict[str, dict],
                                incomplete: Optional[List[dict]] = None
@@ -1158,9 +1257,13 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
     caror receptie s-a NASCUT in rularea asta -- restul au un `IDRR` real, dinainte, care
     nu se misca.
 
-    Se numara receptia ca «nascuta acum» dupa IDRR, nu dupa ramura care a rulat: doua
-    randuri de payload din aceeasi zi se potrivesc pe acelasi rand, deci al doilea poate
-    ajunge, prin potrivire, pe o receptie pe care tocmai a inserat-o primul.
+    Se numara receptia ca «nascuta acum» dupa IDRR, nu dupa ramura care a rulat.
+
+    SAME-DAY RECEPTIONS (operator, 30.09.2026). Matching used to be by date only, taking
+    the first candidate, so two receptions of one day collapsed into one row. Now the rows
+    of a day are matched together, on the rank within the day (`RangZi`), with the value as
+    a safety net -- see `_potriveste_ziua`. Candidates are read BEFORE any insert, so a row
+    can no longer land on a reception another row of this run has just created.
 
     CUT `Detaliu` (slice 0091). A row whose `Detaliu` fails `detaliu_incomplet` does not
     touch the reception's lines: an EXISTING reception keeps its header and its `RHR`
@@ -1193,22 +1296,60 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
     nascute = set()
     ancore: Dict[int, int] = {}
 
+    # --- the same-day tie breaker (operator, 30.09.2026) --------------------------------
+    # Every row is read first, so the rows of one day are matched TOGETHER against that
+    # day's receptions (`_potriveste_ziua`). K-BOT stamps `NrCrtForexe` (position in the
+    # FOREXE list) and `RangZi` (rank among the day's rows) on every row before any row is
+    # dropped. A package without them (an older K-BOT, a package saved before) falls back
+    # to the payload order -- right for a full list, the best there is otherwise.
+    citite: List[dict] = []
+    rang_din_payload: Dict = {}
     for i, rec in enumerate(randuri):
         if not isinstance(rec, dict):
             raise ValueError(f"{TABLE_RECEPTII}[{i}] nu este un obiect.")
         if "Detaliu" not in rec or rec["Detaliu"] is None:
             raise ValueError(f"{TABLE_RECEPTII}[{i}]: lipsește colecția «Detaliu».")
-
         unde = f"{TABLE_RECEPTII}[{i}]"
-        # `Detaliu` E imbricat, prin constructie: `ForEachVar` peste `ListaReceptii` il
-        # numeste in `collectFields`, iar un `ScrapeTable` interior il scrie cu `saveTo`.
-        detalii = cere_lista(rec["Detaliu"], unde, "Detaliu")
-
-        # Restul coloanelor sunt scalare, si o cer explicit.
         data_r = fx_receptii_parse_ro_date(text_celula(rec.get("Data"), unde, "Data"))
         if data_r is None:
             raise ValueError(f"{unde}: «Data» lipsește sau e invalidă.")
         suma = parse_loose_number(text_celula(rec.get("Suma"), unde, "Suma"))
+        zi = data_r.date() if hasattr(data_r, "date") else data_r
+        rang_din_payload[zi] = rang_din_payload.get(zi, 0) + 1
+        rang = _intreg_optional(rec.get("RangZi"))
+        pozitie = _intreg_optional(rec.get("NrCrtForexe"))
+        citite.append({"i": i, "zi": zi, "data_r": data_r, "suma": suma,
+                       "rang": rang if rang is not None else rang_din_payload[zi],
+                       "pozitie": pozitie if pozitie is not None else i + 1,
+                       "stampilat": pozitie is not None})
+
+    # How FOREXE orders the list -- recorded, not relied on (only the order within a day is).
+    cu_pozitie = sorted((x for x in citite if x["stampilat"]), key=lambda x: x["pozitie"])
+    if any(a["zi"] > b["zi"] for a, b in zip(cu_pozitie, cu_pozitie[1:])):
+        journal.line("lista de recepții din FOREXE NU e în ordinea datelor: %s",
+                     ", ".join(f"{x['pozitie']}={x['zi']}" for x in cu_pozitie))
+
+    potrivite: Dict[int, Optional[dict]] = {}
+    for zi in sorted({x["zi"] for x in citite}):
+        ai_zilei = sorted((x for x in citite if x["zi"] == zi), key=lambda x: x["rang"])
+        cursor.execute(_R_CANDIDATI_SQL, (cod, zi))
+        candidati = cursor.fetchall()
+        potrivite.update(_potriveste_ziua(ai_zilei, candidati))
+        if len(ai_zilei) > 1 or len(candidati) > 1:
+            journal.line("ziua %s: %s", zi, "; ".join(
+                f"rândul {x['i']} (rang {x['rang']}, {x['suma']:.2f}) -> "
+                + (f"recepția {potrivite[x['i']]['IDRR']}" if potrivite[x['i']] else "NOUĂ")
+                for x in ai_zilei))
+
+    for x in citite:
+        i = x["i"]
+        rec = randuri[i]
+        unde = f"{TABLE_RECEPTII}[{i}]"
+        # `Detaliu` E imbricat, prin constructie: `ForEachVar` peste `ListaReceptii` il
+        # numeste in `collectFields`, iar un `ScrapeTable` interior il scrie cu `saveTo`.
+        detalii = cere_lista(rec["Detaliu"], unde, "Detaliu")
+        data_r = x["data_r"]
+        suma = x["suma"]
         # Hash-ul de identitate foloseste `Tip`, NU `TipReceptie` -- verificat citind
         # ObtineDateHeader.
         #
@@ -1229,9 +1370,7 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
             text_celula(rec.get("Tip"), unde, "Tip"),
             descriere_r)
 
-        cursor.execute(_R_CANDIDATI_SQL, (cod, data_r))
-        candidati = cursor.fetchall()
-        gasit = candidati[0] if candidati else None
+        gasit = potrivite.get(i)
 
         motiv = detaliu_incomplet(detalii, suma, nr_indicatori)
         if motiv is not None:
@@ -1275,7 +1414,7 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
             cursor.execute(_R_INSERT_SQL, (
                 nr_crt, cod, rec.get("Tip"), data_r, suma,
                 None if rec.get("DescriereReceptie") is None else descriere_r,
-                hash_ident))
+                hash_ident, x["pozitie"], x["rang"]))
             idrr = int(cursor.lastrowid)
             nascute.add(idrr)
             nr_crt += 1
@@ -1296,6 +1435,14 @@ def step4b_receptii_prelucrare(cursor, cod: str, randuri: List[dict],
                     "VECHI" if d["CodIndicator"] in vazuti else "NOU"))
                 vazuti.add(d["CodIndicator"])
                 rhr_scrise += 1
+
+        if gasit is not None and (
+                _intreg_optional(gasit.get("NrCrtForexe")) != x["pozitie"]
+                or _intreg_optional(gasit.get("RangZi")) != x["rang"]):
+            # The row's place in FOREXE is identity, not header data: stamped even when a
+            # cut detail left the header untouched above.
+            cursor.execute(_R_UPDATE_POZITIE_SQL,
+                           (x["pozitie"], x["rang"], int(gasit["IDRR"])))
 
         if idrr in nascute:
             ancore[i] = idrr

@@ -79,6 +79,7 @@ from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 
 from .ddf_stare import are_stare_trimitere
+from .print_count_column import ddf_print_sql
 
 from . import forexe_bp
 
@@ -123,7 +124,9 @@ _SQL_REVIZII = (
     "          WHERE sa.IDREV = r.IDREV), 0) AS TotalRevizie, "
     "p.Sha256, p.Dimensiune, p.DataModif, "
     "{stare} AS StareTrimitere, "
-    "EXISTS (SELECT 1 FROM FX_Rezervari rz WHERE rz.IDREV = r.IDREV) AS AreRezervari "
+    "EXISTS (SELECT 1 FROM FX_Rezervari rz WHERE rz.IDREV = r.IDREV) AS AreRezervari, "
+    # Slice 0099: total prints (PDF row + document row); the literal 0 where sql/0099 has not run.
+    "{prints} AS PrintCount "
     "FROM FX_DDF_REV r "
     "LEFT JOIN FX_DDF_PDF p ON p.IDREV = r.IDREV "
     "WHERE r.IDDF IN (SELECT IDDF FROM FX_DDF WHERE CodAngajament = %s) "
@@ -284,11 +287,11 @@ def get_ddf():
 
         # --- revizii: FX_DDF_REV, cu SUM(ValCur) real ----------------------------------
         stare_sql = "r.StareTrimitere" if are_stare_trimitere(cursor, db_name) else "0"
-        cursor.execute(_SQL_REVIZII.format(stare=stare_sql), (cod,))
+        cursor.execute(_SQL_REVIZII.format(stare=stare_sql, prints=ddf_print_sql(cursor, db_name)), (cod,))
         revizii = []
         for (idrev, iddf, numar_rev, data_rev, desc_scurta, desc_lunga,
              tip, incarcat, preluat, semnatura, total_revizie,
-             pdf_sha, pdf_dim, pdf_modif, stare_trimitere, are_rezervari) in cursor.fetchall():
+             pdf_sha, pdf_dim, pdf_modif, stare_trimitere, are_rezervari, print_count) in cursor.fetchall():
             revizii.append({
                 "idrev": int(idrev) if idrev is not None else None,
                 "iddf": int(iddf) if iddf is not None else None,
@@ -314,6 +317,8 @@ def get_ddf():
                 "pdf_sha256": pdf_sha,
                 "pdf_dimensiune": int(pdf_dim) if pdf_dim is not None else None,
                 "pdf_data_modif": _iso_dt(pdf_modif),
+                # Slice 0099: how many times the document was printed (PDF row + document row).
+                "print_count": int(print_count or 0),
             })
 
         # --- linii: FX_DDF_REV_SA ------------------------------------------------------

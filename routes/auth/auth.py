@@ -34,6 +34,8 @@ Endpoints:
   POST /api/auth/units     (pre-auth)  -> databases this user may open (friendly names)
   POST /api/auth/login     (pre-auth)  -> token + identity + last SS
   POST /api/auth/logout    (token)     -> drop the session
+  GET  /api/auth/my-units  (token)     -> units of the logged-in user (slice 0097)
+  POST /api/auth/switch-unit (token)   -> open another unit of the same user (slice 0097)
   GET  /api/auth/periods   (token)     -> year / SS / CodProgram catalog for a database
   POST /api/auth/last-ss   (token)     -> remember the SS the user just picked
   POST /api/auth/password/code    (token) -> check the current password, e-mail a one-time code
@@ -327,6 +329,106 @@ def auth_logout():
     _log_action(s.username, s.db_name, "LOGOUT",
                 masina=s.pcname, ip=request.remote_addr)
     return jsonify({"ok": True}), 200
+
+
+# ---------------------------------------------------------------------------
+# GET /api/auth/my-units   (token)   -- slice 0097
+# Every unit the logged-in user may open, for the unit selector in the caption bar.
+# The user comes from the session, never from the request.
+# ---------------------------------------------------------------------------
+@auth_bp.route("/api/auth/my-units", methods=["GET"])
+@require_session
+def auth_my_units():
+    username = g.session.username
+    conn = None
+    try:
+        conn = get_kbot_comun_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT Unitati.DC AS DC, Unitati.NumeUnitate AS NumeUnitate, Unitati.CF AS CF,
+                   Unitati_Utilizatori.UN AS UN, Unitati_Utilizatori.Rol AS Rol
+            FROM Unitati_Utilizatori
+            INNER JOIN Unitati ON Unitati_Utilizatori.DC = Unitati.DC
+            WHERE Unitati_Utilizatori.UN = %s
+            ORDER BY Unitati.NumeUnitate
+            """,
+            (username,),
+        )
+        return jsonify({"units": cursor.fetchall()}), 200
+    except mysql.connector.Error as err:
+        logger.error("auth_my_units DB error: %s", err)
+        return jsonify({"error": "Eroare la citirea unităților."}), 500
+    finally:
+        if conn is not None and conn.is_connected():
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/auth/switch-unit   (token)   -- slice 0097
+# Body: { "db_name": "<DC>", "machine": "<pc>" }
+# Opens ANOTHER unit of the same user without the password: the live token already proves
+# the identity (as for /periods). Same authorization check and same answer as /login; the
+# old token is revoked, so one K-BOT keeps one session.
+# ---------------------------------------------------------------------------
+@auth_bp.route("/api/auth/switch-unit", methods=["POST"])
+@require_session
+def auth_switch_unit():
+    s = g.session
+    old_token = g.session_token
+    data = request.get_json(silent=True) or {}
+    db_name = (data.get("db_name") or "").strip()
+    machine = (data.get("machine") or s.pcname or "").strip()
+    if not db_name:
+        return jsonify({"error": "Lipsește 'db_name'."}), 400
+
+    username = s.username
+    conn = None
+    try:
+        conn = get_kbot_comun_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT Rol, LastSS FROM Unitati_Utilizatori WHERE UN = %s AND DC = %s",
+            (username, db_name),
+        )
+        access = cursor.fetchone()
+        if access is None:
+            _log_action(username, db_name, "ACCESS_DENIED", detalii="switch-unit",
+                        rezultat="EROARE", masina=machine, ip=request.remote_addr)
+            return jsonify({"error": "Nu aveți acces la această unitate."}), 403
+        cursor.execute("SELECT NumeUnitate, CF FROM Unitati WHERE DC = %s", (db_name,))
+        unit = cursor.fetchone()
+        if unit is None:
+            logger.error("switch-unit: DC %s in Unitati_Utilizatori but missing from Unitati", db_name)
+            return jsonify({"error": "Unitate neconfigurată."}), 500
+    except mysql.connector.Error as err:
+        logger.error("auth_switch_unit DB error: %s", err)
+        return jsonify({"error": "Eroare la schimbarea unității."}), 500
+    finally:
+        if conn is not None and conn.is_connected():
+            conn.close()
+
+    session_context = {
+        "DbName": db_name,
+        "NumeUnitate": unit["NumeUnitate"],
+        "CF": unit["CF"],
+        "Role": access["Rol"],
+    }
+    token, _sess = STORE.create(
+        username=username, password="", id_unitate=0,
+        db_name=db_name, ctx=session_context, pcname=machine,
+    )
+    STORE.revoke(old_token)
+    logger.info("AUTH_SWITCH_UNIT pid=%s token8=%s un=%s %s -> %s",
+                os.getpid(), token[:8], username, s.db_name, db_name)
+    _log_action(username, db_name, "SWITCH_UNIT", tinta=s.db_name,
+                masina=machine, ip=request.remote_addr)
+
+    return jsonify({
+        "Token": token,
+        "SessionContext": session_context,
+        "LastSS": access["LastSS"],
+    }), 200
 
 
 # ---------------------------------------------------------------------------

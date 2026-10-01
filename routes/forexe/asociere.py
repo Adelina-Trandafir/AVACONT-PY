@@ -117,6 +117,7 @@ from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
 from .prelucrare_pasi import step4d_calculeaza_dif
 from .prelucrare_asociere import (
     ACTIUNE_ASOCIAT,
+    ACTIUNE_DESPRINS,
     ACTIUNE_IGNORAT,
     ACTIUNE_RECONSTITUIRE,
     ACTIUNE_STERGERE,
@@ -134,11 +135,10 @@ from .prelucrare_asociere import (
 
 logger = logging.getLogger(__name__)
 
-# A cincea actiune, care exista DOAR aici: contractul in doua faze nu o are fiindca acolo
-# nimic nu e inca atasat, deci nu e nimic de desprins. E `btnDel_Click` din
-# `frmFX_DUBII_LISTA_HA`.
-ACTIUNE_DESPRINS = "desprins"
-ACTIUNI = (ACTIUNE_ASOCIAT, ACTIUNE_DESPRINS, ACTIUNE_IGNORAT,
+# A cincea actiune, `ACTIUNE_DESPRINS`: `btnDel_Click` din `frmFX_DUBII_LISTA_HA`. Its
+# name lives in `prelucrare_asociere` since 01.10.2026, because the two-phase contract
+# now accepts it too -- only on a correction, a snapshot that already has a link.
+ACTIUNI =(ACTIUNE_ASOCIAT, ACTIUNE_DESPRINS, ACTIUNE_IGNORAT,
            ACTIUNE_STERGERE, ACTIUNE_RECONSTITUIRE)
 
 # Codul-motiv cand clientul cere o schimbare pe un instantaneu blocat. NU e 400: cererea

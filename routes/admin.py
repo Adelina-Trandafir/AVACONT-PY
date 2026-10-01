@@ -461,6 +461,60 @@ def login_reset():
     return jsonify({"ok": True, "username": username, "cleared": removed}), 200
 
 
+@admin_bp.route('/api/admin/users', methods=['GET'])
+@require_api_key
+def users_list():
+    """
+    Every operator row (Unitati_Utilizatori JOIN Unitati, K-BOT server), one row
+    per (UN, DC), plus the live failed-login state of that UN from the running
+    limiter: fails = recent failures, blocked = seconds of lockout left (0 = free).
+    Used by the AvacontPush admin tab.
+    """
+    from routes.auth.ratelimit import LIMITER
+    from utils.database import get_kbot_comun_connection
+
+    conn = None
+    try:
+        conn = get_kbot_comun_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT ua.UN AS un, ua.DC AS dc, u.NumeUnitate AS nume_unitate,
+                   ua.Rol AS rol, ua.LastSS AS last_ss
+            FROM Unitati_Utilizatori AS ua
+            LEFT JOIN Unitati AS u ON u.DC = ua.DC
+            ORDER BY ua.UN, ua.DC
+            """
+        )
+        rows = cursor.fetchall()
+    except Exception as e:
+        logger.error("users_list DB error: %s", e, exc_info=True)
+        return current_app.response_class(
+            json.dumps({"error": f"Eroare la citirea utilizatorilor: {e}"}, ensure_ascii=False),
+            status=500, mimetype="application/json")
+    finally:
+        if conn is not None and conn.is_connected():
+            conn.close()
+
+    states = LIMITER.user_states()
+    users = []
+    for r in rows:
+        un = str(r.get("un") or "")
+        st = states.get(un.strip().lower(), {"fails": 0, "blocked": 0})
+        users.append({
+            "un": un,
+            "dc": r.get("dc") or "",
+            "nume_unitate": r.get("nume_unitate") or "",
+            "rol": r.get("rol") or "",
+            "last_ss": r.get("last_ss") or "",
+            "fails": st["fails"],
+            "blocked": st["blocked"],
+        })
+    return current_app.response_class(
+        json.dumps({"users": users}, ensure_ascii=False), status=200,
+        mimetype="application/json")
+
+
 @admin_bp.route('/api/admin/receptii/refacere', methods=['POST'])
 @require_api_key
 def receptii_refacere_admin():

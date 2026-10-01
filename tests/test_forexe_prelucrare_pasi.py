@@ -636,28 +636,6 @@ def test_cere_lista_accepts_a_list_and_rejects_a_flattened_string():
 # AUTO_INCREMENT nu se deruleaza cu ea, deci `IDRR`-ul unei receptii nascute in faza intai
 # nu mai e al ei in faza a doua. Numele care supravietuieste e INDICELE randului in
 # `ListaReceptii` -- acelasi rationament ca `rand_istoric` pentru instantanee (F24).
-class CursorCuInserturi(FakeCursor):
-    """
-    Ca `FakeCursor`, dar candidatii de la `SELECT IDRR, DataR` se dau PE RAND.
-
-    Fara asta nu se poate scrie cazul in care al doilea rand de payload cade pe receptia
-    pe care tocmai a nascut-o primul: dispecerul pe prefix da acelasi raspuns de fiecare
-    data, deci ori se potrivesc amandoua, ori niciuna.
-    """
-
-    def __init__(self, raspunsuri, candidati_pe_rand):
-        super().__init__(raspunsuri)
-        self.candidati = list(candidati_pe_rand)
-
-    def execute(self, sql, params=None):
-        plat = " ".join(sql.split())
-        if plat.startswith("SELECT IDRR, DataR"):
-            self.executed.append((plat, params))
-            self._result = self.candidati.pop(0) if self.candidati else []
-            return
-        super().execute(sql, params)
-
-
 def test_step4b_anchors_the_reception_it_creates():
     cur = FakeCursor({"SELECT CodIndicator FROM FX_Receptii_RHR": [],
                       "SELECT MAX(NRCRT)": [], "SELECT IDRR, DataR": []})
@@ -687,36 +665,56 @@ def test_step4b_does_not_anchor_a_reception_that_was_already_there():
     assert ancore == {}
 
 
-def test_step4b_anchors_a_row_that_landed_on_a_reception_born_one_row_earlier():
-    """
-    Doua randuri din ACEEASI zi: primul insereaza, al doilea se potriveste pe ce tocmai a
-    inserat primul. Al doilea nu a creat nimic, dar receptia pe care sta e la fel de noua,
-    deci `IDRR`-ul ei e la fel de trecator -- si el are nevoie de ancora.
+# ===========================================================================
+# PASUL 4b -- receptions of the SAME DAY (sliceless, 30.09.2026)
+# ===========================================================================
+# Step 4b used to match a FOREXE row to a stored reception by date only and take the first
+# candidate, so two receptions of one day collapsed into ONE row: the second row landed on
+# the reception the first had just created and overwrote its value. The tie breaker is now
+# `RangZi` (rank within the day, stamped by K-BOT), with the value as a safety net
+# (`_potriveste_ziua`), and candidates are read BEFORE any insert.
+def _pe_zi(rang, pozitie, **kw):
+    rec = _receptie_payload(**kw)
+    rec["RangZi"] = str(rang)
+    rec["NrCrtForexe"] = str(pozitie)
+    return rec
 
-    De-asta «nascuta acum» se masoara pe IDRR, nu pe ramura care a rulat.
-    """
-    cur = CursorCuInserturi(
-        {"SELECT CodIndicator FROM FX_Receptii_RHR": [], "SELECT MAX(NRCRT)": [],
-         "SELECT IDRHR, CodIndicator": []},
-        candidati_pe_rand=[[], "de-completat"])
 
-    # Al doilea rand vede randul inserat de primul. Se completeaza dupa prima inserare,
-    # fiindca abia atunci se stie ce IDRR i-a dat baza.
-    randuri = [_receptie_payload(), _receptie_payload(suma="700,00")]
-    original = cur.execute
-
-    from datetime import date
-
-    def execute(sql, params=None):
-        original(sql, params)
-        if " ".join(sql.split()).startswith("INSERT INTO FX_Receptii_R ") and \
-                cur.candidati and cur.candidati[0] == "de-completat":
-            cur.candidati[0] = [{"IDRR": cur.lastrowid, "DataR": date(2026, 2, 11),
-                                 "SumaAntet": 510.0}]
-
-    cur.execute = execute
+def test_step4b_two_receptions_of_one_day_become_two_receptions():
+    cur = FakeCursor({"SELECT CodIndicator FROM FX_Receptii_RHR": [],
+                      "SELECT MAX(NRCRT)": [], "SELECT IDRR, DataR": []})
+    randuri = [_pe_zi(1, 1, suma="1.723,58"), _pe_zi(2, 2, suma="398,39")]
     _, _, ancore = P.step4b_receptii_prelucrare(cur, COD, randuri, indicatori("AAB"))
 
-    assert len(cur.inserts("FX_Receptii_R")) == 1       # al doilea NU a mai inserat
-    assert sorted(ancore) == [0, 1]                     # dar amandoua sunt ancorate
-    assert ancore[0] == ancore[1]                       # pe aceeasi receptie
+    inserate = cur.inserts("FX_Receptii_R")
+    assert len(inserate) == 2                          # one reception per row, not one for both
+    assert sorted(ancore) == [0, 1]
+    assert ancore[0] != ancore[1]                      # each row anchored on its OWN reception
+    assert [p[4] for p in inserate] == [1723.58, 398.39]
+    assert [p[-2:] for p in inserate] == [(1, 1), (2, 2)]   # (NrCrtForexe, RangZi) stamped
+    # The day's candidates are read once, before anything is inserted.
+    assert sum(1 for sql, _ in cur.executed if sql.startswith("SELECT IDRR, DataR")) == 1
+
+
+def test_step4b_splits_a_reception_merged_before_the_rank_existed():
+    """
+    The real case left behind by the old matching: ONE stored reception for two receptions of
+    the day, holding the value the LAST row wrote (398,39), with no rank yet. The row with that
+    value keeps it (and gets its rank); the other row becomes the reception that was missing.
+    """
+    from datetime import date
+    cur = FakeCursor({
+        "SELECT CodIndicator FROM FX_Receptii_RHR": [],
+        "SELECT MAX(NRCRT)": [],
+        "SELECT IDRR, DataR": [{"IDRR": 271, "DataR": date(2026, 2, 11), "SumaAntet": 398.39,
+                                "NrCrtForexe": None, "RangZi": None}],
+        "SELECT IDRHR, CodIndicator": [{"IDRHR": 9, "CodIndicator": "AAB", "Valoare": 398.39}],
+    })
+    randuri = [_pe_zi(1, 1, suma="1.723,58"), _pe_zi(2, 2, suma="398,39")]
+    _, _, ancore = P.step4b_receptii_prelucrare(cur, COD, randuri, indicatori("AAB"))
+
+    inserate = cur.inserts("FX_Receptii_R")
+    assert len(inserate) == 1 and inserate[0][4] == 1723.58   # the missing one is created
+    assert list(ancore) == [0]                                 # the stored one needs no anchor
+    # 271 is not overwritten with the other reception's value, only stamped with its place.
+    assert cur.updates("FX_Receptii_R") == [(2, 2, 271)]

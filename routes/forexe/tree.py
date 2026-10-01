@@ -74,9 +74,20 @@ _SELECT = (
     "        WHERE d.CodAngajament = a.CodAngajament) AS AreOrd, "
     # Slice 0080-02: the Extrase view -- a bank operation carrying this angajament in
     # CodContract (FX_Extrase.CodContract = CodAngajament).
-    "EXISTS (SELECT 1 FROM FX_Extrase e WHERE e.CodContract = a.CodAngajament) AS AreExtrase "
+    "EXISTS (SELECT 1 FROM FX_Extrase e WHERE e.CodContract = a.CodAngajament) AS AreExtrase, "
+    # Slice 0097: the «Note corectie» view -- a CAB correction note corrects an operation on
+    # this angajament. The notes tables (slice 0088) may not exist on a unit database yet, so
+    # this column is filled in by _sql(): EXISTS when they do, a literal 0 when they do not.
+    "{are_note_cab} AS AreNoteCab "
     "FROM FX_Angajamente a "
 )
+
+# Slice 0097: the AreNoteCab column, in its two shapes (see _SELECT).
+_ARE_NOTE_CAB = ("EXISTS (SELECT 1 FROM FX_NoteCAB_Corectii k "
+                 "        WHERE k.CodAngajament = a.CodAngajament)")
+_NO_NOTE_CAB = "0"
+_SQL_NOTE_TABLE = ("SELECT COUNT(*) FROM information_schema.TABLES "
+                   "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'FX_NoteCAB_Corectii'")
 
 # WHERE-ul (PLAN_TreeDataApi.md):
 #   An     : randurile cu DataCreare NULL se arata INTOTDEAUNA — nu sunt inca
@@ -118,7 +129,13 @@ _WHERE = (
 # orfani, care aici nu exista — nu filtram pe indicatori decat prin SS).
 _ORDER = "ORDER BY a.Descriere"
 
-_SQL = _SELECT + _WHERE + _ORDER
+def _sql(has_note_tables: bool) -> str:
+    """The tree query, with AreNoteCab read from the notes table only where it exists."""
+    are_note_cab = _ARE_NOTE_CAB if has_note_tables else _NO_NOTE_CAB
+    return _SELECT.replace("{are_note_cab}", are_note_cab) + _WHERE + _ORDER
+
+
+_SQL = _sql(True)
 
 # The ss value that lifts the SS filter (slice 0777). Bind order of _SQL:
 # (an, all_ss, ss, include_hidden).
@@ -141,7 +158,7 @@ def get_tree():
     Returneaza { db_name, count, rows: [ {CodAngajament, IDDF, Descriere, Stare,
     DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
-    AreDDF, ArePartener, AreOrd, AreExtrase}, ... ] }.
+    AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab}, ... ] }.
     """
     an_raw = request.args.get("an")
     if an_raw is None or str(an_raw).strip() == "":
@@ -169,12 +186,14 @@ def get_tree():
     try:
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
-        cursor.execute(_SQL, (an, all_ss, ss, include_hidden))
+        cursor.execute(_SQL_NOTE_TABLE, (db_name,))
+        has_note_tables = int(cursor.fetchone()[0] or 0) > 0
+        cursor.execute(_sql(has_note_tables), (an, all_ss, ss, include_hidden))
         rows = []
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
              salarii, ascuns, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
              are_rezervari, are_receptii, are_plati, are_ddf, are_partener,
-             are_ord, are_extrase) in cursor.fetchall():
+             are_ord, are_extrase, are_note_cab) in cursor.fetchall():
             rows.append({
                 "CodAngajament": cod,
                 "IDDF": iddf,
@@ -199,6 +218,7 @@ def get_tree():
                 "ArePartener": bool(are_partener),
                 "AreOrd": bool(are_ord),
                 "AreExtrase": bool(are_extrase),
+                "AreNoteCab": bool(are_note_cab),
             })
         logger.info("[forexe.tree] %s: an=%s ss=%s include_hidden=%s -> %s randuri",
                     db_name, an, ss, include_hidden, len(rows))

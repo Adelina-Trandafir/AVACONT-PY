@@ -78,6 +78,21 @@ class RateLimiter:
                 del self._by_pair[k]
             return len(keys)
 
+    def user_states(self):
+        """Read-only snapshot per username, summed over every IP it failed from:
+        {username: {"fails": <recent failures>, "blocked": <seconds of lock left>}}.
+        Only users that have a bucket at all appear."""
+        now = time.time()
+        out = {}
+        with self._lock:
+            for (_ip, username), b in self._by_pair.items():
+                recent = sum(1 for t in b.fails if t >= now - _WINDOW_USER)
+                left = max(0, int(b.blocked_until - now))
+                st = out.setdefault(username, {"fails": 0, "blocked": 0})
+                st["fails"] += recent
+                st["blocked"] = max(st["blocked"], left)
+        return out
+
 
 # STARE IN-PROCESS (verificat 2026-07-15). Contoarele traiesc in dict-urile
 # _by_ip / _by_pair ale acestei instante, in memoria procesului. Consecinte:

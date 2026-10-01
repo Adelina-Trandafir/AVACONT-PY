@@ -41,6 +41,13 @@ propunerii dispar la rollback si nu se intorc identice. Indicele e stabil prin
 constructie -- dar numai daca ambele faze poarta acelasi payload. O re-descarcare intre
 faze produce alt payload si trebuie sa porneasca o propunere noua.
 
+CORRECTIONS (01.10.2026). `decizii` may also carry rows anchored on `idrh`: snapshots
+written BEFORE this run (`instantanee_asezate` in the proposal) that the operator moved
+while placing the download. Their IDRH is a real key the rollback does not touch, so it is
+a name both phases agree on. Allowed unless an ordonantare freezes the link -- the same
+rule as the anytime editor, checked again at save. Details: `prelucrare_asociere.ancora`,
+`verifica_corecturile`.
+
 MODUL IMPLICIT E "propunere". Un client care nu stie de faze primeste faza care NU
 scrie nimic. Tacerea nu are voie sa insemne «salveaza».
 
@@ -111,8 +118,10 @@ from .prelucrare_asociere import (
     DecizieInvalida,
     amprenta,
     aplica_decizii,
+    citeste_idrh_scrise,
     citeste_instantanee,
     citeste_instantanee_context,
+    este_corectura,
     citeste_receptii,
     marcheaza_reconstituirile_nesigure,
     normalizeaza_decizii,
@@ -601,6 +610,11 @@ def post_prelucrare():
                 "cod": cod,
             }, 409)
 
+        # The snapshots the angajament has BEFORE the steps write anything: the only ones
+        # a correction may name by IDRH (01.10.2026). See `citeste_idrh_scrise`.
+        with timing.stage("instantanee scrise dinainte"):
+            idrh_scrise = citeste_idrh_scrise(cursor, cod)
+
         # Slice 0091: receptions whose `Detaliu` arrived cut (step 4b left their lines
         # alone). Same payload in both phases, so both phases find the same ones.
         receptii_incomplete = []
@@ -649,15 +663,15 @@ def post_prelucrare():
             # in tabloul de decizii ar cere un raspuns care nu i se cere.
             scrise_propuse = {k: v for k, v in scrise.items() if k != "FX_Extrase"}
 
-            # CONTEXTUL: restul instantaneelor angajamentului si platile lui. Nu se
-            # decide nimic despre ele -- se ARATA. Vezi
-            # `citeste_instantanee_context`: fara ele o receptie al carei lant e deja
-            # legat ajunge pe ecran goala, iar formularul nu vede lantul intreg pe care
-            # serverul isi da deja vetourile F15 / F16.
+            # CONTEXTUL: restul instantaneelor angajamentului si platile lui. Nothing HAS
+            # to be decided about them, but the operator may move the ones no ordonantare
+            # freezes (01.10.2026). Vezi `citeste_instantanee_context`: fara ele o
+            # receptie al carei lant e deja legat ajunge pe ecran goala, iar formularul
+            # nu vede lantul intreg pe care serverul isi da deja vetourile F15 / F16.
             with timing.stage("context instantanee asezate"):
                 context = citeste_instantanee_context(
                     cursor, cod, {i["idrh"] for i in instantanee},
-                    citeste_blocaje(cursor, cod))
+                    citeste_blocaje(cursor, cod), idrh_scrise)
 
             # Etapa asta include `citeste_plati`, care e o interogare, nu doar
             # asamblare de dictionare -- de-asta coloana «sql» de langa ea nu e zero.
@@ -717,9 +731,19 @@ def post_prelucrare():
             return raspuns
 
         # --- PASUL 4c, FAZA DOI: se aplica deciziile, se ignora automatul ------
+        # The snapshots written before this run are read only when the operator corrected
+        # one of them: the blocking rule is checked again HERE, on the server, because an
+        # ordonantare may have appeared since the proposal.
+        context = None
+        if any(este_corectura(d) for d in decizii):
+            with timing.stage("context instantanee asezate"):
+                context = citeste_instantanee_context(
+                    cursor, cod, {i["idrh"] for i in instantanee},
+                    citeste_blocaje(cursor, cod), idrh_scrise)
         with timing.stage("pas 4c aplica decizii"):
             numarat = aplica_decizii(cursor, cod, decizii, instantanee, receptii,
-                                     warnings, ancore_receptii, idrr_incomplete)
+                                     warnings, ancore_receptii, idrr_incomplete,
+                                     context)
         scrise["asocieri"] = numarat
 
         # F28: doua sau mai multe reconstituiri pe acelasi angajament fac gruparea

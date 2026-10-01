@@ -73,6 +73,7 @@ from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 
 from . import forexe_bp
+from .print_count_column import ord_print_sql
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,10 @@ _SQL_ORDONANTARI = (
     "p.Sha256, p.Dimensiune, p.DataModif, "
     # Slice 0078 -- signer roles written by the signing upload (PUT .../ord/pdf/<id>).
     # Also BEFORE `{cale_pdf}`, for the same reason as the three columns above.
-    "o.Semnatura"
+    "o.Semnatura, "
+    # Slice 0099: total prints (PDF row + document row); the literal 0 where sql/0099 has not
+    # run. Before `{cale_pdf}` like the columns above: fixed positions.
+    "{prints} AS PrintCount"
     "{cale_pdf} "
     "FROM FX_ORD o "
     "LEFT JOIN FX_ORD_PDF p ON p.IDORDP = o.IDORDP "
@@ -246,7 +250,8 @@ def get_ord():
 
         # --- ordonantari: FX_ORD, cu SUM(Valoare) real ---------------------------------
         are_cale = _are_cale_pdf(cursor, db_name)
-        sql_ord = _SQL_ORDONANTARI.format(cale_pdf=", o.CalePDF" if are_cale else "")
+        sql_ord = _SQL_ORDONANTARI.format(cale_pdf=", o.CalePDF" if are_cale else "",
+                                         prints=ord_print_sql(cursor, db_name))
         # SQL parametrizat — `cod` nu se interpoleaza NICIODATA in text. (Fragmentul
         # `{cale_pdf}` e un literal ales de server, nu date de la client.)
         cursor.execute(sql_ord, (cod,))
@@ -254,8 +259,8 @@ def get_ord():
         for row in cursor.fetchall():
             (idordp, nr_ord, data_ord, incarcat, preluat,
              total_ord, part_ang, nume_partener,
-             pdf_sha, pdf_dim, pdf_modif, semnatura) = row[:12]
-            cale_pdf = row[12] if are_cale else None
+             pdf_sha, pdf_dim, pdf_modif, semnatura, print_count) = row[:13]
+            cale_pdf = row[13] if are_cale else None
             ordonantari.append({
                 "idordp": int(idordp) if idordp is not None else None,
                 "nr_ord": int(nr_ord) if nr_ord is not None else 0,
@@ -278,6 +283,8 @@ def get_ord():
                 "pdf_data_modif": _iso_dt(pdf_modif),
                 # Slice 0078 -- signer roles, e.g. "AB,Ordonator" (NULL/empty = unsigned).
                 "semnatura": semnatura,
+                # Slice 0099: how many times the document was printed (PDF row + document row).
+                "print_count": int(print_count or 0),
             })
 
         # --- linii: FX_ORD_TBL, plate, cu beneficiarul lor (FX_ORD_PART) ---------------

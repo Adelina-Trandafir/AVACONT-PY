@@ -37,6 +37,7 @@ forexe_bp = Blueprint("forexe", __name__)
 # tree.py        -> GET /api/forexe/tree
 # sumar.py       -> GET /api/forexe/sumar
 # rezervari.py   -> GET /api/forexe/rezervari
+# rezervari_reanaliza.py -> POST /api/forexe/rezervari/reanaliza
 # receptii.py    -> GET /api/forexe/receptii
 # receptii_refacere.py -> POST /api/forexe/receptii/refacere (instantaneele si liniile
 #                   lipsa, refacute din FX_Istoric dupa IDH, felia 0062)
@@ -71,6 +72,7 @@ from . import angajamente  # noqa: E402,F401
 from . import tree  # noqa: E402,F401
 from . import sumar  # noqa: E402,F401
 from . import rezervari  # noqa: E402,F401
+from . import rezervari_reanaliza  # noqa: E402,F401
 from . import receptii  # noqa: E402,F401
 from . import receptii_refacere  # noqa: E402,F401
 from . import plati  # noqa: E402,F401
@@ -87,6 +89,10 @@ from . import ord_edit  # noqa: E402,F401
 # Fisier separat, ca ddf.py (citirea vederii 0020) sa ramana neatins; `routes/ddf/*` —
 # clientul Access legacy pe X-Api-Key — nu se atinge deloc.
 from . import ddf_edit  # noqa: E402,F401
+# ddf_parteneri.py = partenerii asociati unui DDF (FX_DDF_Parteneri): GET/POST
+# /api/forexe/ddf/parteneri-asociati (butonul din Sumar, felia 0084-02) + functiile pe care le
+# cheama ddf_edit.py la citire / salvare (pagina «Parteneri» a editorului, felia 0094-02).
+from . import ddf_parteneri  # noqa: E402,F401
 from . import pdf  # noqa: E402,F401
 from . import prelucrare  # noqa: E402,F401
 from . import asociere  # noqa: E402,F401
@@ -122,3 +128,6 @@ from . import note_cab  # noqa: E402,F401
 # pdf_banc.py = PUT /api/forexe/banc/pdf/<tip>/<iddoc>: the signing benches' server mirror (slice
 # 0078-05), ONLY for 000_DEMO -> KBOT_BANC_PDF (sql/0078_05_kbot_banc_pdf.sql). Bench only.
 from . import pdf_banc  # noqa: E402,F401
+# print_count.py = POST .../print: one more print of a DDF / ORD / CAB note / receipt shown in
+# K-BOT (slice 0099, sql/0099_print_count.sql). After pdf.py: it uses its family descriptions.
+from . import print_count  # noqa: E402,F401

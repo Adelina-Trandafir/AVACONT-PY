@@ -127,7 +127,10 @@ _SQL_RECEPTII = (
     "  LIMIT 1) AS Clsf, "
     "(SELECT C.Denumire FROM Clasificatii C "
     "  WHERE C.IDClsf = I.IdClsf "
-    "  LIMIT 1) AS Denumire "
+    "  LIMIT 1) AS Denumire, "
+    # Same-day tie breaker (sliceless, 30.09.2026): the reception's rank among the
+    # receptions of its date in FOREXE. The «which receptions» window skips by it.
+    "R.RangZi AS RangZiR "
     "FROM FX_Receptii_R R "
     "INNER JOIN FX_Receptii_RHR RHR ON R.IDRR = RHR.IDRR "
     "INNER JOIN (SELECT I.CodAI, I.IdClsf, I.IdUnitate, I.NrCrt "
@@ -203,7 +206,7 @@ def get_receptii():
     Returneaza { cod, receptii: [ {idrr, nrcrt_r, data_r, suma_antet, incarcat,
     preluat, reconstituit, reconstituit_nesigur, descriere_r, idrh, nrcrt_h, data_h,
     total, difh, sters_h, este_stergere, descriere_h, idr, id_clsf,
-    cod_indicator, clsf, denumire, nrcrt_ind, valoare, dif}, ... ], plati: [ {data_plata,
+    cod_indicator, clsf, denumire, nrcrt_ind, valoare, dif, rang_zi_r}, ... ], plati: [ {data_plata,
     suma}, ... ] }.
 
     Un `cod` necunoscut / fara receptii NU este 404: un angajament fara receptii este
@@ -229,7 +232,7 @@ def get_receptii():
              reconstituit, reconstituit_nesigur, descriere_r,
              idrh, nrcrt_h, data_h, total, difh, sters_h, este_stergere, descriere_h,
              idr, id_clsf, cod_indicator, nrcrt_ind, valoare, dif, clsf,
-             denumire) in cursor.fetchall():
+             denumire, rang_zi_r) in cursor.fetchall():
             receptii.append({
                 # None = antet neasezat pe nicio receptie (H.IDRR NULL, felia 0062).
                 "idrr": int(idrr) if idrr is not None else None,
@@ -258,6 +261,8 @@ def get_receptii():
                 "nrcrt_ind": _opt_int(nrcrt_ind),
                 "valoare": _num(valoare),
                 "dif": _num(dif),
+                # NULL on receptions written before the column (stamped by the next download).
+                "rang_zi_r": _opt_int(rang_zi_r),
             })
 
         cursor.execute(_SQL_PLATI, (cod,))
