@@ -233,6 +233,31 @@ def _step1_angajament(cursor, cod: str, scalari: dict, db_name: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Slice 0100 -- FX_Angajamente.DataActualizare: cand s-a salvat ultima descarcare
+# ---------------------------------------------------------------------------
+# Pusa la COMMIT-ul fazei a doua (salvarea), niciodata in propunere (care se deruleaza
+# inapoi). Coloana vine din sql/0100_fx_angajamente_data_actualizare.sql; pana cand scriptul
+# e aplicat pe baza unitatii, lipsa ei (eroarea 1054) NU opreste salvarea -- descarcarea se
+# salveaza ca inainte, doar data ramane nescrisa si se spune in jurnal.
+_ANG_DATA_ACTUALIZARE_SQL = (
+    "UPDATE FX_Angajamente SET DataActualizare = NOW() WHERE CodAngajament = %s"
+)
+_ER_BAD_FIELD = 1054
+
+
+def _marcheaza_data_actualizarii(cursor, cod: str) -> None:
+    try:
+        cursor.execute(_ANG_DATA_ACTUALIZARE_SQL, (cod,))
+    except mysql.connector.Error as err:
+        if getattr(err, "errno", None) != _ER_BAD_FIELD:
+            raise
+        logger.warning("PRELUCRARE cod=%s: FX_Angajamente.DataActualizare lipseste "
+                       "(sql/0100_fx_angajamente_data_actualizare.sql nu e aplicat); "
+                       "data actualizarii nu s-a scris", cod)
+        journal.line("DataActualizare nescrisa: coloana lipseste (slice 0100, DDL neaplicat)")
+
+
+# ---------------------------------------------------------------------------
 # Pasul 2 -- FX_Indicatori (Prelucrare_Indicatori)
 # ---------------------------------------------------------------------------
 _IND_EXISTS_SQL = (
@@ -762,6 +787,9 @@ def post_prelucrare():
         journal.line("s-a scris: %s", scrise)
         for w in warnings:
             journal.line("avertisment: %s", w)
+        # Slice 0100: the moment this angajament was last updated from FOREXE.
+        with timing.stage("data actualizarii"):
+            _marcheaza_data_actualizarii(cursor, cod)
         journal.line("commit")
         with timing.stage("commit"):
             conn.commit()

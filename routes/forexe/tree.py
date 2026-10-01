@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
 _SELECT = (
     "SELECT a.CodAngajament, a.IDDF, a.Descriere, a.Stare, a.DataCreare, "
     "a.DataDefinitivare, a.Incarcat, a.Preluat, a.Salarii, a.ASCUNS, "
+    # Slice 0100: when the last FOREXE download of the angajament was saved. The column comes
+    # from sql/0100_fx_angajamente_data_actualizare.sql; where it is not applied yet, _sql()
+    # puts a literal NULL here (every angajament then reads as «never updated»).
+    "{data_actualizare} AS DataActualizare, "
     "(SELECT GROUP_CONCAT(DISTINCT i.SS ORDER BY i.SS SEPARATOR ';') "
     " FROM FX_Indicatori i WHERE i.CodAngajament = a.CodAngajament) AS Surse, "
     # Slice 0777: the moment the angajament was made, as FOREXE's own history says it --
@@ -129,10 +133,21 @@ _WHERE = (
 # orfani, care aici nu exista — nu filtram pe indicatori decat prin SS).
 _ORDER = "ORDER BY a.Descriere"
 
-def _sql(has_note_tables: bool) -> str:
-    """The tree query, with AreNoteCab read from the notes table only where it exists."""
+# Slice 0100: the DataActualizare column, in its two shapes (see _SELECT).
+_DATA_ACTUALIZARE = "a.DataActualizare"
+_NO_DATA_ACTUALIZARE = "NULL"
+_SQL_DATA_ACTUALIZARE_COLUMN = ("SELECT COUNT(*) FROM information_schema.COLUMNS "
+                                "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'FX_Angajamente' "
+                                "AND COLUMN_NAME = 'DataActualizare'")
+
+
+def _sql(has_note_tables: bool, has_data_actualizare: bool = True) -> str:
+    """The tree query, with AreNoteCab read from the notes table only where it exists, and
+    DataActualizare only where its column was added (slice 0100)."""
     are_note_cab = _ARE_NOTE_CAB if has_note_tables else _NO_NOTE_CAB
-    return _SELECT.replace("{are_note_cab}", are_note_cab) + _WHERE + _ORDER
+    data_act = _DATA_ACTUALIZARE if has_data_actualizare else _NO_DATA_ACTUALIZARE
+    return (_SELECT.replace("{are_note_cab}", are_note_cab)
+            .replace("{data_actualizare}", data_act) + _WHERE + _ORDER)
 
 
 _SQL = _sql(True)
@@ -156,7 +171,7 @@ def get_tree():
 
     Query: an (obligatoriu, intreg), ss (obligatoriu; "*" = all sources, slice 0777), include_hidden (0/1, implicit 0).
     Returneaza { db_name, count, rows: [ {CodAngajament, IDDF, Descriere, Stare,
-    DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, Surse, DataAngajamentNou,
+    DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, DataActualizare, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
     AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab}, ... ] }.
     """
@@ -188,10 +203,13 @@ def get_tree():
         cursor = conn.cursor()
         cursor.execute(_SQL_NOTE_TABLE, (db_name,))
         has_note_tables = int(cursor.fetchone()[0] or 0) > 0
-        cursor.execute(_sql(has_note_tables), (an, all_ss, ss, include_hidden))
+        cursor.execute(_SQL_DATA_ACTUALIZARE_COLUMN, (db_name,))
+        has_data_actualizare = int(cursor.fetchone()[0] or 0) > 0
+        cursor.execute(_sql(has_note_tables, has_data_actualizare),
+                       (an, all_ss, ss, include_hidden))
         rows = []
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
-             salarii, ascuns, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
+             salarii, ascuns, data_actualizare, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
              are_rezervari, are_receptii, are_plati, are_ddf, are_partener,
              are_ord, are_extrase, are_note_cab) in cursor.fetchall():
             rows.append({
@@ -206,6 +224,8 @@ def get_tree():
                 "Salarii": bool(salarii),
                 "Ascuns": bool(ascuns),
                 "Surse": surse,
+                # Slice 0100: when the last download was saved; None = none since the column exists.
+                "DataActualizare": data_actualizare.isoformat() if data_actualizare is not None else None,
                 # Full datetime (time included): the date sort orders on it (slice 0777).
                 "DataAngajamentNou": data_ang_nou.isoformat() if data_ang_nou is not None else None,
                 "AreIndicatori": bool(are_indicatori),
