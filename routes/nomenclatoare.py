@@ -82,7 +82,8 @@ def save_clasificatii_complete():
             # generated SS built from another column). ss_values reproduces the old
             # generated expression, so this route behaves exactly as it did before.
             sql_structura = "INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire, Sector, Sursa, SS) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            sql_buget = "INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, Trim1, Trim2, Trim3, Trim4) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            # Slice 0102: DataInceput is required; Access's budget is the whole year's, so it starts on 01.01.
+            sql_buget = "INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, DataInceput, Trim1, Trim2, Trim3, Trim4) VALUES (%s, %s, %s, MAKEDATE(%s, 1), %s, %s, %s, %s)"
 
             inserted_count = 0
             for item in data_list:
@@ -90,7 +91,7 @@ def save_clasificatii_complete():
                 b = item['buget']
                 cursor.execute(sql_structura, (s['IdClsfAcc'], s['IdUnitate'], s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'], s['Denumire']) + ss_values(s['Capitol']))
                 new_id = cursor.lastrowid
-                cursor.execute(sql_buget, (new_id, b['IdUnitate'], b['An'], b['Trim1'], b['Trim2'], b['Trim3'], b['Trim4']))
+                cursor.execute(sql_buget, (new_id, b['IdUnitate'], b['An'], b['An'], b['Trim1'], b['Trim2'], b['Trim3'], b['Trim4']))
                 inserted_count += 1
             
             conn.commit()

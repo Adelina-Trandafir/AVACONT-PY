@@ -6,14 +6,26 @@ Two PUBLIC routes -- no bearer, no API key. The client checks BEFORE login, when
 holds no credential at all (ApiOptions: bearer only, issued at login), and the
 package is the same thing handed out as the installer, so nothing here is secret.
 
-    GET /api/update/latest    -> the small JSON below (200) or 404 when nothing was
-                                 ever published.
-    GET /api/update/download  -> the package named in latest.json, as a file.
+    GET /api/update/latest?access=0|1    -> the small JSON below (200) or 404 when
+                                            nothing was ever published for that kind.
+    GET /api/update/download?access=0|1  -> the package named in latest.json, as a file.
+
+Slice 0104 -- TWO kinds of client, two packages. `access=1` is the package WITH the
+Access components (the Migrare folder + KBot.Access.dll), `access=0` the one WITHOUT them. The
+client learns which it is from POST /api/access/client-type (routes/access.py) and then
+asks for its own kind. `access` missing = 1: every client built before this slice is
+an Access client and never sends the parameter. Any other value is a 400, never a guess.
 
 Everything is read from ONE folder, UPDATE_DIR. `push-update.ps1` on the build PC
-fills it over SFTP: the package `KBot_<version>.zip` and, last, `latest.json`:
+fills it over SFTP: the packages and, last, `latest.json`. latest.json holds one block
+per kind (a kind that was never published is simply absent):
 
     {
+      "access":     { <block> },
+      "non_access": { <block> }
+    }
+
+    <block> = {
       "version":       "1.0.31.0",        # KBot.App FileVersion inside the package
       "minimum":       "1.0.30.0",        # clients below this MUST update
       "file":          "KBot_1.0.31.0.zip",
@@ -22,6 +34,10 @@ fills it over SFTP: the package `KBot_<version>.zip` and, last, `latest.json`:
       "published_utc": "2026-09-18T10:00:00Z",
       "notes":         "free text shown to the operator"
     }
+
+The OLD shape -- the block itself at the top level, written before slice 0104 -- is still
+read, as the "access" block: the first push after this slice rewrites the file in the
+new shape and keeps that block under "access".
 
 The push script uploads to `*.part` and renames into place, and writes latest.json
 AFTER the package, so a reader never sees a version whose file is not there yet.
@@ -37,7 +53,7 @@ import logging
 import os
 import re
 
-from flask import Blueprint, jsonify, send_file
+from flask import Blueprint, jsonify, request, send_file
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +73,10 @@ _SAFE_FILE_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _VERSION_RE = re.compile(r"^\d+(\.\d+){1,3}$")
 
 _REQUIRED_KEYS = ("version", "minimum", "file", "size", "sha256")
+
+# The two blocks of latest.json (slice 0104).
+KIND_ACCESS = "access"
+KIND_NON_ACCESS = "non_access"
 
 
 def _default_update_dir():
@@ -83,11 +103,45 @@ class LatestInvalid(Exception):
     """latest.json exists but cannot be trusted (500)."""
 
 
-def read_latest(update_dir=None):
+def parse_access_param(raw):
     """
-    Read and validate latest.json. Returns the dict as written by the push script.
-    Raises LatestUnavailable when the file is absent, LatestInvalid when it is
-    unreadable, not JSON, missing a key, or names a file that is not a plain name.
+    The `access` query parameter: "1" -> True, "0" -> False, absent -> True (a client from
+    before slice 0104 never sends it and is an Access client). Anything else raises
+    ValueError -- the route answers 400, it does not guess which package to hand out.
+    """
+    if raw is None or raw == "1":
+        return True
+    if raw == "0":
+        return False
+    raise ValueError(f"access={raw!r}")
+
+
+def _validate_block(data, where):
+    """One block: the whole old file, or latest.json["access"] / latest.json["non_access"]."""
+    if not isinstance(data, dict):
+        raise LatestInvalid(f"{where}: not an object")
+    for key in _REQUIRED_KEYS:
+        if key not in data:
+            raise LatestInvalid(f"{where}: missing key '{key}'")
+    for key in ("version", "minimum"):
+        if not isinstance(data[key], str) or not _VERSION_RE.match(data[key]):
+            raise LatestInvalid(f"{where}: '{key}' is not a version: {data[key]!r}")
+    if not isinstance(data["file"], str) or not _SAFE_FILE_RE.match(data["file"]):
+        raise LatestInvalid(f"{where}: 'file' is not a plain file name: {data['file']!r}")
+    if not isinstance(data["size"], int) or data["size"] < 0:
+        raise LatestInvalid(f"{where}: 'size' is not a non-negative integer")
+    if not isinstance(data["sha256"], str) or len(data["sha256"]) != 64:
+        raise LatestInvalid(f"{where}: 'sha256' is not a 64-char hex digest")
+    return data
+
+
+def read_latest(update_dir=None, access=True):
+    """
+    Read and validate latest.json and return the block of the asked kind (access=True ->
+    "access", False -> "non_access"), as written by the push script.
+    Raises LatestUnavailable when the file is absent or has no block of that kind (nothing
+    was published for it), LatestInvalid when it is unreadable, not JSON, or the block is
+    missing a key or names a file that is not a plain name.
     """
     update_dir = update_dir or get_update_dir()
     path = os.path.join(update_dir, LATEST_NAME)
@@ -100,19 +154,18 @@ def read_latest(update_dir=None):
         raise LatestInvalid(f"{LATEST_NAME}: {e}") from e
     if not isinstance(data, dict):
         raise LatestInvalid(f"{LATEST_NAME}: not an object")
-    for key in _REQUIRED_KEYS:
-        if key not in data:
-            raise LatestInvalid(f"{LATEST_NAME}: missing key '{key}'")
-    for key in ("version", "minimum"):
-        if not isinstance(data[key], str) or not _VERSION_RE.match(data[key]):
-            raise LatestInvalid(f"{LATEST_NAME}: '{key}' is not a version: {data[key]!r}")
-    if not isinstance(data["file"], str) or not _SAFE_FILE_RE.match(data["file"]):
-        raise LatestInvalid(f"{LATEST_NAME}: 'file' is not a plain file name: {data['file']!r}")
-    if not isinstance(data["size"], int) or data["size"] < 0:
-        raise LatestInvalid(f"{LATEST_NAME}: 'size' is not a non-negative integer")
-    if not isinstance(data["sha256"], str) or len(data["sha256"]) != 64:
-        raise LatestInvalid(f"{LATEST_NAME}: 'sha256' is not a 64-char hex digest")
-    return data
+
+    kind = KIND_ACCESS if access else KIND_NON_ACCESS
+    if KIND_ACCESS in data or KIND_NON_ACCESS in data:
+        # The shape of slice 0104: one block per kind.
+        if kind not in data:
+            raise LatestUnavailable(f"{path} [{kind}]")
+        return _validate_block(data[kind], f"{LATEST_NAME}[{kind}]")
+
+    # The old shape: the block IS the file, and it was always the Access package.
+    if not access:
+        raise LatestUnavailable(f"{path} [{kind}]")
+    return _validate_block(data, LATEST_NAME)
 
 
 def _error(message, reason, status):
@@ -121,9 +174,13 @@ def _error(message, reason, status):
 
 @update_bp.route("/api/update/latest", methods=["GET"])
 def latest():
-    """The published version, or 404 when nothing has been published yet."""
+    """The published version of the asked kind (?access=0|1), or 404 when nothing has been published for it."""
     try:
-        data = read_latest()
+        access = parse_access_param(request.args.get("access"))
+    except ValueError:
+        return _error("Parametrul «access» trebuie să fie 0 sau 1.", "ACCESS_PARAM_INVALID", 400)
+    try:
+        data = read_latest(access=access)
     except LatestUnavailable:
         return _error("Nu există nicio actualizare publicată.", "NO_UPDATE_PUBLISHED", 404)
     except LatestInvalid as e:
@@ -144,9 +201,13 @@ def latest():
 
 @update_bp.route("/api/update/download", methods=["GET"])
 def download():
-    """The package named in latest.json, streamed as a file (Range supported)."""
+    """The package latest.json names for the asked kind (?access=0|1), streamed as a file (Range supported)."""
     try:
-        data = read_latest()
+        access = parse_access_param(request.args.get("access"))
+    except ValueError:
+        return _error("Parametrul «access» trebuie să fie 0 sau 1.", "ACCESS_PARAM_INVALID", 400)
+    try:
+        data = read_latest(access=access)
     except LatestUnavailable:
         return _error("Nu există nicio actualizare publicată.", "NO_UPDATE_PUBLISHED", 404)
     except LatestInvalid as e:

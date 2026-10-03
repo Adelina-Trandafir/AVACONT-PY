@@ -53,6 +53,11 @@ logger = logging.getLogger(__name__)
 
 TEMPLATE_DB = "AVACONT_SURSA"
 
+# Slice 0103: the ledger of one-time queries (routes/one_time/runner.py). The template's rows are
+# copied into every new unit, so the unit is born with each query already marked as run -- its
+# structure is the template's, which is already what the query would have produced.
+ONE_TIME_LEDGER = "Interogari_Unice"
+
 # D24: the Romanian word already stored on the live rows. Administrator and Director
 # come later; they are values of this one column, not new code paths.
 ROL_CONTABIL = "Contabil"
@@ -520,6 +525,14 @@ def _create_database(conn, dc, undo, say):
             ucur.execute(_clone_table_sql(cur, table, dc))
         ucur.execute("SET FOREIGN_KEY_CHECKS = 1")
         _clone_views(cur, ucur, views, dc)
+        if ONE_TIME_LEDGER in tables:
+            ucur.execute(
+                f"INSERT INTO {_q(dc)}.{_q(ONE_TIME_LEDGER)} "
+                f"SELECT * FROM {_q(TEMPLATE_DB)}.{_q(ONE_TIME_LEDGER)}"
+            )
+            marked = ucur.rowcount
+            unit.commit()
+            say(f"Pas 2: {marked} interogări unice marcate ca rulate (din {TEMPLATE_DB}).")
     finally:
         _close(unit)
 

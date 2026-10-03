@@ -37,6 +37,31 @@ from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
 
 logger = logging.getLogger(__name__)
 
+# Slice 0101: the receptions of the angajament whose chain does not close -- the LAST snapshot
+# of the chain (DataH, then IDRH) is not a deletion row and its Total differs from the
+# reception's current value (FX_Receptii_R.SumaAntet), both rounded to 2 decimals. The same test
+# as AsociereForm.ColoreazaRosuLanturileNeinchise / the «Lantul nu se inchide» tooltip line: keep
+# the two in step. Only snapshots that count (they have lines) are looked at, like the form.
+#
+# One scalar column: NULL when every chain closes, otherwise «YYYY-MM-DD~total~suma» per
+# reception, joined with «|», oldest reception first. The client formats it (Romanian
+# numbers); CAST(... AS CHAR) and not DATE_FORMAT, so no «%» has to survive the driver.
+_LANT_NEINCHIS = (
+    "(SELECT GROUP_CONCAT(CONCAT(CAST(DATE(lr.DataR) AS CHAR), '~', "
+    "                           CAST(ROUND(COALESCE(lh.Total, 0), 2) AS DECIMAL(18,2)), '~', "
+    "                           CAST(ROUND(COALESCE(lr.SumaAntet, 0), 2) AS DECIMAL(18,2))) "
+    "                     ORDER BY lr.DataR, lr.IDRR SEPARATOR '|') "
+    " FROM FX_Receptii_R lr JOIN FX_Receptii_H lh ON lh.IDRR = lr.IDRR "
+    " WHERE lr.CodAngajament = a.CodAngajament "
+    "   AND COALESCE(lh.EsteStergere, 0) = 0 "
+    "   AND EXISTS (SELECT 1 FROM FX_Receptii ll WHERE ll.IDRH = lh.IDRH) "
+    "   AND NOT EXISTS (SELECT 1 FROM FX_Receptii_H lh2 WHERE lh2.IDRR = lh.IDRR "
+    "         AND (COALESCE(lh2.DataH, '1900-01-01') > COALESCE(lh.DataH, '1900-01-01') "
+    "              OR (COALESCE(lh2.DataH, '1900-01-01') = COALESCE(lh.DataH, '1900-01-01') "
+    "                  AND lh2.IDRH > lh.IDRH))) "
+    "   AND ROUND(COALESCE(lh.Total, 0), 2) <> ROUND(COALESCE(lr.SumaAntet, 0), 2))"
+)
+
 # Cele noua flag-uri, fiecare un EXISTS corelat — deci NICIUN join spre FX_DDF.
 # Asta nu e doar stil: un LEFT JOIN FX_DDF ar dubla randul angajamentului daca
 # vreodata apar doua DDF-uri pe acelasi CodAngajament (planul spune 1-la-cel-mult-1,
@@ -82,7 +107,9 @@ _SELECT = (
     # Slice 0097: the «Note corectie» view -- a CAB correction note corrects an operation on
     # this angajament. The notes tables (slice 0088) may not exist on a unit database yet, so
     # this column is filled in by _sql(): EXISTS when they do, a literal 0 when they do not.
-    "{are_note_cab} AS AreNoteCab "
+    "{are_note_cab} AS AreNoteCab, "
+    # Slice 0101: the receptions whose chain does not close (see _LANT_NEINCHIS).
+    + _LANT_NEINCHIS + " AS LantNeinchis "
     "FROM FX_Angajamente a "
 )
 
@@ -173,7 +200,7 @@ def get_tree():
     Returneaza { db_name, count, rows: [ {CodAngajament, IDDF, Descriere, Stare,
     DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, DataActualizare, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
-    AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab}, ... ] }.
+    AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab, LantNeinchis}, ... ] }.
     """
     an_raw = request.args.get("an")
     if an_raw is None or str(an_raw).strip() == "":
@@ -211,7 +238,7 @@ def get_tree():
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
              salarii, ascuns, data_actualizare, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
              are_rezervari, are_receptii, are_plati, are_ddf, are_partener,
-             are_ord, are_extrase, are_note_cab) in cursor.fetchall():
+             are_ord, are_extrase, are_note_cab, lant_neinchis) in cursor.fetchall():
             rows.append({
                 "CodAngajament": cod,
                 "IDDF": iddf,
@@ -239,6 +266,8 @@ def get_tree():
                 "AreOrd": bool(are_ord),
                 "AreExtrase": bool(are_extrase),
                 "AreNoteCab": bool(are_note_cab),
+                # Slice 0101: NULL = every chain closes (see _LANT_NEINCHIS for the shape).
+                "LantNeinchis": lant_neinchis,
             })
         logger.info("[forexe.tree] %s: an=%s ss=%s include_hidden=%s -> %s randuri",
                     db_name, an, ss, include_hidden, len(rows))

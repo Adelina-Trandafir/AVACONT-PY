@@ -112,6 +112,7 @@ from routes.auth.guard import require_session
 from utils.database import get_kbot_connection, get_kbot_comun_connection
 
 from . import forexe_bp
+from .budget_on_day import BudgetByDay
 from .ddf_parteneri import ParteneriInvalizi, citeste_parteneri, sincronizeaza_parteneri
 from .marcaj import LOCK_IDREV, consuma_lacatul, id_marcaj_utilizabil, idrev_tinut
 
@@ -697,6 +698,23 @@ def post_ddf_genereaza():
             for r in cursor.fetchall():
                 receptii[_txt(r.get("CodIndicator"))] = _num(r.get("TotalReceptii"))
 
+        # Slice 0102 (operator, 02.10.2026): «Buget» is the budget the classification had ON THE
+        # REVISION'S DAY -- the `Clasificatii_Buget` version in force plus the rectifications up to
+        # that day, cumulative to its quarter (routes/forexe/budget_on_day.py) -- not what FOREXE
+        # says today. Revision 0 is dated by the angajament's creation; the others by their
+        # reservation day. A day with no version keeps the query's own value (today's credit) and
+        # the operator is told which classifications fell back.
+        buget_zi = BudgetByDay(cursor)
+        for r in randuri:
+            id_clsf = _int0(r.get("IDClsf"))
+            zi = data_rev if rev0 else r.get("DataRezervare")
+            valoare = buget_zi.value(id_clsf, zi)
+            if valoare is None:
+                buget_zi.note_missing(id_clsf, _txt(r.get("Clsf")), zi)
+            else:
+                r["Buget"] = valoare
+        avertismente.extend(buget_zi.warnings())
+
         linii_a, linii_b = _construieste_linii(randuri, cod, receptii)
 
         revizie = {
@@ -1011,6 +1029,15 @@ def get_ddf_draft(iddf, idrev):
             receptii = {_txt(r["CodIndicator"]): _num(r["T"]) for r in cursor.fetchall()}
             for a in linii_a:
                 a["val_rec"] = receptii.get(a["cod_indicator"], 0.0)
+
+            # Slice 0102: «Buget» is not stored either; it is the budget of the classification on
+            # the revision's day (routes/forexe/budget_on_day.py). A day with no budget version
+            # keeps the 0.0 above -- as before this slice.
+            buget_zi = BudgetByDay(cursor)
+            for a in linii_a:
+                valoare = buget_zi.value(a["id_clsf"], rev.get("DataRev"))
+                if valoare is not None:
+                    a["buget"] = valoare
 
         atasamente = []
         avertismente = []

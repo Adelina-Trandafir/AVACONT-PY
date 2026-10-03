@@ -1,11 +1,13 @@
 import logging
 import mysql.connector
 import re
+from datetime import date, datetime
 from flask import Blueprint, request, jsonify
 from mysql.connector import Error
 from utils.security import require_api_key
 from routes.clasificatii_ss import ss_values   # slice 0075-00: Sector/Sursa/SS are written now
 from config import DB_CONFIG  # Importam configurarea
+from utils.database import get_kbot_connection
 from typing import Any, Dict, cast
 
 DB_NAME_REGEX = re.compile(r'^[A-Za-z0-9_]+$')
@@ -182,8 +184,10 @@ def insert():
             sql_structura = """INSERT INTO Clasificatii (IdClsfAcc, IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire, Sector, Sursa, SS)
                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             
-            sql_buget = """INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, Trim1, Trim2, Trim3, Trim4) 
-                           VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+            # Slice 0102: every budget row has a DataInceput (the day it starts to apply). A row
+            # brought from Access is the budget of the whole year, so it starts on 01.01.
+            sql_buget = """INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, DataInceput, Trim1, Trim2, Trim3, Trim4) 
+                           VALUES (%s, %s, %s, MAKEDATE(%s, 1), %s, %s, %s, %s)"""
 
             inserted_count = 0
             mapping = {}
@@ -197,7 +201,7 @@ def insert():
                 
                 new_id = cursor.lastrowid
                 
-                val_b = (new_id, b['IdUnitate'], b['An'], b['Trim1'], b['Trim2'], b['Trim3'], b['Trim4'])
+                val_b = (new_id, b['IdUnitate'], b['An'], b['An'], b['Trim1'], b['Trim2'], b['Trim3'], b['Trim4'])
                 cursor.execute(sql_buget, val_b)
 
                 mapping[s['IdClsfAcc']] = new_id
@@ -527,6 +531,11 @@ def save_clasificatii_complete_upsert():
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
+        # Slice 0102: a budget row is a VERSION that starts on DataInceput, and K-BOT's
+        # «Clasificatii bugetare» window now owns the versions. This route only brings in the
+        # budget of a classification that has NONE for the year yet (a version starting on 01.01);
+        # a classification that already has one is left alone -- overwriting a version with
+        # Access's current figures would erase the budget the DDF needs as it was.
         sql_exists_buget = """
             SELECT IdBuget
             FROM Clasificatii_Buget
@@ -535,24 +544,19 @@ def save_clasificatii_complete_upsert():
             LIMIT 1
         """
 
-        sql_upsert_buget = """
+        sql_insert_buget = """
             INSERT INTO Clasificatii_Buget
             (
                 IdClsf,
                 IdUnitate,
                 An,
+                DataInceput,
                 Trim1,
                 Trim2,
                 Trim3,
                 Trim4
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                IdUnitate = VALUES(IdUnitate),
-                Trim1 = VALUES(Trim1),
-                Trim2 = VALUES(Trim2),
-                Trim3 = VALUES(Trim3),
-                Trim4 = VALUES(Trim4)
+            VALUES (%s, %s, %s, MAKEDATE(%s, 1), %s, %s, %s, %s)
         """
 
         # ------------------------------------------------------------
@@ -561,7 +565,7 @@ def save_clasificatii_complete_upsert():
         inserted_clsf = 0
         updated_clsf = 0
         inserted_buget = 0
-        updated_buget = 0
+        skipped_buget = 0
         mapping = {}
 
         seen_payload_keys = set()
@@ -688,36 +692,37 @@ def save_clasificatii_complete_upsert():
                     )
 
                 # ----------------------------------------------------
-                # 5.5 Verificare existenta buget pentru raportare insert/update
+                # 5.5 Verificare existenta buget (slice 0102: versiuni cu DataInceput)
                 # ----------------------------------------------------
                 cursor.execute(sql_exists_buget, (current_id_clsf, b_clean["An"]))
                 existed_buget_before = cursor.fetchone() is not None
 
                 # ----------------------------------------------------
-                # 5.6 UPSERT Clasificatii_Buget
+                # 5.6 INSERT Clasificatii_Buget doar daca anul nu are nicio versiune
                 # ----------------------------------------------------
-                cursor.execute(
-                    sql_upsert_buget,
-                    (
-                        current_id_clsf,
-                        b_clean["IdUnitate"],
-                        b_clean["An"],
-                        b_clean["Trim1"],
-                        b_clean["Trim2"],
-                        b_clean["Trim3"],
-                        b_clean["Trim4"]
-                    )
-                )
-
                 if existed_buget_before:
-                    updated_buget += 1
+                    skipped_buget += 1
                     logger.debug(
-                        "UPSERT CLASIFICATII item=%s -> UPDATE Clasificatii_Buget IdClsf=%s An=%s",
+                        "UPSERT CLASIFICATII item=%s -> Clasificatii_Buget IdClsf=%s An=%s are deja "
+                        "o versiune de buget; lasat neatins",
                         idx,
                         current_id_clsf,
                         b_clean["An"]
                     )
                 else:
+                    cursor.execute(
+                        sql_insert_buget,
+                        (
+                            current_id_clsf,
+                            b_clean["IdUnitate"],
+                            b_clean["An"],
+                            b_clean["An"],
+                            b_clean["Trim1"],
+                            b_clean["Trim2"],
+                            b_clean["Trim3"],
+                            b_clean["Trim4"]
+                        )
+                    )
                     inserted_buget += 1
                     logger.debug(
                         "UPSERT CLASIFICATII item=%s -> INSERT Clasificatii_Buget IdClsf=%s An=%s",
@@ -760,13 +765,13 @@ def save_clasificatii_complete_upsert():
             logger.info(
                 "UPSERT CLASIFICATII commit succes. db=%s, total=%s, "
                 "clasificatii_inserted=%s, clasificatii_updated=%s, "
-                "buget_inserted=%s, buget_updated=%s",
+                "buget_inserted=%s, buget_skipped=%s",
                 db_name,
                 len(data_list),
                 inserted_clsf,
                 updated_clsf,
                 inserted_buget,
-                updated_buget
+                skipped_buget
             )
         except Exception as e:
             logger.error(
@@ -786,7 +791,7 @@ def save_clasificatii_complete_upsert():
             },
             "buget": {
                 "inserted": inserted_buget,
-                "updated": updated_buget
+                "skipped": skipped_buget
             },
             "mapping": mapping
         }), 200
@@ -836,3 +841,121 @@ def save_clasificatii_complete_upsert():
                 conn.close()
             except Exception as e:
                 logger.warning("UPSERT CLASIFICATII conn.close() a esuat: %s", str(e))
+
+
+# ============================================================
+# ENDPOINT - ACCESS -> K-BOT (slice 0103-05)
+# ============================================================
+# The VBA of the Access estate sends the budget and the rectifications of the classifications it
+# changed to the NEW MariaDB server (DB_CONFIG_NEW, what K-BOT reads) -- NOT to DB_CONFIG, where the
+# routes above write. Correlation: Access IdUnitate + Access IDClsf  ==  Clasificatii.IdUnitate +
+# Clasificatii.IdClsfAcc. A classification that does not resolve to exactly one row is reported
+# back and skipped, never guessed.
+#
+# Body:
+#   { "db_name": "000_DEMO", "id_unitate": 76, "an": 2026,
+#     "data_inceput": "2026-04-01",            (optional: the date the budget below starts to apply;
+#                                               missing = the latest version of the year, else 01.01)
+#     "clasificatii": [ { "IdClsfAcc": 123, "Trim1": 0, "Trim2": 0, "Trim3": 0, "Trim4": 0,
+#                         "rectificari": [ { "Data": "2026-05-10", "Document": "HCL 12",
+#                                            "Trim1": 0, "Trim2": 0, "Trim3": 0, "Trim4": 0 } ] } ] }
+# Answer: { "status": "success", "budgets": n, "rectificari": n, "unmatched": [ids], "ambiguous": [ids] }
+@clasificatii_bp.route('/api/clasificatii/sync_acc_kbot', methods=['POST'])
+@require_api_key
+def sync_acc_kbot():
+    conn = None
+    try:
+        req_data = request.json or {}
+        db_name = _validate_db_name(req_data.get('db_name'))
+        id_unitate = _to_int(req_data.get('id_unitate'), 'id_unitate', required=True)
+        an = _to_int(req_data.get('an'), 'an', required=True)
+        items = req_data.get('clasificatii')
+        if not isinstance(items, list) or not items:
+            return jsonify({"error": "Lista clasificatii lipseste sau e goala."}), 400
+
+        start_text = _to_str(req_data.get('data_inceput'), 'data_inceput')
+        start = None
+        if start_text:
+            try:
+                start = datetime.strptime(start_text[:10], '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({"error": "data_inceput nu este o data (aaaa-ll-zz)."}), 400
+            if start.year != an:
+                return jsonify({"error": "data_inceput nu este in anul " + str(an) + "."}), 400
+
+        conn = get_kbot_connection(db_name)
+        cursor = conn.cursor(dictionary=True, buffered=True)
+
+        budgets = 0
+        rectificari = 0
+        unmatched = []
+        ambiguous = []
+
+        for item in items:
+            acc_id = _to_int(item.get('IdClsfAcc'), 'IdClsfAcc', required=True)
+            cursor.execute(
+                "SELECT IDClsf, Capitol, Subcapitol, Articol, Alineat FROM Clasificatii "
+                " WHERE IdUnitate = %s AND IdClsfAcc = %s", (id_unitate, acc_id))
+            found = cursor.fetchall()
+            if not found:
+                unmatched.append(acc_id)
+                continue
+            if len(found) > 1:
+                ambiguous.append(acc_id)
+                continue
+            clsf = found[0]
+            id_clsf = int(clsf['IDClsf'])
+            trims = [_to_float(item.get('Trim%d' % k), 'Trim%d' % k) for k in (1, 2, 3, 4)]
+
+            # The budget: one version. Without a given start date the version in force is edited in
+            # place (the latest of the year); a year with no version gets one on 01.01.
+            day = start
+            if day is None:
+                cursor.execute(
+                    "SELECT MAX(DataInceput) AS D FROM Clasificatii_Buget WHERE IdClsf = %s AND An = %s",
+                    (id_clsf, an))
+                last = cursor.fetchone()
+                day = last['D'] if last and last['D'] is not None else date(an, 1, 1)
+            cursor.execute(
+                "INSERT INTO Clasificatii_Buget (IdClsf, IdUnitate, An, DataInceput, Trim1, Trim2, Trim3, Trim4) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE Trim1 = VALUES(Trim1), Trim2 = VALUES(Trim2), "
+                "Trim3 = VALUES(Trim3), Trim4 = VALUES(Trim4)",
+                (id_clsf, id_unitate, an, day, *trims))
+            budgets += 1
+
+            for r in (item.get('rectificari') or []):
+                cursor.execute(
+                    "INSERT INTO Clasificatii_Rectificari "
+                    "(IdClsf, Capitol, Subcapitol, Articol, Alineat, Data, Document, Trim1, Trim2, Trim3, Trim4) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON DUPLICATE KEY UPDATE Capitol = VALUES(Capitol), Subcapitol = VALUES(Subcapitol), "
+                    "Articol = VALUES(Articol), Alineat = VALUES(Alineat), Trim1 = VALUES(Trim1), "
+                    "Trim2 = VALUES(Trim2), Trim3 = VALUES(Trim3), Trim4 = VALUES(Trim4)",
+                    (id_clsf, clsf['Capitol'], clsf['Subcapitol'], clsf['Articol'], clsf['Alineat'],
+                     _to_str(r.get('Data'), 'Data', required=True),
+                     _to_str(r.get('Document'), 'Document', required=True),
+                     *[_to_float(r.get('Trim%d' % k), 'Trim%d' % k) for k in (1, 2, 3, 4)]))
+                rectificari += 1
+
+        conn.commit()
+        logger.info("SYNC ACC->KBOT %s unit=%s: budgets=%s rectificari=%s unmatched=%s ambiguous=%s",
+                    db_name, id_unitate, budgets, rectificari, len(unmatched), len(ambiguous))
+        return jsonify({"status": "success", "budgets": budgets, "rectificari": rectificari,
+                        "unmatched": unmatched, "ambiguous": ambiguous}), 200
+
+    except ValueError as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("SYNC ACC->KBOT eroare: %s", str(e), exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception as e:
+                logger.warning("SYNC ACC->KBOT conn.close() a esuat: %s", str(e))
