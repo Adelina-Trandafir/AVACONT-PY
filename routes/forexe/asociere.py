@@ -102,8 +102,17 @@ F15 (capatul lantului) doar AVERTIZEAZA aici. Fundamentul §1.5 chiar asa il des
 instantaneu (fiindca dupa desprindere lantul nu se mai inchide) nu poate face tocmai
 lucrul pentru care exista. Access nu il verifica deloc la desprindere: `btnDel_Click` doar
 re-promova ultimul rand ramas la `Final`, fara sa compare vreo suma.
+
+VALUE CORRECTION (slice 0111, 06.10.2026)
+=========================================
+FOREXE's own history sometimes writes a wrong total on a header (`valoare: 0` over a line of
+1635). The same file now also holds the route that lets the operator correct the WORKING values
+(`FX_Receptii_H.Total`, `FX_Receptii.Valoare`) while `TotalOrig` / `ValoareOrig` keep what FOREXE
+said: `POST /api/forexe/asociere/corectie`, at the end of the file. The reasoning and the rules
+are in `docs/FUNDAMENT_Asociere_Receptii.md`, §1.8 and Part 6 (F35).
 """
 import json
+import math
 import logging
 
 from flask import request, g, current_app
@@ -122,6 +131,8 @@ from .prelucrare_asociere import (
     ACTIUNE_RECONSTITUIRE,
     ACTIUNE_STERGERE,
     DecizieInvalida,
+    ancora,
+    ancora_text,
     MSG_STARE_MODIFICATA,
     REASON_STARE_MODIFICATA,
     amprenta,
@@ -163,12 +174,13 @@ class InstantaneuBlocat(Exception):
 # o comanda care l-ar numi cade in `verifica_blocajele` cu «nu exista pe acest angajament».
 _INSTANTANEE_SQL = (
     "SELECT H.IDRH, H.IDRR, H.IDH, H.DataH, H.Total, H.Descriere, H.TipReceptie, "
-    "       COALESCE(H.Sters, 0) AS Sters, COALESCE(H.EsteStergere, 0) AS EsteStergere "
+    "       COALESCE(H.Sters, 0) AS Sters, COALESCE(H.EsteStergere, 0) AS EsteStergere, "
+    "       H.TotalOrig, H.CorectatDe, H.CorectatLa, H.CorectatMotiv "
     "FROM FX_Receptii_H H WHERE H.CodAngajament = %s AND " + SNAPSHOT_COUNTS_SQL + " "
     "ORDER BY H.DataH, H.IDRH"
 )
 _LINII_SQL = (
-    "SELECT IDRH, CodIndicator, CodAI, CodSSI, IdClsf, Valoare "
+    "SELECT IDR, IDRH, CodIndicator, CodAI, CodSSI, IdClsf, Valoare, ValoareOrig "
     "FROM FX_Receptii WHERE CodAngajament = %s ORDER BY IDRH, CodIndicator"
 )
 # Platile angajamentului, pentru contextul din formular (aceeasi interogare ca la
@@ -309,11 +321,14 @@ def citeste_instantanee(cursor, cod: str, blocaje: dict) -> list:
         if r["IDRH"] is None:
             continue
         linii.setdefault(int(r["IDRH"]), []).append({
+            "idr": int(r["IDR"]),
             "cod_indicator": r["CodIndicator"] or "",
             "cod_ai": r["CodAI"] or "",
             "cod_ssi": r["CodSSI"] or "",
             "id_clsf": r["IdClsf"],
             "valoare": float(r["Valoare"] or 0),
+            # Slice 0111: what FOREXE said. None until the one-time query has filled it.
+            "valoare_orig": None if r["ValoareOrig"] is None else float(r["ValoareOrig"]),
         })
 
     cursor.execute(_INSTANTANEE_SQL, (cod,))
@@ -329,6 +344,11 @@ def citeste_instantanee(cursor, cod: str, blocaje: dict) -> list:
             "data_h": r["DataH"],
             "descriere": r["Descriere"] or "",
             "total": float(r["Total"] or 0),
+            # Slice 0111: what FOREXE said, and who corrected the working value, when, why.
+            "total_orig": None if r["TotalOrig"] is None else float(r["TotalOrig"]),
+            "corectat_de": r["CorectatDe"] or "",
+            "corectat_la": r["CorectatLa"],
+            "corectat_motiv": r["CorectatMotiv"] or "",
             "tip_receptie": r["TipReceptie"] or "",
             "stergere": bool(r["EsteStergere"]),
             # F17: marcat de operator ca «nu consemneaza nicio schimbare».
@@ -794,6 +814,345 @@ def post_asociere():
         journal.refusal("salvarea a căzut: %s -- rollback", e)
         logger.error(f"[forexe.asociere] {e}", exc_info=True)
         return _json_utf8({"error": f"Eroare la salvarea asocierii: {e}"}, 500)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+# ===========================================================================
+# Value correction (slice 0111)
+# ===========================================================================
+# WHY. FOREXE's own history sometimes writes a WRONG total on a reception header: the row
+# «Receptie: ..., valoare: 0, (activ:true)» of AAB3MEF2MG2 (reception of 12.06.2026) says 0
+# while the line under it says 1635. `FX_Receptii_H.Total` copies that figure, so the chain of
+# the reception does not close, the snapshot cannot be matched to its reception by value, and
+# DIFH / DIF -- what the ordonantare sums -- start from a false number.
+#
+# WHAT. The operator corrects the WORKING columns -- `FX_Receptii_H.Total` and
+# `FX_Receptii.Valoare`, the ones every reader already uses -- and the ORIGINAL columns
+# (`TotalOrig`, `ValoareOrig`) keep what FOREXE said. A row is «corrected» when its working
+# value differs from its original. The audit (who / when / why) lives on the header:
+# `CorectatDe`, `CorectatLa`, `CorectatMotiv`; one save is one header + its lines.
+#
+# WHAT IS NEVER TOUCHED. `FX_Istoric` -- the evidence of what FOREXE said -- and the HASH of
+# the lines (computed at birth, read by nobody, see the worklog of slice 0111). A download or a
+# rebuild cannot undo a correction: the history is read only once per row (`Prelucrat`), the
+# download stops at the newest known `DataFX`, and the rebuild from history writes only what is
+# missing.
+#
+# THE RULES, all enforced HERE, not in the form:
+#   * a reason is required;
+#   * the corrected total must equal the sum of the corrected lines (to two decimals) -- a
+#     BLOCKING error, not a warning: the correction must not leave a header and its lines
+#     telling different stories. Header and lines are saved together, all or nothing;
+#   * a placed snapshot that the ordonantare rule freezes (`citeste_blocaje`) cannot be
+#     corrected: an ordonantare read the total of that snapshot (§1.3 of the fundament). An
+#     unplaced one can: nothing has read it yet;
+#   * the deletion row has no value of its own to correct;
+#   * the client sends the values it SAW; if the base holds others, nothing is written (409,
+#     the same code as a stale fingerprint) -- two sessions cannot overwrite each other silently;
+#   * a placed snapshot gets step 4d re-run in the same transaction, because DIF is a stored
+#     column and the ordonantare sums DIF, not Valoare.
+REASON_VALUE_CHANGED = REASON_STARE_MODIFICATA
+MAX_REASON_LENGTH = 500
+
+_H_FILL_ORIG_SQL = (
+    "UPDATE FX_Receptii_H SET TotalOrig = Total WHERE IDRH = %s AND TotalOrig IS NULL"
+)
+_LINES_FILL_ORIG_SQL = (
+    "UPDATE FX_Receptii SET ValoareOrig = Valoare WHERE IDRH = %s AND ValoareOrig IS NULL"
+)
+_H_CORRECT_SQL = (
+    "UPDATE FX_Receptii_H SET Total = %s, CorectatDe = %s, CorectatLa = NOW(), "
+    "CorectatMotiv = %s WHERE IDRH = %s"
+)
+_LINE_CORRECT_SQL = "UPDATE FX_Receptii SET Valoare = %s WHERE IDR = %s AND IDRH = %s"
+# A line born in this download has no key the client knows yet; it is named by its indicator.
+_LINE_CORRECT_BY_INDICATOR_SQL = (
+    "UPDATE FX_Receptii SET Valoare = %s WHERE IDRH = %s AND CodIndicator = %s"
+)
+
+
+class ValueChanged(Exception):
+    """The base holds other values than the ones the client saw. Becomes 409."""
+
+
+def _number(value, name: str) -> float:
+    """A JSON number, finite. A string or a boolean is refused, never converted."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise DecizieInvalida(f"Câmpul «{name}» lipsește sau nu este un număr.")
+    if not math.isfinite(value):
+        raise DecizieInvalida(f"Câmpul «{name}» nu este un număr finit.")
+    return float(value)
+
+
+def normalize_correction(raw) -> dict:
+    """The shape of the request, cleaned. Nothing is fixed silently -- a bad field is refused."""
+    if not isinstance(raw, dict):
+        raise DecizieInvalida("Corp JSON lipsă sau nevalid.")
+    try:
+        idrh = int(raw.get("idrh"))
+    except (TypeError, ValueError) as err:
+        raise DecizieInvalida("Câmpul «idrh» lipsește sau nu este un număr.") from err
+
+    reason = str(raw.get("motiv") or "").strip()
+    if reason == "":
+        raise DecizieInvalida("Motivul corecției este obligatoriu.")
+    if len(reason) > MAX_REASON_LENGTH:
+        raise DecizieInvalida(
+            f"Motivul are {len(reason)} caractere; cel mult {MAX_REASON_LENGTH}.")
+
+    raw_lines = raw.get("linii")
+    if not isinstance(raw_lines, list):
+        raise DecizieInvalida("Câmpul «linii» trebuie să fie o listă.")
+    lines = []
+    seen = set()
+    for i, item in enumerate(raw_lines):
+        if not isinstance(item, dict):
+            raise DecizieInvalida(f"«linii»[{i}] nu este un obiect.")
+        try:
+            idr = int(item.get("idr"))
+        except (TypeError, ValueError) as err:
+            raise DecizieInvalida(
+                f"«linii»[{i}]: «idr» lipsește sau nu este un număr.") from err
+        if idr in seen:
+            raise DecizieInvalida(f"Linia {idr} apare de două ori în «linii».")
+        seen.add(idr)
+        lines.append({
+            "idr": idr,
+            "valoare": _number(item.get("valoare"), f"linii[{i}].valoare"),
+            "valoare_veche": _number(item.get("valoare_veche"), f"linii[{i}].valoare_veche"),
+        })
+
+    return {
+        "idrh": idrh,
+        "total": _number(raw.get("total"), "total"),
+        "total_vechi": _number(raw.get("total_vechi"), "total_vechi"),
+        "motiv": reason,
+        "linii": lines,
+    }
+
+
+def plan_correction(snapshots: list, blocks: dict, request: dict) -> dict:
+    """
+    Checks the correction against the snapshot as it is in the base and returns what to write:
+    {snapshot, total, changes: [(idr, value)], sum_lines}.
+
+    A PURE function over what `citeste_instantanee` / `citeste_blocaje` read, so the rules can
+    be read in one place and checked without a database.
+    """
+    by_idrh = {s["idrh"]: s for s in snapshots}
+    snap = by_idrh.get(request["idrh"])
+    if snap is None:
+        raise DecizieInvalida(f"Instantaneul {request['idrh']} nu există pe acest angajament.")
+    if snap["stergere"]:
+        raise DecizieInvalida("Instantaneul de ștergere nu are o valoare de corectat.")
+
+    reasons = blocks.get(snap["idrh"])
+    if snap["idrr"] and reasons:
+        raise InstantaneuBlocat(
+            "Valoarea nu mai poate fi corectată — instantaneul din " + _zi(snap["data_h"]) +
+            ": " + " ".join(reasons))
+
+    if round(snap["total"], 2) != round(request["total_vechi"], 2):
+        raise ValueChanged("Totalul instantaneului s-a schimbat între citire și salvare.")
+
+    db_lines = {l["idr"]: l for l in snap["linii"]}
+    final = {idr: l["valoare"] for idr, l in db_lines.items()}
+    changes = []
+    for item in request["linii"]:
+        line = db_lines.get(item["idr"])
+        if line is None:
+            raise DecizieInvalida(f"Linia {item['idr']} nu aparține acestui instantaneu.")
+        if round(line["valoare"], 2) != round(item["valoare_veche"], 2):
+            raise ValueChanged("O linie a instantaneului s-a schimbat între citire și salvare.")
+        if round(item["valoare"], 2) != round(line["valoare"], 2):
+            changes.append((item["idr"], item["valoare"]))
+        final[item["idr"]] = item["valoare"]
+
+    sum_lines = round(sum(final.values()), 2)
+    total = request["total"]
+    if abs(round(total, 2) - sum_lines) >= 0.005:
+        raise DecizieInvalida(
+            f"Totalul ({round(total, 2):.2f}) nu este egal cu suma liniilor ({sum_lines:.2f}). "
+            f"Corectați totalul și liniile împreună, apoi salvați.")
+
+    if not changes and round(total, 2) == round(snap["total"], 2):
+        raise DecizieInvalida("Nu s-a modificat nicio valoare.")
+
+    return {"snapshot": snap, "total": total, "changes": changes, "sum_lines": sum_lines}
+
+
+def apply_correction(cursor, cod: str, plan: dict, reason: str, user: str) -> dict:
+    """
+    Writes a checked correction. The originals are filled FIRST (only where still NULL), so
+    the value FOREXE gave is never lost, whatever the one-time query has or has not done yet.
+    """
+    snap = plan["snapshot"]
+    idrh = snap["idrh"]
+    journal.section("value correction, snapshot %s" % idrh)
+    journal.line("total %s -> %s, %s linii schimbate, motiv: %s",
+                 snap["total"], plan["total"], len(plan["changes"]), reason)
+
+    cursor.execute(_H_FILL_ORIG_SQL, (idrh,))
+    cursor.execute(_LINES_FILL_ORIG_SQL, (idrh,))
+    for idr, value in plan["changes"]:
+        cursor.execute(_LINE_CORRECT_SQL, (value, idr, idrh))
+    cursor.execute(_H_CORRECT_SQL, (plan["total"], user, reason, idrh))
+
+    dif_recomputed = False
+    if snap["idrr"]:
+        # DIF is a stored column and the ordonantare sums DIF (qFX_ORD_REC_ANT), not Valoare.
+        step4d_calculeaza_dif(cursor, cod, snap["idrr"])
+        dif_recomputed = True
+    return {"total": 1, "linii": len(plan["changes"]), "dif_recalculat": dif_recomputed}
+
+
+def apply_download_corrections(cursor, corrections: list, snapshots: list, user: str) -> int:
+    """
+    The corrections an operator made IN THE DOWNLOAD WINDOW, applied in phase two (slice 0111).
+
+    `corrections` = the decisions that carry a `corectie`; `snapshots` = what
+    `prelucrare_asociere.citeste_instantanee` read inside THIS transaction. A snapshot born in
+    this run has no key the client could know (its IDRH dies with phase one's rollback), so a
+    correction travels with the decision that names it -- by `rand_istoric` or `idh` -- and its
+    lines are named by INDICATOR. Only the snapshots the download brought: an older, already
+    written one is corrected in the anytime editor (`post_correction`).
+
+    The rules are the anytime editor's (`plan_correction`): reason, total = sum of the lines,
+    no deletion row. No frozen-link check and no stale-value check are needed here: the snapshot
+    is still unplaced (nothing read it), and phase two already verified the fingerprint.
+
+    Step 4d is not re-run here: nothing is placed yet, and the route runs it on every touched
+    reception after the decisions. Returns how many snapshots were corrected.
+    """
+    by_anchor = {}
+    for snap in snapshots:
+        try:
+            by_anchor[ancora(snap)] = snap
+        except DecizieInvalida:
+            continue
+
+    done = 0
+    for decision in corrections:
+        if decision.get("ancora_idrh") is not None:
+            raise DecizieInvalida(
+                "Corecția de valoare se poate face aici doar pe instantaneele aduse de "
+                "descărcare; unul deja scris se corectează în editorul de asociere.")
+        anchor = ancora(decision)
+        snap = by_anchor.get(anchor)
+        if snap is None:
+            raise DecizieInvalida(
+                "Corecția de valoare: " + ancora_text(anchor) +
+                " nu se află printre instantaneele descărcării.")
+        correction = decision["corectie"]
+
+        # The lines get a position as key for the shared rule check, and are mapped back to
+        # their indicator for the write. Two lines of one indicator cannot be told apart.
+        indicator_of = {}
+        lines = []
+        for k, line in enumerate(snap["linii"], start=1):
+            if line["cod_indicator"] in indicator_of.values():
+                raise DecizieInvalida(
+                    "Instantaneul are două linii pe indicatorul " + line["cod_indicator"] +
+                    "; valoarea nu se poate corecta din descărcare.")
+            indicator_of[k] = line["cod_indicator"]
+            lines.append(dict(line, idr=k))
+        key_of = {ind: k for k, ind in indicator_of.items()}
+
+        request_lines = []
+        for item in correction["linii"]:
+            k = key_of.get(item["cod_indicator"])
+            if k is None:
+                raise DecizieInvalida(
+                    "Corecția numește indicatorul " + item["cod_indicator"] +
+                    ", pe care instantaneul nu îl are.")
+            request_lines.append({
+                "idr": k, "valoare": item["valoare"],
+                "valoare_veche": lines[k - 1]["valoare"]})
+
+        view = {"idrh": snap["idrh"], "idrr": 0, "stergere": snap["stergere"],
+                "total": snap["total"], "data_h": snap["data_h"], "linii": lines}
+        plan = plan_correction([view], {}, {
+            "idrh": snap["idrh"], "total": correction["total"],
+            "total_vechi": snap["total"], "motiv": correction["motiv"],
+            "linii": request_lines})
+
+        journal.section("download correction, snapshot %s" % ancora_text(anchor))
+        journal.line("total %s -> %s, %s lines changed, reason: %s",
+                     snap["total"], plan["total"], len(plan["changes"]), correction["motiv"])
+        cursor.execute(_H_FILL_ORIG_SQL, (snap["idrh"],))
+        cursor.execute(_LINES_FILL_ORIG_SQL, (snap["idrh"],))
+        for k, value in plan["changes"]:
+            cursor.execute(_LINE_CORRECT_BY_INDICATOR_SQL,
+                           (value, snap["idrh"], indicator_of[k]))
+        cursor.execute(_H_CORRECT_SQL,
+                       (plan["total"], user, correction["motiv"], snap["idrh"]))
+        done += 1
+    return done
+
+
+@forexe_bp.route("/api/forexe/asociere/corectie", methods=["POST"])
+@require_session
+@journal.traced("asociere corectie POST")
+def post_correction():
+    """
+    Corrects the value of ONE snapshot (header total + lines), all or nothing.
+
+    Body: { cod, idrh, total_vechi, total, linii: [ {idr, valoare_veche, valoare} ], motiv }.
+    `*_vechi` are the values the client saw; the answer is 409 when the base holds others.
+    Answer 200: { cod, idrh, scrise: {total, linii, dif_recalculat} }.
+    """
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _json_utf8({"error": "Corp JSON lipsă sau nevalid."}, 400)
+    cod = str(data.get("cod") or "").strip()
+    if cod == "":
+        return _json_utf8({"error": "Câmp lipsă: cod"}, 400)
+
+    db_name = g.session.db_name
+    user = str(g.session.username or "")[:255]
+    journal.note(dc=db_name, user=user, cod=cod)
+    conn = None
+    try:
+        req = normalize_correction(data)
+
+        conn = get_kbot_connection(db_name)
+        cursor = conn.cursor(dictionary=True)
+
+        blocks = citeste_blocaje(cursor, cod)
+        snapshots = citeste_instantanee(cursor, cod, blocks)
+        plan = plan_correction(snapshots, blocks, req)
+        written = apply_correction(cursor, cod, plan, req["motiv"], user)
+        journal.line("commit")
+        conn.commit()
+
+        logger.info("[forexe.asociere] %s: cod=%s correction idrh=%s -> %s",
+                    db_name, cod, req["idrh"], written)
+        return _json_utf8({"cod": cod, "idrh": req["idrh"], "scrise": written}, 200)
+    except ValueChanged as e:
+        if conn is not None:
+            conn.rollback()
+        journal.refusal("%s -- nu s-a scris nimic (rollback)", e)
+        return _json_utf8({"error": MSG_STARE_MODIFICATA,
+                           "reason": REASON_VALUE_CHANGED}, 409)
+    except InstantaneuBlocat as e:
+        if conn is not None:
+            conn.rollback()
+        journal.refusal("%s -- nu s-a scris nimic (rollback)", e)
+        return _json_utf8({"error": str(e),
+                           "reason": REASON_INSTANTANEU_BLOCAT}, 409)
+    except DecizieInvalida as e:
+        if conn is not None:
+            conn.rollback()
+        journal.refusal("%s -- nu s-a scris nimic (rollback)", e)
+        return _json_utf8({"error": str(e)}, 400)
+    except Exception as e:
+        if conn is not None:
+            conn.rollback()
+        journal.refusal("correction failed: %s -- rollback", e)
+        logger.error(f"[forexe.asociere] {e}", exc_info=True)
+        return _json_utf8({"error": f"Eroare la corectarea valorii: {e}"}, 500)
     finally:
         if conn is not None:
             conn.close()

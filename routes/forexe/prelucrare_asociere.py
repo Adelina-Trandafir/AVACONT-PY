@@ -37,6 +37,7 @@ VB.NET, nu idiomuri Python):
 """
 import hashlib
 import logging
+import math
 from typing import Dict, List, Optional, Set, Tuple
 
 from utils import asociere_log as journal
@@ -613,6 +614,64 @@ def pas4c_automat(cursor, cod: str, instantanee: List[dict]) -> Dict[int, int]:
 # ===========================================================================
 # Forma deciziilor (2.2)
 # ===========================================================================
+# Slice 0111: the longest reason of a value correction (the same number as asociere.py).
+MAX_MOTIV_CORECTIE = 500
+
+
+def _numar_corectie(valoare, nume: str) -> float:
+    """A JSON number, finite. A string or a boolean is refused, never converted."""
+    if isinstance(valoare, bool) or not isinstance(valoare, (int, float)):
+        raise DecizieInvalida(f"«{nume}» lipsește sau nu este un număr.")
+    if not math.isfinite(valoare):
+        raise DecizieInvalida(f"«{nume}» nu este un număr finit.")
+    return float(valoare)
+
+
+def normalizeaza_corectie(brut, i: int) -> Optional[dict]:
+    """
+    The optional `corectie` of decision `i` (slice 0111), cleaned; None when absent.
+
+    The operator corrected, in the download window, the value FOREXE gave on a snapshot the
+    download brought: the total and the lines, named by their INDICATOR (the lines have no
+    key yet -- they are born inside this run). The checks of the rules are made when it is
+    applied (`asociere.apply_download_corrections`); here only the shape, and nothing is
+    fixed silently.
+    """
+    if brut is None:
+        return None
+    if not isinstance(brut, dict):
+        raise DecizieInvalida(f"«decizii»[{i}]: «corectie» nu este un obiect.")
+    total = _numar_corectie(brut.get("total"), f"decizii[{i}].corectie.total")
+    motiv = str(brut.get("motiv") or "").strip()
+    if motiv == "":
+        raise DecizieInvalida("Motivul corecției este obligatoriu.")
+    if len(motiv) > MAX_MOTIV_CORECTIE:
+        raise DecizieInvalida(
+            f"Motivul are {len(motiv)} caractere; cel mult {MAX_MOTIV_CORECTIE}.")
+    brut_linii = brut.get("linii")
+    if not isinstance(brut_linii, list):
+        raise DecizieInvalida(f"«decizii»[{i}].corectie: «linii» trebuie să fie o listă.")
+    linii = []
+    vazute = set()
+    for j, linie in enumerate(brut_linii):
+        if not isinstance(linie, dict):
+            raise DecizieInvalida(f"«decizii»[{i}].corectie.linii[{j}] nu este un obiect.")
+        indicator = str(linie.get("cod_indicator") or "").strip()
+        if indicator == "":
+            raise DecizieInvalida(
+                f"«decizii»[{i}].corectie.linii[{j}]: «cod_indicator» lipsește.")
+        if indicator in vazute:
+            raise DecizieInvalida(
+                f"Indicatorul {indicator} apare de două ori în corecția deciziei {i}.")
+        vazute.add(indicator)
+        linii.append({
+            "cod_indicator": indicator,
+            "valoare": _numar_corectie(
+                linie.get("valoare"), f"decizii[{i}].corectie.linii[{j}].valoare"),
+        })
+    return {"total": total, "motiv": motiv, "linii": linii}
+
+
 def normalizeaza_decizii(brut) -> List[dict]:
     """
     Verifica forma lui `decizii` si o intoarce curatata.
@@ -714,6 +773,8 @@ def normalizeaza_decizii(brut) -> List[dict]:
             "idrr": idrr,
             "rand_receptie": rand_receptie,
             "receptie_noua": eticheta,
+            # Slice 0111: the value the operator corrected in the download window, or None.
+            "corectie": normalizeaza_corectie(item.get("corectie"), i),
         })
     return out
 
@@ -1325,13 +1386,18 @@ def valideaza_plasarile(lanturi: Dict[int, List[dict]],
         # refused.
         journal.line("F15 pe linii: instantaneu %s", _ca_text(val_inst))
         journal.line("              recepție    %s", _ca_text(val_rec))
-        if val_inst and val_inst != val_rec:
+        # 08.10.2026: a line the reception holds at 0.00 is not a line (`_valori_pe_indicator`
+        # already drops it), so it cannot fail the chain. Only an indicator the reception
+        # really carries (value != 0) is compared; an indicator that has a value on the
+        # snapshot and none on the reception is not a vanished line, it is ignored.
+        coduri_dif = [cod for cod in sorted(val_rec)
+                      if round(val_inst.get(cod, 0), 2) != round(val_rec.get(cod, 0), 2)]
+        if val_inst and coduri_dif:
             journal.line("F15 CADE pe linii: tablourile de mai sus nu sunt egale")
             dif = ", ".join(
                 f"{cod}: instantaneu {val_inst.get(cod, 0):.2f} / recepție "
                 f"{val_rec.get(cod, 0):.2f}"
-                for cod in sorted(set(val_inst) | set(val_rec))
-                if round(val_inst.get(cod, 0), 2) != round(val_rec.get(cod, 0), 2))
+                for cod in coduri_dif)
             _f15(
                 f"{nume}: liniile ultimului instantaneu nu se potrivesc cu "
                 f"cele ale recepției ({dif}). Lanțul nu se închide."

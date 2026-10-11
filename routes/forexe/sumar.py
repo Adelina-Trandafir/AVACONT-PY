@@ -120,7 +120,10 @@ _SQL = (
     "  WHERE C.IDClsf = I.IdClsf "
     "  LIMIT 1) AS Clsf, "
     "I.CodIndicator, aggRev.Partener, "
-    "COALESCE(I.Credit_Bugetar, 0)         AS CreditBugetar, "
+    # Slice 0108: the credit bugetar belongs to the CLASSIFICATION (FX_Indicatori_Buget, one row per
+    # IdClsf, fed only by FOREXE), so every angajament on a classification shows the same figure.
+    "COALESCE((SELECT B.CreditBugetar FROM FX_Indicatori_Buget B "
+    "           WHERE B.IdClsf = I.IdClsf), 0)  AS CreditBugetar, "
     "COALESCE(aggRez.TotalRezervari, 0)    AS TotalRezervari, "
     "COALESCE(aggRec.TotalReceptii, 0)     AS TotalReceptii, "
     "COALESCE(aggPlati.TotalPlati, 0)      AS TotalPlati, "

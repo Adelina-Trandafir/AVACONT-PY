@@ -1,0 +1,2 @@
+# Additional server dependency for saved receipt PDF output.
+reportlab>=4,<5

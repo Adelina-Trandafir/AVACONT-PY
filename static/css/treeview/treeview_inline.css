@@ -1,0 +1,56 @@
+/**
+ * ========== TREEVIEW INLINE ==========
+ * Option `inline: true` (portal): the tree is open inside its container, not a drop-down.
+ */
+.treeview-container--inline {
+  display: block;
+  position: relative;
+  min-height: 0;
+}
+
+.treeview-container--inline > .treeview-input,
+.treeview-container--inline > .treeview-arrow,
+.treeview-container--inline > .treeview-loader {
+  display: none;
+}
+
+.treeview.treeview--inline {
+  position: absolute;
+  inset: 0;
+  width: auto !important;
+  height: auto !important;
+  box-shadow: none;
+  border-color: var(--line, #cdcdcd);
+}
+
+.treeview--inline .treeview-dropdown {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.treeview-item.selected {
+  background: #dcecff;
+  box-shadow: inset 3px 0 0 var(--blue, #309eff);
+}
+
+.treeview-item.is-bold .treeview-label { font-weight: 700; }
+/* node.rightIcon: a button at the right end of the row, always visible (not only on hover) */
+/* It stretches over the whole row and carries the row's own line, so the separator runs unbroken under it;
+   the hover tint stops above that line (background-clip) and has room around the icon. */
+.treeview-righticon { flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; box-sizing: border-box; justify-content: center; width: 33px; margin: -4px -6px 0 0; padding: 0 4px 0 0; line-height: 1; cursor: pointer; border-radius: 3px; border-bottom: 1px solid #d3d1d1; background-clip: content-box; font-size: calc(1em + 1.33px); }
+.treeview-righticon:hover, .treeview-righticon:focus-visible { background-color: rgba(48, 158, 255, .18); outline: none; }
+.treeview-item.is-error .treeview-label { color: #c0392b; }
+
+.treeview-badge {
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0 6px;
+  padding: 0 6px;
+  font-size: .78em;
+  color: var(--ink-soft, #3b5a85);
+  background: rgba(0, 0, 0, .06);
+  border-radius: 8px;
+  white-space: nowrap;
+}

@@ -5,7 +5,7 @@ session's database, the yearly budget of one classification and its corrections.
 
     GET  /api/forexe/nomenclatoare/clasificatii?an=2026
         -> 200 { "items": [ { "id_clsf", "id_unitate", "id_clsf_acc", "capitol", "subcapitol", "articol", "alineat",
-                              "denumire", "ss", "clsf" }, ... ],
+                              "denumire", "ss", "clsf", "in_forexe" }, ... ],
                  "names": { "capitol": {"65": ...}, "subcapitol": {"650402": ...},
                             "articol": {"10.01": ...}, "ss": {"02A": ...} } }
 
@@ -33,7 +33,7 @@ session's database, the yearly budget of one classification and its corrections.
                  "e": { "codes": [ {"code", "name"} ], "groups": {"20": ..., "2001": ...} } }
 
     GET  /api/forexe/nomenclatoare/clasificatii/verificare-buget?data=2026-10-02[&angajament=AAB2...]   (slice 0103-04)
-        -> 200 { "data", "trimestru", "items": [ { "id_clsf", "id_unitate", "clsf", "denumire", "ss",
+        -> 200 { "data", "items": [ { "id_clsf", "id_unitate", "clsf", "denumire", "ss",
                  "buget_kbot": number|null, "credit_fx": number|null, "diferenta", "egal" } ] }
 
     POST /api/forexe/nomenclatoare/clasificatii/adauga
@@ -69,10 +69,11 @@ from flask import g, current_app, request
 from routes.auth.guard import require_session
 from routes.inregistrare import nomenclatoare as registration_lists
 from routes.inregistrare import randuri
+from utils import clsf_pair
 from utils.database import COMMON_DB, get_kbot_connection
 
 from . import forexe_bp
-from .budget_on_day import as_day, budget_on_day, quarter_of
+from .budget_on_day import as_day, budget_on_day
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,8 @@ logger = logging.getLogger(__name__)
 _MAX_DOCUMENT = 255
 
 _SQL_ITEMS = (
-    "SELECT C.IDClsf, C.IdUnitate, C.IdClsfAcc, C.Capitol, C.Subcapitol, C.Articol, C.Alineat, C.Denumire, C.SS, C.Clsf "
+    "SELECT C.IDClsf, C.IdUnitate, C.IdClsfAcc, C.Capitol, C.Subcapitol, C.Articol, C.Alineat, C.Denumire, C.SS, C.Clsf, "
+    "       EXISTS (SELECT 1 FROM FX_Indicatori_Buget F WHERE F.IdClsf = C.IDClsf) AS InForexe "
     "  FROM Clasificatii C "
     "  LEFT JOIN Unitati U ON U.IdUnitate = C.IdUnitate "
     " WHERE COALESCE(U.Ascuns, 0) = 0 "
@@ -214,6 +216,8 @@ def get_clasificatii_tree():
             "denumire": _text(r["Denumire"]),
             "ss": _text(r["SS"]),
             "clsf": _text(r["Clsf"]),
+            # Slice 0107: used in FOREXE = FX_Indicatori_Buget has a row for it (FOREXE reported its credit).
+            "in_forexe": bool(r["InForexe"]),
         } for r in cursor.fetchall()]
         return _json_utf8({"items": items, "names": read_names(cursor)}, 200)
     except Exception as e:
@@ -529,6 +533,19 @@ def get_clasificatii_nomenclator():
             conn.close()
 
 
+# Fills FX_Indicatori.IdClsf where it is empty and EXACTLY ONE classification of the same unit has
+# the indicator's ClsfSal (the match the download makes: find_id_clsf). Zero or several matches
+# leave it alone, and a linked indicator is never moved.
+_SQL_LINK_INDICATORS = (
+    "UPDATE FX_Indicatori I "
+    "   SET I.IdClsf = (SELECT C.IDClsf FROM Clasificatii C "
+    "                    WHERE C.IdUnitate = I.IdUnitate AND C.ClsfSal = I.IndicatorFX) "
+    " WHERE (I.IdClsf IS NULL OR I.IdClsf = 0) "
+    "   AND (SELECT COUNT(*) FROM Clasificatii C "
+    "         WHERE C.IdUnitate = I.IdUnitate AND C.ClsfSal = I.IndicatorFX) = 1"
+)
+
+
 def _code_list(body: dict, key: str, label: str) -> list:
     raw = body.get(key)
     if not isinstance(raw, list) or not raw:
@@ -578,10 +595,18 @@ def post_clasificatii_adauga():
                 continue
             plain.execute(randuri.INSERT_SQL, row)
             inserted += 1
+        # Indicators downloaded before their classification existed are waiting with IdClsf NULL.
+        linked = 0
+        if inserted:
+            cursor.execute(_SQL_LINK_INDICATORS)
+            linked = cursor.rowcount
+            # Payments, receptions, history and reservations copied the empty IdClsf too.
+            clsf_pair.fill_children(cursor)
         conn.commit()
-        logger.info("[forexe.clasificatii_edit] %s: add requested %s, inserted %s, existing %s",
-                    db_name, len(rows), inserted, existing)
-        return _json_utf8({"requested": len(rows), "inserted": inserted, "existing": existing}, 200)
+        logger.info("[forexe.clasificatii_edit] %s: add requested %s, inserted %s, existing %s, "
+                    "indicators linked %s", db_name, len(rows), inserted, existing, linked)
+        return _json_utf8({"requested": len(rows), "inserted": inserted, "existing": existing,
+                           "linked": linked}, 200)
     except (_Refused, randuri.RanduriInvalide) as e:
         _rollback(conn)
         return _json_utf8({"error": str(e)}, 400)
@@ -606,10 +631,13 @@ def _rollback(conn):
 # ---------------------------------------------------------------------------
 # Check: the budget FOREXE reported == the budget K-BOT holds (slice 0103-04)
 # ---------------------------------------------------------------------------
-# What FOREXE reported = the `Credit_Bugetar` of the MOST RECENTLY downloaded indicator row of each
-# classification (FX_Indicatori.DTQ). What K-BOT holds = the version in force on the day plus its
-# rectifications, cumulative to the quarter of the day (budget_on_day.py -- the same rule the DDF
+# What FOREXE reported = FX_Indicatori_Buget.CreditBugetar: ONE row per classification, written by
+# every download (slice 0108; the credit belongs to the classification, so there is no «which
+# angajament» to pick and no tie to break). What K-BOT holds = the version in force on the day plus
+# its rectifications, the TOTAL with no quarter cut-off (budget_on_day.py -- the same rule the DDF
 # uses). Rows whose two figures differ by less than half a cent are equal.
+# Slice 0107: ONLY classifications that have a row in FX_Indicatori_Buget (= used in FOREXE) are checked;
+# a classification that has K-BOT values but was never reported by FOREXE is left out.
 _SQL_CHECK_CLASSIFICATIONS = (
     "SELECT C.IDClsf, C.IdUnitate, C.Clsf, C.Denumire, C.SS "
     "  FROM Clasificatii C "
@@ -618,36 +646,34 @@ _SQL_CHECK_CLASSIFICATIONS = (
     " ORDER BY C.Capitol, C.Subcapitol, C.Articol, C.Alineat"
 )
 _SQL_CHECK_FX_ANGAJAMENT = (
-    "SELECT IdClsf, Credit_Bugetar FROM FX_Indicatori "
-    " WHERE IdClsf IS NOT NULL AND IdClsf <> 0 AND CodAngajament = %s "
-    " ORDER BY DTQ DESC"
+    "SELECT DISTINCT B.IdClsf, B.CreditBugetar FROM FX_Indicatori_Buget B "
+    "  JOIN FX_Indicatori I ON I.IdClsf = B.IdClsf "
+    " WHERE I.CodAngajament = %s"
 )
 _SQL_CHECK_FX = (
-    "SELECT IdClsf, Credit_Bugetar FROM FX_Indicatori "
-    " WHERE IdClsf IS NOT NULL AND IdClsf <> 0 "
-    " ORDER BY DTQ DESC"
+    "SELECT IdClsf, CreditBugetar FROM FX_Indicatori_Buget"
 )
 _EQUAL_WITHIN = 0.005
 
 
 def check_budget(cursor, day: date, cod_angajament: str = "") -> list:
-    """One entry per classification that has a K-BOT budget on `day` or an indicator row. With
-    `cod_angajament` only the classifications of that angajament, against ITS indicator rows (the
-    automatic check after a download)."""
+    """One entry per classification that FOREXE reported a credit for (a row in FX_Indicatori_Buget) and
+    that has a K-BOT budget on `day` or a credit. With `cod_angajament` only the classifications of that
+    angajament (the automatic check after a download)."""
     if cod_angajament:
         cursor.execute(_SQL_CHECK_FX_ANGAJAMENT, (cod_angajament,))
     else:
         cursor.execute(_SQL_CHECK_FX)
     credit_fx = {}
     for r in cursor.fetchall():
-        credit_fx.setdefault(int(r["IdClsf"]), _number(r["Credit_Bugetar"]))
+        credit_fx[int(r["IdClsf"])] = _number(r["CreditBugetar"])
 
     cursor.execute(_SQL_CHECK_CLASSIFICATIONS)
     classifications = cursor.fetchall()
     items = []
     for c in classifications:
         id_clsf = int(c["IDClsf"])
-        if cod_angajament and id_clsf not in credit_fx:
+        if id_clsf not in credit_fx:      # not used in FOREXE: never checked, whatever K-BOT holds
             continue
         kbot = budget_on_day(cursor, id_clsf, day)
         fx = credit_fx.get(id_clsf)
@@ -682,7 +708,7 @@ def get_verificare_buget():
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor(dictionary=True, buffered=True)
         items = check_budget(cursor, day, _text(request.args.get("angajament")))
-        return _json_utf8({"data": day.isoformat(), "trimestru": quarter_of(day), "items": items}, 200)
+        return _json_utf8({"data": day.isoformat(), "items": items}, 200)
     except _Refused as e:
         return _json_utf8({"error": str(e)}, 400)
     except Exception as e:

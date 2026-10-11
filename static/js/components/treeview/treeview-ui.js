@@ -47,6 +47,7 @@ export const treeViewUIMixin = {
   },
 
   hide() {
+    if (this.options.inline) return; // an inline tree is always open
     if (this.treeElement) {
       this.treeElement.classList.add('hidden');
       this.treeElement.classList.remove('visible');

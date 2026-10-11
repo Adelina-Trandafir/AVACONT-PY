@@ -224,8 +224,7 @@ def download():
     try:
         response = send_file(
             path,
-            mimetype="application/zip",
-            as_attachment=True,
+            mimetype="application/zip",            as_attachment=True,
             download_name=data["file"],
             conditional=True,
         )
@@ -236,3 +235,50 @@ def download():
     except Exception as e:
         logger.error("update package could not be sent: %s", e, exc_info=True)
         return _error("Pachetul de actualizare nu a putut fi trimis.", "PACKAGE_SEND_FAILED", 500)
+
+
+# The first install of a NEW user (no Access): the Inno Setup .exe, not the update zip.
+# It is uploaded by hand next to latest.json under its build name and the newest one wins,
+# so a new build needs no config change.
+_SETUP_RE = re.compile(r"^[A-Za-z0-9._-]+_noaccess\.exe$")
+
+
+def newest_setup_name(update_dir=None):
+    """
+    File name of the newest *_noaccess.exe in the update folder, or None. The version
+    and the rest of the name do not matter: whichever such file is there is the one.
+    Newest = last modified, so a rebuilt installer wins whatever it is called.
+    """
+    update_dir = update_dir or get_update_dir()
+    try:
+        names = [n for n in os.listdir(update_dir) if _SETUP_RE.match(n)]
+        names.sort(key=lambda n: os.path.getmtime(os.path.join(update_dir, n)))
+    except OSError:
+        return None
+    return names[-1] if names else None
+
+
+@update_bp.route("/api/update/setup", methods=["GET"])
+@update_bp.route("/api/update/setup/<path:file_name>", methods=["GET"])
+def setup(file_name=None):
+    """
+    The installer .exe for a first install (clients without Access), streamed as a file.
+    With a name in the address that exact file is sent (it must be a *_noaccess.exe in the
+    update folder); without one, or when that file is gone, the newest one is.
+    """
+    update_dir = get_update_dir()
+    name = file_name if file_name and _SETUP_RE.match(file_name) \
+        and os.path.isfile(os.path.join(update_dir, file_name)) else newest_setup_name(update_dir)
+    if not name:
+        return _error("Programul de instalare nu este publicat.", "NO_SETUP_PUBLISHED", 404)
+    try:
+        return send_file(
+            os.path.join(update_dir, name),
+            mimetype="application/vnd.microsoft.portable-executable",
+            as_attachment=True,
+            download_name=name,
+            conditional=True,
+        )
+    except Exception as e:
+        logger.error("setup could not be sent: %s", e, exc_info=True)
+        return _error("Programul de instalare nu a putut fi trimis.", "SETUP_SEND_FAILED", 500)

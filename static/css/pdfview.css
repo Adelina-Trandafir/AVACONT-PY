@@ -1,0 +1,25 @@
+/* Slice 0110-08 -- the read-only PDF viewer of the web area (js/portal/pdfview.js, pdf.js vendored).
+   pdf_viewer.min.css supplies the pages; this file lays the viewer out and makes it inert. */
+
+.pdfview { position: relative; background: #7a8190; border: 1px solid var(--line, #cfe3f8); border-radius: 8px; overflow: hidden; }
+.pdfview__scroll { position: absolute; inset: 0; overflow: auto; }
+
+/* A viewer, not a form: nothing typed or clicked in the document's fields goes anywhere. */
+.pdfview .xfaLayer, .pdfview .annotationLayer { pointer-events: none; user-select: text; }
+.pdfview .xfaLayer input, .pdfview .xfaLayer textarea, .pdfview .xfaLayer select, .pdfview .xfaLayer button { pointer-events: none; }
+
+/* the area under the tabs when «Documente» is open */
+.pa__grid[hidden], .pa__docs[hidden] { display: none; }
+.pa__docs { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.pa__docs-list { flex: 0 0 170px; min-height: 0; }
+.pa__docs-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pa__docs-note { font-size: .88rem; color: var(--ink-soft, #3b5a85); }
+.pa__docs-view { flex: 1 1 auto; min-height: 240px; }
+
+@media (max-width: 900px) {
+  .pa__docs { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .pa__docs-view { flex: 1 1 auto; min-height: 60vh; }
+}
+
+/* the stock page-loading icon is an image we do not ship; a plain text mark stands in */
+.pdfview .loadingIcon::after { background: none !important; content: "\2026"; color: #fff; font-size: 24px; }

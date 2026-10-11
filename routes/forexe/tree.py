@@ -108,6 +108,12 @@ _SELECT = (
     # this angajament. The notes tables (slice 0088) may not exist on a unit database yet, so
     # this column is filled in by _sql(): EXISTS when they do, a literal 0 when they do not.
     "{are_note_cab} AS AreNoteCab, "
+    # Slice 00EF-22: the «E-Factura» view -- the angajament's DDF has received e-invoices (a partner's tax code, or a link the operator
+    # made). The tables (slice 00EF-02 / 00EF-17) may not exist on a unit database yet: _sql() fills EXISTS when they do, a literal 0 when not.
+    "{are_primite} AS ArePrimite, "
+    # Slice 0008-02: the name the operator gave (column from sql/0008_02_alias_grupe.sql; where it
+    # is not applied yet, _sql() puts a literal NULL here).
+    "{alias} AS Alias, "
     # Slice 0101: the receptions whose chain does not close (see _LANT_NEINCHIS).
     + _LANT_NEINCHIS + " AS LantNeinchis "
     "FROM FX_Angajamente a "
@@ -117,6 +123,16 @@ _SELECT = (
 _ARE_NOTE_CAB = ("EXISTS (SELECT 1 FROM FX_NoteCAB_Corectii k "
                  "        WHERE k.CodAngajament = a.CodAngajament)")
 _NO_NOTE_CAB = "0"
+# Slice 00EF-22: the ArePrimite column, in its two shapes. No join spreads the row: both are EXISTS. The tax code of a partner is brought
+# to the form EF_Primite.CuiNormalizat has (letters and digits, upper case, a leading «RO» before digits dropped -- the same rule as
+# routes/efactura/primite.py and EfCui in the Migrator).
+_ARE_PRIMITE = ("(EXISTS (SELECT 1 FROM FX_DDF_Parteneri dp JOIN EF_Primite ep "
+                "         ON ep.CuiNormalizat = UPPER(REGEXP_REPLACE(REGEXP_REPLACE(dp.CodFiscal, '[^[:alnum:]]', ''), '^RO([0-9])', '\\\\1')) "
+                "         WHERE dp.IDDF = a.IDDF) "
+                " OR EXISTS (SELECT 1 FROM EF_PrimiteAsocieri pa WHERE pa.IDDF = a.IDDF))")
+_NO_PRIMITE = "0"
+_SQL_PRIMITE_TABLES = ("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s "
+                       "AND TABLE_NAME IN ('EF_Primite', 'EF_PrimiteAsocieri', 'FX_DDF_Parteneri')")
 _SQL_NOTE_TABLE = ("SELECT COUNT(*) FROM information_schema.TABLES "
                    "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'FX_NoteCAB_Corectii'")
 
@@ -131,7 +147,8 @@ _SQL_NOTE_TABLE = ("SELECT COUNT(*) FROM information_schema.TABLES "
 #            O oglindim cu „EXISTS(indicator pe SS) OR NOT EXISTS(niciun indicator)":
 #            filtrul SS ingusteaza DOAR angajamentele care CHIAR au indicatori; orfanii
 #            raman mereu vizibili. Slice 0777: a leading "%s = 1 OR" lifts the whole SS
-#            block when ss=* (all sources); bind tuple is (an, all_ss, ss, include_hidden).
+#            block when ss=* (all sources); bind tuple is (an, an, all_ss, ss, include_hidden).
+#   Slice 0008-02: an = 0 lifts the YEAR filter too (a group of angajamente spans years).
 #   Ascuns : implicit exclude ASCUNS<>0; include_hidden=1 le readuce (btnOpt).
 #   Stare  : exclude Anulat/Suspendat. NU vine din qFX_MAIN_TREE (acela nu are WHERE
 #            deloc) — vine din qFX_MAIN_TREE_DATA:7 si mdl_FX_PopulareTree.md:253,
@@ -141,7 +158,7 @@ _SQL_NOTE_TABLE = ("SELECT COUNT(*) FROM information_schema.TABLES "
 #            LIKE e case-insensitive pe colatia utf8mb4_general_ci a bazei, deci
 #            oglindeste InStr() din Access fara functii suplimentare.
 _WHERE = (
-    "WHERE (YEAR(a.DataCreare) = %s OR a.DataCreare IS NULL) "
+    "WHERE (%s = 0 OR YEAR(a.DataCreare) = %s OR a.DataCreare IS NULL) "
     "AND ( "
     "    %s = 1 OR "
     "    EXISTS (SELECT 1 FROM FX_Indicatori i "
@@ -168,19 +185,29 @@ _SQL_DATA_ACTUALIZARE_COLUMN = ("SELECT COUNT(*) FROM information_schema.COLUMNS
                                 "AND COLUMN_NAME = 'DataActualizare'")
 
 
-def _sql(has_note_tables: bool, has_data_actualizare: bool = True) -> str:
+# Slice 0008-02: the Alias column, in its two shapes (see _SELECT).
+_ALIAS = "a.Alias"
+_NO_ALIAS = "NULL"
+_SQL_ALIAS_COLUMN = ("SELECT COUNT(*) FROM information_schema.COLUMNS "
+                     "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'FX_Angajamente' "
+                     "AND COLUMN_NAME = 'Alias'")
+
+
+def _sql(has_note_tables: bool, has_data_actualizare: bool = True, has_alias: bool = True, has_primite: bool = True) -> str:
     """The tree query, with AreNoteCab read from the notes table only where it exists, and
     DataActualizare only where its column was added (slice 0100)."""
     are_note_cab = _ARE_NOTE_CAB if has_note_tables else _NO_NOTE_CAB
     data_act = _DATA_ACTUALIZARE if has_data_actualizare else _NO_DATA_ACTUALIZARE
     return (_SELECT.replace("{are_note_cab}", are_note_cab)
-            .replace("{data_actualizare}", data_act) + _WHERE + _ORDER)
+            .replace("{are_primite}", _ARE_PRIMITE if has_primite else _NO_PRIMITE)
+            .replace("{data_actualizare}", data_act)
+            .replace("{alias}", _ALIAS if has_alias else _NO_ALIAS) + _WHERE + _ORDER)
 
 
 _SQL = _sql(True)
 
 # The ss value that lifts the SS filter (slice 0777). Bind order of _SQL:
-# (an, all_ss, ss, include_hidden).
+# (an, an, all_ss, ss, include_hidden).
 ALL_SOURCES = "*"
 
 
@@ -200,7 +227,7 @@ def get_tree():
     Returneaza { db_name, count, rows: [ {CodAngajament, IDDF, Descriere, Stare,
     DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, DataActualizare, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
-    AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab, LantNeinchis}, ... ] }.
+    AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab, Alias, LantNeinchis}, ... ] }.
     """
     an_raw = request.args.get("an")
     if an_raw is None or str(an_raw).strip() == "":
@@ -232,13 +259,17 @@ def get_tree():
         has_note_tables = int(cursor.fetchone()[0] or 0) > 0
         cursor.execute(_SQL_DATA_ACTUALIZARE_COLUMN, (db_name,))
         has_data_actualizare = int(cursor.fetchone()[0] or 0) > 0
-        cursor.execute(_sql(has_note_tables, has_data_actualizare),
-                       (an, all_ss, ss, include_hidden))
+        cursor.execute(_SQL_ALIAS_COLUMN, (db_name,))
+        has_alias = int(cursor.fetchone()[0] or 0) > 0
+        cursor.execute(_SQL_PRIMITE_TABLES, (db_name,))
+        has_primite = int(cursor.fetchone()[0] or 0) == 3
+        cursor.execute(_sql(has_note_tables, has_data_actualizare, has_alias, has_primite),
+                       (an, an, all_ss, ss, include_hidden))
         rows = []
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
              salarii, ascuns, data_actualizare, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
              are_rezervari, are_receptii, are_plati, are_ddf, are_partener,
-             are_ord, are_extrase, are_note_cab, lant_neinchis) in cursor.fetchall():
+             are_ord, are_extrase, are_note_cab, are_primite, alias, lant_neinchis) in cursor.fetchall():
             rows.append({
                 "CodAngajament": cod,
                 "IDDF": iddf,
@@ -266,7 +297,10 @@ def get_tree():
                 "AreOrd": bool(are_ord),
                 "AreExtrase": bool(are_extrase),
                 "AreNoteCab": bool(are_note_cab),
+                "ArePrimite": bool(are_primite),
                 # Slice 0101: NULL = every chain closes (see _LANT_NEINCHIS for the shape).
+                # Slice 0008-02: the operator's name for the angajament (None = none).
+                "Alias": alias,
                 "LantNeinchis": lant_neinchis,
             })
         logger.info("[forexe.tree] %s: an=%s ss=%s include_hidden=%s -> %s randuri",

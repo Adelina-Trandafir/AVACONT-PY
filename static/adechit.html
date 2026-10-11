@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prezență · ADECHIT</title><meta name="robots" content="noindex">
+<script src="/static/js/adechit/gate.js"></script>
+<script src="/static/js/portal/theme-init.js"></script>
+<link rel="stylesheet" href="/static/site/site.css"><link rel="stylesheet" href="/static/css/variables.css">
+<link rel="stylesheet" href="/static/css/portal.css"><link rel="stylesheet" href="/static/css/dgv.css">
+<link rel="stylesheet" href="/static/css/treeview/treeview.css"><link rel="stylesheet" href="/static/css/combobox.css"><link rel="stylesheet" href="/static/css/datepicker.css"><link rel="stylesheet" href="/static/css/adechit.css">
+<script src="/static/js/utils/css.js"></script><script src="/static/js/utils/z-max.js"></script>
+<script type="module" src="/static/js/adechit/app.js"></script></head>
+<body class="portal ade-page"><header class="header ade-header">
+<button class="brand ade-brand" id="ade-apps" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Aplicații"><svg class="ade-brand__icon" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#309eff"/><text x="16" y="24" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="800" fill="#fff">A</text></svg><span class="ade-brand__name">ADECHIT</span></button>
+<div class="ade-header__center"><div id="ade-subunit" class="ade-subunit" hidden><div id="ade-subunit-combo" class="ade-picker"></div></div><div class="ade-search"><input id="ade-search" type="search" autocomplete="off" placeholder="Scrie nume sau CNP copil" aria-label="Caută copil după nume sau CNP"></div></div>
+<div class="ade-header__right"><span id="ade-context" class="ade-header__context"></span><span id="ade-session-timer" class="ade-session-timer" role="timer" hidden>⏱ <b>05:00</b></span><button class="btn ade-menu-btn" id="ade-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Meniu"><svg viewBox="0 0 14 12" width="14" height="12" aria-hidden="true"><path d="M0 1h14M0 6h14M0 11h14" stroke="currentColor" stroke-width="2" fill="none"/></svg></button></div>
+<div class="ade-header__hidden" hidden><button id="ade-payers" type="button">Plătitori</button><button id="ade-taxes" type="button">Taxe</button></div></header>
+<main class="ade-main">
+  <div class="ade-notice-row"><p id="ade-message" class="msg" role="status"></p></div>
+  <section class="ade-shell" aria-label="Prezența lunară">
+    <aside class="ade-sidebar">
+      <section class="ade-side-panel ade-month-panel"><h2><button class="ade-h2-btn ade-left__toggle" id="ade-left-toggle" type="button" aria-expanded="true" aria-controls="ade-month-tree" title="Restrânge panoul din stânga">‹</button><span class="ade-h2-text">LUNA / ANUL</span><button class="ade-h2-btn" id="ade-refresh" type="button" title="Reîncarcă situația lunii" aria-label="Reîncarcă situația lunii">🔄</button></h2><div id="ade-month-tree" class="ade-tree"></div></section>
+      <section class="ade-side-panel ade-group-panel"><h2>GRUPA</h2><div id="ade-group-tree" class="ade-tree ade-tree--roots"></div><label class="ade-hidden-groups" data-label="Arată și grupele ascunse"><input id="ade-show-hidden-groups" type="checkbox"><span class="ade-hidden-groups__text">Arată și grupele ascunse</span></label></section>
+    </aside>
+    <section class="ade-center">
+      <div class="ade-toolbar"><div class="ade-toolbar__info" hidden><strong id="ade-period">Alegeți luna</strong><span id="ade-group-caption">Alegeți grupa</span></div>
+        <div class="ade-pickers" aria-label="Anul, luna și grupa"><div id="ade-year-combo" class="ade-picker"></div><div id="ade-month-combo" class="ade-picker"></div><div id="ade-group-combo" class="ade-picker"></div></div></div>
+      <div id="ade-grid" class="ade-grid" aria-label="Situația copiilor"></div>
+      <div id="ade-row-detail" class="ade-row-detail" role="status" hidden></div>
+      <section class="ade-ledger" data-kind="receipt" aria-label="Documentele copilului selectat">
+        <div class="ade-tablist" role="tablist" aria-label="Încasări și restituiri">
+          <button role="tab" aria-selected="true" data-ledger="receipt">Chitanțe</button>
+          <button role="tab" aria-selected="false" data-ledger="other">Alte plăți</button>
+          <button role="tab" aria-selected="false" data-ledger="refund">Restituiri</button>
+          <span id="ade-selected-child">Selectați un copil din tabel.</span>
+        </div>
+        <div id="ade-ledger-body" class="ade-ledger-body"></div>
+      </section>
+    </section>
+    <aside id="ade-reports" class="ade-reports" aria-label="Rapoarte">
+      <button class="ade-reports__toggle" id="ade-reports-toggle" type="button" aria-expanded="true" aria-controls="ade-reports-content" title="Restrânge panoul Rapoarte">›</button>
+      <div class="ade-reports__content" id="ade-reports-content">
+        <h2>RAPOARTE</h2>
+        <div class="ade-rep-group">
+          <div class="ade-rep-item ade-rep-item--cmd" data-label="Situație lunară"><span class="ade-rep-icon" aria-hidden="true">▣</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-situation">▣ <span>Situație lunară</span></button></div></div>
+          <div class="ade-rep-item ade-rep-item--check" data-label="Toate grupele?"><span class="ade-rep-icon" aria-hidden="true"></span><div class="ade-rep-body"><label><input type="checkbox" id="ade-rep-all"> Toate grupele?</label></div></div>
+          <div class="ade-rep-item ade-rep-item--check" data-label="Separă grupe?"><span class="ade-rep-icon" aria-hidden="true"></span><div class="ade-rep-body"><label><input type="checkbox" id="ade-rep-split" disabled> Separă grupe?</label></div></div>
+        </div>
+        <div class="ade-rep-group">
+          <div class="ade-rep-item ade-rep-item--cmd" data-label="Registru casă"><span class="ade-rep-icon" aria-hidden="true">▣</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-cash">▣ <span>Registru casă</span></button></div></div>
+          <div class="ade-rep-item ade-rep-item--cmd" data-label="Raport bancă"><span class="ade-rep-icon" aria-hidden="true">▣</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-bank">▣ <span>Raport bancă</span></button></div></div>
+          <div class="ade-rep-item ade-rep-item--date" data-label="Dată început"><span class="ade-rep-icon" aria-hidden="true">📅</span><div class="ade-rep-body"><label class="ade-report-date"><span>Dată început</span><input type="date" id="ade-rep-start" aria-label="Dată început"></label></div></div>
+          <div class="ade-rep-item ade-rep-item--date" data-label="Dată sfârșit"><span class="ade-rep-icon" aria-hidden="true">📅</span><div class="ade-rep-body"><label class="ade-report-date"><span>Dată sfârșit</span><input type="date" id="ade-rep-end" aria-label="Dată sfârșit"></label></div></div>
+        </div>
+        <div class="ade-rep-group">
+          <div class="ade-rep-item ade-rep-item--cmd" data-label="Fișă cont"><span class="ade-rep-icon" aria-hidden="true">▤</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-account"><span>Fișă cont</span></button></div></div>
+          <div class="ade-rep-item ade-rep-item--check" data-label="Toți copiii din grupă"><span class="ade-rep-icon" aria-hidden="true"></span><div class="ade-rep-body"><label><input type="checkbox" id="ade-rep-account-all"> Toți copiii din grupă</label></div></div>
+          <div class="ade-rep-item ade-rep-item--check" data-label="Trimite Mail?"><span class="ade-rep-icon" aria-hidden="true"></span><div class="ade-rep-body"><label><input type="checkbox" id="ade-rep-account-mail" disabled title="Trimiterea pe mail nu este disponibilă încă."> <strong>Trimite Mail?</strong></label></div></div>
+        </div>
+        <div class="ade-rep-group">
+          <div hidden class="ade-rep-item ade-rep-item--cmd" data-label="Fișă debitor"><span class="ade-rep-icon" aria-hidden="true">▤</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-debtor"><span>Fișă debitor</span></button></div></div>
+          <div hidden class="ade-rep-item ade-rep-item--cmd" data-label="Situație financiară"><span class="ade-rep-icon" aria-hidden="true">▣</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-financial"><span>Situație financiară</span></button></div></div>
+        </div>
+        <div class="ade-rep-group ade-reports__cancelled">
+          <div class="ade-rep-item ade-rep-item--cmd" data-label="Documente anulate"><span class="ade-rep-icon" aria-hidden="true">⊘</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-cancelled"><span>Documente anulate</span></button></div></div>
+        </div>
+        <div class="ade-reports__spacer"></div>
+        <div hidden class="ade-rep-item ade-rep-item--cmd" data-label="Încarcă chitanțe"><span class="ade-rep-icon" aria-hidden="true">🌐</span><div class="ade-rep-body"><button type="button" class="ade-report-command" disabled title="Încărcarea chitanțelor pe site nu este disponibilă încă.">🌐 <span>Încarcă chitanțe</span></button></div></div>
+      </div>
+    </aside>
+  </section>
+</main>
+<dialog id="ade-catalog" class="ade-catalog" aria-labelledby="ade-catalog-title" aria-describedby="ade-catalog-message">
+  <header class="ade-catalog-header"><h2 id="ade-catalog-title">Plătitori</h2><span>Salvare obligatorie înainte de închidere</span></header>
+  <p id="ade-catalog-message" class="msg" role="alert" hidden></p>
+  <section id="ade-catalog-content" class="ade-catalog-content"></section>
+  <footer><button id="ade-catalog-save" class="btn" type="button">Salvează și închide</button></footer>
+</dialog>
+<dialog id="ade-payers-dialog" class="ade-catalog ade-payers-window" aria-labelledby="ade-payers-title">
+  <header class="ade-catalog-header"><h2 id="ade-payers-title">Plătitori</h2><button id="ade-payers-back" class="btn ade-payers-mobile-action" type="button" aria-label="Înapoi" title="Înapoi">↩️</button></header>
+  <p id="ade-payers-message" class="msg" role="alert" hidden></p>
+  <details id="ade-payers-portal-issues" class="ade-portal-issues" hidden><summary id="ade-payers-portal-summary"></summary><div id="ade-payers-portal-links"></div></details>
+  <section class="ade-payers-columns">
+    <section class="ade-list-panel" aria-label="Grupe"><div id="ade-groups-list" class="ade-list-grid"></div><footer class="ade-list-actions"><button id="ade-group-add" class="btn" type="button" disabled>Adaugă</button><button id="ade-group-edit" class="btn" type="button" disabled>Modifică</button></footer></section>
+    <section class="ade-list-panel" aria-label="Copii"><div id="ade-children-list" class="ade-list-grid"></div><footer class="ade-list-actions"><button id="ade-child-add" class="btn" type="button" disabled>Adaugă</button><button id="ade-child-edit" class="btn" type="button" disabled>Modifică</button></footer></section>
+    <section class="ade-list-panel" aria-label="Plătitorii copilului"><div id="ade-payers-list" class="ade-list-grid"></div><footer class="ade-list-actions"><button id="ade-payer-add" class="btn" type="button" disabled>Adaugă</button><button id="ade-payer-edit" class="btn" type="button" disabled>Modifică</button></footer></section>
+  </section>
+  <footer class="ade-payers-footer"><button id="ade-payers-mobile-add" class="btn ade-payers-mobile-action" type="button" aria-label="Adaugă" title="Adaugă" disabled>➕</button><button id="ade-payers-mobile-edit" class="btn ade-payers-mobile-action" type="button" aria-label="Modifică" title="Modifică" disabled>✏️</button><button id="ade-payers-close" class="btn" type="button">Închide</button></footer>
+</dialog>
+<dialog id="ade-record-dialog" class="ade-catalog ade-record-window" aria-labelledby="ade-record-title" aria-describedby="ade-record-message">
+  <form id="ade-record-form">
+    <header class="ade-catalog-header"><h2 id="ade-record-title">Editare</h2></header>
+    <p id="ade-record-message" class="msg" role="status" hidden></p>
+    <section id="ade-record-body" class="ade-record-body"></section>
+    <footer class="ade-record-actions"><button id="ade-record-cancel" class="btn" type="button">Renunță</button><button id="ade-record-save" class="btn" type="submit">Salvează</button></footer>
+  </form>
+</dialog>
+<dialog id="ade-annual" class="ade-catalog ade-annual" aria-labelledby="ade-annual-title">
+  <form id="ade-annual-form">
+    <header class="ade-catalog-header"><h2 id="ade-annual-title">Închidere anuală</h2></header>
+    <p id="ade-annual-message" class="msg" role="alert" hidden></p>
+    <p class="ade-annual-help">Selectați copiii cu Ctrl, Shift sau bifele din prima coloană și trageți-i peste grupa destinație din arbore. Bifați „Plecat” pentru cei care ies la 31 august. Modificările se aplică de la 1 septembrie; copiii plecați cu sold sunt preluați în grupa specială.</p>
+    <fieldset id="ade-annual-workspace" class="ade-annual-workspace">
+      <aside class="ade-annual-groups"><div id="ade-annual-tree" class="ade-tree"></div><footer><button id="ade-annual-add-group" class="btn" type="button">Adaugă grupă</button><button id="ade-annual-delete-group" class="btn" type="button" hidden>Elimină grupa nouă</button></footer></aside>
+      <section class="ade-annual-detail">
+        <label class="ade-annual-name">Denumire în noul an<input id="ade-annual-name" maxlength="50" aria-label="Denumire grupă în noul an"></label>
+        <h3 id="ade-annual-group-title"></h3>
+        <div id="ade-annual-grid" class="ade-annual-grid"></div>
+        <div class="ade-annual-transfer"><span id="ade-annual-selected">0 copii selectați</span><div id="ade-annual-target"></div><button id="ade-annual-move" class="btn" type="button" disabled>Mută copiii selectați</button></div>
+        <h3>Educatori pentru noul an</h3><div id="ade-annual-educator-grid" class="ade-annual-educator-grid"></div>
+        <button id="ade-annual-add-educator" class="btn" type="button">Adaugă educator</button>
+      </section>
+    </fieldset>
+    <footer><button id="ade-annual-cancel" class="btn" type="button">Renunță</button><button id="ade-annual-save" class="btn" type="submit">Închide august și deschide septembrie</button></footer>
+  </form>
+</dialog></body></html>

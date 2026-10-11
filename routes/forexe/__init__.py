@@ -131,3 +131,6 @@ from . import pdf_banc  # noqa: E402,F401
 # print_count.py = POST .../print: one more print of a DDF / ORD / CAB note / receipt shown in
 # K-BOT (slice 0099, sql/0099_print_count.sql). After pdf.py: it uses its family descriptions.
 from . import print_count  # noqa: E402,F401
+# grupe.py = GET/POST /api/forexe/grupe..., POST .../grupe/alias: the groups of angajamente and
+# the alias of an angajament (slice 0008-02, sql/0008_02_alias_grupe.sql).
+from . import grupe  # noqa: E402,F401

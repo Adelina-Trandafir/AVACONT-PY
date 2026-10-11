@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cere mai multe detalii · K-BOT</title>
+<meta name="description" content="Spune-ne cine ești și ce te interesează, iar noi îți răspundem cu detalii despre K-BOT.">
+<meta name="theme-color" content="#309eff">
+<link rel="icon" type="image/png" sizes="64x64" href="/static/site/img/art/logo-64.png">
+<link rel="stylesheet" href="/static/site/site.css">
+<link rel="stylesheet" href="/static/site/detalii.css">
+<script src="/static/js/detalii/detalii.js" defer></script>
+</head>
+<body>
+
+<div class="topwrap">
+<header class="topbar is-scrolled" id="topbar">
+  <div class="topbar__in">
+    <a class="brand" href="/" aria-label="K-BOT, înapoi la prezentare">
+      <img src="/static/site/img/art/logo-128.png" alt="" width="36" height="36">
+      <span class="brand__text">
+        <span class="brand__name">K-BOT</span>
+        <span class="brand__tag">Pune Botu' pe treabă...</span>
+      </span>
+    </a>
+    <div class="topbar__cta">
+      <a class="btn btn--ghost btn--sm" href="/">Înapoi la prezentare</a>
+      <a class="btn btn--primary btn--sm" href="/inregistrare">Înregistrează<span class="btn__more"> unitatea</span></a>
+    </div>
+  </div>
+</header>
+</div>
+
+<main class="detalii">
+  <div class="wrap detalii__wrap">
+    <header class="detalii__head">
+      <span class="pill">Contact</span>
+      <h1>Cere mai multe detalii</h1>
+      <p class="lead">Spune-ne cine ești și ce te interesează. Îți răspundem pe e-mail, de obicei în una sau două zile lucrătoare.</p>
+    </header>
+
+    <section class="card detalii__card" id="card-form">
+      <form id="detalii-form" novalidate autocomplete="on" data-token="{{ token }}">
+        <div class="grid">
+          <div class="field">
+            <label for="f-nume">Nume și prenume <span class="req" aria-hidden="true">*</span></label>
+            <input id="f-nume" name="nume" type="text" maxlength="120" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="f-institutie">Instituția <span class="req" aria-hidden="true">*</span></label>
+            <input id="f-institutie" name="institutie" type="text" maxlength="160" autocomplete="organization" required>
+          </div>
+          <div class="field">
+            <label for="f-email">E-mail <span class="req" aria-hidden="true">*</span></label>
+            <input id="f-email" name="email" type="email" maxlength="80" autocomplete="email" inputmode="email" required>
+          </div>
+          <div class="field">
+            <label for="f-telefon">Telefon <span class="opt">(opțional)</span></label>
+            <input id="f-telefon" name="telefon" type="tel" maxlength="30" autocomplete="tel" inputmode="tel">
+          </div>
+          <div class="field">
+            <label for="f-cf">Cod fiscal <span class="opt">(opțional)</span></label>
+            <input id="f-cf" name="cf" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="ex. 12345678 sau RO12345678">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-mesaj">Ce te interesează? <span class="opt">(opțional)</span></label>
+          <textarea id="f-mesaj" name="mesaj" rows="5" maxlength="2000" placeholder="De exemplu: ce face K-BOT pentru unitatea noastră, cum se face o demonstrație, ce costă."></textarea>
+          <span class="counter" id="mesaj-count" aria-live="off">0 / 2000</span>
+        </div>
+
+        {# Hidden from people (CSS, not type=hidden: robots fill visible-looking text inputs). #}
+        <div class="hp" aria-hidden="true">
+          <label for="f-website">Nu completa acest câmp</label>
+          <input id="f-website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
+        <label class="check" for="f-acord">
+          <input id="f-acord" name="acord" type="checkbox" required>
+          <span>Sunt de acord ca datele de mai sus să fie folosite pentru a-mi răspunde la această cerere. Nu le folosim în alt scop și nu le dăm mai departe. <span class="req" aria-hidden="true">*</span></span>
+        </label>
+
+        <p class="msg" id="form-msg" role="alert" hidden></p>
+
+        <div class="actions">
+          <button class="btn btn--primary btn--lg" type="submit" id="btn-send">Trimite cererea</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card detalii__done" id="card-done" hidden aria-live="polite">
+      <h2>Mulțumim!</h2>
+      <p class="lead">Cererea a ajuns la noi. Îți răspundem pe adresa de e-mail pe care ai scris-o.</p>
+      <p><a class="btn btn--ghost" href="/">Înapoi la prezentare</a></p>
+    </section>
+  </div>
+</main>
+
+</body>
+</html>

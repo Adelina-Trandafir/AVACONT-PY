@@ -5,7 +5,8 @@ Ruta Istoric pentru frmFX_ISTORIC (felia 0022, vederea Istoric).
 Contract (GET /api/forexe/istoric?cod=<CodAngajament>):
     { "cod": "<CodAngajament>",
       "randuri":      [ {...}, ... ],   # FX_Istoric — un rand per inregistrare
-      "clasificatii": [ {...}, ... ] }  # ierarhia de filtrare (nomenclator), deduplicata
+      "clasificatii": [ {...}, ... ],   # ierarhia de filtrare (nomenclator), deduplicata
+      "credit_initial_citit": bool }    # slice 0108: FX_Angajamente.CreditInitialLa nu e NULL
 
 Scope: baza conectata ESTE unitatea (o baza MariaDB = o unitate), deci nu exista
 parametru db_name / id_unitate — baza vine din sesiune (g.session.db_name), exact
@@ -64,6 +65,7 @@ dar pe niciun control — a le adauga ar inventa o vedere.
 import json
 import logging
 
+import mysql.connector
 from flask import request, g, current_app
 
 from routes.auth.guard import require_session
@@ -137,6 +139,26 @@ def _num(value):
     """Coloana de bani -> float. DOUBLE vine ca float; None devine 0.0 (server-side), ca
     grila si totalurile sa arate «0,00», nu gol. Valorile negative isi pastreaza semnul."""
     return float(value) if value is not None else 0.0
+
+
+# Slice 0108: has the INITIAL credit of this angajament been read from «Informatii complete
+# contract»? The K-BOT download asks it together with the history (it already asks the history to
+# choose between the complete and the REVERSE flow) and opens that page only when the answer is
+# False -- once per angajament. Unknown angajament or a database without the column: True, i.e.
+# «do not read» (the server refuses to write it anyway; see prelucrare._step2c_credit_initial).
+_SQL_CREDIT_INITIAL = "SELECT CreditInitialLa FROM FX_Angajamente WHERE CodAngajament = %s"
+_ER_BAD_FIELD = 1054
+
+
+def _credit_initial_citit(cursor, cod: str) -> bool:
+    try:
+        cursor.execute(_SQL_CREDIT_INITIAL, (cod,))
+    except mysql.connector.Error as err:
+        if getattr(err, "errno", None) != _ER_BAD_FIELD:
+            raise
+        return True
+    rand = cursor.fetchone()
+    return True if rand is None else rand[0] is not None
 
 
 @forexe_bp.route("/api/forexe/istoric", methods=["GET"])
@@ -216,7 +238,9 @@ def get_istoric():
 
         logger.info("[forexe.istoric] %s: cod=%s -> randuri=%s clasificatii=%s",
                     db_name, cod, len(randuri), len(clasificatii))
-        return _json_utf8({"cod": cod, "randuri": randuri, "clasificatii": clasificatii}, 200)
+        credit_initial_citit = _credit_initial_citit(cursor, cod)
+        return _json_utf8({"cod": cod, "randuri": randuri, "clasificatii": clasificatii,
+                           "credit_initial_citit": credit_initial_citit}, 200)
     except Exception as e:
         # Fara inghitire: o eroare de baza intoarce motivul, NU liste goale — listele goale
         # ar minti operatorul ca angajamentul nu are istoric.

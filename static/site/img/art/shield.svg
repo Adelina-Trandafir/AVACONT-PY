@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 230" width="200" height="230" role="img" aria-label="Scut cu bifa">
+  <defs>
+    <linearGradient id="sh" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5bbcff"/>
+      <stop offset="1" stop-color="#0a5cb8"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="100" cy="214" rx="64" ry="10" fill="#0b4f9c" opacity="0.14"/>
+  <path d="M100 12 L174 38 L174 108 Q174 170 100 208 Q26 170 26 108 L26 38 Z" fill="url(#sh)"/>
+  <path d="M100 26 L162 48 L162 108 Q162 160 100 194 Q38 160 38 108 L38 48 Z" fill="#ffffff" fill-opacity="0.16"/>
+  <path d="M66 112 L92 138 L138 84" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

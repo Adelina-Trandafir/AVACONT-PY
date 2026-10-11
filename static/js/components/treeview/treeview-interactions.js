@@ -129,6 +129,8 @@ export const treeviewInteractionsMixin = {
       }
     } else {
       if (hasChildren && !e.ctrlKey && !e.metaKey) {
+        // selectParents (portal, Clasificatii): a parent is also chosen, not only opened
+        if (this.options.selectParents) this.selectFromItem(item);
         this.toggleNode(nodeId, e.shiftKey);
       } else {
         this.selectFromItem(item);
@@ -291,6 +293,7 @@ export const treeviewInteractionsMixin = {
     // }
 
     this.hide();
+    if (this.options.inline) this.markSelected();
 
     if (this.options.onSelect) {
       this.options.onSelect({

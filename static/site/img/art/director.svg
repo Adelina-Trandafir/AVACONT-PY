@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 340" width="300" height="340" role="img" aria-label="Directorul">
+  <defs>
+    <linearGradient id="suit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16427f"/>
+      <stop offset="1" stop-color="#0b2a5b"/>
+    </linearGradient>
+  </defs>
+  <!-- shoulders -->
+  <path d="M20 340 Q24 258 96 242 L204 242 Q276 258 280 340 Z" fill="url(#suit)"/>
+  <!-- shirt -->
+  <path d="M116 242 L150 300 L184 242 Z" fill="#ffffff"/>
+  <!-- tie -->
+  <path d="M142 262 L158 262 L162 322 L150 334 L138 322 Z" fill="#309eff"/>
+  <path d="M142 252 L158 252 L156 266 L144 266 Z" fill="#1e78d6"/>
+  <!-- lapels -->
+  <path d="M96 242 L128 242 L150 300 L120 340 L78 340 Z" fill="#0b2a5b" opacity="0.55"/>
+  <path d="M204 242 L172 242 L150 300 L180 340 L222 340 Z" fill="#0b2a5b" opacity="0.55"/>
+  <!-- neck -->
+  <rect x="132" y="204" width="36" height="46" rx="14" fill="#e8b994"/>
+  <!-- ears -->
+  <ellipse cx="94" cy="146" rx="9" ry="16" fill="#e8b994"/>
+  <ellipse cx="206" cy="146" rx="9" ry="16" fill="#e8b994"/>
+  <!-- face -->
+  <ellipse cx="150" cy="140" rx="56" ry="66" fill="#f0c7a3"/>
+  <!-- hair -->
+  <path d="M92 132 Q86 62 150 58 Q214 62 208 132 Q200 92 150 90 Q100 92 92 132 Z" fill="#4a4a52"/>
+  <!-- brows -->
+  <path d="M112 128 Q126 120 140 127" fill="none" stroke="#4a4a52" stroke-width="5" stroke-linecap="round"/>
+  <path d="M160 127 Q174 120 188 128" fill="none" stroke="#4a4a52" stroke-width="5" stroke-linecap="round"/>
+  <!-- eyes -->
+  <circle cx="126" cy="146" r="5" fill="#2b2b33"/>
+  <circle cx="174" cy="146" r="5" fill="#2b2b33"/>
+  <!-- smile -->
+  <path d="M132 182 Q150 194 168 182" fill="none" stroke="#b65a4c" stroke-width="5" stroke-linecap="round"/>
+</svg>

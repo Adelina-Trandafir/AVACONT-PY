@@ -1,0 +1,27 @@
+/* Slice 0110-03 -- look of the session monitor (static/js/session): warning modal, header warning,
+   short notifications. It had no stylesheet in the repository; colors follow site.css tokens. */
+
+#session-warning-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.session-modal-overlay { position: absolute; inset: 0; background: rgba(11, 42, 91, .55); }
+.session-modal-content {
+  position: relative; z-index: 1; max-width: 420px; margin: 16px; padding: 26px 28px;
+  background: #fff; color: #0b2a5b; border-radius: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, .3);
+}
+.session-modal-content h3 { margin: 0 0 12px; font-size: 1.2rem; }
+
+.session-header-warning {
+  flex: 1 1 auto; text-align: center; font-weight: 700; color: #fff;
+  background: #c24a3b; padding: 6px 14px; border-radius: 10px;
+}
+.header.header-warning { border-bottom-color: #c24a3b; }
+.countdown-pulse { animation: session-pulse 1s ease-in-out infinite; }
+@keyframes session-pulse { 50% { opacity: .45; } }
+
+.notification {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1100; max-width: 360px;
+  padding: 12px 16px; border-radius: 12px; color: #fff; background: #1e78d6;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25); transition: opacity .3s;
+}
+.notification-success { background: #1f9d63; }
+.notification-error { background: #c24a3b; }
+.notification.fade-out { opacity: 0; }

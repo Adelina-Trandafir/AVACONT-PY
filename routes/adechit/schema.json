@@ -1,0 +1,717 @@
+{
+  "Grupe": {
+    "key": "IDG",
+    "fields": {
+      "IDG": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Grupa": {
+        "type": "Text",
+        "size": 50,
+        "default": ""
+      },
+      "Educator": {
+        "type": "Text",
+        "size": 50,
+        "default": ""
+      },
+      "Tip": {
+        "type": "Text",
+        "size": 10,
+        "default": "NORMALA"
+      },
+      "InchisaDinAn": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Ascunsa": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "0"
+      }
+    }
+  },
+  "ValoriTaxe": {
+    "key": "IDV",
+    "fields": {
+      "DeLa": {
+        "type": "Text",
+        "size": 7,
+        "default": ""
+      },
+      "PanaLa": {
+        "type": "Text",
+        "size": 7,
+        "default": ""
+      },
+      "IDV": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "TaxaZilnica": {
+        "type": "Double",
+        "size": 8,
+        "default": "0"
+      },
+      "Activ": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "Expl": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      }
+    }
+  },
+  "LunaD": {
+    "key": "IDL",
+    "fields": {
+      "IDL": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Ordine": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "IDV": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Luna": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Anul": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "LunaT": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "LA": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Inchisa": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "ZileLuna": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      }
+    }
+  },
+  "Platitori": {
+    "key": "IDP",
+    "fields": {
+      "IDP": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDG": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Nume": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "CNP": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Plecat": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "SI": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "DataIntrare": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": "=Now()"
+      },
+      "DataIesire": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      }
+    }
+  },
+  "Platitori_sub": {
+    "key": "IDS",
+    "fields": {
+      "IDS": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDP": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Nume": {
+        "type": "Text",
+        "size": 50,
+        "default": ""
+      },
+      "Adresa": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "CUI": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Cont": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Banca": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "EMail": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "TrimiteMail": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "Activ": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "CNP_Platitor": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Telefon": {
+        "type": "Text",
+        "size": 50,
+        "default": ""
+      },
+      "CodAccesPortal": {
+        "type": "Text",
+        "size": 64,
+        "default": ""
+      }
+    }
+  },
+  "Prezenta": {
+    "key": "IDZ",
+    "fields": {
+      "IDZ": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDP": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDL": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDV": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDG": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "ZilePrezenta": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "ValoareContract": {
+        "type": "Double",
+        "size": 8,
+        "default": "0"
+      },
+      "ValoareTotala": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      }
+    }
+  },
+  "Plati": {
+    "key": "IDPL",
+    "fields": {
+      "IDPL": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDP": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDZ": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDS": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDL": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Data": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      },
+      "Plata": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "TIP": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Anulata": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "Valid": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "Motivul": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "OriginMonth": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "OriginYear": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      }
+    }
+  },
+  "Chitante": {
+    "key": "IDC",
+    "fields": {
+      "IDC": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDPL": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Data": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      },
+      "Serie": {
+        "type": "Text",
+        "size": 50,
+        "default": ""
+      },
+      "Numar": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Explicatie": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Anulata": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": ""
+      },
+      "IDL": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      }
+    }
+  },
+  "AlteDoc": {
+    "key": "IDA",
+    "fields": {
+      "IDA": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDPL": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "NrDoc": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "DataDoc": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      },
+      "Anulata": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "IDL": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Explicatie": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      }
+    }
+  },
+  "Retur": {
+    "key": "IDR",
+    "fields": {
+      "IDR": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDP": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDZ": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDL": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "IDS": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Data": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      },
+      "Explicatie": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Anulat": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "NrDoc": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Suma": {
+        "type": "Double",
+        "size": 8,
+        "default": ""
+      },
+      "OriginMonth": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "OriginYear": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      }
+    }
+  },
+  "SS_Buget": {
+    "key": "ID",
+    "fields": {
+      "ID": {
+        "type": "AutoNumber",
+        "size": 4,
+        "default": ""
+      },
+      "IDG": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "IDP": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "IDL": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "IDZ": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Luna": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Anul": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Nume": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "CNP": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "ZilePrezenta": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "SID": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "SIC": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "ValoareContract": {
+        "type": "Double",
+        "size": 8,
+        "default": ""
+      },
+      "ValoareTotala": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Plata": {
+        "type": "Double",
+        "size": 8,
+        "default": ""
+      },
+      "Restanta": {
+        "type": "Double",
+        "size": 8,
+        "default": ""
+      },
+      "Compensare": {
+        "type": "Double",
+        "size": 8,
+        "default": ""
+      },
+      "Anticipat": {
+        "type": "Double",
+        "size": 8,
+        "default": ""
+      },
+      "Plati": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Retur": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "SFD": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "SFC": {
+        "type": "Long",
+        "size": 4,
+        "default": "0"
+      },
+      "Detalii": {
+        "type": "Memo/Long Text",
+        "size": 0,
+        "default": ""
+      },
+      "Plecat": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "Educator": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "Grupa": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      }
+    }
+  },
+  "Grupe_Educator": {
+    "key": "IDGE",
+    "fields": {
+      "IDGE": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "IDG": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Educator": {
+        "type": "Text",
+        "size": 50,
+        "default": ""
+      },
+      "DeLa": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      },
+      "PanaLa": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      }
+    }
+  },
+  "Platitori_Istoric": {
+    "key": "IDI",
+    "fields": {
+      "IDI": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "IDP": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Data": {
+        "type": "Date/Time",
+        "size": 8,
+        "default": ""
+      },
+      "Tip": {
+        "type": "Text",
+        "size": 20,
+        "default": ""
+      },
+      "IDG_Vechi": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "IDG_Nou": {
+        "type": "Long",
+        "size": 4,
+        "default": ""
+      },
+      "Dedus": {
+        "type": "Yes/No",
+        "size": 1,
+        "default": "No"
+      },
+      "Utilizator": {
+        "type": "Text",
+        "size": 80,
+        "default": ""
+      },
+      "Nota": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      }
+    }
+  }
+}

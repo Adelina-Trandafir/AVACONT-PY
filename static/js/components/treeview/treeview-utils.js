@@ -54,7 +54,7 @@ export const treeViewUtilsMixin = {
     }
     let treeHeight = 0;
 
-    const searchWrapperHeight = this.searchWrapper.offsetHeight;
+    const searchWrapperHeight = this.searchWrapper ? this.searchWrapper.offsetHeight : 0; // a tree without a search box has none
     const viewportHeight = window.innerHeight;
     const rect = this.container.getBoundingClientRect();
     const spaceBelow = viewportHeight - rect.top - searchWrapperHeight - 10;

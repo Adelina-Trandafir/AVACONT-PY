@@ -97,6 +97,39 @@ def _col(name: str) -> str:
     return f"`{name}`"
 
 
+# --- rows copied from an indicator that had no classification yet --------------------
+
+# Child tables that copy FX_Indicatori.IdClsf at INSERT time (joined on CodAI).
+CHILD_TABLES = ("FX_Plati", "FX_Receptii", "FX_Receptii_RHR", "FX_Istoric", "FX_Rezervari")
+
+
+def fill_children_sql(table: str, one_ai: bool) -> str:
+    """
+    Fills an EMPTY `IdClsf` of a child row from its indicator (once the indicator has one).
+    Never overwrites a value. `one_ai`: restrict to one CodAI (`%s`), else every indicator.
+    """
+    if table not in CHILD_TABLES:
+        raise ValueError(f"Tabel necunoscut: {table!r}")
+    return (
+        f"UPDATE {_q(None, table)} T JOIN FX_Indicatori I ON I.CodAI = T.CodAI "
+        f"SET T.IdClsf = I.IdClsf "
+        f"WHERE (T.IdClsf IS NULL OR T.IdClsf = 0) AND I.IdClsf IS NOT NULL AND I.IdClsf <> 0"
+        + (" AND I.CodAI = %s" if one_ai else "")
+    )
+
+
+def fill_children(cursor, cod_ai: Optional[str] = None) -> int:
+    """Runs `fill_children_sql` over every child table; returns the rows changed."""
+    changed = 0
+    for table in CHILD_TABLES:
+        if cod_ai is None:
+            cursor.execute(fill_children_sql(table, False))
+        else:
+            cursor.execute(fill_children_sql(table, True), (cod_ai,))
+        changed += cursor.rowcount
+    return changed
+
+
 # --- set-based: the one-off ------------------------------------------------------
 
 def _from_and_unit(t: PairTable, db: Optional[str]):

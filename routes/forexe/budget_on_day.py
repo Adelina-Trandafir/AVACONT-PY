@@ -3,23 +3,26 @@
 The budget of a classification ON A DAY (slice 0102) -- what the fundamentation document (DDF)
 shows as «Buget» and measures «Valoare ramasa» against.
 
-WHY IT EXISTS. `FX_Indicatori.Credit_Bugetar` (and `FX_Rezervari.R_CreditBug`, stamped from it
-when the reservation rows are written) only hold what FOREXE says TODAY. After a budget
+WHY IT EXISTS. What FOREXE reports (`FX_Indicatori_Buget.CreditBugetar`, one row per classification,
+since slice 0108) only holds what FOREXE says TODAY. After a budget
 rectification an old reservation measured against today's smaller budget came out negative. The
 DDF has to use the budget the classification had on the revision's date.
 
-THE RULE (operator, 02.10.2026)
+THE RULE (operator, 02.10.2026; the quarters dropped 03.10.2026, slice 0108)
   1. Version: among the `Clasificatii_Buget` rows of the classification for the year of the day
      (`An = YEAR(day)`), the one with the greatest `DataInceput <= day`. None -> no budget.
   2. Rectifications: the `Clasificatii_Rectificari` rows of the classification dated from the
      version's `DataInceput` up to the day, both included. They are NOT budget; each one changes
      the quarter(s) whose `TrimN` it carries. A rectification older than the version is already
      inside the version and is left out.
-  3. CUMULATIVE up to the quarter of the day: quarter q = (month - 1) // 3 + 1, and the result is
-     the sum of Trim1..Trimq of the version plus the same quarters of its rectifications. There
-     is no yearly total anywhere (operator: a total is not correct there).
+  3. The result is the TOTAL of the version (Trim1 + Trim2 + Trim3 + Trim4) plus the total of
+     every one of its rectifications. NO quarter cut-off: a version that starts on 01.04 with
+     Trim1..4 = 100, 200, 300, 400 gives 1000 on every day from 01.04 on, whatever the day's
+     quarter (operator, 03.10.2026). Before slice 0108 the sum stopped at the quarter of the day
+     and the Migrator split the opening budget by 12; the opening budget now goes whole on
+     Trim1, so the quarters carry no meaning of their own.
 
-`None` means the day has no budget version; the caller keeps today's `Credit_Bugetar` and tells
+`None` means the day has no budget version; the caller keeps today's FOREXE credit (`FX_Indicatori_Buget`) and tells
 the operator so. This module never decides that fallback.
 """
 import logging
@@ -63,10 +66,10 @@ def _amount(value) -> float:
     return 0.0 if value is None else float(value)
 
 
-def cumulative_sum(version: dict, corrections: list, quarter: int) -> float:
-    """Trim1..Trim`quarter` of the version plus the same quarters of every correction."""
+def total_sum(version: dict, corrections: list) -> float:
+    """Trim1..Trim4 of the version plus Trim1..Trim4 of every correction."""
     total = 0.0
-    for k in range(1, quarter + 1):
+    for k in range(1, 5):
         total += _amount(version.get(f"Trim{k}"))
         for c in corrections:
             total += _amount(c.get(f"Trim{k}"))
@@ -74,7 +77,8 @@ def cumulative_sum(version: dict, corrections: list, quarter: int) -> float:
 
 
 def budget_on_day(cursor, id_clsf: int, day) -> Optional[float]:
-    """The cumulative budget of the classification on `day`, or None when no version covers it.
+    """The budget of the classification on `day` (version total + corrections total), or None when no
+    version covers it.
 
     `cursor` must return dict rows. Both queries are drained with `fetchall` so the connection is
     left clean for the caller's next statement.
@@ -92,7 +96,7 @@ def budget_on_day(cursor, id_clsf: int, day) -> Optional[float]:
     start = as_day(version["DataInceput"])
     cursor.execute(_SQL_CORRECTIONS, (int(id_clsf), start, day))
     corrections = cursor.fetchall()
-    return cumulative_sum(version, corrections, quarter_of(day))
+    return total_sum(version, corrections)
 
 
 class BudgetByDay:

@@ -1,0 +1,19 @@
+/* SLICE-AD11: print palette shared with the existing receipt output. */
+@font-face { font-family: AdeReceipt; src: url('/static/fonts/DejaVuSans.ttf') format('truetype'); }
+@page { size: A4; margin: 12mm 15mm; }
+* { box-sizing: border-box; }
+body { font: 9pt/1.4 AdeReceipt,sans-serif; max-width: 180mm; margin: 12mm auto; color: var(--statement-ink,CanvasText); background: var(--statement-paper,Canvas); }
+header { display: flex; justify-content: space-between; gap: 10mm; }
+header div { overflow-wrap: anywhere; }
+h1 { text-align: center; font-size: 16pt; border: 1px solid; padding: 5pt; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 4mm; table-layout: fixed; }
+td,th { border: .5pt solid; padding: 3pt 4pt; overflow-wrap: anywhere; }
+.identity td:first-child { width: 30mm; }.identity td:last-child { text-align: center; }
+.statement td { text-align: right; }.statement td:nth-child(1),.statement td:nth-child(2) { text-align: left; }
+.statement th:first-child { width: 23mm; }.statement th:nth-child(2) { width: 73mm; }.statement th:last-child { width: 18mm; }
+.subtotal,.total { font-weight: bold; }.statement tr { break-inside: avoid; }.statement thead { display: table-header-group; }
+.statement .subtotal { background: var(--report-subtotal-background); }
+.statement .total { background: var(--report-total-background); }
+.statement .subtotal,.statement .total { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+nav { margin-bottom: 6mm; }nav button { padding: 6px 14px; font: inherit; }footer { font-size: 8pt; }
+@media print { nav { display: none; }body { margin: 0; } }

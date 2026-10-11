@@ -1,0 +1,29 @@
+/* The shared confirmation box (js/utils/confirm-box.js): blurred page behind, question in the middle. */
+.confirm-box { box-sizing: border-box; width: min(420px, 92vw); padding: 0; color: var(--ink, #1f2937); background: var(--card, #fff); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); box-shadow: 0 10px 30px rgb(0 0 0 / .25); font-family: inherit; }
+.confirm-box::backdrop { background: rgb(0 0 0 / .25); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+.confirm-box header { padding: 12px 16px; background: var(--sky-2, #eaf2fb); border-bottom: 1px solid var(--line, #cdd5e0); }
+.confirm-box h2 { margin: 0; font-size: 1.15rem; }
+.confirm-box__text { margin: 0; padding: 22px 20px; text-align: center; font-size: 1.05rem; white-space: pre-line; }
+.confirm-box footer { display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line, #cdd5e0); }
+.confirm-box button { min-width: 110px; min-height: 34px; padding: 6px 16px; color: inherit; background: var(--sky-2, #eaf2fb); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); font: inherit; font-weight: 650; cursor: pointer; }
+.confirm-box button:hover { background: var(--sky-1, #f3f8fe); }
+.confirm-box button:focus-visible { outline: 2px solid var(--blue, #309eff); outline-offset: 1px; }
+
+.confirm-box--warning { border-color: #c0392b; }
+.confirm-box--warning header { color: #fff; background: #c0392b; border-bottom-color: #c0392b; }
+.confirm-box--warning .confirm-box__text { text-align: left; }
+.confirm-box--warning footer button:last-child { color: #fff; background: #c0392b; border-color: #c0392b; }
+.confirm-box--warning footer button:last-child:hover { background: #a93226; }
+
+/* reasonBox: the question, then a required reason; «Yes» stays off until the reason is filled in */
+.confirm-box__field { display: block; padding: 0 20px 16px; font-weight: 650; }
+.confirm-box__field textarea { box-sizing: border-box; display: block; width: 100%; margin-top: 6px; padding: 6px 8px; color: inherit; background: var(--card, #fff); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); font: inherit; font-weight: 400; resize: vertical; }
+.confirm-box__field textarea:focus { border-color: var(--blue, #309eff); outline: 1px solid var(--blue, #309eff); }
+.confirm-box button:disabled { opacity: .5; cursor: default; }
+.confirm-box--warning footer button:last-child:disabled:hover { background: #c0392b; }
+
+/* pickBox: a vertical list of choices, at most five and a half rows high, then it scrolls */
+.confirm-box--pick { width: min(360px, 92vw); }
+.confirm-box__list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; padding: 12px 16px; overflow-y: auto; }
+.confirm-box__list button { width: 100%; min-height: 44px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.confirm-box--pick footer { justify-content: flex-start; }

@@ -1,0 +1,45 @@
+/* Slice 0110-02 -- the «Cere mai multe detalii» page. Rides on site.css (tokens, topbar, .card, .btn, .pill). */
+
+.detalii { padding: calc(var(--topbar-h) + 48px) 0 72px; min-height: 100vh; }
+.detalii__wrap { max-width: 820px; }
+.detalii__head { margin-bottom: 28px; }
+.detalii__head h1 { margin-bottom: 14px; }
+
+.detalii__card, .detalii__done { padding: 32px; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; position: relative; }
+.field label { font-weight: 700; font-size: .95rem; }
+.req { color: var(--warn); }
+.opt { font-weight: 500; color: var(--ink-soft); font-size: .85rem; }
+
+.field input[type="text"], .field input[type="email"], .field input[type="tel"], .field input[type="password"], .field textarea {
+  width: 100%; font: inherit; color: var(--ink);
+  padding: 11px 14px; background: #fff;
+  border: 1.5px solid var(--line); border-radius: var(--radius-sm);
+  transition: border-color .15s, box-shadow .15s;
+}
+.field textarea { resize: vertical; min-height: 120px; }
+.field input:hover, .field textarea:hover { border-color: var(--blue); }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(48, 158, 255, .25); }
+.field.is-bad input, .field.is-bad textarea { border-color: var(--warn); }
+.counter { align-self: flex-end; font-size: .8rem; color: var(--ink-soft); }
+
+/* Out of sight for people, still in the page for robots. Not display:none. */
+.hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+.check { display: flex; gap: 12px; align-items: flex-start; font-size: .92rem; color: var(--ink-soft); cursor: pointer; margin-bottom: 18px; }
+.check input { margin-top: 4px; width: 18px; height: 18px; flex: none; accent-color: var(--blue-mid); }
+.check.is-bad { color: var(--warn); }
+
+.msg {padding: 4px 16px;border-radius: var(--radius-sm);background: #fdeceb;color: var(--warn);font-weight: 600;}
+.actions { display: flex; justify-content: flex-end; }
+.btn[disabled] { opacity: .6; cursor: progress; transform: none; }
+
+@media (max-width: 640px) {
+  .detalii { padding-top: calc(var(--topbar-h) + 28px); }
+  .detalii__card, .detalii__done { padding: 22px 18px; }
+  .grid { grid-template-columns: 1fr; }
+  .actions .btn { width: 100%; justify-content: center; }
+  .topbar__cta .btn--ghost { display: none; }
+}

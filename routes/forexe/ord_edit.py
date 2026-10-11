@@ -357,7 +357,7 @@ _SQL_PARTSEL = (
     "  JOIN FX_Extrase E ON P.Referinta_TREZOR = E.Referinta "
     " WHERE NOT EXISTS (SELECT 1 FROM FX_ORD_TBL_REC R WHERE R.IdPlataFX = P.IdPlataFX) "
     "   AND P.CodAngajament = %s "
-    "   AND DATE(P.Data_plata) = %s "
+    "   AND DATE(COALESCE(E.DataBanca, P.Data_plata)) = %s "
     f" GROUP BY {_KMATCH} "
     "  ORDER BY MIN(E.platitor_nume) "
     f" LIMIT {LIMITA_PARTENERI}"
@@ -393,7 +393,7 @@ _SQL_BASE = (
     "  CASE WHEN (E.platitor_iban IS NULL OR E.platitor_cui = %(cui_unit)s) "
     "       THEN %(nume_unit)s ELSE E.platitor_nume END AS Beneficiar, "
     "  P.Suma AS Valoare, "
-    "  DATE(P.Data_plata) AS Data, "
+    "  DATE(COALESCE(E.DataBanca, P.Data_plata)) AS Data, "
     "  P.IdPlataFX, P.IdClsf, P.CodAngajament, P.CodIndicator, "
     "  COALESCE(E.platitor_iban, H.CodIBAN) AS Beneficiar_IBAN, "
     "  E.platitor_cui AS Beneficiar_CUI, "
@@ -416,13 +416,13 @@ _SQL_BASE = (
     "  ON 1 = 1 "
     "WHERE NOT EXISTS (SELECT 1 FROM FX_ORD_TBL_REC R WHERE R.IdPlataFX = P.IdPlataFX) "
     "  AND P.CodAngajament = %(cod)s "
-    "  AND DATE(P.Data_plata) = %(dt)s "
+    "  AND DATE(COALESCE(E.DataBanca, P.Data_plata)) = %(dt)s "
     "{filtru_plata}"
     "  AND {kmatch} IN ({locuri}) "
     "ORDER BY (E.platitor_iban IS NULL OR E.platitor_cui = %(cui_unit)s) DESC, "
     "         CASE WHEN (E.platitor_iban IS NULL OR E.platitor_cui = %(cui_unit)s) "
     "              THEN %(nume_unit)s ELSE E.platitor_nume END, "
-    "         DATE(P.Data_plata), P.IdPlataFX"
+    "         DATE(COALESCE(E.DataBanca, P.Data_plata)), P.IdPlataFX"
 )
 
 
@@ -459,7 +459,7 @@ _SQL_PARTENERI_ZI = (
     "    FROM FX_Plati P "
     "    JOIN FX_Extrase E ON P.Referinta_TREZOR = E.Referinta "
     "   WHERE P.CodAngajament = %s "
-    "     AND DATE(P.Data_plata) = %s "
+    "     AND DATE(COALESCE(E.DataBanca, P.Data_plata)) = %s "
     "     AND NOT EXISTS (SELECT 1 FROM FX_ORD_TBL_REC R WHERE R.IdPlataFX = P.IdPlataFX) "
     "   GROUP BY CONCAT(COALESCE(E.platitor_cui, ''), COALESCE(E.platitor_iban, '')) "
     ") AS sub"
@@ -488,7 +488,9 @@ _SQL_DIAG_ZI = (
     "                             WHERE E.Referinta = P.Referinta_TREZOR)), 0) AS CuExtras "
     "  FROM FX_Plati P "
     " WHERE P.CodAngajament = %(cod)s "
-    "   AND DATE(P.Data_plata) = %(dt)s "
+    "   AND DATE(COALESCE((SELECT E.DataBanca FROM FX_Extrase E "
+    "                       WHERE E.Referinta = P.Referinta_TREZOR LIMIT 1), "
+    "                     P.Data_plata)) = %(dt)s "
     "   AND NOT EXISTS (SELECT 1 FROM FX_ORD_TBL_REC R WHERE R.IdPlataFX = P.IdPlataFX) "
     "{filtru_plata}"
 )
@@ -544,14 +546,14 @@ def contor_parteneri_zi(cursor, cod: str, dt: date) -> int:
 # (`luna` / `an` optionale), fiindca `*` nu e metacaracter in MariaDB si un `LIKE` cu el ar
 # fi tacut gresit.
 _SQL_ZILE = (
-    "SELECT DATE(P.Data_plata) AS DT, COUNT(*) AS Plati "
+    "SELECT DATE(COALESCE(E.DataBanca, P.Data_plata)) AS DT, COUNT(*) AS Plati "
     "  FROM FX_Plati P "
     "  JOIN FX_Extrase E ON P.Referinta_TREZOR = E.Referinta "
     " WHERE P.CodAngajament = %s "
     "   AND NOT EXISTS (SELECT 1 FROM FX_ORD_TBL_REC R WHERE R.IdPlataFX = P.IdPlataFX) "
     "{filtru} "
-    " GROUP BY DATE(P.Data_plata) "
-    " ORDER BY DATE(P.Data_plata)"
+    " GROUP BY DATE(COALESCE(E.DataBanca, P.Data_plata)) "
+    " ORDER BY DATE(COALESCE(E.DataBanca, P.Data_plata))"
 )
 
 
@@ -559,10 +561,10 @@ def citeste_zile(cursor, cod: str, luna, an) -> list:
     parametri = [cod]
     filtru = ""
     if an is not None:
-        filtru += "   AND YEAR(P.Data_plata) = %s "
+        filtru += "   AND YEAR(COALESCE(E.DataBanca, P.Data_plata)) = %s "
         parametri.append(int(an))
     if luna is not None:
-        filtru += "   AND MONTH(P.Data_plata) = %s "
+        filtru += "   AND MONTH(COALESCE(E.DataBanca, P.Data_plata)) = %s "
         parametri.append(int(luna))
     cursor.execute(_SQL_ZILE.format(filtru=filtru), tuple(parametri))
     return cursor.fetchall()

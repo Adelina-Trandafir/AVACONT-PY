@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chitanță {{ receipt.series }}/{{ receipt.number }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/adechit-receipt.css', _external=True) }}">
+<script src="{{ url_for('static', filename='js/adechit/receipt-print.js', _external=True) }}" defer></script></head><body>
+<nav><button id="receipt-print" type="button">🖨️ Listare</button></nav>
+{% for copy in ['Exemplarul plătitorului', 'Exemplarul unității'] %}
+<article class="receipt">
+  <header><strong>{{ receipt.issuer.name }}</strong><div>Cod fiscal: {{ receipt.issuer.tax_code }}</div>
+    <div>{{ receipt.issuer.address }}</div>
+    {% for account in receipt.issuer.accounts %}<div>Cont: {{ account.Cont }}{% if account.Banca %} — {{ account.Banca }}{% endif %}</div>{% endfor %}
+  </header>
+  {% if receipt.cancelled %}<div class="cancelled">ANULATĂ</div>{% endif %}
+  <h1>CHITANȚĂ {{ receipt.series }} / {{ receipt.number }}</h1>
+  {% if receipt.subunit %}<p>Subunitate: {{ receipt.subunit }}</p>{% endif %}
+  <p>Data: {{ receipt.date }}</p>
+  <p>Am primit de la: <strong>{{ receipt.payer }}</strong></p>
+  <p>Adresa: {{ receipt.address }}</p>
+  <p>Suma de: <strong>{{ receipt.amount }} lei</strong></p>
+  <p>Adică: {{ receipt.words }}</p>
+  <p>Reprezentând: {{ receipt.explanation }}</p>
+  <p class="signature">Casier: ____________________</p>
+  <footer>{{ copy }} · Cod 14-4-1</footer>
+</article>
+{% endfor %}
+</body></html>

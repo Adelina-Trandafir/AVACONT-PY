@@ -5,9 +5,9 @@ Felia **0075**. Plan: `docs/PLAN_AutoProvisioning.md`. Trecerile de până acum:
 adresei prin cod; **0075-02** (§5.4–5.5) — nomenclatoarele, numele bazei, `FX_Inregistrari`
 și `/cerere`; **0075-04** (§4) — pagina solicitantului; **0075-03** (§5.6) — aprobarea:
 jobul care creează baza, rândurile și contul, plus linkul de parolă; **0075-05** (§7) —
-pagina operatorului, `/operator`, care aprobă, respinge și retrimite linkul.
+pagina operatorului, `/operator`, care aprobă, respinge și retrimite linkul. **SLICE-ME01: pagina web `/operator` și rutele `/api/operator/*` au fost ELIMINATE** (prea mult acces pentru internet); aprobarea, respingerea și linkul nou se fac acum din programul desktop KBotAdmin, prin SSH, cu `routes/admin_cli/admin_requests.py` peste același `provizionare.py`.
 
-Toate rutele de aici în afară de cele `/api/operator/*` sunt **publice** — pagina o poate deschide oricine de pe internet.
+Toate rutele de aici sunt **publice** — pagina o poate deschide oricine de pe internet.
 Deci: limitatorul pe fiecare rută, numai SQL parametrizat, cod-motiv lângă fiecare mesaj
 românesc, nicio excepție înghițită.
 
@@ -24,12 +24,11 @@ românesc, nicio excepție înghițită.
 | `provizionare.py` | Jobul de aprobare (§5.6): `plan()` (doar verifică), `approve()`, `link_nou()`. Fiecare pas își înregistrează anularea; orice eșec desface tot în ordine inversă și lasă cererea `Esuata` cu `Motiv`. Rulează pe **contul de provizionare**, niciodată pe AVACONT. |
 | `parola.py` | Linkul de o singură folosință trimis după aprobare (D13): găsirea după hash, `ALTER USER`. |
 | `inregistrare.py` | Rutele publice (solicitantul și linkul de parolă). |
-| `operator.py` | Pagina operatorului (0075-05): autentificarea în doi pași, lista, o cerere cu planul ei viu, aprobarea ca job urmărit din pagină, respingerea, linkul nou. Blueprint propriu, `operator_bp`. |
+| `operator.py` | ELIMINAT în SLICE-ME01. Vezi `routes/admin_cli/admin_requests.py`. |
 
 `__init__.py` **nu** importă blueprint-ul, ca `anaf.py` și `store.py` să rămână
 importabile pe o mașină fără `config.py` (același motiv ca la `routes/migrare/`).
-`main.py` le ia explicit: `from routes.inregistrare.inregistrare import inregistrare_bp` și
-`from routes.inregistrare.operator import operator_bp`.
+`main.py` îl ia explicit: `from routes.inregistrare.inregistrare import inregistrare_bp`.
 
 ## Rutele
 
@@ -52,7 +51,7 @@ Cele două rute `/parola` (0075-03) au alt token, cu altă viață: cel din link
 aprobare. Vine în **corp**, fiindcă în link stă după `#` — browserul nu-l trimite niciodată
 serverului într-o adresă, deci nu ajunge în jurnalele nginx și nici în antetul `Referer`.
 
-Pagini: `GET /inregistrare` (0075-04), `GET /parola` (0075-03) și `GET /operator` (0075-05),
+Pagini: `GET /inregistrare` (0075-04) și `GET /parola` (0075-03) (`/operator` a fost eliminată în SLICE-ME01),
 din `PYTHON/static/`.
 
 ### Rutele operatorului (0075-05)

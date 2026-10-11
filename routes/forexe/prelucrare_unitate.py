@@ -106,6 +106,27 @@ class UnitChoiceRequired(Exception):
         self.pending = pending
 
 
+# The reason code of the second question: the classification is in NO unit's nomenclator.
+REASON_CLSF_LIPSA = "CLASIFICATIE_LIPSA"
+MSG_CLSF_LIPSA = (
+    "O clasificație nu este configurată. Operatorul trebuie întrebat dacă o înregistrează "
+    "acum, apoi cererea se trimite din nou."
+)
+
+
+class ClsfMissing(Exception):
+    """
+    Raised when at least one (SS, ClsfE) pair matches NO unit and the request did not ask
+    to register it (operator, 08.10.2026: ask whether to register it now; Da -> the
+    classification is entered in Clasificatii and the flow goes on; Nu -> nothing is
+    saved). Carries every missing pair, so the operator answers once per download.
+    """
+
+    def __init__(self, pending: List[dict]):
+        super().__init__(f"{len(pending)} clasificatii lipsesc din nomenclator")
+        self.pending = pending
+
+
 class UnitChoiceTableMissing(Exception):
     """
     Raised when FX_Alegeri_Unitate does not exist in this database.
@@ -221,6 +242,23 @@ def save_remembered_choice(cursor, ss: str, clsf_e: str, id_unitate: int,
 # ---------------------------------------------------------------------------
 # Choices arriving in the request
 # ---------------------------------------------------------------------------
+def normalize_register_requests(raw) -> set:
+    """
+    The pairs the operator agreed to REGISTER: entries of `alegeri` that carry
+    `"inregistreaza": true` (and no unit). Returns {(SS, ClsfE)}.
+    """
+    out = set()
+    if not raw or not isinstance(raw, list):
+        return out
+    for item in raw:
+        if isinstance(item, dict) and item.get("inregistreaza") is True:
+            ss = str(item.get("ss") or "").strip()
+            clsf_e = str(item.get("clsfe") or "").strip()
+            if ss != "" and clsf_e != "":
+                out.add((ss, clsf_e))
+    return out
+
+
 def normalize_supplied_choices(raw) -> Dict[Tuple[str, str], Tuple[int, bool]]:
     """
     Turn the request's `alegeri` array into {(SS, ClsfE): (IdUnitate, retine)}.
@@ -241,6 +279,8 @@ def normalize_supplied_choices(raw) -> Dict[Tuple[str, str], Tuple[int, bool]]:
     for i, item in enumerate(raw):
         if not isinstance(item, dict):
             raise ValueError(f"«alegeri»[{i}] nu este un obiect.")
+        if item.get("inregistreaza") is True:
+            continue   # a register request, not a unit choice -- see normalize_register_requests
         ss = str(item.get("ss") or "").strip()
         clsf_e = str(item.get("clsfe") or "").strip()
         if ss == "" or clsf_e == "":
@@ -270,7 +310,7 @@ def normalize_supplied_choices(raw) -> Dict[Tuple[str, str], Tuple[int, bool]]:
 # The resolution pass
 # ---------------------------------------------------------------------------
 def resolve_units(cursor, indicators: List[dict], supplied, un: str,
-                  warnings: List[str]) -> Dict[Tuple[str, str], int]:
+                  warnings: List[str], register=None) -> Dict[Tuple[str, str], int]:
     """
     Resolve EVERY indicator's unit before anything is written.
 
@@ -297,6 +337,8 @@ def resolve_units(cursor, indicators: List[dict], supplied, un: str,
     remembered: Optional[Dict[Tuple[str, str], int]] = None   # loaded lazily
     resolved: Dict[Tuple[str, str], int] = {}
     pending: List[dict] = []
+    missing: List[dict] = []           # pairs in no unit and not yet agreed to register
+    register = register or set()
     # Which indicator codes share each pair -- so the question can name them all.
     by_pair: Dict[Tuple[str, str], List[str]] = {}
     for ind in indicators:
@@ -315,11 +357,20 @@ def resolve_units(cursor, indicators: List[dict], supplied, un: str,
             # Access: FX_IdUnitate = -1, False, GoTo Iesire -- the step failed and
             # the orchestrator stopped. Same here, with a message that names the
             # pair instead of a silent exit.
-            raise ValueError(
-                f"Clasificația «{ind['clsf_raw']}» (SS {ind['ss']}, ClsfE "
-                f"{ind['clsf_e']}) nu aparține niciunei unități din această bază. "
-                f"Indicator: {ind['cod_indicator']}."
-            )
+            # Operator, 08.10.2026: not an error but a question. Registered (Da) it is
+            # entered in Clasificatii inside THIS transaction and the flow goes on; refused
+            # (Nu) the client stops and nothing is saved.
+            if key in register:
+                resolved[key] = register_classification(cursor, ind)
+            elif not any(m["ss"] == key[0] and m["clsfe"] == key[1] for m in missing):
+                missing.append({
+                    "ss": key[0],
+                    "clsfe": key[1],
+                    "clsf": str(ind["clsf_raw"]).replace(" ", ""),
+                    "cod_indicator": ind["cod_indicator"],
+                    "indicatori": by_pair.get(key, []),
+                })
+            continue
 
         if len(candidates) == 1:
             resolved[key] = candidates[0]["id_unitate"]
@@ -371,9 +422,81 @@ def resolve_units(cursor, indicators: List[dict], supplied, un: str,
             "unitati": candidates,
         })
 
+    if missing:
+        raise ClsfMissing(missing)
     if pending:
         raise UnitChoiceRequired(pending)
     return resolved
+
+
+# ---------------------------------------------------------------------------
+# Registering a classification that no unit has (operator, 08.10.2026)
+# ---------------------------------------------------------------------------
+_UNITS_OF_SS_SQL = "SELECT IdUnitate FROM Unitati WHERE SursaSector = %s"
+_CAPITOL_EXISTING_SQL = (
+    "SELECT Capitol FROM Clasificatii WHERE SS = %s AND LEFT(Capitol, 2) = %s LIMIT 1"
+)
+_ARTICOL_NAME_SQL = "SELECT Denumire FROM AVACONT_COMUN.DefaArticol WHERE Articol = %s"
+_CLSF_INSERT_SQL = (
+    "INSERT INTO Clasificatii "
+    "(IdUnitate, Capitol, Subcapitol, Articol, Alineat, Denumire, Sector, Sursa, SS) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+)
+
+
+def register_classification(cursor, ind: dict) -> int:
+    """
+    Enter the classification of `ind` in Clasificatii and return the unit it went to.
+
+    FOREXE writes «01A- 65. 04. 01. 60. 01. 00»: SS, then Capitol 65, Subcapitol 04.01,
+    Articol 60.01, Alineat 00. The unit is the ONE unit whose SursaSector is that SS; none
+    or several -> ValueError (the operator registers it by hand, a guess would attach the
+    indicator to the wrong unit). Capitol keeps the form the nomenclator already uses for
+    that SS (its last two characters carry the sector), taken from an existing row.
+    Runs inside the ingest transaction: a «Nu» later in the flow rolls it back.
+    """
+    ss = str(ind["ss"])
+    raw = str(ind["clsf_raw"])
+    tail = raw.split("-", 1)[1] if "-" in raw else ""
+    parts = [p.strip() for p in tail.split(".")]
+    afisat = raw.replace(" ", "")
+    if len(parts) != 6 or any(p == "" for p in parts):
+        raise ValueError(
+            f"Clasificația «{afisat}» nu are forma așteptată (6 grupe); "
+            f"înregistrați-o manual în nomenclatorul «Clasificații».")
+    cap2 = parts[0]
+    subcapitol = f"{parts[1]}.{parts[2]}"
+    articol = f"{parts[3]}.{parts[4]}"
+    alineat = parts[5]
+    if (articol.replace(".", "") + alineat) != ind["clsf_e"]:
+        raise ValueError(
+            f"Clasificația «{afisat}» nu se potrivește cu cheia ei; "
+            f"înregistrați-o manual în nomenclatorul «Clasificații».")
+
+    cursor.execute(_UNITS_OF_SS_SQL, (ss,))
+    unitati = [int(r["IdUnitate"]) for r in cursor.fetchall()]
+    if len(unitati) != 1:
+        cate = "nicio unitate nu are" if not unitati else "mai multe unități au"
+        raise ValueError(
+            f"Clasificația «{afisat}» nu poate fi înregistrată automat: {cate} "
+            f"sursa-sectorul «{ss}». Înregistrați-o manual în nomenclatorul «Clasificații».")
+
+    cursor.execute(_CAPITOL_EXISTING_SQL, (ss, cap2))
+    row = cursor.fetchone()
+    if row is None:
+        raise ValueError(
+            f"Clasificația «{afisat}» nu poate fi înregistrată automat: capitolul «{cap2}» "
+            f"nu există încă la sursa-sectorul «{ss}». "
+            f"Înregistrați-o manual în nomenclatorul «Clasificații».")
+    capitol = str(row["Capitol"])
+
+    cursor.execute(_ARTICOL_NAME_SQL, (articol,))
+    nume = cursor.fetchone()
+    denumire = str((nume or {}).get("Denumire") or afisat)[:255]
+
+    cursor.execute(_CLSF_INSERT_SQL, (unitati[0], capitol, subcapitol, articol, alineat,
+                                      denumire, ss[:2], ss[2:3], ss))
+    return unitati[0]
 
 
 # ---------------------------------------------------------------------------

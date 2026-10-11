@@ -185,7 +185,9 @@ export const treeViewSearchMixin = {
     const filterRecursive = (nodeList) => {
       return nodeList.reduce((acc, node) => {
         const nodeLabel = (node.label || node.name || node.text || '').toLowerCase();
-        const matches = nodeLabel.includes(query.toLowerCase());
+        const matches =
+          nodeLabel.includes(query.toLowerCase()) ||
+          String(node.keywords || '').toLowerCase().includes(query.toLowerCase());
 
         let filteredChildren = [];
         if (node.children && node.children.length > 0) {

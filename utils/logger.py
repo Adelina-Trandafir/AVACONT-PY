@@ -43,6 +43,10 @@ class SessionTagFilter(logging.Filter):
                 if session is not None and token:
                     record.session_tag = '{s=%s u=%s dc=%s} ' % (
                         token[:8], session.username or '-', session.db_name or '-')
+                elif getattr(g, 'portal', None):
+                    portal = g.portal
+                    record.session_tag = '{u=%s dc=%s} ' % (
+                        portal.get('email') or '-', portal.get('db_name') or '-')
             except Exception:          # a log line must never fail because of its tag
                 record.session_tag = ''
         return True

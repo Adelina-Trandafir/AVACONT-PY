@@ -13,7 +13,8 @@ export const comboboxUIMixin = {
       this.overlay = document.createElement('div');
       this.overlay.id = `${this.instanceId}_overlay`;
       this.overlay.className = 'combobox-overlay hidden';
-      document.body.appendChild(this.overlay);
+      // Modal controls keep their overlay inside the dialog's top layer.
+      (this.container.closest('dialog') || document.body).appendChild(this.overlay);
     }
   },
 
@@ -116,9 +117,15 @@ export const comboboxUIMixin = {
 
     const rect = this.input.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
+    const viewportWidth = document.documentElement.clientWidth;
     const dropdownHeight = 200;
 
-    this.dropdown.style.width = `${rect.width}px`;
+    // --combobox-min-width (set in CSS on the dropdown) keeps a narrow field from giving a cramped list
+    const minWidth = parseFloat(getComputedStyle(this.dropdown).getPropertyValue('--combobox-min-width')) || 0;
+    const grow = parseFloat(getComputedStyle(this.dropdown).getPropertyValue('--combobox-grow')) || 1;
+    const width = Math.min(Math.max(rect.width, minWidth) * grow, viewportWidth - 16);
+    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
+    this.dropdown.style.width = `${width}px`;
 
     if (rect.bottom + dropdownHeight > viewportHeight - 10) {
       this.dropdown.classList.add('show-above');
@@ -128,13 +135,13 @@ export const comboboxUIMixin = {
       const finalTop = Math.max(10, topPosition);
 
       this.dropdown.style.top = `${finalTop}px`;
-      this.dropdown.style.left = `${rect.left}px`;
+      this.dropdown.style.left = `${left}px`;
     } else {
       this.dropdown.classList.remove('show-above');
       this.dropdown.classList.add('show-below');
 
       this.dropdown.style.top = `${rect.bottom}px`;
-      this.dropdown.style.left = `${rect.left}px`;
+      this.dropdown.style.left = `${left}px`;
     }
   },
 
@@ -193,7 +200,7 @@ export const comboboxUIMixin = {
           ? this.stripHtml(label) // 🆕 Elimină HTML pentru data-text
           : this.escapeHtml(label);
 
-        return `<div class="combobox-option"
+        return `<div class="combobox-option${item.disabled ? ' is-disabled' : ''}"
                   data-value="${safeValue}" 
                   data-text="${safeText}"> 
                 ${displayLabel}

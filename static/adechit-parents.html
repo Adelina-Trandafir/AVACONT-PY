@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADECHIT · Părinți</title><meta name="robots" content="noindex">
+<script src="/static/js/portal/theme-init.js"></script>
+<link rel="stylesheet" href="/static/site/site.css"><link rel="stylesheet" href="/static/css/variables.css">
+<link rel="stylesheet" href="/static/css/portal.css"><link rel="stylesheet" href="/static/css/combobox.css">
+<link rel="stylesheet" href="/static/css/datepicker.css"><link rel="stylesheet" href="/static/css/adechit-parents.css">
+<link rel="stylesheet" href="/static/css/dgv.css">
+<script src="/static/js/utils/css.js"></script><script src="/static/js/utils/z-max.js"></script>
+<script type="module" src="/static/js/adechit/parents.js"></script></head>
+<body class="portal parent-page"><header class="parent-header"><strong>ADECHIT <span>· Părinți</span></strong><button id="parent-logout" class="btn" hidden>Deconectare</button></header>
+<main class="parent-main"><p id="parent-message" class="msg" role="status" aria-live="polite"></p>
+<section id="parent-login" class="parent-card parent-login"><h1>Bine ai venit</h1><p>Consultă prezența și situația contului copilului tău.</p>
+<form id="parent-credentials" autocomplete="on">
+<label>CNP părinte<input name="username" id="parent-cnp" autocomplete="username" inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13" required></label>
+<label>Cod de acces<input type="password" name="password" id="parent-access" autocomplete="current-password" maxlength="64" required></label>
+<button class="btn" type="submit">Primește codul pe email</button></form>
+<form id="parent-verification" hidden><label>Cod primit pe email<input id="parent-otp" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label>
+<div class="parent-actions"><button class="btn" type="submit">Conectare</button><button class="btn" id="parent-back" type="button">Înapoi</button></div><p>Codul expiră în 5 minute. Pentru retrimitere, revino la pasul anterior.</p></form></section>
+<section id="parent-dashboard" hidden>
+<div class="parent-heading"><div><h1 id="parent-child-name"></h1><p id="parent-child-group"></p></div><div id="parent-child-selector" hidden><label>Alege copilul</label><div id="parent-child-combo"></div></div></div>
+<div class="parent-summary"><article class="parent-card"><span>Sold curent</span><strong id="parent-balance"></strong></article><article class="parent-card"><span>Zile prezență · toată perioada</span><strong id="parent-days"></strong></article><article class="parent-card"><span>Plăți · toată perioada</span><strong id="parent-payments"></strong></article><article class="parent-card"><span>Restituiri · toată perioada</span><strong id="parent-refunds"></strong></article></div>
+<div class="parent-charts"><article class="parent-card"><h2>Zile de prezență lunare</h2><div class="parent-chart-scroll"><svg id="parent-attendance-chart" role="img" aria-label="Zile de prezență lunare"></svg></div></article><article class="parent-card"><h2>Plăți și restituiri lunare</h2><p class="parent-legend"><span class="payment-key">● Plăți</span> <span class="refund-key">● Restituiri</span></p><div class="parent-chart-scroll"><svg id="parent-money-chart" role="img" aria-label="Plăți și restituiri lunare"></svg></div></article></div>
+<article class="parent-card"><h2>Situația lunară</h2><p>Lunile deschise sunt marcate „În curs”. Soldul debitor reprezintă suma datorată; soldul creditor reprezintă suma în avans.</p><div id="parent-month-grid" aria-label="Situația lunară a copilului"></div></article>
+<article class="parent-card"><h2>Fișă de cont</h2><p>Implicit, fișa include întreaga perioadă disponibilă în evidența unității.</p><div class="parent-actions"><label class="parent-check"><input type="checkbox" id="parent-interval"> Interval</label><fieldset id="parent-date-fields" disabled><label>Data început<input type="date" id="parent-start" aria-label="Data început"></label><label>Data sfârșit<input type="date" id="parent-end" aria-label="Data sfârșit"></label></fieldset><button class="btn" id="parent-print">Imprimă</button><button class="btn" id="parent-pdf">Descarcă PDF</button></div></article>
+</section></main></body></html>

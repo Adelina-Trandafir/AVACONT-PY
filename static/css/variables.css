@@ -1,5 +1,12 @@
 /* ========== DASHBOARD BASE ========== */
 :root {
+    /* AD11-02: account statement print palette. */
+    --report-subtotal-background: #eeeeee;
+    --report-total-background: #d6d6d6;
+    /* Error notice: one look for every error message in the app (use var(--err-*), never a literal red). */
+    --err-bg: #fdeceb;
+    --err-ink: #8f1d17;
+    --err-line: #f1b5b1;
     /* Layout */
     --header-height: 50px;
     --modal-header-height: 40px;
@@ -75,4 +82,10 @@
     /* Form controls */
     --form-control-focus-border: #155724;
     --form-control-focus-background: linear-gradient(270deg, #f1fff0 0%, #f3ffc5 100%);
+}
+
+html[data-theme="dark"] {
+    --err-bg: #3a1f1f;
+    --err-ink: #ffb4ae;
+    --err-line: #7a3a36;
 }

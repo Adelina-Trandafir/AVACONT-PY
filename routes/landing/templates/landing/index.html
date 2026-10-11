@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ c.meta.title }}</title>
+<meta name="description" content="{{ c.meta.description }}">
+<link rel="canonical" href="https://k-bot.ro/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="K-BOT">
+<meta property="og:locale" content="ro_RO">
+<meta property="og:title" content="{{ c.meta.title }}">
+<meta property="og:description" content="{{ c.meta.description }}">
+<meta property="og:url" content="https://k-bot.ro/">
+<meta property="og:image" content="https://k-bot.ro/static/site/img/art/logo-512.png">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+{"@type":"Organization","@id":"https://k-bot.ro/#org","name":"K-BOT","url":"https://k-bot.ro/","logo":"https://k-bot.ro/static/site/img/art/logo-512.png"},
+{"@type":"SoftwareApplication","name":"K-BOT","applicationCategory":"BusinessApplication","operatingSystem":"Windows","url":"https://k-bot.ro/","inLanguage":"ro","publisher":{"@id":"https://k-bot.ro/#org"},"description":"{{ c.meta.description }}"}
+]}
+</script>
+<meta name="theme-color" content="#309eff">
+<link rel="icon" type="image/png" sizes="64x64" href="/static/site/img/art/logo-64.png">
+<link rel="apple-touch-icon" href="/static/site/img/art/logo-512.png">
+<script src="/static/site/boot.js"></script>
+<link rel="stylesheet" href="/static/site/site.css">
+<script src="/static/site/site.js" defer></script>
+<script src="/static/site/visit.js" defer></script>
+</head>
+<body>
+
+{# ---------- helpers ---------- #}
+{% macro ico(name) %}<svg class="ico" aria-hidden="true" focusable="false"><use href="#i-{{ name }}"/></svg>{% endmacro %}
+
+{% macro blocks(items) %}
+  {%- for b in items -%}
+    {%- if b is string -%}
+      <p>{{ b|rich }}</p>
+    {%- elif b.h is defined -%}
+      <h4 class="sub">{{ b.h }}</h4>
+    {%- elif b.title is defined -%}
+      <h3 class="sub-title">{{ b.title }}</h3>
+    {%- elif b.rule is defined -%}
+      <hr>
+    {%- elif b.ul is defined -%}
+      <ul class="tick">{% for li in b.ul %}<li>{{ li }}</li>{% endfor %}</ul>
+    {%- elif b.lines is defined -%}
+      <p class="lines">{% for ln in b.lines %}{{ ln }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    {%- endif -%}
+  {%- endfor -%}
+{% endmacro %}
+
+{% macro shot(img) %}
+  <img class="shot" src="/static/site/img/screens/{{ img.file }}" alt="{{ img.alt }}" width="{{ img.w }}" height="{{ img.h }}" loading="lazy" decoding="async">
+{% endmacro %}
+
+{% macro laptop(img, redact=false) %}
+  <figure class="laptop">
+    <div class="laptop__screen">
+      <div class="laptop__frame">
+        {{ shot(img) }}
+        {% if redact %}<span class="redact" style="--x:{{ redact.x }};--y:{{ redact.y }};--w:{{ redact.w }};--h:{{ redact.h }}" aria-hidden="true"></span>{% endif %}
+      </div>
+    </div>
+    <div class="laptop__base" aria-hidden="true"></div>
+  </figure>
+{% endmacro %}
+
+{% macro cta_primary() %}
+  {%- if c.links.download -%}
+    <a class="btn btn--primary" href="{{ c.links.download }}">{{ ico('download') }} Descarcă K-BOT</a>
+  {%- else -%}
+    <a class="btn btn--primary" href="{{ c.links.register }}">{{ ico('arrow') }} Înregistrează unitatea</a>
+  {%- endif -%}
+{% endmacro %}
+
+{# ---------- icon sprite ---------- #}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-calc" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><rect x="8" y="6" width="8" height="3" rx="1"/><path d="M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01M16 17h.01" stroke-width="2.6"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/><path d="M4 21h8"/></symbol>
+    <symbol id="i-parallel" viewBox="0 0 24 24"><path d="M4 6h12M13 3l3 3-3 3M4 12h16M17 9l3 3-3 3M4 18h12M13 15l3 3-3 3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 1.5-2-.6-1.2.2-2.5 1.6-2.5H17a4 4 0 004-4c0-5-4-9.5-9-9.5z"/><path d="M7.5 11h.01M10 7h.01M15 7.5h.01" stroke-width="2.6"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .8-1.5 1.2-1.5 2.5M12 17h.01" stroke-width="2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9M4 4v5h5M4 13a8 8 0 0014 4l2-2M20 20v-5h-5"/></symbol>
+    <symbol id="i-log" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/><path d="M17 15l4 3-4 3z"/></symbol>
+    <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M6.5 6.5h.01M9.5 6.5h.01" stroke-width="2"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 14l2 2 4-4"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01" stroke-width="2"/></symbol>
+    <symbol id="i-tags" viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8z"/><path d="M7.5 8.5h.01" stroke-width="2.6"/></symbol>
+    <symbol id="i-pdf" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 14h6M9 18h4"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M10 21v-5h4v5"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 24 24"><path d="M4 12h13M13 7l5 5-5 5"/></symbol>
+    <symbol id="i-select" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="i-result" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h6a4 4 0 000-8h-2a4 4 0 010-8h6" transform="translate(0 2) scale(1 .85)"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+    <symbol id="i-invoice" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  </defs>
+</svg>
+
+{# ---------- promo banner ---------- #}
+<aside class="promo" id="promo" aria-label="Anunț">
+  <div class="promo__in">
+    <p class="promo__text">{{ c.promo.short|rich }}</p>
+    <button type="button" class="promo__more" data-open="dlg-promo">{{ c.promo.more_label }} {{ ico('arrow') }}</button>
+  </div>
+  <button type="button" class="promo__close" id="promo-close" aria-label="{{ c.promo.close_label }}">{{ ico('close') }}</button>
+</aside>
+
+{# ---------- top bar ---------- #}
+<div class="topwrap">
+<header class="topbar" id="topbar">
+  <div class="topbar__in">
+    <a class="brand" href="#acasa" aria-label="K-BOT, spre început">
+      <img src="/static/site/img/art/logo-128.png" alt="" width="36" height="36">
+      <span class="brand__text">
+        <span class="brand__name">K-BOT</span>
+        <span class="brand__tag">{{ c.hero.kicker }}</span>
+      </span>
+    </a>
+    {% if c.alop_page.published %}
+    <a class="btn btn--hot btn--sm" href="/alop-eroare-adobe-acrobat-pro">{{ ico("alert") }} PDF „Inteligent”</a>
+    {% endif %}
+    <nav class="topnav" aria-label="Secțiunile paginii">
+      {% for n in c.nav %}<a href="#{{ n.id }}" data-tip="{{ n.label }}" aria-label="{{ n.label }}"><span aria-hidden="true">{{ n.icon }}</span></a>{% endfor %}
+    </nav>
+    <div class="topbar__cta">
+      <a class="btn btn--{{ 'ghost' if c.links.download else 'primary' }} btn--sm" href="{{ c.links.register }}">Înregistrează</a>
+      {% if c.links.portal %}<a class="btn btn--ghost btn--sm" href="{{ c.links.portal }}">{{ c.links.portal_label or 'Intră în cont' }}</a>{% endif %}
+      {% if c.links.download %}<a class="btn btn--primary btn--sm" href="{{ c.links.download }}">Descarcă K-BOT</a>{% endif %}
+    </div>
+  </div>
+</header>
+</div>
+
+<nav class="dots" aria-label="Navigare între secțiuni">
+  <a href="#acasa" data-group="acasa" data-label="Acasă"></a>
+  <a href="#pentru-toti" data-group="pentru-toti" data-label="Pentru toți utilizatorii"></a>
+  <a href="#tutoriale" data-group="tutoriale" data-label="Tutoriale"></a>
+  <a href="#pentru-contabil" data-group="pentru-contabil" data-label="Pentru contabil"></a>
+  <a href="#extrase" data-group="extrase" data-label="Extrase bancare"></a>
+  <a href="#pentru-director" data-group="pentru-director" data-label="Pentru director"></a>
+  <a href="#descarcari-multiple" data-group="descarcari-multiple" data-label="Descărcări multiple"></a>
+  <a href="#siguranta" data-group="siguranta" data-label="FOREXE și K-BOT"></a>
+  <a href="#castig" data-group="castig" data-label="Ce câștigi"></a>
+  <a href="#nu-contabilitate" data-group="integrare" data-label="Integrare"></a>
+  <a href="#ce-urmeaza" data-group="ce-urmeaza" data-label="Ce urmează"></a>
+  <a href="#despre-noi" data-group="despre-noi" data-label="Despre noi"></a>
+  {% if c.testimonials.visible %}<a href="#testimoniale" data-group="testimoniale" data-label="Ce spun utilizatorii"></a>{% endif %}
+  <a href="#incepe" data-group="incepe" data-label="Începe"></a>
+</nav>
+
+<main>
+
+{# ======== 1. hero + roles ======== #}
+<section class="screen screen--hero" id="acasa" data-screen data-group="acasa">
+  <div class="wrap hero">
+    <div class="hero__text reveal">
+      <h1><span class="h1__brand">{{ c.hero.title }}</span> <span class="h1__lead">{{ c.hero.lead }}</span></h1>
+      {% for b in c.hero.blocks %}<p class="{{ 'hero__strong' if loop.last else 'lead' }}">{{ b|rich }}</p>{% endfor %}
+      <div class="hero__buttons">
+        {{ cta_primary() }}
+        <a class="btn btn--ghost" href="#pentru-toti">{{ ico('eye') }} Vezi cum funcționează</a>
+      </div>
+    </div>
+    <div class="hero__art reveal" aria-hidden="true">
+      <img src="/static/site/img/art/dog-hero.png" alt="" width="800" height="800">
+    </div>
+  </div>
+
+  <div class="wrap roles" id="roluri">
+    <div class="roles__head reveal">
+      <h2>{{ c.roles.title }}</h2>
+      {% for p in c.roles.intro %}<p>{{ p }}</p>{% endfor %}
+    </div>
+    <div class="roles__cards">
+      {% for card in c.roles.cards %}
+      <a class="card card--role reveal" href="#{{ card.target }}">
+        <span class="card__ico">{{ ico(card.icon) }}</span>
+        <span class="card__text">{{ card.text|rich }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    <p class="roles__outro reveal">{{ c.roles.outro }}</p>
+  </div>
+  <a class="scrollhint" href="#pentru-toti" aria-label="Derulează pentru detalii"><span>Derulează pentru detalii</span>{{ ico('down') }}</a>
+</section>
+
+{# ======== people + data safety ======== #}
+<section class="screen screen--tint" id="oameni" data-screen data-group="oameni">
+  <div class="wrap">
+    <header class="screen__head reveal">
+      <span class="pill">{{ c.people.kicker }}</span>
+      <h2>{{ c.people.title }}</h2>
+      {% for p in c.people.intro %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+    </header>
+    <div class="cards cards--3">
+      {% for card in c.people.cards %}
+      <article class="card reveal">
+        <h3><span class="card__ico">{{ ico(card.icon) }}</span>{{ card.title }}</h3>
+        {{ blocks(card.blocks) }}
+      </article>
+      {% endfor %}
+    </div>
+    <header class="screen__head reveal">
+      <h3 class="sub-title">{{ c.people.safety_title }}</h3>
+      <p class="lead">{{ c.people.safety_intro }}</p>
+    </header>
+    <div class="cards cards--3">
+      {% for card in c.people.safety_cards %}
+      <article class="card reveal">
+        <h3><span class="card__ico">{{ ico(card.icon) }}</span>{{ card.title }}</h3>
+        {{ blocks(card.blocks) }}
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ======== 2. everyone ======== #}
+<section class="screen" id="pentru-toti" data-screen data-group="pentru-toti">
+  <div class="wrap">
+    <div class="split split--laptop split--rev split--head">
+      <header class="screen__head reveal">
+        <span class="pill">{{ c.everyone.kicker }}</span>
+        <h2>{{ c.everyone.title }}</h2>
+      </header>
+      <div class="reveal">{{ laptop(c.everyone.image) }}</div>
+    </div>
+    <div class="cards cards--3">
+      {% for card in c.everyone.cards %}
+      <article class="card reveal">
+        <h3><span class="card__ico">{{ ico(card.icon) }}</span>{{ card.title }}</h3>
+        {{ blocks(card.blocks) }}
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ======== 2b. tutorials ======== #}
+<section class="screen" id="tutoriale" data-screen data-group="tutoriale">
+  <div class="wrap">
+    <div class="split split--laptop split--rev">
+      <div class="reveal">
+        <span class="pill">{{ c.tutorials.kicker }}</span>
+        <h2>{{ c.tutorials.title }}</h2>
+        {% for p in c.tutorials.blocks %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+      </div>
+      <div class="reveal">{{ laptop(c.tutorials.image) }}</div>
+    </div>
+    <div class="steps reveal">
+      {% for s in c.tutorials.steps %}
+      <div class="step"><span class="card__ico">{{ ico(s.icon) }}</span><span>{{ s.text }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ======== 3. accountant ======== #}
+<section class="screen screen--tint" id="pentru-contabil" data-screen data-group="pentru-contabil">
+  <div class="wrap split split--person">
+    <div class="person reveal">
+      <span class="pill">{{ c.accountant.kicker }}</span>
+      <h2>{{ c.accountant.title }}</h2>
+      <img class="person__img" src="/static/site/img/art/accountant.svg" alt="" width="300" height="340" aria-hidden="true">
+    </div>
+    <div class="topics reveal">
+      <p class="topics__hint">{{ c.accountant.hint }}</p>
+      {% for t in c.accountant.topics %}
+      <button type="button" class="topic" data-open="dlg-{{ t.id }}">
+        <span class="card__ico">{{ ico(t.icon) }}</span>
+        <span class="topic__body">
+          <span class="topic__title">{{ t.title }}</span>
+          <span class="topic__sub">{{ t.blocks[0]|rich }}</span>
+        </span>
+        <span class="topic__go">{{ ico('arrow') }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ======== 4. statements ======== #}
+<section class="screen" id="extrase" data-screen data-group="extrase">
+  <div class="wrap split split--laptop split--rev">
+    <div class="reveal">
+      <span class="pill">{{ c.statements.kicker }}</span>
+      <h2>{{ c.statements.title }}</h2>
+      {% for p in c.statements.blocks %}<p class="lead">{{ p|rich }}</p>{% endfor %}
+      <div class="cards cards--2 cards--tight">
+        {% for card in c.statements.cards %}
+        <article class="card"><span class="card__ico">{{ ico(card.icon) }}</span><p>{{ card.text|rich }}</p></article>
+        {% endfor %}
+      </div>
+      {% for p in c.statements.after %}<p>{{ p|rich }}</p>{% endfor %}
+    </div>
+    <div class="reveal">{{ laptop(c.statements.image, {'x': '57.5%', 'y': '53.7%', 'w': '16.8%', 'h': '12.2%'}) }}</div>
+  </div>
+</section>
+
+{# ======== 5. director ======== #}
+<section class="screen screen--tint" id="pentru-director" data-screen data-group="pentru-director">
+  <div class="wrap split split--person">
+    <div class="reveal">
+      <span class="pill">{{ c.director.kicker }}</span>
+      <h2>{{ c.director.title }}</h2>
+      {% for p in c.director.blocks %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+    </div>
+    <div class="director reveal">
+      <img class="person__img person__img--float" src="/static/site/img/art/director.svg" alt="" width="300" height="340" aria-hidden="true">
+      <figure class="mockwin" aria-label="{{ c.director.mock_note }}">
+        <div class="mockwin__bar"><i></i><i></i><i></i><span>K-BOT — Director</span></div>
+        <div class="mockwin__body">
+          <div class="mockrow mockrow--head">{% for col in c.director.columns %}<span>{{ col }}</span>{% endfor %}</div>
+          {% for r in range(4) %}
+          <div class="mockrow">{% for col in c.director.columns %}<span><b class="skel"></b></span>{% endfor %}</div>
+          {% endfor %}
+        </div>
+        <figcaption>{{ c.director.mock_note }}</figcaption>
+      </figure>
+    </div>
+  </div>
+  <div class="wrap steps reveal">
+    {% for s in c.director.steps %}
+    <div class="step"><span class="card__ico">{{ ico(s.icon) }}</span><span>{{ s.text }}</span></div>
+    {% endfor %}
+  </div>
+</section>
+
+{# ======== 6. multi download ======== #}
+<section class="screen" id="descarcari-multiple" data-screen data-group="descarcari-multiple">
+  <div class="wrap">
+    <div class="split split--laptop split--rev">
+      <div class="reveal">
+        <span class="pill pill--opt">{{ c.multi.kicker }}</span>
+        <h2>{{ c.multi.title }}</h2>
+        {% for p in c.multi.blocks %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+      </div>
+      <div class="reveal">{{ laptop(c.multi.image) }}</div>
+    </div>
+    <div class="steps reveal">
+      {% for s in c.multi.steps %}
+      <div class="step"><span class="card__ico">{{ ico(s.icon) }}</span><span>{{ s.text }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ======== 7. safety ======== #}
+<section class="screen screen--tint" id="siguranta" data-screen data-group="siguranta">
+  <div class="wrap">
+    <header class="screen__head reveal">
+      <span class="pill">{{ c.safety.kicker }}</span>
+      <h2>{{ c.safety.title }}</h2>
+      {% for p in c.safety.intro %}<p class="lead">{{ p }}</p>{% endfor %}
+    </header>
+    <div class="compare reveal">
+      <div class="compare__head"><span>În FOREXE</span><span>În K-BOT</span></div>
+      {% for pr in c.safety.pairs %}
+      <div class="compare__row">
+        <p class="compare__cell compare__cell--a"><span class="compare__tag">În FOREXE</span><span class="compare__txt">{{ pr.forexe }}</span></p>
+        <p class="compare__cell compare__cell--b"><span class="compare__tag">În K-BOT</span><span class="compare__txt">{{ pr.kbot }}</span></p>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="safety__foot reveal">
+      <img src="/static/site/img/art/shield.svg" alt="" width="100" height="115" aria-hidden="true">
+      <div>{% for p in c.safety.outro %}<p>{{ p|rich }}</p>{% endfor %}</div>
+    </div>
+  </div>
+</section>
+
+{# ======== online access ======== #}
+<section class="screen" id="acces-online" data-screen data-group="acces-online">
+  <div class="wrap">
+    <header class="screen__head reveal">
+      <span class="pill">{{ c.online.kicker }}</span>
+      <h2>{{ c.online.title }}</h2>
+      {% for p in c.online.intro %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+    </header>
+    <div class="cards cards--3">
+      {% for card in c.online.cards %}
+      <article class="card reveal">
+        <h3><span class="card__ico">{{ ico(card.icon) }}</span>{{ card.title }}</h3>
+        {{ blocks(card.blocks) }}
+      </article>
+      {% endfor %}
+    </div>
+    <div class="reveal">
+      {% for p in c.online.outro %}<p class="lead">{{ p|rich }}</p>{% endfor %}
+      <p>
+        <button type="button" class="link" data-open="dlg-acces-online">{{ c.online.more_label }} {{ ico('arrow') }}</button>
+        {% if c.links.portal %} &nbsp; <a class="btn btn--ghost btn--sm" href="{{ c.links.portal }}">{{ c.links.portal_label or 'Intră în cont' }}</a>{% endif %}
+      </p>
+    </div>
+  </div>
+</section>
+
+{# ======== 8. gains ======== #}
+<section class="screen" id="castig" data-screen data-group="castig">
+  <div class="wrap">
+    <header class="screen__head reveal">
+      <span class="pill">{{ c.gains.kicker }}</span>
+      <h2>{{ c.gains.title }}</h2>
+    </header>
+    <div class="cards cards--5">
+      {% for g in c.gains.list %}
+      <article class="card card--gain reveal">
+        <span class="card__ico">{{ ico(g.icon) }}</span>
+        <h3>{{ g.title }}</h3>
+        <p>{{ g.text }}</p>
+      </article>
+      {% endfor %}
+    </div>
+    <div class="gains__close reveal">
+      <p>{{ c.gains.lead_in }}</p>
+      <p class="gains__big">{{ c.gains.closing|rich }}</p>
+    </div>
+  </div>
+</section>
+
+{# ======== positioning ======== #}
+<section class="screen" id="nu-contabilitate" data-screen data-group="integrare">
+  <div class="wrap split split--pos">
+    <div class="reveal">
+      <h2>{{ c.positioning.title }}</h2>
+      {% for p in c.positioning.blocks %}<p class="{{ 'lead' if loop.index == 2 else '' }}">{{ p|rich }}</p>{% endfor %}
+    </div>
+    <div class="beside reveal">
+      <div class="beside__card">
+        <span class="card__ico">{{ ico('calc') }}</span>
+        <b>{{ c.positioning.visual.left.title }}</b>
+        <span>{{ c.positioning.visual.left.sub }}</span>
+      </div>
+      <div class="beside__link"><span class="beside__line" aria-hidden="true"></span><span class="beside__cap">{{ c.positioning.visual.caption }}</span><span class="beside__line" aria-hidden="true"></span></div>
+      <div class="beside__card beside__card--kbot">
+        <img src="/static/site/img/art/logo-128.png" alt="" width="56" height="56">
+        <b>{{ c.positioning.visual.right.title }}</b>
+        <span>{{ c.positioning.visual.right.sub }}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ======== integration: formats ======== #}
+<section class="screen screen--tint" id="integrare" data-screen data-group="integrare">
+  <div class="wrap split split--integr">
+    <div class="reveal">
+      <span class="pill pill--soon">{{ c.integration.badge }}</span>
+      <h2>{{ c.integration.title }}</h2>
+      {% for p in c.integration.blocks %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+      <ul class="formats">
+        {% for f in c.integration.formats %}<li><span class="fmt">{{ f.tag }}</span><span>— {{ f.text }}</span></li>{% endfor %}
+      </ul>
+      <p>{{ c.integration.api_line|rich }}</p>
+      {% for p in c.integration.after %}<p>{{ p|rich }}</p>{% endfor %}
+    </div>
+    <div class="reveal">
+      <div class="hub">
+        <svg class="hub__lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          {% for n in c.integration.hub.nodes %}<line x1="50" y1="50" x2="{{ n.x }}" y2="{{ n.y }}" class="{{ 'is-now' if n.now else 'is-soon' }}"/>{% endfor %}
+        </svg>
+        <div class="hub__center"><img src="/static/site/img/art/logo-128.png" alt="" width="64" height="64"><b>{{ c.integration.hub.center }}</b></div>
+        {% for n in c.integration.hub.nodes %}
+        <div class="hub__node {{ 'is-now' if n.now else 'is-soon' }}" style="left:{{ n.x }}%;top:{{ n.y }}%">
+          <b>{{ n.label }}</b>
+          <span>{{ c.integration.now_label if n.now else c.integration.planned_label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="hub__tags"><span class="pill pill--soon">{{ c.integration.planned_label }}</span>{% for f in c.integration.formats %}<span class="fmt">{{ f.tag }}</span>{% endfor %}<span class="fmt">API</span></p>
+    </div>
+  </div>
+</section>
+
+{# ======== integration: the other direction ======== #}
+<section class="screen" id="integrare-api" data-screen data-group="integrare">
+  <div class="wrap split split--mirror">
+    <div class="reveal">
+      <span class="pill pill--soon">{{ c.mirror.badge }}</span>
+      <h2>{{ c.mirror.title }}</h2>
+      {% for p in c.mirror.blocks %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+    </div>
+    <div class="flows reveal">
+      <p class="flows__lead">{{ c.mirror.old_lead }}</p>
+      <ol class="flow flow--old">{% for st in c.mirror.old_steps %}<li>„{{ st }}”</li>{% endfor %}</ol>
+      <p class="flows__lead">{{ c.mirror.new_lead }}</p>
+      <ol class="flow flow--new">{% for st in c.mirror.new_steps %}<li>{{ st }}</li>{% endfor %}</ol>
+    </div>
+  </div>
+  <div class="wrap mirror__after reveal">
+    {% for p in c.mirror.after %}<p class="{{ 'lead' if loop.first or loop.index == 2 else '' }}">{{ p|rich }}</p>{% endfor %}
+  </div>
+</section>
+
+{# ======== 9. future ======== #}
+<section class="screen screen--tint" id="ce-urmeaza" data-screen data-group="ce-urmeaza">
+  <div class="wrap split split--future">
+    <div class="reveal">
+      <span class="pill">{{ c.future.kicker }}</span>
+      <h2>{{ c.future.title }}</h2>
+      {% for p in c.future.intro %}<p class="lead">{{ p|rich }}</p>{% endfor %}
+      <p class="note">{{ c.future.note }}</p>
+    </div>
+    <ol class="timeline reveal">
+      {% for n in c.future.nodes %}
+      <li class="tnode">
+        <span class="tnode__dot">{{ ico(n.icon) }}</span>
+        <div class="tnode__body">
+          <span class="tnode__label">{{ n.label }}</span>
+          <h3>{{ n.title }}</h3>
+          <p class="tnode__teaser">{{ n.teaser|rich }}</p>
+          <button type="button" class="link" data-open="dlg-{{ n.id }}">{{ c.future.more_label }} {{ ico('arrow') }}</button>
+        </div>
+      </li>
+      {% endfor %}
+      <li class="tnode tnode--end">
+        <span class="tnode__dot">{{ ico('flow') }}</span>
+        <div class="tnode__body">
+          <span class="tnode__label">{{ c.future.direction.label }}</span>
+          {% for p in c.future.direction.blocks %}<p>{{ p|rich }}</p>{% endfor %}
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+{# ======== about ======== #}
+<section class="screen" id="despre-noi" data-screen data-group="despre-noi">
+  <div class="wrap split split--about">
+    <div class="reveal">
+      <span class="pill">{{ c.about.kicker }}</span>
+      <h2>{{ c.about.title }}</h2>
+      {% for p in c.about.blocks %}<p class="{{ 'lead' if loop.first else '' }}">{{ p|rich }}</p>{% endfor %}
+    </div>
+    <dl class="facts reveal">
+      {% for f in c.about.facts %}
+      <div class="fact"><dt>{{ f.title }}</dt><dd>{{ f.text }}</dd></div>
+      {% endfor %}
+    </dl>
+  </div>
+</section>
+
+<section class="screen screen--tint" id="despre-filosofie" data-screen data-group="despre-noi">
+  <div class="wrap split split--about">
+    <div class="reveal">
+      <h2>{{ c.philosophy.title }}</h2>
+      {% for p in c.philosophy.blocks %}<p>{{ p|rich }}</p>{% endfor %}
+    </div>
+    <blockquote class="ask reveal">
+      <p class="ask__lead">{{ c.philosophy.quote.lead }}</p>
+      <p class="ask__no">{{ c.philosophy.quote.no }}</p>
+      <p class="ask__lead">{{ c.philosophy.quote.lead2 }}</p>
+      <p class="ask__yes">{{ c.philosophy.quote.yes|rich }}</p>
+      <p class="ask__end">{{ c.philosophy.quote.end }}</p>
+    </blockquote>
+  </div>
+</section>
+
+{% if c.testimonials.visible %}
+{# ======== testimonials ======== #}
+<section class="screen screen--tint screen--short" id="testimoniale" data-screen data-group="testimoniale">
+  <div class="wrap">
+    <header class="screen__head reveal"><h2>{{ c.testimonials.title }}</h2></header>
+    <div class="quotes">
+      {% for t in c.testimonials["items"] %}
+      <figure class="quote reveal{{ ' is-placeholder' if t.quote.startswith('[') else '' }}">
+        <blockquote>„{{ t.quote }}”</blockquote>
+        <figcaption><b>{{ t.name }}</b><span>{{ t.org }}</span></figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# ======== closing call to action ======== #}
+<section class="screen screen--short screen--cta" id="incepe" data-screen data-group="incepe">
+  <div class="wrap closing reveal">
+    <div class="closing__buttons">
+      {%- if c.links.download -%}
+        <a class="btn btn--primary btn--lg" href="{{ c.links.download }}">{{ ico('download') }} {{ c.finalcta.primary }}</a>
+        <a class="btn btn--ghost btn--lg" href="{{ c.links.register }}">Înregistrează unitatea</a>
+      {%- else -%}
+        <a class="btn btn--primary btn--lg" href="{{ c.links.register }}">{{ ico('arrow') }} {{ c.finalcta.primary }}</a>
+      {%- endif -%}
+      {% if c.links.contact %}<a class="btn btn--ghost btn--lg" href="{{ c.links.contact }}">{{ c.links.contact_label or 'Contact' }}</a>{% endif %}
+    </div>
+    <p class="closing__note">{{ c.finalcta.note }}</p>
+  </div>
+</section>
+
+</main>
+
+{# ---------- side panels with the full text ---------- #}
+{% for t in c.accountant.topics %}
+<dialog class="drawer" id="dlg-{{ t.id }}" aria-labelledby="dlg-{{ t.id }}-t">
+  <div class="drawer__head">
+    <h3 id="dlg-{{ t.id }}-t"><span class="card__ico">{{ ico(t.icon) }}</span>{{ t.title }}</h3>
+    <button type="button" class="drawer__close" data-close aria-label="Închide">{{ ico('close') }}</button>
+  </div>
+  <div class="drawer__body">
+    {{ blocks(t.blocks) }}
+    {% if t.image %}<figure class="drawer__fig">{{ shot(t.image) }}</figure>{% endif %}
+  </div>
+</dialog>
+{% endfor %}
+
+<dialog class="drawer" id="dlg-acces-online" aria-labelledby="dlg-acces-online-t">
+  <div class="drawer__head">
+    <h3 id="dlg-acces-online-t"><span class="card__ico">{{ ico('eye') }}</span>{{ c.online.title }}</h3>
+    <button type="button" class="drawer__close" data-close aria-label="Închide">{{ ico('close') }}</button>
+  </div>
+  <div class="drawer__body">
+    {{ blocks(c.online.blocks) }}
+  </div>
+</dialog>
+
+{% for n in c.future.nodes %}
+<dialog class="drawer" id="dlg-{{ n.id }}" aria-labelledby="dlg-{{ n.id }}-t">
+  <div class="drawer__head">
+    <h3 id="dlg-{{ n.id }}-t"><span class="card__ico">{{ ico(n.icon) }}</span>{{ n.title }}</h3>
+    <button type="button" class="drawer__close" data-close aria-label="Închide">{{ ico('close') }}</button>
+  </div>
+  <div class="drawer__body">
+    {{ blocks(n.blocks) }}
+  </div>
+</dialog>
+{% endfor %}
+
+
+<dialog class="drawer" id="dlg-promo" aria-labelledby="dlg-promo-t">
+  <div class="drawer__head">
+    <h3 id="dlg-promo-t">{{ c.promo.dialog.title }}</h3>
+    <button type="button" class="drawer__close" data-close aria-label="Închide">{{ ico('close') }}</button>
+  </div>
+  <div class="drawer__body">
+    {{ blocks(c.promo.dialog.blocks) }}
+    <p class="drawer__cta">
+      {%- if c.links.download -%}
+        <a class="btn btn--primary" href="{{ c.links.download }}">{{ ico('download') }} {{ c.promo.dialog.cta }}</a>
+      {%- else -%}
+        <a class="btn btn--primary" href="{{ c.links.register }}">{{ ico('arrow') }} {{ c.promo.dialog.cta }}</a>
+      {%- endif -%}
+    </p>
+    <p class="drawer__foot">{{ c.promo.dialog.footnote }}</p>
+  </div>
+</dialog>
+
+</body>
+</html>

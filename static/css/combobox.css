@@ -109,6 +109,8 @@
     align-items: center;
 }
 .combobox-option:last-child{border-bottom: none;}
+.combobox-option.is-disabled{opacity:.5;cursor:default;}
+.combobox-option.is-disabled:hover,.combobox-option.is-disabled.highlighted{background:transparent;}
 .combobox-option:hover,
 .combobox-option.highlighted{background: linear-gradient(90deg, var(--status-color-left), var(--status-color-right));}
 .combobox-option.selected{background: #e8f5e8; color: #2e7d32; font-weight: 500;}

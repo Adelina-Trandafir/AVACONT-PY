@@ -164,11 +164,19 @@ def _fields(entry) -> dict:
     """The four values the page and the approval screen use, from `date_generale`."""
     general = entry.get("date_generale") if isinstance(entry, dict) else None
     general = general if isinstance(general, dict) else {}
+    seat = entry.get("adresa_sediu_social") if isinstance(entry, dict) else None
+    seat = seat if isinstance(seat, dict) else {}
     return {
         "cui": _text(general.get("cui")),
         "denumire": _text(general.get("denumire")),
         "adresa": _text(general.get("adresa")),
         "nr_reg_com": _text(general.get("nrRegCom")),
+        # Structured seat address (slice 00EF-13, «Date Unitate»): read by routes/efactura only; "" when ANAF omits it.
+        "judet_cod": _text(seat.get("scod_JudetAuto")),
+        "judet": _text(seat.get("sdenumire_Judet")),
+        "localitate": _text(seat.get("sdenumire_Localitate")),
+        # VAT payer today (E-Factura customer: «RO» prefix); False when ANAF omits the block.
+        "platitor_tva": bool((entry.get("inregistrare_scop_Tva") or {}).get("scpTVA")) if isinstance(entry, dict) else False,
     }
 
 

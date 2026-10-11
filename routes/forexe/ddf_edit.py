@@ -443,7 +443,8 @@ _SQL_GEN_INDICATORI = (
     "  CONCAT(C.SS, C.ClsfSal)                         AS CodSSI, "
     "  A.DataCreare                                    AS DataRezervare, "
     "  H.CodAI, H.CodAngajament, H.CodIndicator, "
-    "  I.Credit_Bugetar                                AS Buget, "
+    "  COALESCE((SELECT B.CreditBugetar FROM FX_Indicatori_Buget B "
+    "             WHERE B.IdClsf = I.IdClsf), 0)       AS Buget, "
     "  0                                               AS ValPrec, "
     "  H.Val_Rezervare_I                               AS Suma "
     "FROM FX_Istoric H "
@@ -1122,7 +1123,7 @@ def get_ddf_draft(iddf, idrev):
 # server yet. They come back with the tree picker, not before.
 _SQL_CLSF_PE_ANGAJAMENT = (
     "SELECT C.IDClsf, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
-    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(SUM(i.Credit_Bugetar), 0) FROM FX_Indicatori i          WHERE i.CodAngajament = %s AND i.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
+    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(MAX(B.CreditBugetar), 0) FROM FX_Indicatori_Buget B JOIN FX_Indicatori i ON i.IdClsf = B.IdClsf WHERE i.CodAngajament = %s AND B.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
     "  FROM Clasificatii C "
     " WHERE C.IDClsf IN (SELECT CC.IDClsf FROM Clasificatii CC "
     "                      JOIN FX_Indicatori I ON CC.IDClsf = I.IdClsf "
@@ -1132,7 +1133,7 @@ _SQL_CLSF_PE_ANGAJAMENT = (
 
 _SQL_CLSF_ACELASI_TITLU = (
     "SELECT C.IDClsf, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
-    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(SUM(i.Credit_Bugetar), 0) FROM FX_Indicatori i          WHERE i.CodAngajament = %s AND i.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 3 AS SortOrd "
+    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(MAX(B.CreditBugetar), 0) FROM FX_Indicatori_Buget B JOIN FX_Indicatori i ON i.IdClsf = B.IdClsf WHERE i.CodAngajament = %s AND B.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 3 AS SortOrd "
     "  FROM Clasificatii C "
     " WHERE C.Titlu IN (SELECT CC.Titlu FROM Clasificatii CC "
     "                     JOIN FX_Indicatori I ON CC.IDClsf = I.IdClsf "
@@ -1150,7 +1151,7 @@ _SQL_CLSF_ACELASI_TITLU = (
 # (`left(Articol, 2)`), so the client passes it as a parameter and no substring is computed.
 _SQL_CLSF_MANUAL = (
     "SELECT C.IDClsf, C.Clsf, C.Denumire, C.SS, C.Titlu, C.IdUnitate, "
-    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(SUM(i.Credit_Bugetar), 0) FROM FX_Indicatori i          WHERE i.CodAngajament = %s AND i.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
+    "       (SELECT COALESCE(SUM(sa.ValCur), 0) FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf)            AS ValPrec,        (SELECT COALESCE(SUM(r.Valoare), 0) FROM FX_Receptii r          WHERE r.CodAngajament = %s AND r.IdClsf = C.IDClsf)              AS ValRec,        (SELECT sa.CodIndicator FROM FX_DDF_REV_SA sa          WHERE sa.CodAngajament = %s AND sa.IdClsf = C.IDClsf LIMIT 1)    AS CodIndicator,        (SELECT COALESCE(MAX(B.CreditBugetar), 0) FROM FX_Indicatori_Buget B JOIN FX_Indicatori i ON i.IdClsf = B.IdClsf WHERE i.CodAngajament = %s AND B.IdClsf = C.IDClsf)              AS Buget,        CONCAT(C.SS, C.ClsfSal) AS CodSSI, 1 AS SortOrd "
     "  FROM Clasificatii C "
     " WHERE (%s IS NULL OR C.Titlu = %s) "
     " ORDER BY C.Clsf"
@@ -1176,7 +1177,7 @@ def _clsf_din_rand(r: dict) -> dict:
         # Empty = no indicator exists for this classification yet, so the client mints one.
         "cod_indicator": _txt(r.get("CodIndicator")),
         # Slice 0081-12 (operator, 26.09.2026): the budget of a line NOT generated from a
-        # reservation is the angajament's FX_Indicatori.Credit_Bugetar for the classification.
+        # reservation is the credit FOREXE reports for the classification (FX_Indicatori_Buget, slice 0108).
         # Display only, like the reservation path's R_CreditBug.
         "buget": _num(r.get("Buget")),
     }
@@ -1442,12 +1443,23 @@ def _numar_folosit(cursor, tip: str, dc: str, cod: str, valoare: int) -> bool:
     return cursor.fetchone() is not None
 
 
-def _numar_blocat_de_altcineva(cursor, tip: str, dc: str, valoare: int, token: str):
-    """Who else is holding the number right now? Returns their user name, or None."""
-    cursor.execute(
-        "SELECT Utilizator FROM FX_NumberLock "
-        " WHERE Tip = %s AND DC = %s AND Valoare = %s AND ExpiraLa >= NOW() AND Token <> %s "
-        " LIMIT 1", (tip, dc, valoare, token))
+def _numar_blocat_de_altcineva(cursor, tip: str, dc: str, cod: str, valoare: int, token: str):
+    """Who else is holding the number right now? Returns their user name, or None.
+
+    A NUMARREV lock is scoped to its angajament (the same key `_SQL_LOCK_MAX_NUMARREV` uses):
+    revision 1 of angajament A and revision 1 of angajament B are different numbers.
+    """
+    if tip == LOCK_TIP_NUMARREV:
+        cursor.execute(
+            "SELECT Utilizator FROM FX_NumberLock "
+            " WHERE Tip = %s AND DC = %s AND CodAngajament = %s AND Valoare = %s "
+            "   AND ExpiraLa >= NOW() AND Token <> %s LIMIT 1",
+            (tip, dc, cod, valoare, token))
+    else:
+        cursor.execute(
+            "SELECT Utilizator FROM FX_NumberLock "
+            " WHERE Tip = %s AND DC = %s AND Valoare = %s AND ExpiraLa >= NOW() AND Token <> %s "
+            " LIMIT 1", (tip, dc, valoare, token))
     rand = cursor.fetchone()
     return _txt(rand.get("Utilizator")) if rand else None
 
@@ -1571,7 +1583,7 @@ def post_ddf_numar_schimba(idlock):
             conn.rollback()
             return _json_utf8({"error": f"Numărul {valoare} a mai fost folosit."}, 409)
 
-        detinator = _numar_blocat_de_altcineva(cursor, tip, dc, valoare, token)
+        detinator = _numar_blocat_de_altcineva(cursor, tip, dc, cod, valoare, token)
         if detinator is not None:
             conn.rollback()
             return _json_utf8(
@@ -1636,8 +1648,13 @@ def delete_ddf_numar(idlock):
     try:
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("DELETE FROM FX_NumberLock WHERE IdLock = %s AND Token = %s",
-                       (idlock, token))
+        # The same operator counts as the owner even when the session token changed since the
+        # lock was taken (a re-login while the form was open): otherwise the release matched
+        # nothing and the number stayed held until it expired.
+        utilizator = getattr(g.session, "username", "") or ""
+        cursor.execute("DELETE FROM FX_NumberLock WHERE IdLock = %s "
+                       "AND (Token = %s OR (Utilizator <> '' AND Utilizator = %s))",
+                       (idlock, token, utilizator))
         conn.commit()
         return _json_utf8({"id_lock": idlock, "eliberat": cursor.rowcount > 0}, 200)
     except Exception as e:
@@ -1919,17 +1936,19 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
             cursor.execute(
                 "INSERT INTO FX_Indicatori "
                 "  (CodAI, CodAngajament, CodIndicator, IdClsf, IdUnitate, "
-                "   Credit_Bugetar_Initial, Angajament_Legal, Credit_Bugetar_Definitiv) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "   Angajament_Legal, Credit_Bugetar_Definitiv) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
                 "ON DUPLICATE KEY UPDATE "
-                "  Credit_Bugetar_Initial = VALUES(Credit_Bugetar_Initial), "
                 "  Angajament_Legal = VALUES(Angajament_Legal), "
                 "  Credit_Bugetar_Definitiv = VALUES(Credit_Bugetar_Definitiv)",
                 # Since 0080-01 FX_Indicatori.IdClsf is the MariaDB key, like section A.
+                # Slice 0108: Credit_Bugetar_Initial is NOT written here: it is what FOREXE shows on
+                # «Informatii complete contract», read once (routes/forexe/credit_initial.py), and a
+                # re-save of the revision must never overwrite it.
                 (cod_ai, cod, _txt(a.get("cod_indicator")),
                  _int0(a.get("id_clsf")),
                  _int0(a.get("id_unitate")),
-                 val_cur, val_cur, val_cur))
+                 val_cur, val_cur))
 
     # ---- 3: FX_DDF -----------------------------------------------------------------------
     if ddf_nou:

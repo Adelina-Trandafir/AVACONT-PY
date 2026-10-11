@@ -37,6 +37,7 @@ from typing import Dict, List, Optional, Tuple
 
 from utils import asociere_log as journal
 
+from .budget_on_day import budget_on_day
 from .marcaj import LOCK_IDR, LOCK_IDRH, consuma_lacatul, id_marcaj_utilizabil
 from .prelucrare_helpers import (
     cod_ai,
@@ -537,7 +538,8 @@ def _calculeaza_val_rezervare_dif(cursor, cod: str) -> None:
 #     o a doua scriere ar esua zgomotos oricum -- dar filtrul e cel care o previne.)
 _REZ_SELECT = (
     "SELECT H.ID, I.CodAI, I.CodAngajament, I.CodIndicator, I.IdClsf, "
-    "  DATE(H.DataFX) AS DataRezervare, I.Credit_Bugetar AS R_CreditBug, "
+    "  DATE(H.DataFX) AS DataRezervare, "
+    "  (SELECT B.CreditBugetar FROM FX_Indicatori_Buget B WHERE B.IdClsf = I.IdClsf) AS R_CreditBug, "
     "  H.Val_Rezervare_I AS R_Initiala, H.Val_AngLeg AS R_Definitiva, "
     "  {valoare} AS R_Valoare, H.Val_Rezervare_Ant, H.IDREV, "
     "  (SELECT C.Clsf FROM Clasificatii C WHERE C.IDClsf = I.IdClsf LIMIT 1) AS ClsfSort "
@@ -561,11 +563,10 @@ def step3cd_populeaza_rezervari(cursor, cod: str, initiala: bool,
     """
     Scrie FX_Rezervari. Apelata de doua ori: `initiala=True`, apoi `initiala=False`.
 
-    D-E: un `IDREV` care arata catre o revizie absenta din FX_DDF_REV se scrie NULL, se
-    numara si se intoarce ca avertisment. Nu ar trebui sa se intample; daca se intampla,
-    avertismentul e singurul mod in care cineva afla. Alternativa -- sa lasam INSERT-ul
-    sa cada -- ar lua toata tranzactia cu el (eroare 1452) pentru o legatura pe care
-    pasul 3e o poate umple mai tarziu oricum.
+    D-E: un `IDREV` care arata catre o revizie absenta din FX_DDF_REV se scrie NULL, fara
+    avertisment (operator, 08.10.2026). Alternativa -- sa lasam INSERT-ul sa cada -- ar
+    lua toata tranzactia cu el (eroare 1452) pentru o legatura pe care pasul 3e o poate
+    umple mai tarziu oricum.
     """
     valoare = "H.Val_AngLeg" if initiala else "H.Val_Rezervare_Dif"
     tip_rand = "Rez_Definitiva" if initiala else "Rez_Influenta"
@@ -578,16 +579,20 @@ def step3cd_populeaza_rezervari(cursor, cod: str, initiala: bool,
         if idrev is not None:
             cursor.execute(_DDF_REV_EXISTA_SQL, (int(idrev),))
             if cursor.fetchone() is None:
-                warnings.append(
-                    f"FX_Rezervari: revizia {idrev} nu există în FX_DDF_REV — "
-                    f"legătura rămâne goală (indicator {r['CodIndicator']})."
-                )
+                # Operator 08.10.2026: no message to the operator; step 3e fills the link later.
                 idrev = None
+
+        # Slice 0108 (operator, 03.10.2026): the credit stamped on a reservation is the budget the
+        # classification had on the reservation's day (budget_on_day.py -- the version in force plus
+        # its corrections, the total). A day with no budget version keeps what FOREXE reports for the
+        # classification (the SELECT's R_CreditBug), as the DDF does.
+        buget_zi = budget_on_day(cursor, int(r["IdClsf"] or 0), r["DataRezervare"])
+        credit_bug = buget_zi if buget_zi is not None else r["R_CreditBug"]
 
         r_valoare = float(r["R_Valoare"] or 0)
         cursor.execute(_REZ_INSERT_SQL, (
             int(r["ID"]), r["CodAI"], r["CodAngajament"], r["CodIndicator"],
-            r["IdClsf"], r["DataRezervare"], r["R_CreditBug"],
+            r["IdClsf"], r["DataRezervare"], credit_bug,
             r["R_Initiala"], r["R_Definitiva"], r_valoare, idrev,
             # EInitiala pe ramura initiala; pe cealalta, cele trei coloane de influenta.
             1 if initiala else 0,
@@ -666,16 +671,21 @@ _RECEPTII_ISTORIC_SQL = (
 _MAX_NRCRT_H_SQL = (
     "SELECT MAX(NrCrt) AS MaxNr FROM FX_Receptii_H WHERE CodAngajament = %s"
 )
+# Slice 0111: `TotalOrig` is born with the row, equal to `Total` -- what FOREXE said. `Total` is
+# the working value an operator may correct (routes/forexe/asociere.py, corectie); `TotalOrig`
+# never changes after this insert. The value is the expression `Total`, not a second
+# placeholder: a MariaDB value list may read a column set earlier in the same list, so the
+# parameter tuples of every caller stay as they were.
 _H_INSERT_SQL = (
     "INSERT INTO FX_Receptii_H "
-    "(IDH, NrCrt, CodAngajament, DataH, Total, Descriere, EsteStergere, Sters) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, 0)"
+    "(IDH, NrCrt, CodAngajament, DataH, Total, TotalOrig, Descriere, EsteStergere, Sters) "
+    "VALUES (%s, %s, %s, %s, %s, Total, %s, %s, 0)"
 )
 # Slice 0076: the same row, with the IDRH the page reserved and wrote into the description.
 _H_INSERT_CU_ID_SQL = (
     "INSERT INTO FX_Receptii_H "
-    "(IDRH, IDH, NrCrt, CodAngajament, DataH, Total, Descriere, EsteStergere, Sters) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)"
+    "(IDRH, IDH, NrCrt, CodAngajament, DataH, Total, TotalOrig, Descriere, EsteStergere, Sters) "
+    "VALUES (%s, %s, %s, %s, %s, %s, Total, %s, %s, 0)"
 )
 _REC_INSERT_SQL = (
     "INSERT INTO FX_Receptii "

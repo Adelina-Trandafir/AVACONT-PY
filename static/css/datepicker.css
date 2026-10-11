@@ -1,0 +1,20 @@
+/* Custom date picker (js/components/datepicker). Colours come from the page tokens, so it follows light/dark. */
+.kdp { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
+.kdp__field { box-sizing: border-box; flex: 1; min-width: 0; height: 23px; padding: 1px 24px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 2px; font: inherit; text-align: center; }
+.kdp__field:focus { border-color: var(--blue); outline: 1px solid var(--blue); }
+.kdp__field.is-invalid { border-color: var(--danger, #c0392b); outline: 1px solid var(--danger, #c0392b); }
+.kdp__button { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 22px; padding: 0; color: inherit; background: transparent; border: 0; font-size: .95em; line-height: 1; cursor: pointer; }
+.kdp__button:hover { background: var(--sky-2); }
+.kdp__popup { position: fixed; z-index: 100000; box-sizing: border-box; width: 272px; padding: 8px; color: var(--ink); background: var(--card); border: 1px solid var(--blue); border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .25); font-size: 14.33px; user-select: none; }
+.kdp__head { display: grid; grid-template-columns: 24px 24px 1fr 24px 24px; align-items: center; gap: 2px; margin-bottom: 6px; text-align: center; }
+.kdp__head strong { text-transform: capitalize; font-weight: 800; }
+.kdp__nav { height: 24px; padding: 0; color: inherit; background: transparent; border: 0; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer; }
+.kdp__nav:hover, .kdp__foot button:hover { background: var(--sky-2); }
+.kdp__week, .kdp__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.kdp__week span { padding: 2px 0; color: var(--ink-soft); font-size: .85em; font-weight: 700; }
+.kdp__day { height: 30px; padding: 0; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 4px; font: inherit; cursor: pointer; }
+button.kdp__day:hover { background: var(--sky-2); }
+.kdp__day.is-today { border-color: var(--blue); }
+.kdp__day.is-selected { color: #fff; background: var(--blue); font-weight: 800; }
+.kdp__foot { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.kdp__foot button { padding: 3px 10px; color: var(--blue-deep, var(--ink)); background: transparent; border: 0; border-radius: 4px; font: inherit; font-weight: 700; cursor: pointer; }

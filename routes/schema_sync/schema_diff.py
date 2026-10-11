@@ -306,6 +306,9 @@ class SchemaDiff:
     # -- 1 / 2: tables -----------------------------------------------
     def _tables(self):
         for name in sorted(set(self.tgt.tables) - set(self.src.tables)):
+            # SLICE-ADE3-03: ADE owns its schema; absence from the K-BOT template is not deletion.
+            if name.upper().startswith('AD_') or name == 'Unitati_Chitante':
+                continue
             self._emit(name, None, "TABLE", "DROP",
                        f"DROP TABLE {self._t(name)};", destructive=True)
 
@@ -515,7 +518,10 @@ class SchemaDiff:
         elif src_pk.columns != tgt_pk.columns and self.force:
             # Combined: MariaDB will not leave an auto_increment column
             # keyless, even momentarily.
-            self._emit(src_tbl.name, "PRIMARY", "PK", "MODIFY",
+            # A key that uses a column the target does not have yet must run AFTER the ADD COLUMN
+            # (priority 7): PK/MODIFY is priority 3, so such a change goes out as PK/CREATE (priority 9).
+            late = any(name not in tgt_tbl.columns for name in src_pk.columns)
+            self._emit(src_tbl.name, "PRIMARY", "PK", "CREATE" if late else "MODIFY",
                        f"ALTER TABLE {self._t(src_tbl.name)} "
                        f"DROP PRIMARY KEY, ADD PRIMARY KEY ({cols});",
                        destructive=True)

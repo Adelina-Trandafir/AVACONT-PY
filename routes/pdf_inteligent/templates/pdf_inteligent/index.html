@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eroare ALOP: XFAObject.rawValue în Acrobat Pro – soluție (Reader) · K-BOT</title>
+<meta name="description" content="Formularele ALOP (OMF 1.140/2025) dau eroarea rawValue / permissions settings în Adobe Acrobat Pro după prima semnătură. Soluția: Acrobat Reader Desktop.">
+<meta name="theme-color" content="#309eff">
+{% if not published %}<meta name="robots" content="noindex, nofollow">{% endif %}
+<link rel="canonical" href="https://k-bot.ro/alop-eroare-adobe-acrobat-pro">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="K-BOT">
+<meta property="og:locale" content="ro_RO">
+<meta property="og:title" content="Eroare ALOP în Acrobat Pro: folosiți Reader">
+<meta property="og:description" content="Formularele ALOP (OMF 1.140/2025) se blochează în Acrobat Pro după prima semnătură. Ce se întâmplă și ce trebuie făcut.">
+<meta property="og:url" content="https://k-bot.ro/alop-eroare-adobe-acrobat-pro">
+<meta property="og:image" content="https://k-bot.ro/static/site/img/art/logo-512.png">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[{"@type":"Article","headline":"Formularele ALOP ale Ministerului Finanțelor și problema Adobe Acrobat Pro","inLanguage":"ro","datePublished":"2026-10-07","dateModified":"2026-10-07","mainEntityOfPage":"https://k-bot.ro/alop-eroare-adobe-acrobat-pro","image":"https://k-bot.ro/static/site/img/art/logo-512.png","author":{"@type":"Organization","name":"K-BOT","url":"https://k-bot.ro/"},"publisher":{"@type":"Organization","name":"K-BOT","logo":{"@type":"ImageObject","url":"https://k-bot.ro/static/site/img/art/logo-512.png"}}},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"De ce apare eroarea XFAObject.rawValue la semnarea formularelor ALOP?","acceptedAnswer":{"@type":"Answer","text":"Formularele MFP sunt bazate pe XFA și conțin JavaScript care își recalculează câmpurile. După prima semnătură electronică, Acrobat Pro interpretează recalcularea ca pe o modificare nepermisă a documentului semnat și o blochează."}},{"@type":"Question","name":"Pot folosi Adobe Acrobat Pro pentru formularele ALOP?","acceptedAnswer":{"@type":"Answer","text":"Nu este recomandat pentru completarea și semnarea succesivă. În testele noastre, Adobe Acrobat Reader Desktop, versiunea gratuită, gestionează fluxul mai bine."}},{"@type":"Question","name":"Cum deschid documentul în Reader dacă am instalat și Acrobat Pro?","acceptedAnswer":{"@type":"Answer","text":"Click dreapta pe document, apoi Open with / Deschide cu, apoi Adobe Acrobat Reader."}},{"@type":"Question","name":"Ce fac dacă Reader verifică semnăturile imediat la deschidere?","acceptedAnswer":{"@type":"Answer","text":"Din Edit, Preferences, Signatures, Verification, debifați „Verify signatures when the document is opened”."}}]}]}
+</script>
+<link rel="icon" type="image/png" sizes="64x64" href="/static/site/img/art/logo-64.png">
+<link rel="stylesheet" href="/static/site/site.css">
+<link rel="stylesheet" href="/static/site/pdf.css">
+</head>
+<body>
+
+<div class="topwrap">
+<header class="topbar is-scrolled" id="topbar">
+  <div class="topbar__in">
+    <a class="brand" href="/" aria-label="K-BOT, înapoi la prezentare">
+      <img src="/static/site/img/art/logo-128.png" alt="" width="36" height="36">
+      <span class="brand__text">
+        <span class="brand__name">K-BOT</span>
+        <span class="brand__tag">Pune Botu' pe treabă...</span>
+      </span>
+    </a>
+    <div class="topbar__cta">
+      <a class="btn btn--ghost btn--sm" href="/">Înapoi la prezentare</a>
+      <a class="btn btn--primary btn--sm" href="/inregistrare">Înregistrează<span class="btn__more"> unitatea</span></a>
+    </div>
+  </div>
+</header>
+</div>
+
+<main class="pdfi">
+  <article class="wrap pdfi__wrap">
+
+    <header class="pdfi__head">
+      <span class="pill pill--hot">⚠️ ALOP · OMF nr. 1.140/2025</span>
+      <h1>Formularele ALOP ale Ministerului Finanțelor și problema Adobe Acrobat Pro</h1>
+      <p class="pdfi__sub">📄 PDF „Inteligent”, dar nu și prietenos.</p>
+      <p class="pdfi__date">Actualizat: <time datetime="2026-10-07">7 octombrie 2026</time></p>
+    </header>
+
+    <section aria-labelledby="pe-scurt">
+      <h2 id="pe-scurt">⚡ Pe scurt</h2>
+      <p>Pentru documentele ALOP introduse prin OMF nr. 1.140/2025, recomandarea noastră este foarte simplă:</p>
+      <div class="verdict">
+        <div class="verdict__box verdict__box--yes">
+          <h3>✅ Folosiți</h3>
+          <p><strong>Adobe Acrobat Reader Desktop</strong>, versiunea gratuită.</p>
+        </div>
+        <div class="verdict__box verdict__box--no">
+          <h3>🚫 Evitați</h3>
+          <p><strong>Adobe Acrobat Pro</strong> pentru completarea și semnarea succesivă a acestor formulare.</p>
+        </div>
+      </div>
+      <p class="verdict__note">Da, situația este absurdă: un produs Adobe comercial, plătit și teoretic mai capabil poate avea probleme cu niște formulare oficiale, în timp ce versiunea gratuită Reader funcționează.</p>
+      <p>Dar problema nu este Adobe Acrobat Pro în sine și nici calculatorul utilizatorului. <strong>Problema pleacă de la modul în care Ministerul Finanțelor a construit aceste PDF-uri.</strong></p>
+      <p>MFP a ales pentru un flux administrativ obligatoriu niște formulare bazate pe <strong>XFA</strong> (XML Forms Architecture), cu JavaScript intern, calcule automate și multiple restricții de securitate. Combinația aceasta devine extrem de fragilă exact în scenariul pentru care documentele respective ar trebui să fie folosite: mai mulți utilizatori completează și semnează succesiv același document electronic.</p>
+      <p>Cu alte cuvinte, în locul unui PDF robust și interoperabil, avem niște formulare care depind de comportamentul foarte specific al unei anumite aplicații Adobe.</p>
+    </section>
+
+    <section aria-labelledby="ce-se-intampla">
+      <h2 id="ce-se-intampla">🔍 Ce se întâmplă efectiv</h2>
+      <p>Formularele MFP conțin scripturi JavaScript care modifică automat diverse câmpuri și efectuează calcule în formular.</p>
+      <p>Problemele apar <strong>după aplicarea primei semnături electronice</strong>.</p>
+      <p>În testele efectuate pe calculatoare care folosesc Adobe Acrobat Pro, continuarea fluxului cu certificate digitale calificate — inclusiv token-uri USB precum cele certSIGN — poate genera erori precum:</p>
+      <p class="err">GeneralError: Operation failed. XFAObject.rawValue:...:calculate</p>
+      <p>sau:</p>
+      <p class="err">Property: 'rawValue' cannot be set because doing so would violate this document's permissions settings.</p>
+      <p class="translate">💬 <strong>Tradus din limbaj Adobe în limbaj normal:</strong> formularul MFP încearcă să-și recalculeze propriile câmpuri, iar Acrobat îi răspunde că nu mai are voie să le modifice.</p>
+      <p class="translate">🧪 <strong>Verificat și manual:</strong> am descărcat un formular de pe site-ul Ministerului Finanțelor, l-am salvat și l-am semnat manual în Acrobat Pro, fără K-BOT sau alt intermediar. Eroarea a apărut la fel.</p>
+      <p>Așadar, nu vorbim despre un utilizator care a apăsat greșit un buton și nici despre un token defect. Vorbim despre un document care ajunge să se împiedice de propriile mecanisme de securitate după ce a fost semnat.</p>
+    </section>
+
+    <section aria-labelledby="de-ce">
+      <h2 id="de-ce">🧩 De ce apare problema</h2>
+
+      <div class="why">
+        <h3><span class="why__n">1</span> MFP folosește formulare XFA</h3>
+        <p>Acestea nu sunt simple PDF-uri. Sunt documente dinamice bazate pe XFA, în care formularul, datele și scripturile interne interacționează între ele.</p>
+        <p>Printre altele, scripturile respective modifică proprietatea <span class="path">rawValue</span> pentru a actualiza valori, totaluri, TVA, footer-uri și alte câmpuri calculate.</p>
+        <p>Atât timp cât documentul nu este semnat, acest lucru poate funcționa fără probleme. După semnarea electronică însă, începe distracția. 🎢</p>
+      </div>
+
+      <div class="why">
+        <h3><span class="why__n">2</span> Semnătura protejează documentul, dar formularul încă încearcă să se modifice</h3>
+        <p>O semnătură digitală are tocmai rolul de a proteja documentul împotriva modificărilor nepermise.</p>
+        <p>Problema este că formularul creat de MFP continuă să aibă nevoie să execute JavaScript și să schimbe valori după prima semnătură. Acrobat Pro poate interpreta aceste operații ca modificări nepermise ale unui document deja semnat și blochează operația.</p>
+        <p>De aici apar erorile legate de <span class="path">XFAObject.rawValue</span> și de <span class="path">document's permissions settings</span>.</p>
+      </div>
+
+      <p>Practic, MFP a construit un document care trebuie simultan:</p>
+      <ul class="dont">
+        <li>să fie protejat prin semnătură electronică;</li>
+        <li>să continue să se modifice prin JavaScript;</li>
+        <li>să treacă succesiv prin mai mulți semnatari.</li>
+      </ul>
+      <p>Nu este tocmai combinația ideală pentru un document care ar trebui să reprezinte un flux administrativ stabil și predictibil.</p>
+    </section>
+
+    <section class="irony" aria-labelledby="ridicol">
+      <h2 id="ridicol">🤦 Și partea cu adevărat ridicolă</h2>
+      <p>În testele noastre, <strong>Adobe Acrobat Reader</strong>, adică versiunea gratuită, gestionează acest flux <strong>mai bine</strong> decât <strong>Adobe Acrobat Pro</strong>, versiunea comercială.</p>
+      <p>Reader tratează documentul în principal ca formular care trebuie completat și semnat și permite, în situațiile testate, executarea calculelor necesare între etapele succesive ale fluxului. Acrobat Pro are funcții suplimentare de editare și manipulare a documentelor, iar interacțiunea dintre aceste funcții, restricțiile documentului semnat și scripturile XFA ale formularului MFP poate conduce la blocarea recalculării.</p>
+      <p><strong>Așadar: nu cumpărarea unei licențe Adobe mai scumpe rezolvă problema. În acest caz poate face exact contrariul.</strong></p>
+    </section>
+
+    <section aria-labelledby="ce-trebuie-facut">
+      <h2 id="ce-trebuie-facut">🛠️ Ce trebuie făcut</h2>
+      <p>Pentru formularele ALOP aferente OMF nr. 1.140/2025, recomandăm:</p>
+      <ol class="steps">
+        <li>Folosiți <strong>Adobe Acrobat Reader Desktop</strong>, actualizat la zi.</li>
+        <li><strong>Nu deschideți</strong> aceste documente în Acrobat Pro pentru completare și semnare succesivă.</li>
+        <li>Dacă pe calculator sunt instalate ambele aplicații, deschideți documentul explicit cu:<br>
+          <span class="path">Click dreapta → Open with / Deschide cu → Adobe Acrobat Reader</span><br>
+          și nu cu Acrobat Pro.</li>
+      </ol>
+      <p>Pentru organizațiile în care Acrobat Pro este necesar pentru alte activități, acesta poate rămâne instalat. Pur și simplu trebuie separat fluxul ALOP de activitățile pentru care este utilizat Acrobat Pro.</p>
+
+      <h3>🔐 Dacă Reader începe să verifice semnăturile imediat la deschiderea documentului</h3>
+      <p>Dacă apar probleme legate de verificarea automată a semnăturilor, în Adobe Reader poate fi dezactivată verificarea imediată la deschiderea documentului:</p>
+      <p><span class="path">Edit → Preferences → Signatures → Verification</span></p>
+      <p>și se debifează: <strong>„Verify signatures when the document is opened”</strong>.</p>
+      <p>Această măsură poate evita situațiile în care verificarea documentului intervine înainte ca utilizatorul curent să își poată continua operațiunile și introduce PIN-ul certificatului digital.</p>
+    </section>
+
+    <section aria-labelledby="intrebari">
+      <h2 id="intrebari">❓ Întrebări frecvente</h2>
+      <h3>De ce apare eroarea XFAObject.rawValue la semnarea formularelor ALOP?</h3>
+      <p>Formularele MFP sunt bazate pe XFA și conțin JavaScript care își recalculează câmpurile. După prima semnătură electronică, Acrobat Pro interpretează recalcularea ca pe o modificare nepermisă a documentului semnat și o blochează.</p>
+      <h3>Pot folosi Adobe Acrobat Pro pentru formularele ALOP?</h3>
+      <p>Nu este recomandat pentru completarea și semnarea succesivă. În testele noastre, Adobe Acrobat Reader Desktop, versiunea gratuită, gestionează fluxul mai bine.</p>
+      <h3>Cum deschid documentul în Reader dacă am instalat și Acrobat Pro?</h3>
+      <p>Click dreapta pe document, apoi Open with / Deschide cu, apoi Adobe Acrobat Reader.</p>
+      <h3>Ce fac dacă Reader verifică semnăturile imediat la deschidere?</h3>
+      <p>Din Edit, Preferences, Signatures, Verification, debifați „Verify signatures when the document is opened”.</p>
+    </section>
+
+    <section class="conclusion" aria-labelledby="concluzia">
+      <h2 id="concluzia">📌 Concluzia</h2>
+      <p>Nu ar trebui să fie nevoie de o pagină ca aceasta.</p>
+      <p>Un document electronic oficial introdus într-un flux obligatoriu la nivel național ar trebui să poată fi completat și semnat într-o versiune curentă a uneia dintre cele mai răspândite aplicații PDF comerciale din lume fără ca utilizatorii să fie obligați să învețe diferențele dintre XFA, rawValue, JavaScript, sandbox-uri Adobe și permisiunile interne ale unui PDF.</p>
+      <p>Utilizatorul final nu ar trebui să depaneze arhitectura formularului Ministerului Finanțelor. Departamentul IT nu ar trebui să descopere prin încercări succesive că Adobe Acrobat Pro trebuie evitat și trebuie folosită versiunea gratuită Reader. Iar un contabil sau un ordonator de credite nu ar trebui să primească erori JavaScript obscure doar pentru că încearcă să semneze un document exact în fluxul pentru care documentul respectiv a fost creat.</p>
+      <p>MFP a ales tehnologia, MFP a construit formularele și MFP a impus fluxul. Ar fi fost normal ca tot MFP să se asigure că aceste trei lucruri funcționează împreună înainte ca documentele să ajungă obligatoriu la utilizatori.</p>
+      <p>Până când formularele vor fi făcute suficient de robuste încât aplicația folosită pentru deschiderea unui PDF să nu mai devină o loterie, soluția practică rămâne:</p>
+      <p class="conclusion__final">✅ ALOP → Adobe Acrobat Reader Desktop. Nu Acrobat Pro.</p>
+    </section>
+
+  </article>
+</main>
+
+</body>
+</html>

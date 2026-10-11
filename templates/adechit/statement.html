@@ -1,0 +1,7 @@
+<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fișă cont</title>
+<link rel="stylesheet" href="/static/css/variables.css"><link rel="stylesheet" href="/static/css/adechit-statement.css"><script src="/static/js/adechit/statement-print.js" defer></script></head>
+<body><nav><button id="statement-print" type="button">Imprimă</button></nav>
+<header><div><strong>{{ statement.issuer.name }}</strong><br>{{ statement.issuer.address }}</div><div>Cod fiscal: {{ statement.issuer.tax_code }}<br>Cont: {% for account in statement.issuer.accounts %}{{ account.Cont }} {% endfor %}</div></header>
+<h1>Fișă cont</h1><table class="identity"><tbody>{% for label,value in [('Nume',statement.child),('Adresa',statement.address),('CNP',statement.cnp),('Email',statement.email),('Perioada',statement.period)] %}<tr><td>{{ label }}</td><td>{{ value }}</td></tr>{% endfor %}</tbody></table>
+<table class="statement"><thead><tr><th>Data</th><th>Explicație</th><th>DEBIT</th><th>CREDIT</th><th>Sold</th><th>Tip sold</th></tr></thead><tbody>{% for row in statement.rows %}<tr class="{{ row.kind }}"><td>{{ row.date }}</td><td>{{ row.explanation }}</td><td>{{ row.debit }}</td><td>{{ row.credit }}</td><td>{{ row.balance }}</td><td>{{ row.balance_type }}</td></tr>{% endfor %}</tbody></table>
+<footer>Generată la {{ statement.generated }}</footer></body></html>

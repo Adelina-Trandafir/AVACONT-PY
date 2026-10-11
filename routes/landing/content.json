@@ -1,0 +1,1163 @@
+{
+  "meta": {
+    "title": "K-BOT – automatizare FOREXE pentru contabilii din instituții publice",
+    "description": "K-BOT preia munca repetitivă din FOREXE: angajamente, recepții, documente de fundamentare și ordonanțări, pregătite, verificate și semnate din aplicație."
+  },
+  "alop_page": {
+    "published": true
+  },
+  "links": {
+    "register": "/inregistrare",
+    "download": null,
+    "portal": "/portal",
+    "portal_label": "Intră în cont",
+    "contact": "/detalii",
+    "contact_label": "Cere detalii"
+  },
+  "nav": [
+    {
+      "id": "acasa",
+      "icon": "🏠",
+      "label": "Acasă"
+    },
+    {
+      "id": "pentru-toti",
+      "icon": "⚙️",
+      "label": "Funcționalități"
+    },
+    {
+      "id": "tutoriale",
+      "icon": "🎓",
+      "label": "Tutoriale"
+    },
+    {
+      "id": "roluri",
+      "icon": "👥",
+      "label": "Pentru cine"
+    },
+    {
+      "id": "siguranta",
+      "icon": "🛡️",
+      "label": "Siguranță"
+    },
+    {
+      "id": "acces-online",
+      "icon": "🌐",
+      "label": "Online"
+    },
+    {
+      "id": "nu-contabilitate",
+      "icon": "🔗",
+      "label": "Integrare"
+    },
+    {
+      "id": "ce-urmeaza",
+      "icon": "🚀",
+      "label": "Ce urmează"
+    },
+    {
+      "id": "despre-noi",
+      "icon": "💬",
+      "label": "Despre noi"
+    }
+  ],
+  "hero": {
+    "kicker": "Pune Botu' pe treabă...",
+    "title": "K-BOT.",
+    "lead": "Mai puțină muncă repetitivă. Mai mult timp pentru ce contează.",
+    "blocks": [
+      "K-BOT este aplicația care preia o mare parte din munca repetitivă din FOREXE și o face în locul contabilului.",
+      "Tu alegi ce trebuie făcut. K-BOT aduce datele, le pune în ordine, pregătește documentele, face verificările necesare și, acolo unde fluxul permite, duce operațiunile mai departe în FOREXE.",
+      "Documentele de fundamentare și ordonanțările se pregătesc, se verifică, se semnează și se tipăresc direct din aplicație. Fără plimbat PDF-uri între foldere, mailuri și calculatoare. Avem destule drumuri de făcut în viața reală.",
+      "Iar înainte ca o cifră să ajungă într-un document sau în FOREXE, K-BOT încearcă să oprească problemele acolo unde este cel mai simplu de rezolvat: înainte de salvare.",
+      "**K-BOT nu înlocuiește contabilul. Îi ia de pe cap partea pe care un robot o poate face mai bine: pașii repetați, verificările mecanice și navigarea fără sfârșit prin aceleași ecrane.**"
+    ]
+  },
+  "roles": {
+    "title": "O aplicație pentru fiecare rol",
+    "intro": [
+      "K-BOT nu arată tuturor aceeași interfață doar pentru că „așa e mai simplu de programat”.",
+      "Fiecare utilizator vede ceea ce are nevoie pentru activitatea lui."
+    ],
+    "cards": [
+      {
+        "icon": "calc",
+        "target": "pentru-contabil",
+        "text": "**Contabilul** are acces la zona completă de lucru: angajamente, recepții, plăți, fundamentări, ordonanțări, note de corecție, nomenclatoare și legătura cu FOREXE."
+      },
+      {
+        "icon": "pen",
+        "target": "pentru-director",
+        "text": "**Directorul** are o interfață separată, simplificată, în care vede documentele care așteaptă semnătura lui și le poate verifica și semna."
+      },
+      {
+        "icon": "parallel",
+        "target": "descarcari-multiple",
+        "text": "**Descărcările multiple**, atunci când sunt activate pentru unitate, adaugă posibilitatea actualizării mai multor angajamente în paralel."
+      }
+    ],
+    "outro": "Ideea este simplă: mai puține butoane care nu te privesc, mai puține ferestre în care n-ai ce căuta și mai puține ocazii să te întrebi „eu ce trebuia să fac aici?”."
+  },
+  "everyone": {
+    "kicker": "Pentru toți utilizatorii",
+    "title": "Lucrurile mici care fac munca de zi cu zi mai ușoară",
+    "image": {
+      "file": "fereastra-principala.png",
+      "alt": "Fereastra principală K-BOT: lista de angajamente și vederea Sumar",
+      "w": 1922,
+      "h": 1000
+    },
+    "cards": [
+      {
+        "icon": "user",
+        "title": "Conectare fără ritualuri",
+        "blocks": [
+          "K-BOT ține minte ultimul utilizator și ultima unitate folosită. Dacă lucrezi cu mai multe unități, o alegi pe cea dorită și continui.",
+          "Anul de lucru și combinația Sursă/Sector se aleg direct din bara principală și rămân memorate.",
+          "Schimbarea unității nu înseamnă reluarea întregii povești de la zero. Conexiunea existentă cu FOREXE este închisă corect, iar K-BOT pregătește contextul noii unități.",
+          "După o perioadă de inactivitate, sesiunea expiră din motive de siguranță. Reconectarea este făcută astfel încât să poți continua de unde ai rămas, nu de unde ai început dimineața."
+        ]
+      },
+      {
+        "icon": "eye",
+        "title": "Vezi doar ce există",
+        "blocks": [
+          "K-BOT afișează doar zonele care au informații pentru angajamentul selectat.",
+          "Dacă nu există recepții, nu primești o filă goală de recepții doar ca să fie acolo. Dacă există plăți, istoric sau documente, apar exact acele zone.",
+          "În tabele poți sorta, filtra și grupa informațiile, iar totalurile se recalculează după ceea ce este vizibil.",
+          "Problemele sunt semnalate vizual. De exemplu, atunci când recepțiile unui angajament nu se închid corect, angajamentul este evidențiat, iar explicația este disponibilă direct în interfață."
+        ]
+      },
+      {
+        "icon": "palette",
+        "title": "Aspect pe gustul tău",
+        "blocks": [
+          "Poți alege între teme diferite, inclusiv variante întunecate și moderne, precum și dimensiunea textului.",
+          "Nu revoluționăm contabilitatea prin schimbarea culorii ferestrei. Dar dacă tot petreci câteva ore pe zi în ea, măcar să nu te certe și monitorul."
+        ]
+      },
+      {
+        "icon": "help",
+        "title": "Ajutor acolo unde lucrezi",
+        "blocks": [
+          "Ajutorul este integrat în aplicație și poate fi deschis direct cu F1 sau din butonul dedicat.",
+          "Poți căuta folosind formulări naturale, există tururi ghidate pentru ferestrele importante, iar manualul poate fi imprimat sau exportat."
+        ]
+      },
+      {
+        "icon": "refresh",
+        "title": "Actualizări fără emoții",
+        "blocks": [
+          "K-BOT verifică automat dacă există o versiune nouă și îți spune ce conține înainte de instalare.",
+          "Dacă actualizarea nu este obligatorie, o poți amâna.",
+          "Iar dacă internetul lipsește temporar, aplicația nu transformă acest lucru într-o tragedie grecească. Pornește și continuă să funcționeze cu ceea ce este disponibil local."
+        ]
+      },
+      {
+        "icon": "log",
+        "title": "Mesajele nu dispar după OK",
+        "blocks": [
+          "Mesajele importante afișate în aplicație sunt păstrate și în jurnalul de activitate.",
+          "Așa că momentul acela clasic în care apeși reflex pe „OK” și, o secundă mai târziu, te întrebi „stai... ce scria?” nu mai trebuie urmat de investigații criminalistice."
+        ]
+      }
+    ]
+  },
+  "tutorials": {
+    "kicker": "K-BOT te învață singur",
+    "title": "Nu ai nevoie de instruire separată: aplicația te conduce pas cu pas",
+    "image": {
+      "file": "fereastra-principala.png",
+      "alt": "Fereastra principală K-BOT",
+      "w": 1922,
+      "h": 1000
+    },
+    "blocks": [
+      "K-BOT vine cu **tutoriale interactive** încorporate. Un tutorial nu este un film și nu este un manual de citit: îți spune pe ecran ce ai de făcut, apoi **așteaptă să faci tu pasul** și abia după aceea merge mai departe.",
+      "Totul se întâmplă pe ecranul tău, în fereastra pe care o folosești de fapt. Zona din jur se întunecă, iar locul unde trebuie să acționezi rămâne luminat. K-BOT nu apasă nimic în locul tău.",
+      "Poți ieși oricând; dacă ai făcut altceva decât pasul cerut, tutorialul se oprește singur, fără să strice nimic.",
+      "Lista tutorialelor crește constant și va acoperi toate fluxurile de lucru existente și pe cele care vin. La prima pornire, un tutorial scurt îți arată unde le găsești; se pornesc din «?», de lângă butoanele de închidere ale ferestrei."
+    ],
+    "steps": [
+      {
+        "icon": "help",
+        "text": "Apeși «?» și alegi un tutorial"
+      },
+      {
+        "icon": "flow",
+        "text": "Faci pașii, unul câte unul, chiar în aplicație"
+      },
+      {
+        "icon": "check",
+        "text": "Ajungi la capăt cu lucrarea făcută"
+      }
+    ]
+  },
+  "accountant": {
+    "kicker": "Pentru contabil",
+    "title": "Pentru contabil: FOREXE, dar cu mai puțină muncă de mână",
+    "hint": "Alege o temă ca să citești tot textul.",
+    "topics": [
+      {
+        "id": "date",
+        "icon": "download",
+        "title": "Datele vin la tine",
+        "blocks": [
+          "După conectarea cu certificatul digital, K-BOT lucrează cu FOREXE prin browserul integrat.",
+          "Lista de angajamente poate fi adusă în aplicație dintr-un clic.",
+          "Pentru un angajament, K-BOT poate descărca antetul, indicatorii, rezervările, recepțiile, detaliile și istoricul.",
+          "La actualizare poți alege ce recepții merită reîmprospătate, astfel încât robotul să nu deschidă pagini degeaba.",
+          "Atunci când aceleași date au fost deja descărcate, K-BOT poate reutiliza informațiile existente, cu confirmarea ta."
+        ]
+      },
+      {
+        "id": "coada",
+        "icon": "queue",
+        "title": "Robotul are coadă. La propriu.",
+        "blocks": [
+          "Operațiunile automate sunt organizate într-o coadă.",
+          "Poți vedea ce se execută, ce urmează, poți pune operațiunile pe pauză, elimina cereri sau opri acțiunea curentă.",
+          "Nu trebuie să stai cu degetul pe buton întrebându-te dacă ai apăsat o dată sau de trei ori."
+        ]
+      },
+      {
+        "id": "browser",
+        "icon": "window",
+        "title": "FOREXE rămâne accesibil",
+        "blocks": [
+          "Browserul FOREXE este disponibil chiar în K-BOT.",
+          "Dacă lucrezi direct în FOREXE și creezi sau modifici anumite informații, K-BOT poate prelua datele rezultate.",
+          "Poți porni inclusiv crearea unui angajament nou, iar după salvarea lui K-BOT îl poate aduce automat în aplicație."
+        ]
+      },
+      {
+        "id": "vederi",
+        "icon": "layers",
+        "title": "Toate informațiile angajamentului, într-un singur loc",
+        "blocks": [
+          "Pentru fiecare angajament există o vedere coerentă asupra datelor importante:",
+          "**Sumar** — datele principale, indicatorii și totalurile relevante.",
+          "**Istoric** — operațiunile în ordine, cu filtre și totaluri.",
+          "**Rezervări** — organizare pe luni și zile, grafic și posibilitatea de reanalizare înainte de scriere.",
+          "**Recepții** — structură clară pe luni și recepții, cu valorile recepționate, plătite și diferențele dintre ele.",
+          "**Plăți** — zilele cu plăți sunt vizibile imediat, iar pentru fiecare plată pot fi consultate informațiile aferente.",
+          "**Extrase de cont** — atât pentru angajamentul curent, cât și într-o vedere generală pentru întreaga unitate."
+        ],
+        "image": {
+          "file": "receptii.png",
+          "alt": "Vederea Recepții a unui angajament",
+          "w": 1617,
+          "h": 1281
+        }
+      },
+      {
+        "id": "asocieri",
+        "icon": "link",
+        "title": "Asocierea recepțiilor: problema complicată pe care K-BOT încearcă să o facă vizibilă",
+        "blocks": [
+          "În istoricul FOREXE, modificările unei recepții nu vin întotdeauna cu explicația completă despre locul exact în care trebuie așezate.",
+          "Iar o asociere greșită poate afecta calculele care urmează.",
+          "K-BOT încearcă să recunoască automat situațiile sigure.",
+          "Pentru cazurile care au nevoie de intervenția utilizatorului, aplicația oferă o fereastră vizuală în care recepțiile și modificările neasociate pot fi analizate înainte de salvare.",
+          "Graficele arată evoluția valorilor și poziția plăților, iar mutările imposibile sunt respinse.",
+          "Nimic nu se scrie definitiv până când utilizatorul nu confirmă.",
+          "Dacă o recepție nu se închide corect, K-BOT oprește ordonanțarea înainte ca problema să fie împinsă mai departe.",
+          "Pe românește: mai bine cinci minute acum decât „cine a umblat aici?” peste trei luni."
+        ],
+        "image": {
+          "file": "asocieri-grafic.png",
+          "alt": "Graficul evoluției valorii recepțiilor, cu reperele plăților",
+          "w": 1649,
+          "h": 974
+        }
+      },
+      {
+        "id": "ddf",
+        "icon": "doc",
+        "title": "Documentul de fundamentare",
+        "blocks": [
+          "K-BOT pregătește documentul de fundamentare pornind de la datele existente.",
+          "Fluxul documentului este vizibil și urmărește etapele prin care acesta trece: ciornă, semnături, trimitere în FOREXE, PDF final și aprobare.",
+          "Pentru un angajament există o singură revizie deschisă la un moment dat.",
+          "La trimiterea în FOREXE, K-BOT execută pașii necesari, completează informațiile și păstrează capturi ale operațiunilor.",
+          "Dacă procesul este întrerupt, poate continua de unde a rămas, fără să creeze din nou același angajament.",
+          "Editorul verifică datele înainte de salvare: valori obligatorii, date, clasificații, totaluri și alte reguli ale documentului.",
+          "Bugetul folosit în document este cel corespunzător momentului reviziei, nu pur și simplu valoarea existentă astăzi.",
+          "După semnare, documentul nu mai poate fi regenerat sau modificat.",
+          "K-BOT păstrează astfel exact documentul care a fost semnat, nu o versiune „aproape la fel”."
+        ],
+        "image": {
+          "file": "ddf-vedere.png",
+          "alt": "Vederea Fundamentare, cu reviziile unui angajament",
+          "w": 1610,
+          "h": 1276
+        }
+      },
+      {
+        "id": "ord",
+        "icon": "check",
+        "title": "Ordonanțarea de plată",
+        "blocks": [
+          "Pentru plățile neordonanțate, ordonanțarea poate fi creată direct din ziua respectivă.",
+          "Pentru perioade mai mari există generarea în lot: K-BOT poate pregăti câte o ordonanțare pentru fiecare zi cu plăți neordonanțate.",
+          "Documentul este generat cu tabelul completat înainte de semnare.",
+          "În editor pot fi gestionate informațiile beneficiarilor, conturile, banca, recepțiile, plățile anterioare, documentele justificative și imaginile atașate.",
+          "La salvare, K-BOT verifică informațiile și încearcă să prezinte problemele împreună, nu una câte una după fiecare apăsare pe „Salvează”.",
+          "O ordonanțare semnată nu mai poate fi modificată sau ștearsă."
+        ],
+        "image": {
+          "file": "ord-editor.png",
+          "alt": "Editorul de ordonanțare de plată, pagina Beneficiari",
+          "w": 1915,
+          "h": 1167
+        }
+      },
+      {
+        "id": "note",
+        "icon": "alert",
+        "title": "Operațiuni necorelate și note de corecție",
+        "blocks": [
+          "La conectare, K-BOT poate identifica plățile pe care FOREXE nu le-a putut lega de un angajament.",
+          "Utilizatorul completează asocierea necesară, iar K-BOT poate genera nota de corecție și, la cerere, o poate încărca în FOREXE.",
+          "Documentele rezultate rămân disponibile într-o vedere separată."
+        ],
+        "image": {
+          "file": "note-corectie.png",
+          "alt": "Vederea Note corecție",
+          "w": 1761,
+          "h": 802
+        }
+      },
+      {
+        "id": "nomenclatoare",
+        "icon": "tags",
+        "title": "Clasificații și parteneri",
+        "blocks": [
+          "Clasificațiile bugetare sunt organizate într-o structură ușor de urmărit, de la capitol până la alineat.",
+          "Bugetele pot fi păstrate pe versiuni și rectificări, iar K-BOT poate compara evidența proprie cu creditul din FOREXE și poate afișa diferențele.",
+          "Pentru parteneri, codul fiscal este obligatoriu și unic.",
+          "Denumirea și adresa pot fi completate din datele ANAF, iar banca poate fi identificată din IBAN.",
+          "Mai puțin copy-paste. Mai puține litere inversate. Mai puține ocazii în care cifra 8 decide să se dea drept 3."
+        ],
+        "image": {
+          "file": "parteneri.png",
+          "alt": "Fereastra Parteneri",
+          "w": 1440,
+          "h": 840
+        }
+      },
+      {
+        "id": "pdf",
+        "icon": "pdf",
+        "title": "PDF-uri, semnături și tipărire fără turism digital",
+        "blocks": [
+          "Documentele PDF sunt afișate direct în K-BOT prin integrarea Adobe.",
+          "Utilizatorul autorizat poate deschide și semna documentul în aplicație, iar copia semnată este salvată automat.",
+          "Dacă încărcarea nu reușește temporar, copia locală este păstrată și încărcarea este reluată ulterior.",
+          "Documentele semnate nu sunt regenerate.",
+          "Pentru tipărire există liste dedicate. Documentele pot fi generate și trimise la imprimantă fără să fie deschise unul câte unul, iar aplicația păstrează evidența tipăririlor.",
+          "Pentru cine a imprimat vreodată 40 de documente deschizându-le pe rând: da, știm."
+        ],
+        "image": {
+          "file": "ddf-semnare.png",
+          "alt": "Pagina Document PDF, gata de semnare în K-BOT",
+          "w": 1106,
+          "h": 1331
+        }
+      }
+    ]
+  },
+  "statements": {
+    "kicker": "Pentru contabil",
+    "title": "Extrasele bancare, puse în ordine",
+    "image": {
+      "file": "extrase-fereastra.png",
+      "alt": "Fereastra Extrase de cont",
+      "w": 2100,
+      "h": 1260
+    },
+    "blocks": [
+      "K-BOT descarcă extrasele de cont din FOREXE și le aduce în același loc cu restul informațiilor cu care lucrezi.",
+      "Poți vedea situația din două perspective:"
+    ],
+    "cards": [
+      {
+        "icon": "building",
+        "text": "**La nivelul întregii unități** — o vedere centralizată a extraselor și operațiunilor bancare, fără să fie nevoie să intri pe fiecare angajament în parte."
+      },
+      {
+        "icon": "doc",
+        "text": "**La nivelul fiecărui angajament** — vezi exact extrasele și plățile care îl privesc, împreună cu celelalte informații ale angajamentului."
+      }
+    ],
+    "after": [
+      "Astfel, poți porni de la imaginea de ansamblu și ajunge imediat la detaliu, fără să reconstruiești singur legătura dintre extras, plată și angajament.",
+      "**Extrasul spune ce s-a întâmplat în bancă. K-BOT te ajută să vezi și unde contează în restul lucrării.**",
+      "Și, desigur, fără sportul național numit „deschid trei ferestre și încerc să țin minte ce căutam în prima”."
+    ]
+  },
+  "director": {
+    "kicker": "Pentru director",
+    "title": "Pentru director: documentele care așteaptă semnătura, fără restul zgomotului",
+    "blocks": [
+      "Directorul are propria interfață K-BOT.",
+      "Aici vede documentele de fundamentare care așteaptă semnătura sa pentru unitățile la care are acest rol.",
+      "Lista arată informațiile importante: unitatea, angajamentul, obiectul, revizia, data și valoarea.",
+      "Documentul se deschide direct în aceeași fereastră și poate fi semnat cu certificatul digital.",
+      "În această zonă documentul se verifică și se semnează. Nu se editează.",
+      "După semnare, PDF-ul este salvat automat, iar documentul continuă fluxul până la starea finală de aprobare.",
+      "Simplu. Pentru că directorul are probabil și alte lucruri de făcut decât să învețe încă un ERP."
+    ],
+    "columns": [
+      "Unitate",
+      "Angajament",
+      "Obiect",
+      "Revizie",
+      "Data",
+      "Valoare"
+    ],
+    "mock_note": "Ilustrație a ferestrei directorului",
+    "steps": [
+      {
+        "icon": "check",
+        "text": "Verifici documentul"
+      },
+      {
+        "icon": "pen",
+        "text": "Semnezi cu certificatul digital"
+      },
+      {
+        "icon": "flow",
+        "text": "Documentul continuă fluxul"
+      }
+    ]
+  },
+  "multi": {
+    "kicker": "Opțional",
+    "title": "Descărcări multiple — pentru unitățile care au nevoie de mai multă viteză",
+    "image": {
+      "file": "setari-descarcari-multiple.png",
+      "alt": "Pagina Descărcări multiple din Setări",
+      "w": 1659,
+      "h": 1050
+    },
+    "blocks": [
+      "În modul standard, operațiunile FOREXE sunt executate pe rând.",
+      "Pentru unitățile care au activată opțiunea de descărcări multiple, K-BOT poate actualiza mai multe angajamente în paralel.",
+      "Fiecare angajament folosește propriul tab FOREXE, în cadrul aceleiași conectări.",
+      "Numărul de operațiuni paralele poate fi configurat în limitele permise pentru unitate.",
+      "Din fereastra de actualizare poți selecta angajamentele dorite sau le poți alege pe cele care nu au mai fost actualizate de un anumit număr de zile.",
+      "K-BOT poate face această verificare și automat la conectare.",
+      "Dacă o descărcare întâmpină o problemă, celelalte pot continua. La final primești o singură situație clară cu ceea ce nu s-a actualizat și motivul.",
+      "Adică mai degrabă „trei au mers, unul are problema X” decât „s-a blocat ceva undeva, succes la investigație”."
+    ],
+    "steps": [
+      {
+        "icon": "select",
+        "text": "Selectezi angajamentele"
+      },
+      {
+        "icon": "parallel",
+        "text": "Rulează în paralel"
+      },
+      {
+        "icon": "result",
+        "text": "Primești un rezultat clar"
+      }
+    ]
+  },
+  "safety": {
+    "kicker": "FOREXE și K-BOT",
+    "title": "FOREXE și K-BOT — aceeași muncă, alt mod de a ajunge la rezultat",
+    "intro": [
+      "K-BOT nu încearcă să înlocuiască FOREXE.",
+      "În schimb, încearcă să reducă exact acele momente în care munca repetitivă sau lipsa unei verificări poate transforma o operațiune simplă într-o problemă descoperită mult mai târziu."
+    ],
+    "pairs": [
+      {
+        "forexe": "istoricul unei recepții nu spune întotdeauna clar unde trebuie asociată fiecare modificare.",
+        "kbot": "asocierea este analizată, prezentată vizual și confirmată înainte de scriere."
+      },
+      {
+        "forexe": "poți ajunge la ordonanțare chiar dacă lanțul recepțiilor nu se închide corect.",
+        "kbot": "ordonanțarea este oprită până când problema este rezolvată."
+      },
+      {
+        "forexe": "o citire incompletă a unei pagini poate lăsa date lipsă.",
+        "kbot": "citirea incompletă este recunoscută și datele existente nu sunt suprascrise automat."
+      },
+      {
+        "forexe": "o trimitere întreruptă poate însemna reluarea manuală a pașilor.",
+        "kbot": "fluxul poate fi reluat din punctul în care s-a oprit."
+      },
+      {
+        "forexe": "documentele și verificările implică mai multe ecrane și pași succesivi.",
+        "kbot": "informația este adusă într-un flux unic, iar operațiunile repetitive sunt executate de robot."
+      },
+      {
+        "forexe": "o notă de corecție pentru operațiuni necorelate trebuie pregătită separat.",
+        "kbot": "operațiunile sunt identificate, asociate și documentul poate fi generat din aplicație."
+      },
+      {
+        "forexe": "verificarea bugetului față de evidența proprie este o operațiune manuală.",
+        "kbot": "diferențele pot fi verificate automat după actualizarea datelor."
+      }
+    ],
+    "outro": [
+      "Scopul nu este să spunem că un sistem este „bun” și celălalt „rău”.",
+      "Scopul este mult mai practic: **acolo unde există zece pași repetați, K-BOT încearcă să lase omul să facă alegerea și robotul să facă cei zece pași.**"
+    ]
+  },
+  "gains": {
+    "kicker": "Ce câștigi",
+    "title": "Ce câștigi, concret",
+    "list": [
+      {
+        "icon": "route",
+        "title": "Mai puțină navigare.",
+        "text": "Un angajament poate fi descărcat dintr-un clic, fără să parcurgi manual fiecare pagină."
+      },
+      {
+        "icon": "repeat",
+        "title": "Mai puțină muncă repetată.",
+        "text": "Datele deja existente sunt refolosite pentru documente și verificări."
+      },
+      {
+        "icon": "copy",
+        "title": "Mai puțin copy-paste.",
+        "text": "Cifrele și informațiile sunt preluate din datele deja descărcate."
+      },
+      {
+        "icon": "shield",
+        "title": "Mai puține surprize la salvare.",
+        "text": "Verificările sunt făcute înainte ca informația să fie scrisă."
+      },
+      {
+        "icon": "doc",
+        "title": "Mai puțină muncă la documente.",
+        "text": "Fundamentările și ordonanțările sunt pregătite direct din aplicație."
+      },
+      {
+        "icon": "window",
+        "title": "Mai puține drumuri între aplicații.",
+        "text": "PDF-urile se deschid, se semnează și se tipăresc în K-BOT."
+      },
+      {
+        "icon": "building",
+        "title": "Mai multă vizibilitate asupra plăților.",
+        "text": "Extrasele bancare sunt disponibile atât centralizat, pentru întreaga unitate, cât și în contextul fiecărui angajament."
+      },
+      {
+        "icon": "queue",
+        "title": "Mai multă vizibilitate asupra automatizărilor.",
+        "text": "Știi ce face robotul, ce este în coadă, unde s-a oprit și de ce."
+      },
+      {
+        "icon": "parallel",
+        "title": "Mai multă viteză acolo unde este nevoie.",
+        "text": "Cu opțiunea de descărcări multiple, mai multe angajamente pot fi actualizate în paralel."
+      },
+      {
+        "icon": "help",
+        "title": "Ajutor când ai nevoie de el.",
+        "text": "Căutare, tururi ghidate și manual direct în aplicație."
+      }
+    ],
+    "lead_in": "Și, poate cel mai important:",
+    "closing": "**mai puțin timp petrecut făcând lucruri pe care calculatorul le poate face singur.**"
+  },
+  "future": {
+    "kicker": "Ce urmează",
+    "title": "K-BOT merge mai departe",
+    "intro": [
+      "K-BOT nu este un proiect pe care îl considerăm „gata” doar pentru că face astăzi mai multe lucruri decât făcea ieri.",
+      "Direcția este simplă: **tot ce poate elimina o operațiune repetitivă, o evidență ținută separat sau acel clasic „să nu uit să fac asta mai târziu” merită automatizat.**"
+    ],
+    "note": "Funcționalitățile de mai jos sunt direcții planificate. Conținutul și ordinea etapelor pot evolua pe parcursul dezvoltării.",
+    "nodes": [
+      {
+        "id": "astazi",
+        "label": "Astăzi",
+        "icon": "check",
+        "title": "Astăzi",
+        "teaser": "K-BOT lucrează deja cu FOREXE, angajamente, recepții, plăți, extrase bancare, documente de fundamentare, ordonanțări, note de corecție, verificări, semnături și tipărire.",
+        "blocks": [
+          "K-BOT lucrează deja cu FOREXE, angajamente, recepții, plăți, extrase bancare, documente de fundamentare, ordonanțări, note de corecție, verificări, semnături și tipărire.",
+          "Extrasele bancare reprezintă deja una dintre legăturile importante dintre informațiile financiare și angajamente: K-BOT le descarcă din FOREXE și oferă atât o situație centralizată la nivelul unității, cât și situația specifică fiecărui angajament.",
+          "Această bază este punctul de plecare pentru următoarele integrări."
+        ]
+      },
+      {
+        "id": "urmeaza",
+        "label": "Urmează",
+        "icon": "invoice",
+        "title": "Urmează: integrarea cu e-Factura",
+        "teaser": "O factură descărcată prin e-Factura va putea deveni sursă pentru adăugarea sau modificarea recepțiilor aferente.",
+        "blocks": [
+          {
+            "h": "Factura primită devine informație de lucru, nu încă un document de verificat separat"
+          },
+          "O factură descărcată prin e-Factura va putea deveni sursă pentru **adăugarea sau modificarea recepțiilor** aferente.",
+          "K-BOT va putea folosi informațiile deja existente în factură pentru a pregăti operațiunea, iar utilizatorul va verifica și va confirma rezultatul.",
+          "Scopul este să reducem și mai mult introducerea acelorași date în două sau trei locuri diferite.",
+          "**Factura a venit deja cu informațiile. Ar fi păcat să le mai tastăm o dată, doar ca să nu se plictisească tastatura.**",
+          {
+            "rule": true
+          },
+          {
+            "title": "Facturile emise și încasările"
+          },
+          {
+            "h": "De la factură la operațiunea care trebuie făcută în FOREXE"
+          },
+          "Pentru facturile emise, K-BOT va putea urmări diferit fluxul în funcție de modul în care acestea sunt încasate.",
+          "**Dacă factura este încasată prin bancă**, informațiile vor putea deveni sursă pentru pregătirea **notei de corecție CAB**.",
+          "Aici, legătura cu extrasele bancare deja descărcate și centralizate de K-BOT devine firească: sistemul are deja imaginea încasărilor și o poate folosi pentru a pregăti pașii următori.",
+          "**Dacă factura este încasată în numerar**, chiar la generarea facturii utilizatorul va putea indica ce angajamente și ce recepții sunt afectate.",
+          "Astfel, atunci când trebuie făcute operațiunile corespunzătoare în FOREXE, K-BOT va ști deja:",
+          {
+            "ul": [
+              "ce trebuie modificat;",
+              "unde trebuie modificat;",
+              "ce angajament este afectat;",
+              "ce recepție este afectată;",
+              "de unde provin valorile."
+            ]
+          },
+          "Nu va mai trebui să ții separat minte că „factura asta de marți trebuie să ajungă în recepția aia după ce se întâmplă cealaltă operațiune”.",
+          "**Calculatorul are memorie. Ar fi cazul să-l punem și la treabă.**"
+        ]
+      },
+      {
+        "id": "online",
+        "label": "Online",
+        "icon": "window",
+        "title": "Accesul online va deveni treptat un spațiu de lucru",
+        "teaser": "Astăzi, accesul online este doar pentru consultarea datelor. Următorul pas: o parte din operațiunile din aplicația instalată vor putea fi făcute și din browser.",
+        "blocks": [
+          "Astăzi, accesul online la K-BOT este **doar pentru consultarea datelor**.",
+          "Următorul pas este extinderea acestei zone astfel încât o parte din operațiunile care acum se fac exclusiv în aplicația instalată să poată fi realizate și direct din browser.",
+          {
+            "title": "Editarea datelor din browser"
+          },
+          "În plan este introducerea posibilității de a **crea și modifica date direct din interfața online**, păstrând aceleași reguli de validare, drepturi de acces și protecție existente în K-BOT.",
+          "Scopul este ca, pentru operațiunile care nu depind de componente locale ale calculatorului, utilizatorul să poată lucra și din browser, fără să fie obligatoriu să se afle la calculatorul pe care este instalată aplicația.",
+          "**Astăzi: vezi datele online. Mai departe: vei putea și lucra cu ele.**",
+          {
+            "rule": true
+          },
+          {
+            "title": "Legătura online cu FOREXE"
+          },
+          "Analizăm și posibilitatea ca anumite informații să poată fi **descărcate din FOREXE direct prin sistemul online**.",
+          "Această direcție depinde însă de validarea tehnică a modului în care FOREXE poate fi accesat în siguranță din această arhitectură.",
+          "Dacă integrarea se dovedește fezabilă, obiectivul este ca actualizarea datelor să nu mai depindă întotdeauna de aplicația K-BOT instalată pe un anumit calculator.",
+          "Deocamdată este o **direcție în evaluare**, nu o funcție promisă."
+        ]
+      },
+      {
+        "id": "departe",
+        "label": "Mai departe",
+        "icon": "box",
+        "title": "Mai departe: modul de gestiune",
+        "teaser": "Un viitor modul de gestiune va extinde K-BOT dincolo de fluxul actual de semnare a documentelor PDF.",
+        "blocks": [
+          {
+            "h": "Gestiunea nu doar trimite informații. Poate porni documentele"
+          },
+          "Un viitor modul de gestiune va extinde K-BOT dincolo de fluxul actual de semnare a documentelor PDF.",
+          "Pe lângă semnarea documentelor de fundamentare și a ordonanțărilor, modulul va putea folosi informațiile existente în gestiune pentru a pregăti:",
+          "**angajamente noi**, atunci când operațiunea o cere;",
+          "**revizii noi ale angajamentelor existente**, folosind datele deja cunoscute de sistem;",
+          "și **documentele PDF aferente, completate direct cu informațiile disponibile în gestiune**.",
+          "Ideea este ca o informație introdusă corect o dată să poată continua prin întregul flux, fără să fie rescrisă la fiecare etapă.",
+          "**O dată introdusă. De câte ori este nevoie, folosită. Nu invers.**",
+          {
+            "rule": true
+          },
+          {
+            "title": "Tot mai puține liste ținute „în cap”"
+          },
+          "O parte importantă din dezvoltarea K-BOT va continua în aceeași direcție:",
+          "sistemul trebuie să știe **ce operațiune urmează**, pe baza informațiilor pe care deja le are.",
+          "În loc ca utilizatorul să țină separat evidența:",
+          {
+            "lines": [
+              "„am factura asta”",
+              "„trebuie să modific recepția aceea”",
+              "„după încasare trebuie făcută nota”",
+              "„după aceea trebuie actualizat angajamentul”,"
+            ]
+          },
+          "K-BOT trebuie să poată lega aceste informații între ele și să prezinte utilizatorului operațiunea care trebuie verificată și executată.",
+          "Nu vrem să înlocuim decizia omului.",
+          "Vrem să eliminăm nevoia ca omul să joace și rolul de calendar, agendă, checklist și memorie cache.",
+          {
+            "rule": true
+          },
+          {
+            "title": "Și altele"
+          },
+          "Integrarea cu e-Factura și modulul de gestiune sunt doar direcțiile cele mai clare din etapa următoare.",
+          "K-BOT va continua să crească în jurul aceleiași idei:",
+          "**mai puține informații introduse de două ori, mai puține operațiuni ținute minte, mai multe legături între datele care există deja și mai multă automatizare acolo unde decizia nu trebuie luată de calculator.**",
+          "Nu vrem să adăugăm funcții doar ca să avem o listă mai lungă de funcții.",
+          "Vrem ca fiecare funcție nouă să elimine un pas pe care, într-o zi normală de lucru, cineva ar prefera sincer să nu-l mai facă."
+        ]
+      }
+    ],
+    "direction": {
+      "label": "Direcția",
+      "blocks": [
+        "**Astăzi, K-BOT automatizează o parte importantă din lucrul cu FOREXE și documentele aferente.**",
+        "**Mâine, vrem ca informația să circule singură între e-Factura, extrase bancare, gestiune, documente și FOREXE — iar utilizatorul să intervină acolo unde este nevoie de verificare și decizie.**",
+        "Pe termen lung, vrem ca diferența dintre „K-BOT instalat” și „K-BOT online” să fie tot mai mică. Aplicația instalată va rămâne necesară acolo unde există motive tehnice — de exemplu integrarea cu componente locale, certificate sau aplicații externe — dar cât mai multe operațiuni vor putea fi mutate în browser atunci când acest lucru poate fi făcut corect și sigur.",
+        "**Mai puțin „trebuie să ajung la calculatorul acela”. Mai mult „mă conectez și continui de unde am rămas”.**"
+      ]
+    },
+    "more_label": "Citește tot"
+  },
+  "promo": {
+    "short": "**Ai rămas în urmă cu documentele cerute de noul ALOP? K-BOT te poate ajuta să le recuperezi rapid. Versiunea completă este gratuită până la 31.12.2026.**",
+    "more_label": "Află mai mult",
+    "close_label": "Închide anunțul",
+    "dialog": {
+      "title": "Ai rămas în urmă cu documentele cerute de noul ALOP?",
+      "blocks": [
+        "**K-BOT te poate ajuta să recuperezi rapid. Iar până la 31 decembrie 2026, versiunea completă este gratuită.**",
+        "Dacă ai angajamente pentru care documentele de fundamentare sau ordonanțările trebuie încă generate și listate, K-BOT poate transforma o muncă de durată într-un proces mult mai rapid.",
+        "Pentru o **unitate școlară de dimensiune medie**, documentele restante pot fi generate și pregătite pentru listare **în maximum o zi de lucru**.",
+        "Poți folosi toate funcționalitățile disponibile ale K-BOT până la **31.12.2026, fără costuri de utilizare**, ca să vezi în activitatea reală dacă îți este util.",
+        "Și nu există nicio obligație să continui după aceea.",
+        "**Dacă decizi că K-BOT nu este pentru tine, îl dezinstalezi și atât.**",
+        "Folosirea K-BOT nu te obligă să renunți la programul de contabilitate pe care îl utilizezi și nici nu creează o dependență de aplicație pentru continuarea activității."
+      ],
+      "cta": "Încearcă K-BOT gratuit",
+      "footnote": "Versiune completă gratuită până la 31.12.2026 · Fără obligație de continuare"
+    }
+  },
+  "positioning": {
+    "title": "K-BOT nu este un program de contabilitate",
+    "blocks": [
+      "Și nici nu încearcă să devină unul.",
+      "K-BOT este o aplicație de sine stătătoare, construită pentru a automatiza operațiunile din jurul activității financiar-contabile: legătura cu FOREXE, documentele, verificările, recepțiile, plățile, extrasele bancare, semnăturile și fluxurile care le leagă între ele.",
+      "Programul tău de contabilitate poate rămâne exact acolo unde este.",
+      "**K-BOT lucrează alături de el, nu în locul lui.**",
+      "Asta înseamnă că aplicația poate fi conectată și cu alte soluții software folosite de instituție, acolo unde există posibilitatea tehnică și, bineînțeles, cu acordul producătorilor acestora.",
+      "Nu vrem să obligăm o instituție să își schimbe programul de contabilitate doar pentru a putea folosi K-BOT.",
+      "Din contră.",
+      "**Ideea este ca K-BOT să se adapteze ecosistemului existent, nu ecosistemul să fie reconstruit în jurul K-BOT.**",
+      "Pentru că schimbarea unui program folosit de ani de zile doar ca să poți automatiza câteva operațiuni ar fi un mod destul de complicat de a simplifica lucrurile."
+    ],
+    "visual": {
+      "left": {
+        "title": "Programul tău de contabilitate",
+        "sub": "Rămâne exact unde este"
+      },
+      "right": {
+        "title": "K-BOT",
+        "sub": "Lucrează alături de el"
+      },
+      "caption": "Alături, nu în locul lui"
+    }
+  },
+  "integration": {
+    "badge": "Urmează",
+    "title": "Datele tale trebuie să poată circula",
+    "blocks": [
+      "Unul dintre pașii următori este extinderea posibilităților de schimb de date cu celelalte aplicații ale instituției.",
+      "K-BOT va putea exporta informațiile în mai multe forme, în funcție de ceea ce poate folosi sistemul cu care trebuie să comunice:"
+    ],
+    "formats": [
+      {
+        "tag": "XML",
+        "text": "pentru aplicațiile și fluxurile care lucrează cu structuri standardizate;"
+      },
+      {
+        "tag": "CSV",
+        "text": "pentru schimburi simple de date și importuri tabelare;"
+      },
+      {
+        "tag": "JSON",
+        "text": "pentru aplicații moderne și integrări software;"
+      }
+    ],
+    "after": [
+      "Scopul este simplu:",
+      "**datele introduse sau obținute într-un sistem nu ar trebui rescrise manual în altul doar pentru că cele două programe nu au fost prezentate încă unul altuia.**"
+    ],
+    "now_label": "Există acum",
+    "planned_label": "Urmează",
+    "hub": {
+      "center": "K-BOT",
+      "nodes": [
+        {
+          "label": "FOREXE",
+          "now": true,
+          "x": 50,
+          "y": 9
+        },
+        {
+          "label": "Extrase bancare",
+          "now": true,
+          "x": 87,
+          "y": 31
+        },
+        {
+          "label": "Programul de contabilitate",
+          "now": false,
+          "x": 87,
+          "y": 71
+        },
+        {
+          "label": "e-Factura",
+          "now": false,
+          "x": 50,
+          "y": 92
+        },
+        {
+          "label": "Gestiune",
+          "now": false,
+          "x": 13,
+          "y": 71
+        },
+        {
+          "label": "Alte aplicații ale instituției",
+          "now": false,
+          "x": 13,
+          "y": 31
+        }
+      ]
+    },
+    "api_line": "sau, atunci când aplicația parteneră oferă această posibilitate, **direct prin API**, fără fișiere intermediare."
+  },
+  "mirror": {
+    "badge": "Urmează",
+    "title": "Iar integrarea va funcționa și în sens invers",
+    "blocks": [
+      "Pe lângă exportul informațiilor din K-BOT, avem în plan și crearea propriilor API-uri.",
+      "Astfel, programele de contabilitate sau alte aplicații autorizate ale instituției vor putea solicita direct din K-BOT informațiile de care au nevoie."
+    ],
+    "old_lead": "În locul unui flux de tip:",
+    "old_steps": [
+      "exportă fișierul",
+      "salvează-l undeva",
+      "deschide celălalt program",
+      "importă-l",
+      "speră că ai ales fișierul bun"
+    ],
+    "new_lead": "integrarea va putea deveni:",
+    "new_steps": [
+      "aplicația cere informația",
+      "K-BOT o furnizează"
+    ],
+    "after": [
+      "Fără drumuri inutile ale utilizatorului între programe.",
+      "Pe termen lung, vrem ca K-BOT să poată deveni un punct de legătură între FOREXE, e-Factura, extrase bancare, gestiune și programele financiar-contabile deja folosite de instituții.",
+      "**Nu încă o insulă de date. Ci legătura dintre ele.**"
+    ]
+  },
+  "about": {
+    "kicker": "Despre noi",
+    "title": "Aproape 20 de ani de software construit pentru munca reală",
+    "blocks": [
+      "Firma noastră există din **2007**.",
+      "În aproape două decenii de activitate am construit și dezvoltat aplicații software pornind, de cele mai multe ori, de la probleme foarte concrete întâlnite de utilizatori în activitatea lor de zi cu zi.",
+      "O parte importantă a experienței noastre este legată de **software-ul dedicat instituțiilor bugetare**.",
+      "De-a lungul anilor, programele dezvoltate de noi au fost utilizate de **peste 100 de unități bugetare din județul Prahova**.",
+      "Asta înseamnă aproape 20 de ani în care am văzut cum arată munca din spatele unui formular, al unei raportări sau al unei operațiuni care, din exterior, pare să însemne doar „mai apeși un buton”.",
+      "De multe ori nu este doar un buton.",
+      "Și tocmai de acolo pornesc multe dintre ideile noastre."
+    ],
+    "facts": [
+      {
+        "title": "Din 2007",
+        "text": "dezvoltăm și întreținem aplicații software."
+      },
+      {
+        "title": "Aproape 20 de ani de experiență",
+        "text": "în construirea de soluții pentru activități reale, nu proiecte demonstrative."
+      },
+      {
+        "title": "Peste 100 de unități bugetare",
+        "text": "au folosit de-a lungul timpului programele dezvoltate de noi în județul Prahova."
+      },
+      {
+        "title": "Focus pe sectorul bugetar",
+        "text": "și pe procesele, documentele și constrângerile specifice acestuia."
+      }
+    ]
+  },
+  "philosophy": {
+    "title": "Software făcut pentru oameni care chiar trebuie să-l folosească",
+    "blocks": [
+      "Nu credem că un program este bun doar pentru că „funcționează”.",
+      "Trebuie să fie clar.",
+      "Trebuie să reducă munca, nu să mute aceeași muncă într-o altă fereastră.",
+      "Trebuie să prevină greșelile acolo unde poate.",
+      "Și, mai ales, trebuie să țină cont de felul în care oamenii lucrează în realitate, nu doar de felul în care arată procesul într-o diagramă.",
+      "K-BOT continuă exact această direcție.",
+      "Experiența acumulată în aproape două decenii de software pentru instituții publice este folosită acum pentru a automatiza o parte din operațiunile care consumă zilnic timp în lucrul cu FOREXE și documentele aferente.",
+      "**Nu vrem să facem cel mai complicat program.**",
+      "Vrem să facem programul care elimină cât mai multe dintre complicațiile pe care utilizatorul nu ar trebui să le aibă."
+    ],
+    "quote": {
+      "lead": "Nu pornim de la întrebarea:",
+      "no": "„Ce funcție interesantă am putea adăuga?”",
+      "lead2": "Pornim mai degrabă de la:",
+      "yes": "**„Ce face omul de zece ori pe zi și n-ar mai trebui să facă?”**",
+      "end": "De acolo începe automatizarea."
+    }
+  },
+  "testimonials": {
+    "visible": true,
+    "title": "Ce spun utilizatorii",
+    "items": [
+      {
+        "quote": "[Testimonial utilizator]",
+        "name": "Nume / Funcție",
+        "org": "Instituție"
+      },
+      {
+        "quote": "[Testimonial utilizator]",
+        "name": "Nume / Funcție",
+        "org": "Instituție"
+      },
+      {
+        "quote": "[Testimonial utilizator]",
+        "name": "Nume / Funcție",
+        "org": "Instituție"
+      }
+    ]
+  },
+  "finalcta": {
+    "primary": "Încearcă K-BOT gratuit",
+    "note": "Versiune completă gratuită până la 31.12.2026 · Fără obligație de continuare"
+  },
+  "online": {
+    "id": "acces-online",
+    "kicker": "Online",
+    "title": "Accesul online la date",
+    "intro": [
+      "K-BOT nu este singurul loc în care îți poți vedea datele. Le poți consulta și online, direct din browser, de oriunde te-ai afla: de la birou, de acasă sau chiar de pe telefon. Nu trebuie să instalezi nimic.",
+      "Pagina online este gândită exclusiv pentru consultare. **Poți să te uiți. Nu poți să strici nimic.**"
+    ],
+    "cards": [
+      {
+        "icon": "eye",
+        "title": "Ce poți vedea",
+        "blocks": [
+          {
+            "ul": [
+              "lista angajamentelor",
+              "Sumarul",
+              "Rezervările",
+              "Recepțiile",
+              "Plățile",
+              "documentele PDF"
+            ]
+          },
+          "Nu poți modifica date, nu poți descărca informații noi din FOREXE și nu poți trimite operațiuni. Lucrul propriu-zis rămâne în K-BOT."
+        ]
+      },
+      {
+        "icon": "shield",
+        "title": "Autentificare în doi pași",
+        "blocks": [
+          "Fără certificat digital, intrarea cere întotdeauna parola **și** codul primit pe e-mail. Parola singură nu este suficientă.",
+          "Vezi doar unitățile la care contul tău are deja drepturi. Nu poți vedea datele altor unități."
+        ]
+      },
+      {
+        "icon": "pen",
+        "title": "Intrare cu tokenul digital",
+        "blocks": [
+          "Dacă folosești un token cu semnătură digitală calificată, îl poți înrola și pentru accesul online. După înrolare, intri cu el, fără codul primit pe e-mail.",
+          "Funcționează de pe calculator; de pe telefon sau tabletă intri cu parola și codul."
+        ]
+      }
+    ],
+    "outro": [
+      "Datele pot fi văzute de oriunde. **Nu de oricine.** Datele rămân pe serverele K-BOT și sunt disponibile numai persoanelor autorizate pentru unitățile respective."
+    ],
+    "more_label": "Citește tot",
+    "blocks": [
+      "K-BOT nu este singurul loc în care îți poți vedea datele. Le poți consulta și online, direct din browser, de oriunde te-ai afla: de la birou, de acasă sau chiar de pe telefon. Nu trebuie să instalezi nimic.",
+      "Pagina online este gândită exclusiv pentru consultare. Poți vedea:",
+      {
+        "ul": [
+          "lista angajamentelor;",
+          "Sumarul;",
+          "Rezervările;",
+          "Recepțiile;",
+          "Plățile;",
+          "documentele PDF."
+        ]
+      },
+      "Nu poți modifica date, nu poți descărca informații noi din FOREXE și nu poți trimite operațiuni. Lucrul propriu-zis rămâne în K-BOT. Online vezi informația de care ai nevoie, fără riscul de a modifica ceva din greșeală.",
+      "Documentele PDF văzute online sunt o **copie aplatizată** a fișierelor originale și se pot vedea **doar dacă au fost semnate inițial în aplicația locală**.",
+      {
+        "rule": true
+      },
+      {
+        "title": "Cum intri"
+      },
+      "Accesul este simplu:",
+      {
+        "ul": [
+          "Deschizi pagina K-BOT în browser și apeși „Intră în cont”.",
+          "Introduci adresa de e-mail și parola — aceleași pe care le folosești în K-BOT.",
+          "Primești pe e-mail un cod de 6 cifre și îl introduci în pagină. Codul poate fi folosit o singură dată și expiră după 10 minute.",
+          "Alegi unitatea, apoi anul și sursa cu care vrei să lucrezi."
+        ]
+      },
+      "Dacă ai acces la mai multe unități, le poți schimba oricând din bara de sus.",
+      "Fără conturi separate, fără încă o parolă de ținut minte. Avem deja destule.",
+      {
+        "rule": true
+      },
+      {
+        "title": "Intrare cu certificatul digital, fără codul primit pe e-mail"
+      },
+      "Dacă folosești un token cu semnătură digitală calificată, același tip de certificat cu care semnezi documentele, îl poți înrola și pentru accesul online. După înrolare, poți intra folosind certificatul, fără să mai introduci codul primit pe e-mail.",
+      {
+        "h": "Cum îl înrolezi"
+      },
+      {
+        "ul": [
+          "Intri prima dată folosind parola și codul primit pe e-mail.",
+          "Conectezi tokenul la calculator.",
+          "Apeși „Certificat” în partea de sus a paginii.",
+          "Alegi „Înrolează certificatul acesta”."
+        ]
+      },
+      "La următoarea vizită poți apăsa direct „Intră cu certificat digital” și alegi certificatul corespunzător.",
+      {
+        "h": "De reținut"
+      },
+      {
+        "ul": [
+          "Un singur certificat poate fi activ pentru contul tău. Dacă certificatul este reînnoit, îl înrolezi din nou, iar cel vechi este dezactivat.",
+          "Din același dialog „Certificat” poți dezactiva certificatul în orice moment.",
+          "Autentificarea cu certificat funcționează de pe calculator, unde tokenul poate fi conectat fizic. De pe telefon sau tabletă intri în continuare cu adresa de e-mail, parola și codul primit pe e-mail.",
+          "Dacă certificatul a expirat sau browserul nu îl poate identifica, pagina revine automat la autentificarea cu parolă și cod."
+        ]
+      },
+      {
+        "rule": true
+      },
+      {
+        "title": "Datele pot fi văzute de oriunde. Nu de oricine."
+      },
+      "Accesul din browser nu înseamnă că datele devin mai puțin protejate. Din contră, accesul online folosește mai multe mecanisme de protecție tocmai pentru că informațiile pot fi consultate din afara calculatorului pe care este instalat K-BOT.",
+      {
+        "h": "Autentificare în doi pași"
+      },
+      "Fără certificat digital, autentificarea cere întotdeauna parola și codul primit pe e-mail. Parola singură nu este suficientă pentru acces. Dacă folosești certificatul digital, al doilea factor este chiar tokenul fizic pe care îl deții.",
+      {
+        "h": "Vezi doar unitățile la care ai acces"
+      },
+      "După autentificare, K-BOT îți arată doar unitățile pentru care contul tău are deja drepturi. Nu poți vedea datele altor unități.",
+      {
+        "h": "Accesul online este doar pentru citire"
+      },
+      "Din browser poți consulta informațiile, dar nu le poți modifica. Nu poți:",
+      {
+        "ul": [
+          "modifica angajamente;",
+          "schimba recepții;",
+          "trimite operațiuni;",
+          "descărca informații noi din FOREXE;",
+          "altera documentele existente."
+        ]
+      },
+      "Poți să te uiți. Nu poți să strici nimic.",
+      {
+        "h": "Sesiunile nu rămân deschise la nesfârșit"
+      },
+      "După 20 de minute fără activitate, sesiunea se închide automat. Cu două minute înainte, K-BOT te avertizează și îți permite să continui dacă încă lucrezi. Indiferent de activitate, o sesiune nu poate rămâne deschisă mai mult de 8 ore.",
+      {
+        "h": "Parola nu este păstrată de pagina online"
+      },
+      "Parola este verificată atunci când te autentifici și nu este păstrată ulterior de pagină. Codul primit pe e-mail are o durată de viață limitată, poate fi folosit o singură dată și este păstrat doar într-o formă criptată până la expirare.",
+      {
+        "h": "Accesările lasă o urmă"
+      },
+      "K-BOT păstrează informații despre autentificări: cine a accesat sistemul, când a avut loc accesul și unitatea consultată. Astfel, accesările pot fi verificate ulterior dacă este nevoie.",
+      {
+        "h": "Încercările greșite sunt limitate"
+      },
+      "Dacă sunt introduse în mod repetat parole sau coduri greșite, autentificarea este blocată temporar. Nu poți încerca la nesfârșit până când „poate nimerește cineva parola”.",
+      {
+        "h": "Protecția datelor și certificatul digital"
+      },
+      "Datele rămân pe serverele K-BOT și sunt disponibile numai persoanelor autorizate pentru unitățile respective. Pentru certificatul digital, serverul păstrează doar amprenta necesară identificării certificatului. Nu este necesară păstrarea CNP-ului sau a altor date personale din certificat pentru această autentificare.",
+      {
+        "rule": true
+      },
+      {
+        "title": "Când ai terminat"
+      },
+      "Apasă „Ieși”. Este mai bine decât să închizi pur și simplu fila browserului, mai ales atunci când folosești un calculator care nu îți aparține. Un click în plus. De data asta chiar merită."
+    ]
+  },
+  "people": {
+    "kicker": "Cine stă în spatele K-BOT",
+    "title": "Site-ul a fost făcut cu AI. Aplicația, de oameni.",
+    "intro": [
+      "Da, acest site de prezentare a fost realizat cu ajutorul inteligenței artificiale (Claude Code). **Aplicația K-BOT nu.**",
+      "K-BOT este făcut de oameni reali, cu ajutorul inteligenței artificiale. **Toate funcțiile trec prin mâna unor oameni, iar tot planul și toată logica sunt 100% umane.**"
+    ],
+    "cards": [
+      {
+        "icon": "user",
+        "title": "Planul este omenesc",
+        "blocks": [
+          "Ce face K-BOT, în ce ordine și de ce se hotărăște de oameni care cunosc munca din FOREXE și din contabilitatea publică."
+        ]
+      },
+      {
+        "icon": "check",
+        "title": "Fiecare funcție trece prin oameni",
+        "blocks": [
+          "Nicio funcție nu ajunge în aplicație doar pentru că o poate scrie un program. Fiecare este gândită, verificată și acceptată de oameni."
+        ]
+      },
+      {
+        "icon": "pen",
+        "title": "AI-ul ajută, nu decide",
+        "blocks": [
+          "Inteligența artificială accelerează munca de scriere și de verificare. Direcția, regulile și răspunderea rămân ale oamenilor."
+        ]
+      }
+    ],
+    "safety_title": "Siguranța datelor tale",
+    "safety_intro": "Datele unei unități nu sunt un detaliu tehnic. Iată, pe scurt, cum stau lucrurile.",
+    "safety_cards": [
+      {
+        "icon": "shield",
+        "title": "Programatorul nu are acces la parolele tale",
+        "blocks": [
+          "Cel care a scris aplicația **nu are acces la parolele utilizatorilor**. Nu le poate citi și nu le poate afla.",
+          "Parola este folosită o singură dată, pentru a verifica autentificarea, și nu este păstrată de aplicație sau de pagina online."
+        ]
+      },
+      {
+        "icon": "doc",
+        "title": "GDPR: se lucrează",
+        "blocks": [
+          "Lucrăm la conformarea cu GDPR pentru datele prelucrate de aplicație. Este un proces în desfășurare: nu pretindem că este încheiat și nu ascundem că nu este.",
+          "Principiile după care lucrăm sunt cele din regulament: datele sunt vizibile doar persoanelor autorizate pentru unitatea lor, accesările lasă o urmă și nu păstrăm mai mult decât este necesar."
+        ]
+      },
+      {
+        "icon": "eye",
+        "title": "Accesul online, la fel de păstrat",
+        "blocks": [
+          "Datele pot fi consultate din browser, dar doar în regim de citire și doar cu autentificare în doi pași sau cu tokenul tău digital.",
+          "Detaliile sunt în secțiunea „Accesul online la date”, mai jos pe pagină."
+        ]
+      }
+    ]
+  }
+}

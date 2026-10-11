@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zona utilizatorilor · K-BOT</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#309eff">
+<!-- slice 0110-04: where the certificate calls go; filled by the server (empty = this host) -->
+<meta name="portal-cert-origin" content="__CERT_ORIGIN__">
+<link rel="icon" type="image/png" sizes="64x64" href="/static/site/img/art/logo-64.png">
+<!-- the saved look goes on before the first paint (an external file: the CSP forbids inline scripts) -->
+<script src="/static/js/portal/theme-init.js"></script>
+<link rel="stylesheet" href="/static/site/site.css">
+<link rel="stylesheet" href="/static/site/detalii.css">
+<link rel="stylesheet" href="/static/css/variables.css">
+<link rel="stylesheet" href="/static/css/treeview/treeview.css">
+<link rel="stylesheet" href="/static/css/combobox.css">
+<link rel="stylesheet" href="/static/css/dgv.css">
+<link rel="stylesheet" href="/static/vendor/pdfjs/pdf_viewer.min.css">
+<link rel="stylesheet" href="/static/css/pdfview.css">
+<link rel="stylesheet" href="/static/css/portal.css">
+<script src="/static/js/utils/css.js"></script>
+<script src="/static/js/utils/z-max.js"></script>
+<script type="module" src="/static/js/portal/portal.js"></script>
+<script type="module" src="/static/js/portal/nozoom.js"></script>
+</head>
+<body class="portal">
+
+<header class="header" id="portal-header">
+  <a class="brand" href="/" aria-label="K-BOT, spre prezentare">
+    <img src="/static/site/img/art/logo-128.png" alt="" width="36" height="36">
+    <span class="brand__text">
+      <span class="brand__name">K-BOT</span>
+      <span class="brand__tag">Zona utilizatorilor</span>
+    </span>
+  </a>
+  <nav class="pmenu" id="pmenu-nav" aria-label="Meniu principal" hidden>
+    <ul class="pmenu__bar" id="pmenu"></ul>
+  </nav>
+  <div class="user-info" id="user-info" hidden>
+    <span class="user-email" id="user-email"></span>
+    <button class="btn btn--ghost btn--sm" type="button" id="btn-cert" hidden title="Certificatul digital cu care intri fără cod">🔐 Certificat</button>
+    <button class="btn btn--ghost btn--sm" type="button" id="btn-theme" aria-label="Schimbă tema" title="Schimbă tema (luminos / întunecat)">🌙</button>
+    <button class="btn btn--ghost btn--sm" type="button" id="btn-logout">Ieși</button>
+  </div>
+</header>
+
+<main class="portal__main">
+
+  <!-- 1: e-mail + password -->
+  <section class="card portal__card" id="card-login" hidden>
+    <h1>Autentificare</h1>
+    <p class="lead">Intră cu adresa de e-mail și parola contului K-BOT. Îți trimitem apoi un cod pe e-mail.</p>
+    <form id="form-login" novalidate>
+      <div class="field">
+        <label for="p-email">E-mail</label>
+        <input id="p-email" type="email" autocomplete="username" inputmode="email" maxlength="80" required>
+      </div>
+      <div class="field">
+        <label for="p-parola">Parola</label>
+        <input id="p-parola" type="password" autocomplete="current-password" maxlength="128" required>
+      </div>
+      <div class="field">
+        <label for="p-app-combo-input">Aplicația</label>
+        <div id="p-app-combo"></div>
+      </div>
+      <p class="msg" id="msg-login" role="alert" hidden></p>
+      <div class="actions"><button class="btn btn--primary btn--lg" type="submit" id="btn-login">Continuă</button></div>
+    </form>
+    <!-- certificate sign-in: computers only. certificat.js removes this block on a phone/tablet. -->
+    <div class="portal__cert" id="cert-login" hidden>
+      <div class="portal__or"><span>sau</span></div>
+      <button class="btn btn--ghost btn--lg portal__cert-btn" type="button" id="btn-cert-login">🔐 Intră cu certificat digital</button>
+    </div>
+    <p class="portal__note">Nu ai cont? <a href="/inregistrare">Înregistrează unitatea</a> sau <a href="/detalii">cere mai multe detalii</a>.</p>
+  </section>
+
+  <!-- 2: the mailed code -->
+  <section class="card portal__card" id="card-code" hidden>
+    <h1>Codul de pe e-mail</h1>
+    <p class="lead">Am trimis un cod din 6 cifre la <strong id="code-to"></strong>. Este valabil 10 minute.</p>
+    <form id="form-code" novalidate>
+      <div class="field">
+        <label for="p-cod">Cod</label>
+        <input id="p-cod" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" required>
+      </div>
+      <p class="msg" id="msg-code" role="alert" hidden></p>
+      <div class="actions">
+        <button class="btn btn--ghost btn--lg" type="button" id="btn-code-back">Înapoi</button>
+        <button class="btn btn--primary btn--lg" type="submit" id="btn-code">Intră</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- 3: signed in -->
+  <section class="portal__app" id="card-app" hidden>
+    <div class="card pa__bar">
+      <div class="pa__f pa__f--unit"><label for="unit-combo">Unitatea</label><div id="unit-combo"></div></div>
+      <div class="pa__f pa__f--an"><label for="an-combo">Anul</label><div id="an-combo"></div></div>
+      <div class="pa__f pa__f--ss"><label for="ss-combo">Sursa</label><div id="ss-combo"></div></div>
+      <button type="button" class="btn btn--ghost btn--sm js-back-ang" aria-label="Înapoi la angajamente" title="Înapoi la angajamente"><span class="bk-ico" aria-hidden="true">⬅️</span><span class="bk-txt"> Angajamente</span></button>
+    </div>
+    <p class="msg" id="msg-app" role="alert" hidden></p>
+    <p class="lead pa__hint" id="app-lead" hidden></p>
+
+    <div class="pa__body" id="pa-body" hidden>
+      <div class="card pa__left">
+        <h2 class="pa__h">
+          <span class="pa__title">Angajamente <span class="pa__count" id="app-count"></span></span>
+          <button type="button" class="pa__opt" id="btn-tree-opt" aria-haspopup="menu" aria-expanded="false" aria-controls="tree-menu" title="Opțiuni listă" aria-label="Opțiuni listă">⚙️</button>
+        </h2>
+        <div class="card pa__menu" id="tree-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" data-sort="name">Ordonare după nume</button>
+          <button type="button" role="menuitemradio" data-sort="date">Ordonare după dată</button>
+        </div>
+        <div class="pa__grid" id="grid-ang"></div>
+      </div>
+      <div class="card pa__right">
+        <div class="pa__tabs" role="tablist" aria-orientation="vertical" aria-label="Datele angajamentului">
+          <button type="button" class="pa__back" id="btn-back" aria-label="Înapoi la lista de angajamente" title="Înapoi la lista de angajamente"><span class="pa__ico" aria-hidden="true">⬆️</span><span class="pa__lbl">Lista</span></button>
+          <button type="button" role="tab" data-tab="sumar" class="is-active"><span class="pa__ico" aria-hidden="true">📊</span><span class="pa__lbl">Sumar</span></button>
+          <button type="button" role="tab" data-tab="istoric"><span class="pa__ico" aria-hidden="true">🕘</span><span class="pa__lbl">Istoric</span></button>
+          <button type="button" role="tab" data-tab="rezervari"><span class="pa__ico" aria-hidden="true">📌</span><span class="pa__lbl">Rezervări</span></button>
+          <button type="button" role="tab" data-tab="receptii"><span class="pa__ico" aria-hidden="true">📦</span><span class="pa__lbl">Recepții</span></button>
+          <button type="button" role="tab" data-tab="extrase"><span class="pa__ico" aria-hidden="true">🏦</span><span class="pa__lbl">Extrase</span></button>
+          <button type="button" role="tab" data-tab="plati"><span class="pa__ico" aria-hidden="true">💶</span><span class="pa__lbl">Plăți</span></button>
+          <button type="button" role="tab" data-tab="fundamentari"><span class="pa__ico" aria-hidden="true">📑</span><span class="pa__lbl">Fundamentări</span></button>
+          <button type="button" role="tab" data-tab="ordonantari"><span class="pa__ico" aria-hidden="true">📋</span><span class="pa__lbl">Ordonanțări</span></button>
+        </div>
+        <div class="pa__main">
+          <div class="pa__sel" id="pa-sel">Alegeți un angajament din listă.</div>
+          <!-- slice 0110-10: on a computer the tree of the card (Toate ... > month > day / document) sits beside its grid; a phone has no tree -->
+          <div class="pa__split">
+            <div class="pa__tree" id="tab-tree-host" hidden>
+              <!-- slice 0110-12: the header of the tree (Extrase only): the icon that changes what the card shows -->
+              <div class="pa__tree-head" id="tab-tree-head" hidden>
+                <span class="pa__tree-cap">Extrase</span>
+                <button type="button" class="pa__opt" id="btn-ext-mode" aria-haspopup="menu" aria-expanded="false" aria-controls="ext-mode-menu" title="Modul de vizualizare" aria-label="Modul de vizualizare">⚙️</button>
+              </div>
+              <div class="card pa__menu pa__menu--tree" id="ext-mode-menu" role="menu" hidden>
+                <button type="button" role="menuitemradio" data-mode="antet">Arată antet + operații</button>
+                <button type="button" role="menuitemradio" data-mode="detalii">Arată operații + detalii</button>
+              </div>
+              <div class="pa__grid" id="tab-tree"></div>
+            </div>
+            <div class="pa__content">
+              <div class="pa__grid" id="grid-tab"></div>
+              <!-- slice 0110-12: under the grid of Istoric and Plati (computers): the detail of the chosen row -->
+              <div class="pa__detail" id="tab-detail" hidden></div>
+              <!-- slice 0110-12: the Extrase card (computers) -->
+              <div class="pa__ext-card" id="ext-tab" hidden>
+                <div class="pc__g" id="xt-top"></div>
+                <div class="pc__g" id="xt-ops"></div>
+                <dl class="kv pa__kv" id="xt-detail" hidden></dl>
+              </div>
+              <div class="pa__docs" id="docs-tab" hidden>
+                <!-- slice 0110-12: the horizontal navbar of DdfView / OrdView (computers) -->
+                <div class="pa__subnav" id="doc-nav" role="tablist" aria-label="Documentul">
+                  <button type="button" role="tab" data-page="view" class="is-active">Vizualizare</button>
+                  <button type="button" role="tab" data-page="doc">Document</button>
+                </div>
+                <div class="pa__page" id="doc-page-view">
+                  <div class="pa__doc-head" id="doc-head" hidden></div>
+                  <div class="pa__docs-list" id="grid-docs"></div>
+                  <div class="pa__docs-lines" id="grid-lines"></div>
+                  <dl class="kv pa__kv" id="doc-foot" hidden></dl>
+                </div>
+                <div class="pa__page" id="doc-page-doc">
+                  <div class="pa__docs-bar">
+                    <span class="pa__docs-note">Vizualizare a documentului semnat. Semnăturile se verifică în K-BOT.</span>
+                    <button type="button" class="btn btn--ghost btn--sm" id="btn-docdl" hidden>Descarcă PDF-ul semnat</button>
+                  </div>
+                  <p class="msg" id="msg-doc" hidden></p>
+                  <div class="pa__docs-view" id="pdf-host"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- the Clasificatii page (menu Nomenclatoare): the tree on the left, the budget of the chosen one on the right -->
+    <div class="pc" id="clsf-view" hidden>
+      <div class="card pc__left">
+        <h2 class="pa__h">
+          <span class="pa__title">Clasificații <span class="pa__count" id="clsf-count"></span></span>
+          <button type="button" class="btn btn--ghost btn--sm" id="btn-clsf-check">Verificare buget</button>
+        </h2>
+        <div class="pc__filters">
+          <label><input type="checkbox" id="chk-clsf-toate"> Arată toate clasificațiile</label>
+          <label><input type="checkbox" id="chk-clsf-forexe"> Doar cele folosite în FOREXE</label>
+        </div>
+        <div class="pa__grid" id="tree-clsf"></div>
+      </div>
+      <div class="card pc__right">
+        <h2 class="pa__h"><span class="pa__title" id="clsf-title">Alegeți o clasificație din listă.</span></h2>
+        <div class="pa__sel" id="clsf-buget-title"></div>
+        <div class="pc__g" id="grid-clsf-buget"></div>
+        <div class="pa__sel" id="clsf-corr-title"></div>
+        <div class="pc__g" id="grid-clsf-corr"></div>
+        <div class="pc__tot" id="grid-clsf-total"></div>
+      </div>
+    </div>
+
+    <!-- the Parteneri page (menu Nomenclatoare): the list on the left, the chosen partner on the right -->
+    <div class="pc" id="part-view" hidden>
+      <div class="card pc__left">
+        <h2 class="pa__h"><span class="pa__title">Parteneri <span class="pa__count" id="part-count"></span></span></h2>
+        <div class="pc__filters">
+          <label><input type="checkbox" id="chk-part-activ"> Ascunde partenerii fără activitate</label>
+        </div>
+        <div class="pa__grid" id="tree-part"></div>
+      </div>
+      <div class="card pc__right">
+        <h2 class="pa__h"><span class="pa__title" id="part-title">Alegeți un partener din listă.</span></h2>
+        <dl class="kv pc__kv">
+          <dt>Cod partener</dt><dd id="part-cod"></dd>
+          <dt>Cod fiscal</dt><dd id="part-cf"></dd>
+          <dt>Denumire</dt><dd id="part-den"></dd>
+          <dt>Cont IBAN principal</dt><dd id="part-iban"></dd>
+          <dt>Banca</dt><dd id="part-banca"></dd>
+          <dt>Adresa</dt><dd id="part-adresa"></dd>
+          <dt>Ascuns</dt><dd id="part-ascuns"></dd>
+        </dl>
+        <div class="pa__sel">Coduri angajament</div>
+        <div class="pc__g" id="grid-part-cod"></div>
+      </div>
+    </div>
+
+    <!-- the budget check page: classifications whose FOREXE credit differs from the K-BOT budget -->
+    <div class="card pa__ext" id="clsf-check-view" hidden>
+      <h2 class="pa__h">
+        <span class="pa__title" id="check-title">Verificare buget FOREXE</span>
+        <button type="button" class="btn btn--ghost btn--sm" id="btn-check-back">← Clasificații</button>
+      </h2>
+      <p class="pa__hint" id="check-state"></p>
+      <div class="pa__ext-grid" id="grid-check"></div>
+    </div>
+
+    <!-- the Extrase page (menu): months and days on the left; headers + operations, or a day's operations + detail, on the right -->
+    <div class="pc" id="ext-view" hidden>
+      <div class="card pc__left">
+        <h2 class="pa__h"><span class="pa__title">Extrase de cont <span class="pa__count" id="ext-count"></span></span></h2>
+        <div class="pa__grid" id="tree-ext"></div>
+      </div>
+      <div class="card pc__right">
+        <h2 class="pa__h"><span class="pa__title" id="ext-title">Toate extrasele</span></h2>
+        <div class="pc__g" id="grid-ext-top"></div>
+        <div class="pc__g" id="grid-ext-ops"></div>
+        <dl class="kv pc__kv pc__detail" id="ext-detail" hidden>
+          <dt>Nr. document</dt><dd id="ed-nr"></dd>
+          <dt>Data banca</dt><dd id="ed-banca"></dd>
+          <dt>Data document</dt><dd id="ed-doc"></dd>
+          <dt>Referință</dt><dd id="ed-ref"></dd>
+          <dt>Referință destinatar</dt><dd id="ed-refd"></dd>
+          <dt>Plătitor</dt><dd id="ed-plat"></dd>
+          <dt>CUI</dt><dd id="ed-cui"></dd>
+          <dt>IBAN</dt><dd id="ed-iban"></dd>
+          <dt>Debit</dt><dd id="ed-deb"></dd>
+          <dt>Credit</dt><dd id="ed-cred"></dd>
+          <dt>Cod angajament</dt><dd id="ed-cod"></dd>
+          <dt>Indicator</dt><dd id="ed-ind"></dd>
+          <dt>Cod program</dt><dd id="ed-prog"></dd>
+          <dt>Explicații</dt><dd id="ed-expl"></dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- slice 0110-04: enrol / switch off the digital certificate (computers only; removed on a phone/tablet) -->
+<dialog class="card portal__dlg" id="dlg-cert" aria-labelledby="dlg-cert-title">
+  <h2 id="dlg-cert-title">Certificat digital</h2>
+  <p class="lead" id="cert-state">Se verifică...</p>
+  <p class="msg" id="msg-cert" role="alert" hidden></p>
+  <ul class="portal__certs" id="cert-list"></ul>
+  <div class="actions">
+    <button class="btn btn--ghost" type="button" id="btn-cert-close">Închide</button>
+    <button class="btn btn--primary" type="button" id="btn-cert-enrol" hidden>Înrolează certificatul acesta</button>
+  </div>
+</dialog>
+
+</body>
+</html>

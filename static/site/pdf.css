@@ -1,0 +1,56 @@
+/* The «PDF Inteligent» article. Rides on site.css (tokens, topbar, .btn, .pill). */
+
+.pdfi { padding: calc(var(--topbar-h) + 48px) 0 72px; min-height: 100vh; }
+.pdfi__wrap { max-width: 860px; }
+.pdfi__head { margin-bottom: 28px; }
+.pdfi__head h1 { margin: 12px 0 14px; color: var(--blue-deep); font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; }
+.pdfi__sub { font-size: 1.1rem; color: var(--ink-soft); }
+.pill--hot { background: #fde7e9; color: #a4161a; }
+
+.pdfi h2 { margin: 40px 0 14px; color: var(--blue-deep); font-size: 1.55rem; line-height: 1.2; }
+.pdfi h3 { margin: 22px 0 8px; color: var(--ink); font-size: 1.12rem; }
+.pdfi p { margin: 0 0 14px; }
+
+/* The short answer, first thing on the page. */
+.verdict { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 8px 0 8px; }
+.verdict__box { padding: 22px 24px; border-radius: var(--radius); border: 2px solid; background: #fff; box-shadow: var(--shadow-sm); }
+.verdict__box h3 { margin: 0 0 6px; font-size: 1.25rem; }
+.verdict__box p { margin: 0; color: var(--ink-soft); }
+.verdict__box--yes { border-color: var(--ok); background: #effaf4; }
+.verdict__box--yes h3 { color: var(--ok); }
+.verdict__box--no { border-color: var(--warn); background: #fdf0ee; }
+.verdict__box--no h3 { color: var(--warn); }
+.verdict__note { margin-top: 14px; padding: 14px 18px; border-left: 4px solid #e0a100; background: #fff7dd; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+
+/* Error messages, as the operator sees them in Acrobat. */
+.err { margin: 8px 0 14px; padding: 14px 18px; background: #14213d; color: #ffd6d6; border-radius: var(--radius-sm); font: .9rem/1.5 Consolas, "Cascadia Mono", monospace; overflow-wrap: anywhere; }
+.translate { padding: 16px 20px; border-left: 4px solid var(--blue); background: var(--sky-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+
+.why { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 6px 26px 14px; margin: 14px 0; }
+.why h3 { display: flex; gap: 12px; align-items: center; }
+.why__n { flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 800; display: grid; place-items: center; }
+
+.dont { margin: 14px 0; padding: 0; list-style: none; }
+.dont li { position: relative; padding: 4px 0 4px 34px; }
+.dont li::before { content: "\2715"; position: absolute; left: 0; top: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fde7e9; color: var(--warn); font-weight: 800; font-size: .8rem; display: grid; place-items: center; }
+
+.irony { padding: 22px 26px; border-radius: var(--radius); background: linear-gradient(135deg, #fff3d6, #fde7e9); border: 1px solid #f1c9a0; margin-top: 40px; }
+.irony h2 { margin-top: 0; }
+
+.steps { counter-reset: s; margin: 14px 0; padding: 0; list-style: none; }
+.steps li { counter-increment: s; position: relative; padding: 14px 18px 14px 62px; margin-bottom: 10px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
+.steps li::before { content: counter(s); position: absolute; left: 16px; top: 12px; width: 32px; height: 32px; border-radius: 50%; background: var(--ok); color: #fff; font-weight: 800; display: grid; place-items: center; }
+.path { display: inline-block; padding: 2px 10px; border-radius: 8px; background: var(--sky-2); color: var(--blue-deep); font-weight: 700; }
+
+.conclusion { margin-top: 40px; padding: 28px; border-radius: var(--radius); background: var(--ink); color: #fff; }
+.conclusion h2 { color: #fff; margin-top: 0; }
+.conclusion p { color: #dbe7fb; }
+.conclusion .conclusion__final { margin: 18px 0 0; padding: 16px 20px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, .1); font-size: 1.2rem; font-weight: 800; color: #fff; }
+
+@media (max-width: 700px) {
+  .pdfi { padding-top: calc(var(--topbar-h) + 28px); }
+  .verdict { grid-template-columns: 1fr; }
+  .why { padding: 4px 18px 10px; }
+}
+
+.pdfi__date { font-size: .9rem; color: var(--ink-soft); }

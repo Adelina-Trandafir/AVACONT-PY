@@ -6,6 +6,7 @@
 // the unit name and the e-mail were typed by strangers on the public page.
 
 import { createOperatorApi, ApiError } from './api.js';
+import { confirmBox } from '../utils/confirm-box.js';
 
 const TOKEN_KEY = 'kbot.operator.token';
 const EMAIL_KEY = 'kbot.operator.email';
@@ -466,7 +467,7 @@ async function onApprove() {
   const question =
     `Se creează baza ${edits.dbName} pentru «${d.Denumire}» și contul ${d.Email}.\n\n` +
     'Continuați?';
-  if (!window.confirm(question)) return;
+  if (!await confirmBox(question, { title: 'Aprobare cerere', yes: 'Continuă', no: 'Renunță' })) return;
   try {
     const answer = await busy('approve-btn', () => api.approve(d.IdCerere, edits.codProgram, edits.dbName));
     watchJob(answer.job, d.IdCerere, 0);
@@ -485,7 +486,7 @@ async function onReject() {
     $('reject-motiv').focus();
     return;
   }
-  if (!window.confirm(`Respingeți cererea ${d.IdCerere} (${d.Denumire})?\nSolicitantul primește motivul pe e-mail.`)) return;
+  if (!await confirmBox(`Respingeți cererea ${d.IdCerere} (${d.Denumire})?\nSolicitantul primește motivul pe e-mail.`, { title: 'Respingere cerere', yes: 'Respinge', no: 'Renunță' })) return;
   try {
     const answer = await busy('reject-btn', () => api.reject(d.IdCerere, motiv));
     await openDetail(d.IdCerere);
@@ -502,7 +503,7 @@ async function onReject() {
 async function onNewLink() {
   const d = state.detail;
   if (!d) return;
-  if (!window.confirm(`Trimiteți un link nou de parolă la ${d.Email}? Linkul vechi nu va mai funcționa.`)) return;
+  if (!await confirmBox(`Trimiteți un link nou de parolă la ${d.Email}? Linkul vechi nu va mai funcționa.`, { title: 'Link nou de parolă', yes: 'Trimite', no: 'Renunță' })) return;
   try {
     const answer = await busy('link-btn', () => api.newLink(d.IdCerere));
     await openDetail(d.IdCerere);
