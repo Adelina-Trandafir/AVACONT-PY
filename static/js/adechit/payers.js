@@ -40,22 +40,38 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
     if (error.reason === 'EMAIL_CONFLICT' && Array.isArray(error.details) && error.details.length) host.replaceChildren(...conflictNodes(error.details));
   };
   // The email conflict names the other parent, child and group as links that close the form and open that record.
-  function conflictNodes(details) {
-    const nodes = ['Adresa de email este deja utilizată de '];
-    const text = (value) => document.createTextNode(value);
-    const link = (label, depth, item, selectParent = false) => {
-      if (!item.linkable || !label) return text(label || '(necompletat)');
-      const button = document.createElement('button'); button.type = 'button'; button.className = 'ade-link'; button.textContent = label;
-      button.addEventListener('click', () => goTo(item, depth, selectParent).catch((error) => report(error, $('ade-payers-message'))));
-      return button;
-    };
-    details.forEach((item, index) => {
-      if (index) nodes.push(text('; '));
-      nodes.push(text('părintele '), link(item.parent, 2, item, true), text(`, CNP ${item.cnp || '(necompletat)'}, copil `), link(item.child, 2, item));
-      if (item.group) nodes.push(text(', grupa '), link(item.group, 1, item));
-    });
-    nodes.push(text('.'));
+  const textNode = (value) => document.createTextNode(value);
+  function recordLink(label, depth, item, selectParent = false) {
+    if (!item.linkable || !label) return textNode(label || '(necompletat)');
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'ade-link'; button.textContent = label;
+    button.addEventListener('click', () => goTo(item, depth, selectParent).catch((error) => report(error, $('ade-payers-message'))));
+    return button;
+  }
+  // "părintele X, CNP …[, email …], copil Y, grupa Z[, subunitatea S]" with parent, child and group as links.
+  function personNodes(item, withEmail) {
+    const nodes = [textNode('părintele '), recordLink(item.parent, 2, item, true),
+      textNode(`, CNP ${item.cnp || '(necompletat)'}${withEmail ? `, email ${item.email || '(necompletat)'}` : ''}, copil `), recordLink(item.child, 2, item)];
+    if (item.group) nodes.push(textNode(', grupa '), recordLink(item.group, 1, item));
+    if (item.show_subunit && item.subunit) nodes.push(textNode(`, subunitatea ${item.subunit}`));
+    if (item.left) nodes.push(textNode(' (plecat)'));
     return nodes;
+  }
+  const joinNodes = (items, withEmail) => items.flatMap((item, index) => [...(index ? [textNode('; ')] : []), ...personNodes(item, withEmail)]);
+  function conflictNodes(details) { return ['Adresa de email este deja utilizată de ', ...joinNodes(details, false), '.']; }
+  // Same CNP / same email already known in the DC (all subunits the account may open), shown while the operator types.
+  let similarRequest = 0;
+  async function showSimilar(pre, row) {
+    const own = ++similarRequest;
+    const cnp = read('CNP_Platitor', pre); const email = read('EMail', pre).toLowerCase();
+    const query = new URLSearchParams({ cnp: /^[0-9]{13}$/.test(cnp) ? cnp : '', email: email.includes('@') ? email : '', exclude: row?.IDS ?? '' });
+    if (!query.get('cnp') && !query.get('email')) return;
+    const found = await api(`/api/adechit/parents/similar?${query}`);
+    if (own !== similarRequest || !editor.open) return;
+    const nodes = [];
+    if (found.cnp.length) nodes.push(textNode('CNP-ul mai apare la: '), ...joinNodes(found.cnp, true), textNode('. '));
+    if (found.email.length) nodes.push(textNode('Emailul mai apare la: '), ...joinNodes(found.email, false), textNode('.'));
+    if (!nodes.length) return;
+    showMessage(message, 'x', 'error'); message.replaceChildren(...nodes);
   }
   // depth: 1 = group (its children), 2 = the child (its payers); the parent link also selects that payer.
   async function goTo(item, depth, selectParent) {
@@ -194,6 +210,7 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
   // A new child is always saved together with its first parent: one form, one Save, nothing is kept without the parent.
   function editChildWithPayer() {
     if (!canEdit()) return;
+    if (!selectedGroup) { report(new Error('Selectați grupa copilului.'), $('ade-payers-message')); return; }
     if (!begin('Adaugă copil', '/api/adechit/child-with-payer', (saved) => {
       selectedChild = saved.child; selectedPayer = saved.payer;
       selectedGroup = data.groups.find((group) => group.IDG === saved.child.IDG) || selectedGroup;
@@ -239,9 +256,12 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
       });
     }
     field('Activ', 'Activ', row ? row.Activ : true, 'checkbox', body, pre).disabled = !row;
+    const lookup = () => showSimilar(pre, row).catch((error) => console.error('[ADE forms] similar lookup failed', error));
     $(`ade-field-${pre}CNP_Platitor`).addEventListener('blur', () => {
       const text = cnpMessage(read('CNP_Platitor', pre)); showMessage(message, text, text ? 'error' : 'info');
+      if (!text) lookup();
     });
+    $(`ade-field-${pre}EMail`).addEventListener('blur', lookup);
     return gather;
   }
   function editPayer(row = null) {
@@ -348,13 +368,14 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
     grids.push(grid($('ade-groups-list'), groupRows, groupColumns, 'IDG', (row) => {
       chooseGroup(row).catch((error) => report(error, $('ade-payers-message')));
     }, { ...listOptions('Grupa'), onCellAction: ({ row }) => openLevel(row, 0), editable: canEdit(),
+      onRowDblClick: (row) => editGroup(row).catch((error) => report(error, $('ade-payers-message'))),
       onCellSave: saveHiddenGroup, onCellSaved: () => refresh().catch((error) => report(error, $('ade-payers-message'))) }));
     grids.push(grid($('ade-children-list'), children, mobile.matches ? mobileColumns(childColumns, [50, 35, 15], true) : childColumns, 'IDP', (row) => {
       chooseChild(row).catch((error) => report(error, $('ade-payers-message')));
-    }, { ...listOptions('Nume'), onCellAction: ({ row }) => openLevel(row, 1) }));
+    }, { ...listOptions('Nume'), onCellAction: ({ row }) => openLevel(row, 1), onRowDblClick: (row) => { selectedChild = row; editChild(row); } }));
     grids.push(grid($('ade-payers-list'), payers, mobile.matches ? mobileColumns(payerColumns, [50, 35, 15]) : payerColumns, 'IDS', (row) => {
       selectedPayer = row; updateButtons();
-    }, listOptions('Nume')));
+    }, { ...listOptions('Nume'), onRowDblClick: (row) => { selectedPayer = row; editPayer(row); } }));
     // Restore visible selection using the common grid selection behavior.
     [selectedGroup, selectedChild, selectedPayer].forEach((row, index) => {
       if (row) grids[index].selectRow(row[['IDG', 'IDP', 'IDS'][index]]);
@@ -464,7 +485,7 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
   $('ade-payers').addEventListener('click', open);
   $('ade-group-add').addEventListener('click', () => editGroup().catch((error) => report(error, $('ade-payers-message'))));
   $('ade-group-edit').addEventListener('click', () => { if (selectedGroup) editGroup(selectedGroup).catch((error) => report(error, $('ade-payers-message'))); });
-  $('ade-child-add').addEventListener('click', () => editChild());
+  $('ade-child-add').addEventListener('click', () => editChildWithPayer());
   $('ade-child-edit').addEventListener('click', () => { if (selectedChild) editChild(selectedChild); });
   $('ade-payer-add').addEventListener('click', () => editPayer());
   $('ade-payer-edit').addEventListener('click', () => { if (selectedPayer) editPayer(selectedPayer); });

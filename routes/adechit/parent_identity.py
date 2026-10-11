@@ -91,6 +91,43 @@ def reconcile_contacts(repo, rows, own_id=None):
     return codes
 
 
+PERSON_SELECT = ('SELECT p.IDS,p.Nume,p.CNP_Platitor,p.EMail,p.SubunitId,c.IDP,c.IDG,c.Nume AS ChildName,c.Plecat,g.Grupa AS GroupName '
+                 'FROM AD_Platitori_sub p '
+                 'LEFT JOIN AD_Platitori c ON c.IDP=p.IDP AND c.SubunitId=p.SubunitId '
+                 'LEFT JOIN AD_Grupe g ON g.IDG=c.IDG AND g.SubunitId=c.SubunitId ')
+
+
+def open_subunits(repo):
+    """Subunits of the DC this account may open: the only ones whose people are named or linked."""
+    return {s['SubunitId']: s['Name'] for s in repo.subunits if s['Active'] and s['Allowed']}
+
+
+def person_detail(repo, row):
+    """A parent/child/group the page names as links; another subunit is linkable when the account may open it."""
+    opened = open_subunits(repo)
+    return {'parent_id': row['IDS'], 'parent': row['Nume'], 'cnp': row['CNP_Platitor'] or '', 'email': row['EMail'] or '',
+            'child_id': row['IDP'], 'child': row['ChildName'] or '', 'left': bool(row.get('Plecat')),
+            'group_id': row['IDG'], 'group': row['GroupName'] or '',
+            'subunit_id': row['SubunitId'], 'subunit': opened.get(row['SubunitId'], ''), 'show_subunit': len(opened) > 1,
+            'linkable': row['SubunitId'] in opened}
+
+
+def similar_contacts(repo, cnp, email, exclude_id):
+    """Other parents with this CNP / this email anywhere in the DC (every subunit the account may open, departed children
+    included): information for the operator while typing, not a refusal."""
+    opened = list(open_subunits(repo))
+    result = {'cnp': [], 'email': []}
+    if not opened:
+        return result
+    marks = ','.join(['%s'] * len(opened))
+    base = PERSON_SELECT + f'WHERE p.IDS<>%s AND p.SubunitId IN ({marks}) AND '
+    if re.fullmatch(r'[0-9]{13}', cnp):
+        result['cnp'] = [person_detail(repo, r) for r in repo.query(base + 'TRIM(p.CNP_Platitor)=%s', (exclude_id, *opened, cnp))]
+    if email:
+        result['email'] = [person_detail(repo, r) for r in repo.query(base + 'LOWER(TRIM(p.EMail))=%s', (exclude_id, *opened, email))]
+    return result
+
+
 def prepare_parent(repo, values, existing=None):
     changing_email = existing and 'EMail' in values
     merged = {**(existing or {}), **values}
@@ -105,25 +142,19 @@ def prepare_parent(repo, values, existing=None):
             repo.execute('DELETE FROM AD_PortalParents WHERE CNP=%s', (old_cnp,))
     contact_changed = not existing or cnp != old_cnp or email != str(existing.get('EMail') or '').strip().lower()
     if email and contact_changed:
-        duplicates = repo.query('SELECT p.IDS,p.Nume,p.CNP_Platitor,p.SubunitId,c.IDP,c.IDG,c.Nume AS ChildName,g.Grupa AS GroupName '
-            'FROM AD_Platitori_sub p '
-            'LEFT JOIN AD_Platitori c ON c.IDP=p.IDP AND c.SubunitId=p.SubunitId '
-            'LEFT JOIN AD_Grupe g ON g.IDG=c.IDG AND g.SubunitId=c.SubunitId '
-            'WHERE LOWER(TRIM(p.EMail))=%s AND p.IDS<>%s AND COALESCE(TRIM(p.CNP_Platitor),\'\')<>%s', (email, own_id, cnp))
-        # Another subunit of the same unit is still linkable when the account may open it (the page switches to it).
-        open_subunits = {s['SubunitId']: s['Name'] for s in repo.subunits if s['Active'] and s['Allowed']}
-        details = [{'parent_id': r['IDS'], 'parent': r['Nume'], 'cnp': r['CNP_Platitor'] or '',
-                    'child_id': r['IDP'], 'child': r['ChildName'] or '',
-                    'group_id': r['IDG'], 'group': r['GroupName'] or '',
-                    'subunit_id': r['SubunitId'], 'subunit': open_subunits.get(r['SubunitId'], ''),
-                    'linkable': r['SubunitId'] in open_subunits} for r in duplicates]
+        duplicates = repo.query(PERSON_SELECT +
+            'WHERE LOWER(TRIM(p.EMail))=%s AND p.IDS<>%s AND COALESCE(TRIM(p.CNP_Platitor),\'\')<>%s '
+            'AND p.SubunitId=%s AND COALESCE(c.Plecat,0)=0', (email, own_id, cnp, repo.scope()))   # active children, current subunit only
+        details = [person_detail(repo, r) for r in duplicates]
         require(not duplicates, 'EMAIL_CONFLICT', 'Adresa de email este deja utilizată de ' + '; '.join(
             f"părintele {r['Nume']}, CNP {r['CNP_Platitor'] or '(necompletat)'}, copil {r['ChildName'] or '(necompletat)'}"
             + (f", grupa {r['GroupName']}" if r['GroupName'] else '')
             for r in duplicates) + '.', 409, details)
         if not existing or old_cnp != cnp:
-            other_contacts = repo.query('SELECT EMail FROM AD_Platitori_sub WHERE TRIM(CNP_Platitor)=%s AND IDS<>%s '
-                                        "AND TRIM(COALESCE(EMail,''))<>'' AND LOWER(TRIM(EMail))<>%s", (cnp, own_id, email))
+            other_contacts = repo.query('SELECT p.EMail FROM AD_Platitori_sub p '
+                                        'LEFT JOIN AD_Platitori c ON c.IDP=p.IDP AND c.SubunitId=p.SubunitId '
+                                        'WHERE TRIM(p.CNP_Platitor)=%s AND p.IDS<>%s AND p.SubunitId=%s AND COALESCE(c.Plecat,0)=0 '
+                                        "AND TRIM(COALESCE(p.EMail,''))<>'' AND LOWER(TRIM(p.EMail))<>%s", (cnp, own_id, repo.scope(), email))
             require(not other_contacts, 'EMAIL_CONFLICT',
                     'Acest CNP are deja alt email. Corectați înregistrările existente ale părintelui.', 409)
     values['EMail'] = email or None

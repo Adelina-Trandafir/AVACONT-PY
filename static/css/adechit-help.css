@@ -1,0 +1,47 @@
+/* SLICE-AD12: the ADECHIT help. Screen: a dialog (summary left, text right). Print window: the whole text on white. */
+.ade-help { width: min(1120px, 96vw); height: min(780px, 92vh); }
+.ade-help-actions { display: flex; align-items: center; gap: 8px; }
+.ade-help-body { display: grid; grid-template-columns: 270px minmax(0, 1fr); flex: 1; min-height: 0; }
+.ade-help-toc { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 10px 6px 14px; background: var(--sky-1); border-right: 1px solid var(--line); }
+.ade-help-toc a { display: block; padding: 5px 10px; color: var(--ink); text-decoration: none; border-left: 3px solid transparent; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; line-height: 1.3; }
+.ade-help-toc a:hover, .ade-help-toc a:focus-visible { background: var(--sky-2); outline: none; }
+.ade-help-toc a.is-active { background: var(--sky-2); border-left-color: var(--blue); font-weight: 700; }
+.ade-help-toc__section { margin-top: 8px; font-weight: 700; }
+.ade-help-toc__sub { padding-left: 24px !important; font-size: .88rem; color: var(--ink-soft) !important; }
+.ade-help-toc__sub.is-active { color: var(--ink) !important; }
+.ade-help-content { position: relative; min-height: 0; overflow-y: auto; padding: 8px 32px 48px; scroll-behavior: auto; }
+.ade-help-doc-head h1, .ade-help-doc h1 { margin: 18px 0 2px; font-size: 1.7rem; }
+.ade-help-subtitle { margin: 0 0 12px; color: var(--ink-soft); }
+.ade-help-section { max-width: 78ch; margin: 0 0 8px; padding-bottom: 8px; }
+.ade-help-section > h2 { margin: 28px 0 10px; padding-bottom: 6px; font-size: 1.4rem; color: var(--ink); border-bottom: 2px solid var(--blue); }
+.ade-help-section > h3 { margin: 20px 0 6px; font-size: 1.1rem; color: var(--ink); }
+.ade-help-section p, .ade-help-section li { line-height: 1.6; }
+.ade-help-section p { margin: 0 0 10px; }
+.ade-help-section ul, .ade-help-section ol { margin: 0 0 12px; padding-left: 1.4em; }
+.ade-help-section li { margin-bottom: 4px; }
+.ade-help-section a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ade-help-note { padding: 10px 14px; background: var(--sky-2); border-left: 4px solid var(--blue); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.ade-help-table { margin: 0 0 14px; overflow-x: auto; }
+.ade-help-table table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.ade-help-table th, .ade-help-table td { padding: 6px 10px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
+.ade-help-table th { background: var(--sky-2); }
+@media (max-width: 760px) {
+  .ade-help { width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
+  .ade-help-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 30%) minmax(0, 1fr); }
+  .ade-help-toc { border-right: 0; border-bottom: 1px solid var(--line); }
+  .ade-help-content { padding-inline: 16px; }
+}
+
+/* The print window has no theme: black on white, every section from a new line only when it would be cut. */
+body.ade-help-print { margin: 0; color: #000; background: #fff; font: 11pt/1.5 "Segoe UI", Arial, sans-serif; }
+.ade-help-doc { max-width: 190mm; margin: 0 auto; padding: 8mm 6mm; }
+.ade-help-print .ade-help-subtitle { color: #444; }
+.ade-help-print-toc { margin: 0 0 8mm; padding-left: 1.4em; column-count: 2; }
+.ade-help-print a { color: #0b4f9c; }
+.ade-help-print .ade-help-section > h2 { color: #000; border-bottom: 2px solid #0b4f9c; break-after: avoid; }
+.ade-help-print .ade-help-section > h3 { break-after: avoid; }
+.ade-help-print .ade-help-note { background: #eef5ff; border-left: 4px solid #0b4f9c; break-inside: avoid; }
+.ade-help-print .ade-help-table th { background: #e8eef7; }
+.ade-help-print .ade-help-table th, .ade-help-print .ade-help-table td { border: 1px solid #999; }
+.ade-help-print tr, .ade-help-print li { break-inside: avoid; }
+@page { size: A4; margin: 12mm; }

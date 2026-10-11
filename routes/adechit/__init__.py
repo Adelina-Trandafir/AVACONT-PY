@@ -155,6 +155,15 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
     def child_with_payer(repo):
         return command(repo, 'child-with-payer', lambda body: catalog_forms.save_child_with_payer(repo, body, g.portal['email'], 'transfer' in g.ade_operations))
 
+    @bp.get('/api/adechit/parents/similar')
+    @guard('read')
+    def parent_similar(repo):
+        from .parent_identity import similar_contacts
+        exclude = request.args.get('exclude', '')
+        require(exclude == '' or exclude.isdigit(), 'FILTER', 'Filtru invalid.', 400)
+        return similar_contacts(repo, request.args.get('cnp', '').strip(), request.args.get('email', '').strip().lower(),
+                                int(exclude) if exclude else -1)
+
     @bp.get('/api/adechit/parents/portal-issues')
     @guard('read')
     def parent_portal_issues(repo):
@@ -221,6 +230,14 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
         else:
             response = Response(render_template('adechit/receipt.html', receipt=data), mimetype='text/html')
             response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        response.headers.update({'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+        return response
+
+    @bp.get('/api/adechit/help/pdf')
+    @guard('read')
+    def help_pdf(repo):
+        from .help_pdf import pdf_bytes
+        response = send_file(BytesIO(pdf_bytes()), mimetype='application/pdf', as_attachment=True, download_name='Ajutor_ADECHIT.pdf', max_age=0)
         response.headers.update({'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
         return response
 

@@ -8,6 +8,7 @@ import { startSessionTimer } from './session.js';
 import { bindCatalogs } from './catalogs.js';
 import { bindAnnual } from './annual.js';
 import { bindReports, outputReport } from './reports.js';
+import { bindHelp } from './help.js';
 import { confirmBox, pickBox, reasonBox } from '../utils/confirm-box.js';
 
 const $ = (id) => document.getElementById(id);
@@ -859,6 +860,7 @@ function bind() {
   const annual = bindAnnual({ api, refresh: () => loadContext(true), message: (text) => showMessage($('ade-message'), text, 'info') });
   state.annual = annual;
   wireLongPress();
+  bindHelp({ fetchOutput, report });
   state.reports = bindReports({ fetchOutput, report,
     snapshot: () => ({ month: state.context ? selectedMonth() : null, monthId: state.monthId, groupId: state.groupId, selected: state.selected }) });
   $('ade-search').addEventListener('input', filterGrid);
@@ -1041,7 +1043,12 @@ async function loadContext(rebuildTrees = false) {
   }
   else {
     if (state.year) await loadYear(state.year);
-    state.monthTree.setData(monthNodes()); state.monthTree.isTreeRendered = false; state.monthTree.renderTree('');
+    // Every year that was open stays open (and loaded): after a save the selected month must still be visible.
+    for (const k_id of state.monthTree.expandedNodes) {
+      const k_year = Number(String(k_id).split(':')[1]);
+      if (String(k_id).startsWith('year:') && k_year !== state.year) await loadYear(k_year);
+    }
+    renderMonthTree();
     if (!state.context.months.some((row) => row.IDL === state.monthId)) state.monthId = null;
     await loadGroups();
   }

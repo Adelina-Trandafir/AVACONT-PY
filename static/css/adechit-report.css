@@ -41,3 +41,22 @@ body.rpt-wide main, body.rpt-wide footer { max-width: 281mm; }
 .rpt-break { break-after: page; }
 .rpt-footer { margin-top: 4mm; font-size: 7pt; font-weight: bold; }
 @media print { .rpt-bar { display: none; } body.rpt { padding: 0; margin: 0; } .rpt main, .rpt footer { zoom: 1 !important; } }
+
+/* SLICE-AD11-05: on the SCREEN the report follows the theme of the page that opened it (reports.js sets data-theme).
+   Printing keeps the Access palette above: these rules never apply to print, and the PDF is built by the server. */
+@media screen {
+  html[data-theme="dark"] { color-scheme: dark; background: #12161d; }
+  html[data-theme="dark"] body.rpt { color: #e6ebf3; background: #12161d; }
+  html[data-theme="dark"] .rpt-bar { background: #1b212b; border-bottom-color: #2f3a4d; }
+  html[data-theme="dark"] .rpt-bar button { color: #e6ebf3; background: #232c3b; border: 1px solid #2f3a4d; border-radius: 3px; }
+  html[data-theme="dark"] .rpt-bar button:hover { background: #2c384c; }
+  html[data-theme="dark"] .rpt-table th, html[data-theme="dark"] .rpt-table td { border-color: #3a475c; }
+  html[data-theme="dark"] .rpt-table th { background: #232c3b; }
+  html[data-theme="dark"] .rpt-table th.tint-d, html[data-theme="dark"] .rpt-table td.tint-d { background: #3a2326; }
+  html[data-theme="dark"] .rpt-table th.tint-c, html[data-theme="dark"] .rpt-table td.tint-c { background: #243322; }
+  html[data-theme="dark"] .rpt-table th.tint-z, html[data-theme="dark"] .rpt-table td.tint-z { background: #1f2d44; color: #9cc3f2; }
+  html[data-theme="dark"] .rpt-table tr.total td, html[data-theme="dark"] .rpt-table tr.sub td, html[data-theme="dark"] .rpt-table tr.grand td { background: #2a3548; }
+  html[data-theme="dark"] .rpt-table tr.cancelled td { color: #8d99ad; }
+  html[data-theme="dark"] .rpt-box, html[data-theme="dark"] .rpt-sign th, html[data-theme="dark"] .rpt-sign td { border-color: #6b7a92; }
+  html[data-theme="dark"] .rpt-kv td { border-bottom-color: #4a5870; }
+}

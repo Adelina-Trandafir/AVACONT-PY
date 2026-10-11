@@ -20,6 +20,8 @@ export async function outputReport({ fetchOutput, path, pdf, title }) {
       const k_html = await k_response.text();
       if (k_window.closed) return;
       k_window.document.open(); k_window.document.write(k_html); k_window.document.close();
+      // on screen the report follows the theme of this page; printing and the PDF stay on the Access palette
+      if (document.documentElement.dataset.theme === 'dark') k_window.document.documentElement.dataset.theme = 'dark';
       // the page keeps its opener: the PDF button asks it to download (it holds the sign-in the request needs)
       k_window.adePdf = () => outputReport({ fetchOutput, path: path.replace('/print?', '/pdf?'), pdf: true, title })
         .catch((k_error) => k_window.alert(k_error.message));

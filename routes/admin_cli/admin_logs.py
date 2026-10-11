@@ -7,7 +7,8 @@ with ONE difference on purpose: the `{...}` tag is read as key=value pairs, so a
 
   api_server.log / api_server_vba.log / schema_sync.log   one entry per header line (+ traceback lines)
   forexe_timing.log / asociere.log                        one entry per `====` block
-  gunicorn_error                                          raw lines (no common format)
+  gunicorn error.log / help_feedback.log / one_time.log   raw lines (no common format)
+  gunicorn access.log                                     one entry per request (only the last ACCESS_TAIL_BYTES are read)
 
 Files are read newest generation first on disk (.1 .. .5 are the rotated copies); `gens` says how many
 rotated copies are read besides the live file.
@@ -17,6 +18,7 @@ import re
 from datetime import datetime, timedelta
 
 MAX_DETAIL = 4000
+ACCESS_TAIL_BYTES = 6 * 1024 * 1024   # the access log is huge: only its end is read
 
 _RX_LINE = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d{3} - (?P<lvl>[A-Z]+) - (?P<ip>\S+) - (?P<msg>.*)$")
@@ -26,6 +28,9 @@ _RX_BLOCK_HEAD = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.\d{3}\s+rulare\s+(?P<run>\d+)\s+\[(?P<label>[^\]]*)\]"
     r"\s+status\s+(?P<status>\S+)")
 _RX_RAW_TS = re.compile(r"^(?P<ts>\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}:\d{2})")
+_RX_ACCESS = re.compile(
+    r'^(?P<ip>\S+) \S+ \S+ \[(?P<ts>[^\]]+)\] "(?P<req>[^"]*)" (?P<status>\d{3}) (?P<size>\S+)'
+    r'(?: "(?P<ref>[^"]*)" "(?P<ua>[^"]*)")?')
 _SEPARATOR = "=" * 100
 NO_DB = "-"
 
@@ -55,6 +60,9 @@ def files():
         timing_path, timing_backups = "forexe_timing.log", 5
     schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                "schema_sync", "schema_sync.log")
+    app_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    error_path = os.environ.get("KBOT_GUNICORN_ERROR_LOG") or "/var/log/avacont/error.log"
+    access_path = os.environ.get("KBOT_GUNICORN_ACCESS_LOG") or os.path.join(os.path.dirname(error_path), "access.log")
     return {
         "server": ("api_server.log", server_path, backups, "lines"),
         "vba": ("api_server_vba.log", vba_path, backups, "lines"),
@@ -62,8 +70,11 @@ def files():
         "asociere": ("asociere.log", os.environ.get("KBOT_ASOCIERE_LOG") or _cfg("ASOCIERE_LOG_PATH", "asociere.log"),
                      5, "blocks"),
         "schema": ("schema_sync.log", schema_path, 5, "lines"),
-        "gunicorn": ("gunicorn error.log", os.environ.get("KBOT_GUNICORN_ERROR_LOG") or "/var/log/avacont/error.log",
-                     0, "raw"),
+        "gunicorn": ("gunicorn error.log", error_path, 0, "raw"),
+        "access": ("gunicorn access.log", access_path, 0, "access"),
+        "feedback": ("help_feedback.log", os.path.join(app_root, "help_feedback.log"), 0, "raw"),
+        "onetime": ("one_time.log", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "one_time", "one_time.log"),
+                    0, "raw"),
     }
 
 
@@ -76,6 +87,17 @@ def generations(path, backups, gens):
 def _read_lines(path):
     with open(path, "r", encoding="utf-8", errors="replace") as handle:
         return handle.read().splitlines()
+
+
+def _read_tail_lines(path, max_bytes):
+    """The last `max_bytes` of a big file as lines (the first, cut, line is dropped)."""
+    with open(path, "rb") as handle:
+        size = os.fstat(handle.fileno()).st_size
+        cut = size > max_bytes
+        handle.seek(max(0, size - max_bytes))
+        data = handle.read()
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    return lines[1:] if cut and lines else lines
 
 
 def _iso(ts):
@@ -174,21 +196,64 @@ def _block_entry(label, block):
                   notes.get("user", ""), notes.get("dc", ""), notes.get("session", ""), msg, block)
 
 
+def _raw_level(text):
+    upper = text.upper()
+    return "ERROR" if ("ERROR" in upper or "CRITICAL" in upper) else ("WARNING" if "WARN" in upper else "INFO")
+
+
 def _parse_raw(label, path):
+    """Lines that carry no time of their own (a traceback, a worker message) are folded into ONE entry
+    and take the time of the first stamped line after them (the traceback is printed just before the
+    line that says what happened), else of the one before, else the file's own time."""
     out = []
     stamp = datetime.fromtimestamp(os.stat(path).st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    last = ""
+    pending = []     # untimed lines waiting for the next stamp
+
+    def flush(ts):
+        if not pending:
+            return
+        head = [x for x in pending if not x[:1].isspace()]
+        msg = (head[-1] if head else pending[-1]).strip()
+        out.append(_entry(label, ts, _raw_level(" ".join(pending)), "", "", "", "", msg, list(pending)))
+        del pending[:]
+
     for line in _read_lines(path):
         if not line.strip():
             continue
         found = _RX_RAW_TS.match(line)
-        ts = found.group("ts") if found else stamp
-        upper = line.upper()
-        level = "ERROR" if ("ERROR" in upper or "CRITICAL" in upper) else ("WARNING" if "WARN" in upper else "INFO")
-        out.append(_entry(label, ts, level, "", "", "", "", line, [line]))
+        if found is None:
+            pending.append(line)
+            continue
+        ts = found.group("ts")
+        flush(ts)
+        last = ts
+        out.append(_entry(label, ts, _raw_level(line), "", "", "", "", line, [line]))
+    flush(last or stamp)
+    out.sort(key=lambda e: e["ts"])
     return out
 
 
-_PARSERS = {"lines": _parse_lines, "blocks": _parse_blocks, "raw": _parse_raw}
+def _parse_access(label, path):
+    """One entry per request: 5xx = ERROR, 4xx = WARNING, the rest INFO."""
+    out = []
+    for line in _read_tail_lines(path, ACCESS_TAIL_BYTES):
+        found = _RX_ACCESS.match(line)
+        if found is None:
+            continue
+        try:
+            stamp = datetime.strptime(found.group("ts").split()[0], "%d/%b/%Y:%H:%M:%S").strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        status = int(found.group("status"))
+        level = "ERROR" if status >= 500 else ("WARNING" if status >= 400 else "INFO")
+        msg = "%s %s" % (status, found.group("req"))
+        detail = [msg, "bytes: %s" % found.group("size"), "referer: %s" % (found.group("ref") or "-"), "agent: %s" % (found.group("ua") or "-")]
+        out.append(_entry(label, stamp, level, found.group("ip"), "", "", "", msg, detail))
+    return out
+
+
+_PARSERS = {"lines": _parse_lines, "blocks": _parse_blocks, "raw": _parse_raw, "access": _parse_access}
 
 
 def file_info():
@@ -212,6 +277,8 @@ def read_entries(file_key="", db="", gens=1, since=None):
     for key, (label, path, backups, kind) in files().items():
         if file_key and key != file_key:
             continue
+        if kind == "access" and not file_key:
+            continue    # only on request: it is huge and 4xx would swamp the warning counts
         for gen_path in generations(path, backups, gens):
             if not os.path.isfile(gen_path):
                 continue
