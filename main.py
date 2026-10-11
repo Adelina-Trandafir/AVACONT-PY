@@ -20,20 +20,13 @@ asociere_log.set_enabled(ASOCIERE_LOG_ENABLED)
 
 # Importam modulele (Blueprints) pe care le-am creat in folderul /routes
 from routes.admin import admin_bp
-from routes.nomenclatoare import nom_bp
 # from routes.docfund import doc_bp
 from routes.tools import tools_bp
-from routes.salarii import salarii_bp
 from routes.parteneri import parteneri_bp
 from routes.clasificatii import clasificatii_bp
 from routes.mfp import mfp_bp  
-from routes.wfls import wfl_bp  
-from routes.ftp import ftp_bp  # Importam Blueprint-ul de upload FTP 
-from routes.ddf import ddf_bp  # Importam Blueprint-ul pentru DDF
-from routes.ord import ord_bp
 from routes.forexe import forexe_bp  # Importam Blueprint-ul FOREXE (ListaAngajamente)
 from routes.auth import auth_bp  # Importam Blueprint-ul de login al aplicatiei K-BOT
-from routes.forexe.seed import seed_bp
 from routes.migrare.migrare import migrare_bp  # felia 0044: migrarea prin fisier .accdb impins
 from routes.update import update_bp  # slice 0067: application update channel (public, read-only)
 from routes.inregistrare.inregistrare import inregistrare_bp  # felia 0075: pagina publica de inregistrare
@@ -100,20 +93,13 @@ def _payload_prea_mare(_e):
 # 2. Inregistram Blueprints
 # Aici practic ii spunem aplicatiei principale sa includa rutele din celelalte fisiere
 app.register_blueprint(admin_bp)
-app.register_blueprint(nom_bp)
 # app.register_blueprint(doc_bp)
 app.register_blueprint(tools_bp)
-app.register_blueprint(salarii_bp)
 app.register_blueprint(parteneri_bp)
 app.register_blueprint(clasificatii_bp)
 app.register_blueprint(mfp_bp)
-app.register_blueprint(wfl_bp)
-app.register_blueprint(ftp_bp)  # Inregistram Blueprint-ul de upload FTP
-app.register_blueprint(ddf_bp)  # Inregistram Blueprint-ul pentru DDF
-app.register_blueprint(ord_bp)
 app.register_blueprint(forexe_bp)  # Inregistram Blueprint-ul FOREXE
 app.register_blueprint(auth_bp)  # Inregistram Blueprint-ul de login
-app.register_blueprint(seed_bp)
 app.register_blueprint(migrare_bp)
 app.register_blueprint(update_bp)
 app.register_blueprint(inregistrare_bp)  # Inregistrarea publica a unei unitati noi

@@ -1,53 +1,49 @@
-from functools import wraps
-from flask import request, jsonify
+"""
+Route guards that are NOT the bearer session (security plan, S2).
+
+The key that used to be shipped to every client (config.API_KEY, header X-Api-Key) is gone: no route
+accepts it any more. Two narrow credentials remain, each held only where it is needed and each valid
+for its own routes only:
+
+  * require_admin        X-Admin-Token == config.ADMIN_TOKEN   administration tools (KBotAdmin, migrator)
+  * require_access_sync  X-Access-Key  == config.ACCESS_SYNC_KEY   the Access application's sync of
+                         classifications and partners (routes/clasificatii.py, routes/parteneri.py)
+
+A credential that is unset or empty makes its routes refuse everything (never "open").
+"""
+import hmac
 import logging
-from config import API_KEY
+from functools import wraps
+
+from flask import request, jsonify
 
 logger = logging.getLogger(__name__)
 
-def require_api_key(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        client_ip = request.remote_addr
-        endpoint = request.path
-        
-        if request.headers.get('X-Api-Key') != API_KEY:
-            logger.warning(f"ACCES REFUZAT! IP: {client_ip} a incercat sa acceseze {endpoint} cu cheie gresita.")
-            return jsonify({"error": "Unauthorized"}), 401
-        
-        return func(*args, **kwargs)
-    return wrapper
 
-# ---------------------------------------------------------------------------
-# Security plan S2/S4: administration has its OWN credential, never the key shipped to clients.
-# ADMIN_TOKEN lives only in the server's config.py (and in the memory of the admin tools, which
-# read it over SSH). Header: X-Admin-Token. Unset or empty = every admin route refuses (503).
-#
-# TRANSITION ONLY: until the final retirement step the legacy X-Api-Key is still accepted here so
-# the old and the new system can be tested side by side. That step deletes the branch marked
-# LEGACY-KEY-BRANCH together with require_api_key and config.API_KEY.
-# ---------------------------------------------------------------------------
-def _admin_token():
+def _config_secret(name):
     try:
         import config
-        return str(getattr(config, "ADMIN_TOKEN", "") or "")
+        return str(getattr(config, name, "") or "")
     except Exception:
         return ""
 
 
-def require_admin(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        import hmac
-        expected = _admin_token()
-        given = request.headers.get('X-Admin-Token', '')
-        if expected and given and hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
-            return func(*args, **kwargs)
-        # LEGACY-KEY-BRANCH (removed at retirement)
-        if request.headers.get('X-Api-Key') == API_KEY:
-            return func(*args, **kwargs)
-        if not expected:
-            logger.error("ADMIN_TOKEN is not set in config.py: admin routes accept only the legacy key")
-        logger.warning(f"ACCES ADMIN REFUZAT! IP: {request.remote_addr} {request.path}")
-        return jsonify({"error": "Unauthorized"}), 401
-    return wrapper
+def _guard(header, config_name):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            expected = _config_secret(config_name)
+            given = request.headers.get(header, "")
+            if expected and given and hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
+                return func(*args, **kwargs)
+            if not expected:
+                logger.error("%s is not set in config.py: routes guarded by %s refuse every request",
+                             config_name, header)
+            logger.warning("ACCES REFUZAT (%s)! IP: %s %s", header, request.remote_addr, request.path)
+            return jsonify({"error": "Unauthorized"}), 401
+        return wrapper
+    return decorator
+
+
+require_admin = _guard("X-Admin-Token", "ADMIN_TOKEN")
+require_access_sync = _guard("X-Access-Key", "ACCESS_SYNC_KEY")

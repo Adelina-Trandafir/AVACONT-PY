@@ -8,9 +8,8 @@ import pandas as pd
 import numpy as np
 import threading
 from flask import Blueprint, request, jsonify, send_file
-from utils.security import require_api_key
 from utils.helpers import sanitize_header
-from routes.auth.guard import require_session_or_api_key
+from routes.auth.guard import require_session
 
 tools_bp = Blueprint('tools', __name__)
 logger = logging.getLogger(__name__)
@@ -390,7 +389,7 @@ def apply_complex_filter(df, filter_string):
 # ENDPOINT
 # ==============================================================================
 @tools_bp.route('/api/tools/process_excel', methods=['POST'])
-@require_session_or_api_key   # K-BOT trimite bearer; X-Api-Key ramane doar pentru FOREXE legacy
+@require_session
 def process_excel_base64():
     try:
         data = request.json
@@ -553,168 +552,3 @@ def process_excel_base64():
     except Exception as e:
         logger.error(f"Eroare Procesare Excel API: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
-
-@tools_bp.route('/api/tools/say_hello', methods=['POST'])
-@require_api_key
-def say_hello():
-    try:
-        data = request.json
-        name = data.get('name', 'World')
-        logger.info(f"Received say_hello request with name: {name}")
-        return jsonify({"message": f"Hello, {name}!"}), 200
-    except Exception as e:
-        logger.error(f"Eroare in say_hello: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-
-@tools_bp.route('/api/tools/pdfium_dll', methods=['GET'])
-@require_api_key
-def download_pdfium_dll():
-    dll_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../cache/vbnet/pdfium.dll'))
-    
-    if not os.path.exists(dll_path):
-        logger.error(f"pdfium.dll nu există la calea: {dll_path}")
-        return jsonify({"error": "Fișierul nu a fost găsit pe server."}), 404
-
-    try:
-        return send_file(
-            dll_path,
-            mimetype='application/octet-stream',
-            as_attachment=True,
-            download_name='pdfium.dll'
-        )
-    except Exception as e:
-        logger.error(f"Eroare la trimiterea pdfium.dll: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-
-@tools_bp.route('/api/tools/check_update', methods=['GET'])
-@require_api_key
-def check_update():
-    filename = request.args.get('file', type=str)
-    client_version = request.args.get('version', type=int)
-
-    if not filename or client_version is None:
-        return jsonify({"error": "Parametrii 'file' și 'version' sunt obligatorii."}), 400
-
-    try:
-        manifest = _load_manifest()
-    except FileNotFoundError:
-        logger.error(f"Manifestul nu există la calea: {MANIFEST_PATH}")
-        return jsonify({"error": "Manifest indisponibil pe server."}), 500
-    except (json.JSONDecodeError, OSError) as e:
-        logger.error(f"Eroare la citirea manifestului: {e}", exc_info=True)
-        return jsonify({"error": "Manifest invalid pe server."}), 500
-
-    if filename not in manifest:
-        return jsonify({"error": "Fișier necunoscut."}), 404
-
-    server_version = int(manifest[filename])
-
-    if server_version <= client_version:
-        return ('', 204)  # client la zi, nimic de trimis
-
-    dll_path = _safe_cache_path(filename)
-    if not dll_path or not os.path.exists(dll_path):
-        logger.error(f"Fișier listat în manifest dar absent pe disc: {filename}")
-        return jsonify({"error": "Fișierul nu a fost găsit pe server."}), 404
-
-    try:
-        response = send_file(
-            dll_path,
-            mimetype='application/octet-stream',
-            as_attachment=True,
-            download_name=filename
-        )
-        response.headers['X-File-Version'] = str(server_version)
-        logger.info(f"Trimitere fișier {filename} v{server_version} către client (client v{client_version})")
-        return response
-    except Exception as e:
-        logger.error(f"Eroare la trimiterea fișierului {filename}: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-
-@tools_bp.route('/api/tools/check_updates', methods=['POST'])
-@require_api_key
-def check_updates():
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, list):
-        return jsonify({"error": "Corpul trebuie să fie o listă JSON de {name, version}."}), 400
-
-    try:
-        manifest = _load_manifest()
-    except FileNotFoundError:
-        logger.error(f"Manifestul nu există la calea: {MANIFEST_PATH}")
-        return jsonify({"error": "Manifest indisponibil pe server."}), 500
-    except (json.JSONDecodeError, OSError) as e:
-        logger.error(f"Eroare la citirea manifestului: {e}", exc_info=True)
-        return jsonify({"error": "Manifest invalid pe server."}), 500
-
-    updates = []
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        name = item.get('name')
-        version = item.get('version')
-        if not name or name not in manifest:
-            continue
-        try:
-            client_version = int(version)
-        except (TypeError, ValueError):
-            continue
-        server_version = int(manifest[name])
-        if server_version > client_version:
-            path = _safe_cache_path(name)
-            if path and os.path.exists(path):
-                updates.append({"name": name, "version": server_version})
-
-    return jsonify({"updates": updates})
-
-@tools_bp.route('/api/tools/upload', methods=['POST'])
-@require_api_key
-def upload_file():
-    uploaded = request.files.get('file')
-    if uploaded is None or not uploaded.filename:
-        return jsonify({"error": "Lipsește fișierul ('file')."}), 400
-
-    raw_version = request.form.get('version')
-    try:
-        version = int(raw_version)
-    except (TypeError, ValueError):
-        return jsonify({"error": "Câmpul 'version' (MAJOR, întreg) e obligatoriu."}), 400
-    if version == 0:
-        return jsonify({"error": "Versiunea trebuie să fie <> 0."}), 400
-
-    dest_path = _safe_cache_path(uploaded.filename)
-    if dest_path is None:
-        return jsonify({"error": "Nume de fișier invalid."}), 400
-
-    name = os.path.basename(uploaded.filename)
-
-    try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with _manifest_lock:
-            try:
-                manifest = _load_manifest()
-            except FileNotFoundError:
-                manifest = {}
-            # manifest corupt (JSONDecodeError) -> se propagă la 500, nu-l stricăm
-            old_version = manifest.get(name)
-
-            tmp_path = dest_path + '.upload.tmp'
-            uploaded.save(tmp_path)
-            os.replace(tmp_path, dest_path)
-
-            manifest[name] = version
-            _write_manifest(manifest)
-    except Exception as e:
-        logger.error(f"Eroare la upload {uploaded.filename}: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-    logger.info(f"Upload reușit: {name} v{version} (anterior: {old_version})")
-    return jsonify({
-        "name": name,
-        "version": version,
-        "previous_version": old_version,
-        "status": "ok"
-    })

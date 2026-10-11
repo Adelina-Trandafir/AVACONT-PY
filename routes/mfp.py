@@ -9,7 +9,6 @@ from lxml import etree  # type: ignore
 from bs4 import BeautifulSoup, Tag
 from flask import Blueprint, request, send_file, jsonify
 from datetime import datetime
-from utils.security import require_api_key
 from routes.auth.guard import require_session
 
 # --- CONFIGURARE ---
@@ -152,55 +151,9 @@ def download_template(url, local_path):
         if local_path.exists(): local_path.unlink()
         raise e
 
-@mfp_bp.route('/api/mfp/template_ord', methods=['GET', 'HEAD'])
-@require_api_key
-def get_cached_template_ord():
-    """Returnează cel mai nou template ORD (Ordonantare) din cache."""
-    try:
-        # Cauta fisierele care incep cu ORD_V
-        matches = sorted(CACHE_DIR.glob("ORD_V*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
-
-        if not matches:
-            return jsonify({"error": "Nu există niciun template ORD în cache"}), 404
-
-        pdf_path = matches[0]
-
-        return send_file(
-            pdf_path,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=pdf_path.name
-        )
-    except Exception as e:
-        logger.error(f"Eroare get_cached_template_ord: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-        
-@mfp_bp.route('/api/mfp/template_ddf', methods=['GET', 'HEAD'])
-@require_api_key
-def get_cached_template():
-    """Returnează cel mai nou template PDF din cache (după data modificării fișierului)."""
-    try:
-        matches = sorted(CACHE_DIR.glob("DDF_V*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
-
-        if not matches:
-            return jsonify({"error": "Nu există niciun template în cache"}), 404
-
-        pdf_path = matches[0]
-
-        return send_file(
-            pdf_path,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=pdf_path.name
-        )
-    except Exception as e:
-        logger.error(f"Eroare get_cached_template: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-
 # ---------------------------------------------------------------------------
 # Plan securitate API (S2): rutele moderne ale machetelor, cu bearer (K-BOT).
-# Cele doua rute vechi cu X-Api-Key de mai sus raman pana la retragerea finala.
+# (Rutele vechi cu X-Api-Key au fost retrase.)
 # ---------------------------------------------------------------------------
 def _serve_template(prefix):
     matches = sorted(CACHE_DIR.glob(prefix + "_V*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -229,54 +182,3 @@ def get_template_ord_session():
         logger.error(f"Eroare get_template_ord_session: {e}", exc_info=True)
         return jsonify({"error": "Macheta nu a putut fi citită de pe server."}), 500
 
-
-@mfp_bp.route('/api/mfp/get_ef_token', methods=['GET'])
-@require_api_key
-def get_ef_token():
-    """Endpoint care trimite inapoi fisierul token.zip din radacina proiectului."""
-    try:
-        token_path = Path("token.zip")
-        if not token_path.exists():
-            return jsonify({"error": "Fisierul token.zip nu exista pe server"}), 404
-        return send_file(token_path, mimetype='application/zip', as_attachment=True, download_name=token_path.name)
-        
-    except Exception as e:
-        logger.error(f"Eroare get_ef_token: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-
-# @mfp_bp.route('/api/mfp/xfa_writter', methods=['GET', 'HEAD'])
-# @require_api_key
-# def get_cached_xfa_writter():
-#     """Returnează cel mai nou template XFA WRITTER din cache (după data modificării fișierului)."""
-#     try:
-#         exe_path = CACHE_DIR_VBNET / "XFA_WRITTER.exe"
-#         if not exe_path.exists():
-#             return jsonify({"error": "XFA_WRITTER.exe nu există pe server"}), 404
-#         return send_file(exe_path, mimetype='application/octet-stream', as_attachment=True, download_name=exe_path.name)
-        
-#     except Exception as e:
-#         logger.error(f"Eroare get_cached_xfa_writter: {str(e)}", exc_info=True)
-#         return jsonify({"error": str(e)}), 500
-
-# @mfp_bp.route('/api/mfp/xfa_writter/version', methods=['GET'])
-# @require_api_key
-# def get_xfa_writter_version():
-#     """Returneaza versiunea din fisierul XFA_WRITTER.txt."""
-#     try:
-#         version_path = CACHE_DIR_VBNET / "XFA_WRITTER.txt"
-        
-#         if not version_path.exists():
-#             return jsonify({"error": "Fisierul de versiune nu exista"}), 404
-            
-#         # Citeste continutul si elimina spatiile albe/new lines
-#         version_data = version_path.read_text().strip()
-        
-#         return jsonify({
-#             "version": version_data,
-#             "filename": "xfa_writter.txt"
-#         }), 200
-        
-#     except Exception as e:
-#         logger.error(f"Eroare get_xfa_writter_version: {str(e)}", exc_info=True)
-#         return jsonify({"error": str(e)}), 500

@@ -33,8 +33,8 @@ How the rows are found (two passes, both parameterised, cod never interpolated):
      IDORDTBLP, FX_ORD_DOC by IDORDPARTP). A child already found in pass 1 is not
      read twice.
 
-Guard: `require_session_or_api_key` -- callable from K-BOT with the bearer, or by hand
-with the legacy X-Api-Key (curl). `db_name` comes from the query on purpose: the caller
+Guard: `require_session` -- callable from K-BOT with the bearer
+`db_name` comes from the query on purpose: the caller
 names the DC, the session's own DC is not consulted.
 """
 import datetime
@@ -44,7 +44,7 @@ import logging
 
 from flask import request, current_app
 
-from routes.auth.guard import require_session_or_api_key
+from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 from utils.dbname import validate_db_name as _validate_db_name
 
@@ -248,7 +248,7 @@ def dump_angajament(cursor, db_name, cod):
 
 
 @forexe_bp.route("/api/forexe/angajament/dump", methods=["GET"])
-@require_session_or_api_key
+@require_session
 def get_angajament_dump():
     """Query: db_name (the DC, required), cod (CodAngajament, required).
 

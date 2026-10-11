@@ -53,7 +53,7 @@ _ensure_importable()
 
 from routes.auth import session_store
 from routes.auth.session_store import SessionStore
-from routes.auth.guard import require_session, require_session_or_api_key
+from routes.auth.guard import require_session
 
 CTX = {"DbName": "000_DEMO"}
 
@@ -206,68 +206,3 @@ def test_guard_rejects_revoked_token(guard_app):
     r = app.test_client().get("/protected",
                               headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 401
-
-
-# ---------- guard de tranzitie (bearer SAU X-Api-Key legacy) ----------
-# Acopera contractul rutelor partajate cu FOREXE vechi (process_excel):
-# bearer-ul K-BOT e judecat strict, cheia legacy trece doar FARA Authorization.
-
-@pytest.fixture
-def dual_app(monkeypatch):
-    """Flask minimal cu o ruta pe require_session_or_api_key, STORE curat."""
-    fresh = SessionStore()
-    monkeypatch.setattr("routes.auth.guard.STORE", fresh)
-    app = Flask(__name__)
-
-    @app.route("/shared", methods=["POST"])
-    @require_session_or_api_key
-    def shared():
-        from flask import g
-        has_session = hasattr(g, "session")
-        return jsonify(via="bearer" if has_session else "apikey")
-
-    app.config["TESTING"] = True
-    return app, fresh
-
-
-def test_dual_guard_rejects_anonymous(dual_app):
-    app, _ = dual_app
-    assert app.test_client().post("/shared").status_code == 401
-
-
-def test_dual_guard_accepts_live_bearer(dual_app):
-    app, store = dual_app
-    token, _ = _create(store)
-    r = app.test_client().post("/shared",
-                               headers={"Authorization": f"Bearer {token}"})
-    assert r.status_code == 200
-    assert r.get_json()["via"] == "bearer"
-
-
-def test_dual_guard_accepts_legacy_api_key(dual_app):
-    app, _ = dual_app
-    # config-ul (real sau stub-ul de test) e sursa cheii legacy
-    from config import API_KEY
-    r = app.test_client().post("/shared", headers={"X-Api-Key": API_KEY})
-    assert r.status_code == 200
-    assert r.get_json()["via"] == "apikey"
-
-
-def test_dual_guard_rejects_wrong_api_key(dual_app):
-    app, _ = dual_app
-    r = app.test_client().post("/shared", headers={"X-Api-Key": "gresit"})
-    assert r.status_code == 401
-
-
-def test_dual_guard_expired_bearer_does_not_fall_back_to_key(dual_app):
-    # Un client care a INTENTIONAT bearer primeste mesajul de re-login,
-    # chiar daca ar fi trimis (ipotetic) si cheia legacy in aceeasi cerere.
-    app, store = dual_app
-    token, _ = _create(store)
-    store.revoke(token)
-    from config import API_KEY
-    r = app.test_client().post("/shared",
-                               headers={"Authorization": f"Bearer {token}",
-                                        "X-Api-Key": API_KEY})
-    assert r.status_code == 401
-    assert "Autentificați-vă" in r.get_json()["error"]

@@ -62,7 +62,7 @@ def is_legacy_request():
         return False
     try:
         headers = request.headers
-        return bool(headers.get('X-Api-Key')) and not headers.get('Authorization')
+        return bool(headers.get('X-Access-Key') or headers.get('X-Api-Key')) and not headers.get('Authorization')
     except Exception:              # the split must never lose a line
         return False
 

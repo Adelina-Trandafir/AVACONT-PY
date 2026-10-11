@@ -1,4 +1,4 @@
-# Tests for POST /api/admin/receptii/refacere -- the keyed, session-less twin of
+# Tests for POST /api/admin/receptii/refacere -- the admin-token, session-less twin of
 # /api/forexe/receptii/refacere (slice 0062). OFFLINE: a bare Flask app with only
 # admin_bp, and `executa_refacerea` replaced by a recorder, so no database is touched.
 import json
@@ -9,15 +9,23 @@ from flask import Flask
 try:
     from routes.admin import admin_bp
     import routes.forexe.receptii_refacere as RR
-    from config import API_KEY
+    import config
 except Exception as e:                              # pragma: no cover - broken install
     pytest.skip(f"imports unavailable: {e}", allow_module_level=True)
 
 URL = "/api/admin/receptii/refacere"
 
+ADMIN_TOKEN = "test-admin-token"
+_config_holder = config
+
 _app = Flask(__name__)
 _app.register_blueprint(admin_bp)
 _app.config["TESTING"] = True
+
+
+@pytest.fixture(autouse=True)
+def _admin_token(monkeypatch):
+    monkeypatch.setattr(_config_holder, "ADMIN_TOKEN", ADMIN_TOKEN, raising=False)
 
 
 @pytest.fixture
@@ -42,10 +50,10 @@ def recorder(monkeypatch):
     return calls
 
 
-def _post(client, body, key=API_KEY):
+def _post(client, body, key=ADMIN_TOKEN):
     headers = {"Content-Type": "application/json"}
     if key is not None:
-        headers["X-Api-Key"] = key
+        headers["X-Admin-Token"] = key
     return client.post(URL, data=json.dumps(body), headers=headers)
 
 

@@ -4,7 +4,8 @@ import re
 from datetime import date, datetime
 from flask import Blueprint, request, jsonify
 from mysql.connector import Error
-from utils.security import require_api_key
+from utils.security import require_access_sync
+from utils.access_limits import access_sync_limits
 from routes.clasificatii_ss import ss_values   # slice 0075-00: Sector/Sursa/SS are written now
 from config import DB_CONFIG  # Importam configurarea
 from utils.database import get_kbot_connection
@@ -107,59 +108,12 @@ def _to_str(value, field_name, required=False, strip_value=True):
 
     return value
 
-@clasificatii_bp.route('/api/clasificatii/get_clasificatii_ids', methods=['POST'])
-@require_api_key
-def get_clasificatii_ids():
-    try:
-        data = request.json
-        
-        # Extragem parametrii
-        db_name = _validate_db_name(data.get('db_name'))
-        unit_id = _to_int(data.get('unit_id'), 'unit_id', required=True)
-        clasificatii_codes = data.get('clasificatii_codes')
-
-        # 1. Validări
-        if not db_name or not unit_id:
-            return jsonify({"error": "Lipsesc parametrii 'db_name' sau 'unit_id'."}), 400
-
-        if not clasificatii_codes or not isinstance(clasificatii_codes, list):
-            return jsonify({"data": []}), 200
-
-        # 2. Conectare (Acum functia exista!)
-        conn = get_db_connection(db_name)
-        try:
-            cursor = conn.cursor(dictionary=True)
-
-            # 3. Query
-            placeholders = ', '.join(['%s'] * len(clasificatii_codes))
-            
-            sql = f"""
-                SELECT IdClsf as IdClsfPY, IdClsfAcc as IdClsf
-                FROM Clasificatii 
-                WHERE IdUnitate = %s 
-                AND IdClsfAcc IN ({placeholders})
-            """
-
-            params = [unit_id] + clasificatii_codes
-            cursor.execute(sql, tuple(params))
-            
-            rows = cursor.fetchall()
-            
-            return jsonify({"data": rows}), 200
-
-        finally:
-            if conn.is_connected():
-                conn.close()
-
-    except Exception as e:
-        logger.error(f"Eroare clasificatii: {e}")
-        return jsonify({"error": str(e)}), 500
-
 # ==============================================================================
 # 4. INSERT CLASIFICATII
 # ==============================================================================
 @clasificatii_bp.route('/api/clasificatii/insert', methods=['POST'])
-@require_api_key
+@require_access_sync
+@access_sync_limits('clasificatii_insert')
 def insert():
     try:
         req_data = request.json
@@ -226,205 +180,12 @@ def insert():
         logger.error(f"Eroare Generala Clasificatii: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# ==============================================================================
-# 5. MAPPING
-# ==============================================================================
-@clasificatii_bp.route('/api/clasificatii/mapping_clasificatii', methods=['POST'])
-@require_api_key
-def get_mapping():
-    try:
-        req_data = request.json
-        db_name = _validate_db_name(req_data.get('db_name'))
-        logger.info(f"Cerere Mapping pentru {db_name}")
-
-        if not db_name:
-            return jsonify({"error": "Missing db_name"}), 400
-
-        conn = None
-        try:
-            conn = get_db_connection(db_name)
-            cursor = conn.cursor(dictionary=True)
-            
-            cursor.execute("SELECT IdClsfAcc, IdClsf FROM Clasificatii")
-            rows = cursor.fetchall()
-            rows = cast(list[Dict[str, Any]], rows)
-            
-            mapping = {row['IdClsfAcc']: row['IdClsf'] for row in rows}
-            logger.info(f"Mapping returnat: {len(mapping)} inregistrari")
-            
-            return jsonify(mapping), 200
-        except Exception as e:
-            logger.error(f"Eroare Mapping: {str(e)}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
-        finally:
-            if conn: conn.close()
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ==============================================================================
-# 6. INSERT RECTIFICARI
-# ==============================================================================
-@clasificatii_bp.route('/api/clasificatii/rectificari', methods=['POST'])
-@require_api_key
-def save_rectificari():
-    try:
-        req_data = request.json
-        db_name = _validate_db_name(req_data.get('db_name'))
-        data_list = req_data.get('data')
-
-        logger.info(f"Insert RECTIFICARI in {db_name}. Count: {len(data_list) if data_list else 0}")
-
-        if not db_name or not data_list:
-            return jsonify({"error": "Date invalide"}), 400
-
-        conn = None
-        try:
-            conn = get_db_connection(db_name)
-            cursor = conn.cursor()
-            conn.start_transaction()
-            
-            sql = """INSERT INTO Clasificatii_Rectificari 
-                     (IdClsf, Capitol, Subcapitol, Articol, Alineat, Data, Document, Trim1, Trim2, Trim3, Trim4) 
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-            
-            values = [(x['IdClsf'], x['Capitol'], x['Subcapitol'], x['Articol'], x['Alineat'], 
-                       x['Data'], x['Document'], x['Trim1'], x['Trim2'], x['Trim3'], x['Trim4']) 
-                      for x in data_list]
-            
-            cursor.executemany(sql, values)
-            conn.commit()
-            
-            logger.info(f"Insert RECTIFICARI Succes. Rows: {cursor.rowcount}")
-            return jsonify({"status": "success", "count": cursor.rowcount}), 200
-
-        except Exception as e:
-            if conn: conn.rollback()
-            logger.error(f"Eroare Insert Rectificari: {str(e)}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
-        finally:
-            if conn: conn.close()
-    except Exception as e:
-        logger.error(f"Eroare Generala Rectificari: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-# ==============================================================================
-# 6.1. UPSERT RECTIFICARI
-# ==============================================================================
-@clasificatii_bp.route('/api/clasificatii/rectificari_upsert', methods=['POST'])
-@require_api_key
-def upsert_rectificari():
-
-    try:
-        req_data = request.json
-        db_name = _validate_db_name(req_data.get('db_name'))
-        data_list = req_data.get('data')
-
-        logger.info(
-            f"UPSERT RECTIFICARI in {db_name}. "
-            f"Count: {len(data_list) if data_list else 0}"
-        )
-
-        if not db_name or not data_list:
-            return jsonify({"error": "Date invalide"}), 400
-
-        conn = None
-
-        try:
-            conn = get_db_connection(db_name)
-            cursor = conn.cursor()
-
-            conn.start_transaction()
-
-            sql = """
-                INSERT INTO Clasificatii_Rectificari
-                (
-                    IdClsf,
-                    Capitol,
-                    Subcapitol,
-                    Articol,
-                    Alineat,
-                    Data,
-                    Document,
-                    Trim1,
-                    Trim2,
-                    Trim3,
-                    Trim4
-                )
-                VALUES
-                (
-                    %s, %s, %s, %s, %s,
-                    %s, %s,
-                    %s, %s, %s, %s
-                )
-                ON DUPLICATE KEY UPDATE
-                    Capitol    = VALUES(Capitol),
-                    Subcapitol = VALUES(Subcapitol),
-                    Articol    = VALUES(Articol),
-                    Alineat    = VALUES(Alineat),
-                    Trim1      = VALUES(Trim1),
-                    Trim2      = VALUES(Trim2),
-                    Trim3      = VALUES(Trim3),
-                    Trim4      = VALUES(Trim4)
-            """
-
-            values = [
-                (
-                    x['IdClsf'],
-                    x['Capitol'],
-                    x['Subcapitol'],
-                    x['Articol'],
-                    x['Alineat'],
-                    x['Data'],
-                    x['Document'],
-                    x['Trim1'],
-                    x['Trim2'],
-                    x['Trim3'],
-                    x['Trim4']
-                )
-                for x in data_list
-            ]
-
-            cursor.executemany(sql, values)
-
-            conn.commit()
-
-            logger.info(
-                f"UPSERT RECTIFICARI Succes. Rows: {cursor.rowcount}"
-            )
-
-            return jsonify({
-                "status": "success",
-                "count": len(data_list),
-                "affected_rows": cursor.rowcount
-            }), 200
-
-        except Exception as e:
-            if conn:
-                conn.rollback()
-
-            logger.error(
-                f"Eroare UPSERT Rectificari: {str(e)}",
-                exc_info=True
-            )
-
-            return jsonify({"error": str(e)}), 500
-
-        finally:
-            if conn:
-                conn.close()
-
-    except Exception as e:
-        logger.error(
-            f"Eroare Generala UPSERT Rectificari: {str(e)}"
-        )
-
-        return jsonify({"error": str(e)}), 500
-
 # ============================================================
 # ENDPOINT - UPSERT CLASIFICATII COMPLETE
 # ============================================================
 @clasificatii_bp.route('/api/clasificatii/clasificatii_complete_upsert', methods=['POST'])
-@require_api_key
+@require_access_sync
+@access_sync_limits('clasificatii_upsert')
 def save_clasificatii_complete_upsert():
     conn = None
     cursor = None
@@ -861,7 +622,8 @@ def save_clasificatii_complete_upsert():
 #                                            "Trim1": 0, "Trim2": 0, "Trim3": 0, "Trim4": 0 } ] } ] }
 # Answer: { "status": "success", "budgets": n, "rectificari": n, "unmatched": [ids], "ambiguous": [ids] }
 @clasificatii_bp.route('/api/clasificatii/sync_acc_kbot', methods=['POST'])
-@require_api_key
+@require_access_sync
+@access_sync_limits('clasificatii_sync_kbot')
 def sync_acc_kbot():
     conn = None
     try:
