@@ -49,6 +49,14 @@ REASON_TOKEN_UNKNOWN = "TOKEN_UNKNOWN"        # token inexistent in store
 REASON_EXPIRED_IDLE = "EXPIRED_IDLE"          # fereastra de inactivitate depasita
 REASON_EXPIRED_ABSOLUTE = "EXPIRED_ABSOLUTE"  # plafonul absolut de la emitere depasit
 REASON_CONTEXT_MISMATCH = "CONTEXT_MISMATCH"  # token viu, dar pe alt context (ex. alt db_name)
+REASON_PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED"  # sesiune restransa: doar schimbarea parolei
+REASON_SESSION_REVOKED = "SESSION_REVOKED"    # AuthVersion al contului a crescut dupa emiterea tokenului
+
+# Scopul unei sesiuni. "full" = login normal; "password_change" = emisa doar pentru schimbarea
+# obligatorie a parolei initiale (TTL scurt, refuzata de toate rutele de date).
+SCOPE_FULL = "full"
+SCOPE_PASSWORD_CHANGE = "password_change"
+PASSWORD_CHANGE_TTL_SECONDS = 10 * 60
 
 
 @dataclass
@@ -62,6 +70,9 @@ class Session:
     expires_at: float
     pcname: str = ""
     last_seen: float = 0.0
+    scope: str = SCOPE_FULL
+    auth_version: int = 0   # AuthVersion al contului la emitere (0 = necunoscut)
+    abs_ttl: float = _ABS_TTL_SECONDS   # plafonul absolut al ACESTEI sesiuni (scurt pentru password_change)
 
 
 # Rezultatul unei validari, cu destul context pentru un log de 401 lamuritor
@@ -83,14 +94,19 @@ class SessionStore:
         self._by_token: dict[str, Session] = {}
         self._notes: dict[tuple, tuple] = {}   # (token, name) -> (value, expires_at)
 
-    def create(self, username, password, id_unitate, db_name, ctx, pcname):
+    def create(self, username, password, id_unitate, db_name, ctx, pcname,
+               scope=SCOPE_FULL, auth_version=0):
         token = secrets.token_urlsafe(_TOKEN_NBYTES)
         now = time.time()
         s = Session(username=username, password=password,
                     id_unitate=id_unitate, db_name=db_name, ctx=ctx,
                     issued_at=now,
                     expires_at=min(now + _TTL_SECONDS, now + _ABS_TTL_SECONDS),
-                    pcname=pcname, last_seen=now)
+                    pcname=pcname, last_seen=now,
+                    scope=scope, auth_version=auth_version)
+        if scope == SCOPE_PASSWORD_CHANGE:
+            s.abs_ttl = PASSWORD_CHANGE_TTL_SECONDS
+            s.expires_at = now + s.abs_ttl
         with self._lock:
             self._by_token[token] = s
         return token, s
@@ -106,7 +122,7 @@ class SessionStore:
             if s is None:
                 return Validation(reason=REASON_TOKEN_UNKNOWN, now=now)
             # Plafonul absolut are prioritate (chiar sub folosire continua).
-            if now >= s.issued_at + _ABS_TTL_SECONDS:
+            if now >= s.issued_at + s.abs_ttl:
                 del self._by_token[token]
                 return Validation(reason=REASON_EXPIRED_ABSOLUTE,
                                   issued_at=s.issued_at, last_seen=s.last_seen, now=now)
@@ -115,7 +131,7 @@ class SessionStore:
                 return Validation(reason=REASON_EXPIRED_IDLE,
                                   issued_at=s.issued_at, last_seen=s.last_seen, now=now)
             # Fereastra glisanta, dar niciodata dincolo de plafonul absolut.
-            s.expires_at = min(now + _TTL_SECONDS, s.issued_at + _ABS_TTL_SECONDS)
+            s.expires_at = min(now + _TTL_SECONDS, s.issued_at + s.abs_ttl)
             s.last_seen = now
             return Validation(session=s, reason=REASON_OK,
                               issued_at=s.issued_at, last_seen=s.last_seen, now=now)
@@ -129,12 +145,20 @@ class SessionStore:
         with self._lock:
             self._by_token.pop(token, None)
 
+    def revoke_user(self, username):
+        """Revoca TOATE sesiunile unui cont (schimbare de parola / resetare). Intoarce cate."""
+        with self._lock:
+            dead = [t for t, s in self._by_token.items() if s.username == username]
+            for t in dead:
+                del self._by_token[t]
+            return len(dead)
+
     def sweep(self):
         """Curatare periodica optionala a sesiunilor expirate."""
         now = time.time()
         with self._lock:
             dead = [t for t, s in self._by_token.items()
-                    if s.expires_at <= now or now >= s.issued_at + _ABS_TTL_SECONDS]
+                    if s.expires_at <= now or now >= s.issued_at + s.abs_ttl]
             for t in dead:
                 del self._by_token[t]
 
@@ -192,22 +216,29 @@ class RedisSessionStore:
     def _key(self, token):
         return self._prefix + token
 
-    def create(self, username, password, id_unitate, db_name, ctx, pcname):
+    @staticmethod
+    def _blob(s):
+        # SECURITY (R2): parola NU pleaca niciodata spre stocarea partajata.
+        return json.dumps({
+            "username": s.username, "password": "", "id_unitate": s.id_unitate,
+            "db_name": s.db_name, "ctx": s.ctx, "issued_at": s.issued_at,
+            "expires_at": s.expires_at, "pcname": s.pcname, "last_seen": s.last_seen,
+            "scope": s.scope, "auth_version": s.auth_version, "abs_ttl": s.abs_ttl,
+        })
+
+    def create(self, username, password, id_unitate, db_name, ctx, pcname,
+               scope=SCOPE_FULL, auth_version=0):
         token = secrets.token_urlsafe(_TOKEN_NBYTES)
         now = self._now()
-        expires_at = min(now + _TTL_SECONDS, now + _ABS_TTL_SECONDS)
+        abs_ttl = PASSWORD_CHANGE_TTL_SECONDS if scope == SCOPE_PASSWORD_CHANGE else _ABS_TTL_SECONDS
+        expires_at = min(now + _TTL_SECONDS, now + abs_ttl)
         s = Session(username=username, password=password,
                     id_unitate=id_unitate, db_name=db_name, ctx=ctx,
                     issued_at=now, expires_at=expires_at,
-                    pcname=pcname, last_seen=now)
-        # SECURITY (R2): parola NU pleaca niciodata spre stocarea partajata.
-        blob = json.dumps({
-            "username": username, "password": "", "id_unitate": id_unitate,
-            "db_name": db_name, "ctx": ctx, "issued_at": now,
-            "expires_at": expires_at, "pcname": pcname, "last_seen": now,
-        })
-        ttl = max(1, int(now + _ABS_TTL_SECONDS - now))   # = _ABS_TTL_SECONDS
-        self._r.set(self._key(token), blob, ex=ttl)
+                    pcname=pcname, last_seen=now,
+                    scope=scope, auth_version=auth_version, abs_ttl=abs_ttl)
+        ttl = max(1, int(abs_ttl))
+        self._r.set(self._key(token), self._blob(s), ex=ttl)
         return token, s
 
     def _load(self, token):
@@ -219,7 +250,9 @@ class RedisSessionStore:
                        id_unitate=d["id_unitate"], db_name=d["db_name"],
                        ctx=d["ctx"], issued_at=d["issued_at"],
                        expires_at=d["expires_at"], pcname=d.get("pcname", ""),
-                       last_seen=d.get("last_seen", d["issued_at"]))
+                       last_seen=d.get("last_seen", d["issued_at"]),
+                       scope=d.get("scope", SCOPE_FULL), auth_version=d.get("auth_version", 0),
+                       abs_ttl=d.get("abs_ttl", _ABS_TTL_SECONDS))
 
     def validate_and_touch_ex(self, token) -> Validation:
         now = self._now()
@@ -230,7 +263,7 @@ class RedisSessionStore:
             # Redis a maturat cheia (idle/absolut) SAU tokenul e necunoscut — sub Redis
             # cele doua nu se pot distinge dupa reap; raportam TOKEN_UNKNOWN.
             return Validation(reason=REASON_TOKEN_UNKNOWN, now=now)
-        if now >= s.issued_at + _ABS_TTL_SECONDS:
+        if now >= s.issued_at + s.abs_ttl:
             self._r.delete(self._key(token))
             return Validation(reason=REASON_EXPIRED_ABSOLUTE,
                               issued_at=s.issued_at, last_seen=s.last_seen, now=now)
@@ -239,15 +272,10 @@ class RedisSessionStore:
             return Validation(reason=REASON_EXPIRED_IDLE,
                               issued_at=s.issued_at, last_seen=s.last_seen, now=now)
         # Gliseaza fereastra de idle, taiata la plafonul absolut; rescrie blobul si TTL-ul.
-        s.expires_at = min(now + _TTL_SECONDS, s.issued_at + _ABS_TTL_SECONDS)
+        s.expires_at = min(now + _TTL_SECONDS, s.issued_at + s.abs_ttl)
         s.last_seen = now
-        blob = json.dumps({
-            "username": s.username, "password": "", "id_unitate": s.id_unitate,
-            "db_name": s.db_name, "ctx": s.ctx, "issued_at": s.issued_at,
-            "expires_at": s.expires_at, "pcname": s.pcname, "last_seen": s.last_seen,
-        })
-        ttl = max(1, int(s.issued_at + _ABS_TTL_SECONDS - now))
-        self._r.set(self._key(token), blob, ex=ttl)
+        ttl = max(1, int(s.issued_at + s.abs_ttl - now))
+        self._r.set(self._key(token), self._blob(s), ex=ttl)
         return Validation(session=s, reason=REASON_OK,
                           issued_at=s.issued_at, last_seen=s.last_seen, now=now)
 
@@ -257,6 +285,19 @@ class RedisSessionStore:
     def revoke(self, token):
         if token:
             self._r.delete(self._key(token))
+
+    def revoke_user(self, username):
+        n = 0
+        for key in self._r.scan_iter(match=self._prefix + "*", count=500):
+            if key.startswith(self._prefix + "note:"):
+                continue
+            raw = self._r.get(key)
+            if raw is None:
+                continue
+            if json.loads(raw).get("username") == username:
+                self._r.delete(key)
+                n += 1
+        return n
 
     def sweep(self):
         # Redis matura singur cheile la expirarea TTL-ului; nimic de facut.

@@ -46,7 +46,7 @@ from flask import request, current_app
 
 from routes.auth.guard import require_session_or_api_key
 from utils.database import get_kbot_connection
-from routes.admin import _validate_db_name
+from utils.dbname import validate_db_name as _validate_db_name
 
 from . import forexe_bp
 

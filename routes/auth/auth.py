@@ -64,8 +64,9 @@ from flask import Blueprint, request, jsonify, g
 
 from utils.database import (get_kbot_connection, get_kbot_comun_connection,
                             kbot_server_address, legacy_server_address)
-from routes.auth.session_store import STORE, REASON_CONTEXT_MISMATCH
-from routes.auth.guard import require_session, json_response
+from routes.auth.session_store import STORE, REASON_CONTEXT_MISMATCH, SCOPE_FULL, SCOPE_PASSWORD_CHANGE
+from routes.auth.guard import require_session, require_session_any_scope, json_response
+from routes.auth import account_state, password_policy
 from routes.auth.ratelimit import LIMITER
 from routes.auth import mailer
 
@@ -158,6 +159,26 @@ verify_operator = _verify_operator
 log_action = _log_action
 
 
+def _account_state_or_error(username):
+    """-> ((must_change, auth_version), None) or (None, error response)."""
+    try:
+        return account_state.get_state(username), None
+    except mysql.connector.Error as err:
+        logger.error("account state read failed: %s", err)
+        return None, (jsonify({"error": "Eroare la autentificare."}), 500)
+
+
+def _restricted_login_response(username, version, machine, ip):
+    """The password is right but it is the INITIAL one: the only session issued is the
+    short-lived password_change scope; no unit list, no context, no data access."""
+    token, _sess = STORE.create(username=username, password="", id_unitate=0, db_name="",
+                                ctx={}, pcname=machine, scope=SCOPE_PASSWORD_CHANGE,
+                                auth_version=version)
+    logger.info("AUTH_PASSWORD_CHANGE_REQUIRED pid=%s token8=%s un=%s", os.getpid(), token[:8], username)
+    _log_action(username, None, "PASSWORD_CHANGE_REQUIRED", masina=machine, ip=ip)
+    return jsonify({"password_change_required": True, "Token": token, "units": []}), 200
+
+
 # ---------------------------------------------------------------------------
 # Token guard for post-login endpoints.
 # Rutele autentificate (logout / periods / last-ss) folosesc guard.require_session,
@@ -196,6 +217,12 @@ def auth_units():
 
     # Parola corecta: stergem contoarele (login reusit reseteaza ambele bucket-uri).
     LIMITER.record_success(ip, username)
+
+    state, err_resp = _account_state_or_error(username)
+    if err_resp is not None:
+        return err_resp
+    if state[0]:
+        return _restricted_login_response(username, state[1], (data.get("machine") or "").strip(), ip)
 
     conn = None
     try:
@@ -256,6 +283,13 @@ def auth_login():
     # NU e esec de credentiale, deci nu conteaza la brute-force).
     LIMITER.record_success(ip, username)
 
+    state, err_resp = _account_state_or_error(username)
+    if err_resp is not None:
+        return err_resp
+    if state[0]:
+        return _restricted_login_response(username, state[1], machine, ip)
+    auth_version = state[1]
+
     conn = None
     try:
         conn = get_kbot_comun_connection()
@@ -301,6 +335,7 @@ def auth_login():
     token, _sess = STORE.create(
         username=username, password="", id_unitate=0,
         db_name=db_name, ctx=session_context, pcname=machine,
+        scope=SCOPE_FULL, auth_version=auth_version,
     )
 
     # Log de succes autoexplicativ (pereche cu logul de 401 din guard): daca PID-ul
@@ -322,7 +357,7 @@ def auth_login():
 # POST /api/auth/logout   (token)
 # ---------------------------------------------------------------------------
 @auth_bp.route("/api/auth/logout", methods=["POST"])
-@require_session
+@require_session_any_scope
 def auth_logout():
     s = g.session
     STORE.revoke(g.session_token)
@@ -417,6 +452,7 @@ def auth_switch_unit():
     token, _sess = STORE.create(
         username=username, password="", id_unitate=0,
         db_name=db_name, ctx=session_context, pcname=machine,
+        scope=SCOPE_FULL, auth_version=s.auth_version,
     )
     STORE.revoke(old_token)
     logger.info("AUTH_SWITCH_UNIT pid=%s token8=%s un=%s %s -> %s",
@@ -539,11 +575,21 @@ def auth_last_ss():
 _PWD_CODE_NOTE = "pwd_code"          # session-note name (routes.auth.session_store)
 _PWD_CODE_TTL = 10 * 60              # seconds a code stays valid
 _PWD_CODE_MAX_ATTEMPTS = 5           # wrong codes before the code is thrown away
-_PWD_MIN_LENGTH = 8
+_PWD_MAX_LENGTH = 256                # payload sanity limit
+_ER_NOT_VALID_PASSWORD = 1819        # MariaDB: password rejected by a validation plugin
 _PWD_CHANGE_MSG_NOT_CONFIGURED = (
     "Trimiterea e-mailului nu este configurată pe server. "
     "Contactați administratorul."
 )
+
+
+def _policy_failed(policy, violations):
+    msg = "Parola nouă nu respectă cerințele serverului."
+    if not violations:
+        msg = ("Serverul a refuzat parola din cauza unor cerințe suplimentare "
+               "(de exemplu o parolă prea comună sau folosită deja).")
+    return json_response({"error": msg, "reason": "PASSWORD_POLICY_FAILED",
+                          "violations": violations, "policy": policy}, 400)
 
 
 def _hash_code(code: str) -> str:
@@ -573,8 +619,19 @@ def _set_operator_password(host, port, username, current_password, new_password)
             conn.close()
 
 
+@auth_bp.route("/api/auth/password/policy", methods=["GET"])
+@require_session_any_scope
+def auth_password_policy():
+    """The server's REAL password requirements (read from MariaDB, never a copy in the client)."""
+    try:
+        return jsonify({"policy": password_policy.read_policy()}), 200
+    except mysql.connector.Error as err:
+        logger.error("password policy read failed: %s", err)
+        return jsonify({"error": "Cerințele de parolă nu au putut fi citite de pe server."}), 500
+
+
 @auth_bp.route("/api/auth/password/code", methods=["POST"])
-@require_session
+@require_session_any_scope
 def auth_password_code():
     """
     Body: { "current_password": "<pass>" }
@@ -592,7 +649,7 @@ def auth_password_code():
     ip = request.remote_addr
 
     if LIMITER.is_blocked(ip, username):
-        _log_action(username, s.db_name, "AUTH_BLOCKED", detalii="password/code",
+        _log_action(username, s.db_name or None, "AUTH_BLOCKED", detalii="password/code",
                     rezultat="EROARE", masina=s.pcname, ip=ip)
         return jsonify({"error": _RATE_LIMIT_MSG}), 429
 
@@ -603,7 +660,7 @@ def auth_password_code():
 
     if not _verify_operator(username, current_password):
         LIMITER.record_failure(ip, username)
-        _log_action(username, s.db_name, "AUTH_FAIL", detalii="password/code",
+        _log_action(username, s.db_name or None, "AUTH_FAIL", detalii="password/code",
                     rezultat="EROARE", masina=s.pcname, ip=ip)
         return jsonify({"error": "Parola actuală este incorectă."}), 401
     LIMITER.record_success(ip, username)
@@ -615,7 +672,7 @@ def auth_password_code():
         return jsonify({"error": _PWD_CHANGE_MSG_NOT_CONFIGURED}), 503
     except Exception as err:   # smtplib / socket: the operator must know nothing arrived
         logger.error("password code mail failed for %s: %s", mailer.mask_address(username), err)
-        _log_action(username, s.db_name, "PASSWORD_CODE", detalii="mail failed",
+        _log_action(username, s.db_name or None, "PASSWORD_CODE", detalii="mail failed",
                     rezultat="EROARE", masina=s.pcname, ip=ip)
         return jsonify({"error": "E-mailul cu codul nu a putut fi trimis. Reîncercați mai târziu."}), 502
 
@@ -623,13 +680,13 @@ def auth_password_code():
     STORE.put_note(g.session_token, _PWD_CODE_NOTE,
                    {"hash": _hash_code(code), "attempts": 0, "issued_at": time.time()},
                    _PWD_CODE_TTL)
-    _log_action(username, s.db_name, "PASSWORD_CODE", masina=s.pcname, ip=ip)
+    _log_action(username, s.db_name or None, "PASSWORD_CODE", masina=s.pcname, ip=ip)
     return jsonify({"email_masked": mailer.mask_address(username),
                     "expires_in": _PWD_CODE_TTL}), 200
 
 
 @auth_bp.route("/api/auth/password/change", methods=["POST"])
-@require_session
+@require_session_any_scope
 def auth_password_change():
     """
     Body: { "current_password", "code", "new_password" }
@@ -648,10 +705,20 @@ def auth_password_change():
 
     if not current_password or not code or not new_password:
         return jsonify({"error": "Completați parola actuală, codul primit și parola nouă."}), 400
-    if len(new_password) < _PWD_MIN_LENGTH:
-        return jsonify({"error": f"Parola nouă trebuie să aibă cel puțin {_PWD_MIN_LENGTH} caractere."}), 400
+    if len(new_password) > _PWD_MAX_LENGTH or len(current_password) > _PWD_MAX_LENGTH:
+        return jsonify({"error": "Parola este prea lungă."}), 400
     if new_password == current_password:
         return jsonify({"error": "Parola nouă trebuie să difere de cea actuală."}), 400
+
+    # The server's real policy, judged BEFORE anything is spent: every missing requirement at once.
+    try:
+        policy = password_policy.read_policy()
+    except mysql.connector.Error as err:
+        logger.error("password policy read failed: %s", err)
+        return jsonify({"error": "Cerințele de parolă nu au putut fi citite de pe server."}), 500
+    violations = password_policy.evaluate(new_password, policy)
+    if violations:
+        return _policy_failed(policy, violations), 400
 
     note = STORE.get_note(g.session_token, _PWD_CODE_NOTE)
     if note is None:
@@ -660,7 +727,7 @@ def auth_password_change():
         attempts = int(note.get("attempts", 0)) + 1
         if attempts >= _PWD_CODE_MAX_ATTEMPTS:
             STORE.delete_note(g.session_token, _PWD_CODE_NOTE)
-            _log_action(username, s.db_name, "PASSWORD_CHANGE", detalii="code attempts exhausted",
+            _log_action(username, s.db_name or None, "PASSWORD_CHANGE", detalii="code attempts exhausted",
                         rezultat="EROARE", masina=s.pcname, ip=ip)
             return jsonify({"error": "Prea multe coduri greșite. Cereți un cod nou."}), 400
         remaining = _PWD_CODE_TTL - int(time.time() - float(note.get("issued_at", time.time())))
@@ -673,13 +740,22 @@ def auth_password_change():
     try:
         _set_operator_password(kbot_host, kbot_port, username, current_password, new_password)
     except mysql.connector.Error as err:
+        if getattr(err, "errno", None) == _ER_NOT_VALID_PASSWORD:
+            # The policy changed between display and submit, or an extra plugin refused it.
+            # The code is NOT spent; the answer carries the CURRENT policy.
+            try:
+                policy = password_policy.read_policy()
+            except mysql.connector.Error:
+                policy = None
+            violations = password_policy.evaluate(new_password, policy) if policy else []
+            return _policy_failed(policy, violations), 400
         if getattr(err, "errno", None) == _ER_ACCESS_DENIED:
             LIMITER.record_failure(ip, username)
-            _log_action(username, s.db_name, "AUTH_FAIL", detalii="password/change",
+            _log_action(username, s.db_name or None, "AUTH_FAIL", detalii="password/change",
                         rezultat="EROARE", masina=s.pcname, ip=ip)
             return jsonify({"error": "Parola actuală este incorectă."}), 401
         logger.error("password change failed for %s: %s", mailer.mask_address(username), err)
-        _log_action(username, s.db_name, "PASSWORD_CHANGE", detalii=str(err)[:200],
+        _log_action(username, s.db_name or None, "PASSWORD_CHANGE", detalii=str(err)[:200],
                     rezultat="EROARE", masina=s.pcname, ip=ip)
         return jsonify({"error": "Parola nu a putut fi schimbată pe server."}), 500
 
@@ -696,7 +772,29 @@ def auth_password_change():
         logger.warning("legacy password change skipped for %s: %s",
                        mailer.mask_address(username), err)
 
-    _log_action(username, s.db_name, "PASSWORD_CHANGE",
+    _log_action(username, s.db_name or None, "PASSWORD_CHANGE",
                 detalii=("legacy ok" if legacy_updated else "legacy NOT updated"),
                 masina=s.pcname, ip=ip)
-    return jsonify({"ok": True, "legacy_updated": legacy_updated}), 200
+
+    # Finish: clear MustChangePassword, bump AuthVersion, kill EVERY old session of the account.
+    was_restricted = s.scope != SCOPE_FULL
+    try:
+        account_state.complete_change(username)
+        _must, new_version = account_state.get_state(username)
+    except mysql.connector.Error as err:
+        logger.error("password changed but account state not updated for %s: %s",
+                     mailer.mask_address(username), err)
+        STORE.revoke_user(username)
+        return jsonify({"error": "Parola a fost schimbată, dar contul nu a putut fi actualizat. "
+                                 "Autentificați-vă din nou cu parola nouă."}), 500
+    STORE.revoke_user(username)
+
+    answer = {"ok": True, "legacy_updated": legacy_updated, "relogin_required": was_restricted}
+    if not was_restricted:
+        # A voluntary change from a normal session: hand back a fresh token of the same
+        # unit so the operator keeps working without logging in again.
+        token, _sess = STORE.create(username=username, password="", id_unitate=0,
+                                    db_name=s.db_name, ctx=s.ctx, pcname=s.pcname,
+                                    scope=SCOPE_FULL, auth_version=new_version)
+        answer["Token"] = token
+    return jsonify(answer), 200

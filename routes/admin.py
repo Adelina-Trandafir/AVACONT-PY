@@ -8,7 +8,7 @@ import re
 from flask import Blueprint, request, jsonify, send_file, current_app
 import json
 from mysql.connector import errorcode
-from utils.security import require_api_key
+from utils.security import require_api_key, require_admin
 from utils.database import get_db_connection
 from config import FILE_BAZA_PATH, FILE_EF_PATH 
 from decimal import Decimal
@@ -22,25 +22,7 @@ SOURCE_DB = 'AVACONT_SURSA'
 COMMON_DB = "AVACONT_COMUN"  # Baza comuna (care nu trebuie modificata in referinte)
 DB_NAME_REGEX = re.compile(r'^[A-Za-z0-9_]+$')
 
-def _validate_db_name(db_name):
-    """
-    Valideaza strict numele bazei de date.
-    IMPORTANT:
-    - db_name nu poate fi parametrizat prin %s in connect()
-    - de aceea il validam whitelist-only
-    """
-    if not isinstance(db_name, str):
-        raise ValueError("db_name invalid")
-
-    db_name = db_name.strip()
-
-    if not db_name:
-        raise ValueError("db_name invalid")
-
-    if not DB_NAME_REGEX.fullmatch(db_name):
-        raise ValueError("db_name invalid")
-
-    return db_name
+from utils.dbname import validate_db_name as _validate_db_name  # moved to utils (security plan S2)
 
 # ==============================================================================
 # 8. DOWNLOAD: BAZA.ACCDB
@@ -440,7 +422,7 @@ def setup_database():
 
 
 @admin_bp.route('/api/admin/login/reset', methods=['POST'])
-@require_api_key
+@require_admin
 def login_reset():
     """
     Clears the failed-login counters (and any lockout) for one operator.
@@ -462,7 +444,7 @@ def login_reset():
 
 
 @admin_bp.route('/api/admin/users', methods=['GET'])
-@require_api_key
+@require_admin
 def users_list():
     """
     Every operator row (Unitati_Utilizatori JOIN Unitati, K-BOT server), one row
@@ -516,7 +498,7 @@ def users_list():
 
 
 @admin_bp.route('/api/admin/receptii/refacere', methods=['POST'])
-@require_api_key
+@require_admin
 def receptii_refacere_admin():
     """
     Intretinere (felia 0062): reface instantaneele / liniile de receptie lipsa din istoric,

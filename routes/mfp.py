@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup, Tag
 from flask import Blueprint, request, send_file, jsonify
 from datetime import datetime
 from utils.security import require_api_key
+from routes.auth.guard import require_session
 
 # --- CONFIGURARE ---
 mfp_bp = Blueprint('mfp', __name__)
@@ -195,6 +196,39 @@ def get_cached_template():
     except Exception as e:
         logger.error(f"Eroare get_cached_template: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Plan securitate API (S2): rutele moderne ale machetelor, cu bearer (K-BOT).
+# Cele doua rute vechi cu X-Api-Key de mai sus raman pana la retragerea finala.
+# ---------------------------------------------------------------------------
+def _serve_template(prefix):
+    matches = sorted(CACHE_DIR.glob(prefix + "_V*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not matches:
+        return jsonify({"error": "Nu există nicio machetă " + prefix + " pe server"}), 404
+    pdf_path = matches[0]
+    return send_file(pdf_path, mimetype='application/pdf', as_attachment=True, download_name=pdf_path.name)
+
+
+@mfp_bp.route('/api/mfp/templates/ddf', methods=['GET', 'HEAD'])
+@require_session
+def get_template_ddf_session():
+    try:
+        return _serve_template("DDF")
+    except Exception as e:
+        logger.error(f"Eroare get_template_ddf_session: {e}", exc_info=True)
+        return jsonify({"error": "Macheta nu a putut fi citită de pe server."}), 500
+
+
+@mfp_bp.route('/api/mfp/templates/ord', methods=['GET', 'HEAD'])
+@require_session
+def get_template_ord_session():
+    try:
+        return _serve_template("ORD")
+    except Exception as e:
+        logger.error(f"Eroare get_template_ord_session: {e}", exc_info=True)
+        return jsonify({"error": "Macheta nu a putut fi citită de pe server."}), 500
+
 
 @mfp_bp.route('/api/mfp/get_ef_token', methods=['GET'])
 @require_api_key

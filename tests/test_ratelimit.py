@@ -151,6 +151,7 @@ def app(monkeypatch):
     monkeypatch.setattr(auth_module, "_verify_operator", _fake_verify)
     monkeypatch.setattr(auth_module, "get_kbot_comun_connection", lambda: _FakeConn())
     monkeypatch.setattr(auth_module, "_log_action", lambda *a, **k: None)
+    monkeypatch.setattr("routes.auth.account_state.get_state", lambda u: (False, 0))
 
     flask_app = Flask(__name__)
     flask_app.json.ensure_ascii = False

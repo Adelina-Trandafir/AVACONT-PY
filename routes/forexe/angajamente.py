@@ -26,9 +26,7 @@ from flask import request, jsonify
 from routes.auth.guard import require_session    # bearer opac (Felia 1 auth)
 from utils.database import get_kbot_connection   # serverul K-BOT (DB_CONFIG_NEW)
 from utils import timing                         # cronometrul, forexe_timing.log
-# R5 verificat: validatorul canonic db_name traieste in routes/admin.py:24
-# (DB_NAME_REGEX = ^[A-Za-z0-9_]+$, ridica ValueError("db_name invalid")).
-from routes.admin import _validate_db_name
+from utils.dbname import validate_db_name as _validate_db_name
 
 from . import forexe_bp
 

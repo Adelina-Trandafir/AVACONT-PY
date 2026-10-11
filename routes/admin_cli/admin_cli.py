@@ -21,6 +21,10 @@ Commands (all read-only unless marked WRITE):
     acct-add    --un U --dc D --rol R  WRITE  link an account to a database (KB role R)
     acct-role   --un U --dc D --rol R  WRITE  change the KB role of a link
     acct-remove --un U --dc D          WRITE  unlink (and drop its extra roles)
+    password-state                     per account: must change the password now / when it was last changed
+    clear-must-change --un U           WRITE  cancel the obligation (flag off, AuthVersion untouched: open sessions stay)
+    must-change-all                    WRITE  force a password change for EVERY account linked to a unit
+    must-change --un U                 WRITE  force a password change at the next login (call after every reset to an initial password)
     ensure-role --cod C                WRITE  create a known extra role (see KNOWN_ROLES)
     diff --db D [--mode SAFE|FORCE]    schema difference against AVACONT_SURSA, nothing stored
     commands                           the whitelist of `command`
@@ -382,6 +386,62 @@ def cmd_acct_remove(args):
         _exec(conn, "DELETE FROM `%s`.`Unitati_Utilizatori` WHERE UN=%%s AND DC=%%s" % COMMON_DB, (args.un, dc))
         _journal(conn, "ADMIN_ACCT_REMOVE", dc, args.un, "roluri extra sterse: %d" % extra)
         return {"un": args.un, "dc": dc, "extra_roles_removed": extra}
+    finally:
+        conn.close()
+
+
+def cmd_must_change(args):
+    _check_name(args.un, "Contul")
+    conn = connect()
+    try:
+        _exec(conn,
+              "INSERT INTO `%s`.`Conturi_Securitate` (UN, MustChangePassword, AuthVersion) VALUES (%%s, 1, 2) "
+              "ON DUPLICATE KEY UPDATE MustChangePassword = 1, AuthVersion = AuthVersion + 1" % COMMON_DB,
+              (args.un,))
+        _journal(conn, "ADMIN_MUST_CHANGE", None, args.un, "schimbare obligatorie a parolei")
+        return {"un": args.un, "must_change": True}
+    finally:
+        conn.close()
+
+
+def cmd_password_state(args):
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT UN, MustChangePassword, PasswordChangedAt FROM `%s`.`Conturi_Securitate`" % COMMON_DB)
+            rows = cur.fetchall()
+        except mysql.connector.Error as err:
+            if getattr(err, "errno", None) == 1146:
+                raise AdminError("Tabela Conturi_Securitate lipseste: rulati sql/SEC01_conturi_securitate.sql.")
+            raise
+        finally:
+            cur.close()
+        return {"accounts": [{"un": r[0], "must_change": bool(r[1]), "changed_at": _iso(r[2])} for r in rows]}
+    finally:
+        conn.close()
+
+
+def cmd_clear_must_change(args):
+    _check_name(args.un, "Contul")
+    conn = connect()
+    try:
+        n = _exec(conn, "UPDATE `%s`.`Conturi_Securitate` SET MustChangePassword = 0 WHERE UN = %%s" % COMMON_DB, (args.un,))
+        _journal(conn, "ADMIN_CLEAR_MUST_CHANGE", None, args.un, "obligatia de schimbare a parolei anulata")
+        return {"un": args.un, "rows": n}
+    finally:
+        conn.close()
+
+
+def cmd_must_change_all(args):
+    conn = connect()
+    try:
+        n = _exec(conn,
+                  "INSERT INTO `%s`.`Conturi_Securitate` (UN, MustChangePassword, AuthVersion) "
+                  "SELECT DISTINCT UN, 1, 2 FROM `%s`.`Unitati_Utilizatori` "
+                  "ON DUPLICATE KEY UPDATE MustChangePassword = 1, AuthVersion = AuthVersion + 1" % (COMMON_DB, COMMON_DB))
+        _journal(conn, "ADMIN_MUST_CHANGE_ALL", None, "*", "schimbare obligatorie a parolei pentru toate conturile")
+        return {"rows": n}
     finally:
         conn.close()
 
@@ -887,6 +947,16 @@ def _parser():
     p.add_argument("--un", required=True)
     p.add_argument("--dc", required=True)
     p.set_defaults(fn=cmd_acct_remove)
+
+    sub.add_parser("password-state").set_defaults(fn=cmd_password_state)
+    p = sub.add_parser("clear-must-change")
+    p.add_argument("--un", required=True)
+    p.set_defaults(fn=cmd_clear_must_change)
+    sub.add_parser("must-change-all").set_defaults(fn=cmd_must_change_all)
+
+    p = sub.add_parser("must-change")
+    p.add_argument("--un", required=True)
+    p.set_defaults(fn=cmd_must_change)
 
     p = sub.add_parser("ensure-role")
     p.add_argument("--cod", required=True)

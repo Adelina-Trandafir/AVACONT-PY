@@ -23,7 +23,7 @@ import re
 from flask import Blueprint, Response, request
 
 from utils.database import get_db_connection
-from utils.security import require_api_key
+from utils.security import require_admin
 
 # The schema tool lives in its own package and keeps its own command lines.
 # Only the callable entry point is imported here -- see schema_service for why
@@ -161,7 +161,7 @@ def _fail(where, exc):
 # -----------------------------------------------------------------------------
 
 @migrare_bp.route("/api/migrare/baze", methods=["GET"])
-@require_api_key
+@require_admin
 def baze():
     """
     Bazele de unitate existente pe server, cu numarul de tabele FX_ pe care le au
@@ -214,7 +214,7 @@ def baze():
 # -----------------------------------------------------------------------------
 
 @migrare_bp.route("/api/migrare/fisiere", methods=["GET"])
-@require_api_key
+@require_admin
 def fisiere():
     try:
         return _json({"ok": True, "fisiere": storage.list_pushed()})
@@ -229,7 +229,7 @@ def fisiere():
 # -----------------------------------------------------------------------------
 
 @migrare_bp.route("/api/migrare/push/init", methods=["POST"])
-@require_api_key
+@require_admin
 def push_init():
     body = request.get_json(silent=True) or {}
     try:
@@ -246,7 +246,7 @@ def push_init():
 
 
 @migrare_bp.route("/api/migrare/push/bucata", methods=["POST"])
-@require_api_key
+@require_admin
 def push_bucata():
     try:
         upload_id = (request.form.get("id") or "").strip()
@@ -276,7 +276,7 @@ def push_bucata():
 
 
 @migrare_bp.route("/api/migrare/push/final", methods=["POST"])
-@require_api_key
+@require_admin
 def push_final():
     body = request.get_json(silent=True) or {}
     try:
@@ -293,7 +293,7 @@ def push_final():
 # -----------------------------------------------------------------------------
 
 @migrare_bp.route("/api/migrare/tabele", methods=["POST"])
-@require_api_key
+@require_admin
 def tabele_fisier():
     """
     Lista tabelelor migrate, cu numarul de randuri din fisier si cu unitatea aleasa
@@ -391,7 +391,7 @@ def tabele_fisier():
 # -----------------------------------------------------------------------------
 
 @migrare_bp.route("/api/migrare/analiza", methods=["POST"])
-@require_api_key
+@require_admin
 def analiza():
     body = request.get_json(silent=True) or {}
     db_name = body.get("baza")
@@ -463,7 +463,7 @@ def analiza():
 # -----------------------------------------------------------------------------
 
 @migrare_bp.route("/api/migrare/rulare", methods=["POST"])
-@require_api_key
+@require_admin
 def rulare():
     body = request.get_json(silent=True) or {}
     analiza_id = body.get("analiza") or body.get("analiza")
@@ -565,7 +565,7 @@ def rulare():
 
 
 @migrare_bp.route("/api/migrare/schema-sync", methods=["POST"])
-@require_api_key
+@require_admin
 def schema_sync_start():
     body = request.get_json(silent=True) or {}
     db_name = (body.get("dc") or body.get("baza") or "").strip()
@@ -608,7 +608,7 @@ def schema_sync_start():
 # -----------------------------------------------------------------------------
 
 @migrare_bp.route("/api/migrare/stare/<job_id>", methods=["GET"])
-@require_api_key
+@require_admin
 def stare(job_id):
     job = jobs.get(job_id)
     if job is None:

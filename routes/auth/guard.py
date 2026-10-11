@@ -25,6 +25,7 @@ from routes.auth.session_store import (
     STORE,
     REASON_TOKEN_ABSENT, REASON_TOKEN_MALFORMED, REASON_TOKEN_UNKNOWN,
     REASON_EXPIRED_IDLE, REASON_EXPIRED_ABSOLUTE, REASON_CONTEXT_MISMATCH,
+    REASON_PASSWORD_CHANGE_REQUIRED, REASON_SESSION_REVOKED, SCOPE_FULL,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ _REASON_MESSAGES = {
     REASON_EXPIRED_IDLE: "Sesiune expirată din inactivitate. Autentificați-vă din nou.",
     REASON_EXPIRED_ABSOLUTE: "Sesiune expirată. Autentificați-vă din nou.",
     REASON_CONTEXT_MISMATCH: "Acces interzis pentru această unitate.",
+    REASON_PASSWORD_CHANGE_REQUIRED: "Trebuie să vă schimbați parola înainte de a continua.",
+    REASON_SESSION_REVOKED: "Sesiunea a fost închisă (parola contului s-a schimbat). Autentificați-vă din nou.",
 }
 
 
@@ -89,7 +92,7 @@ def _safe_size():
         return -1
 
 
-def _resolve(fn, args, kwargs):
+def _resolve(fn, args, kwargs, allow_restricted=False):
     """Nucleul comun: valideaza bearer-ul, aseaza g.session/g.session_token, apeleaza
     handler-ul. Intoarce raspunsul de 401 (cu motiv) daca tokenul nu e viu."""
     auth = request.headers.get("Authorization", "")
@@ -107,7 +110,26 @@ def _resolve(fn, args, kwargs):
             return _reject_expiry(v, token)
         return reject(REASON_TOKEN_UNKNOWN, token)
 
-    g.session = v.session
+    sess = v.session
+    # Revocation: a session minted under an older AuthVersion of the account is dead
+    # (password changed or administrator reset). Sessions without a version (0) predate this.
+    if sess.auth_version:
+        try:
+            from routes.auth import account_state
+            if account_state.current_version(sess.username) != sess.auth_version:
+                STORE.revoke(token)
+                return reject(REASON_SESSION_REVOKED, token)
+        except Exception as err:   # DB down and nothing cached: do not guess, do not let it through
+            logger.error("AuthVersion check failed: %s", err)
+            return json_response({"error": "Serviciul de autentificare este indisponibil. Reîncercați.",
+                                  "reason": "AUTH_UNAVAILABLE"}, 503)
+
+    # A restricted session (initial password) may only reach the routes that opt in.
+    if sess.scope != SCOPE_FULL and not allow_restricted:
+        return json_response({"error": _REASON_MESSAGES[REASON_PASSWORD_CHANGE_REQUIRED],
+                              "reason": REASON_PASSWORD_CHANGE_REQUIRED}, 403)
+
+    g.session = sess
     g.session_token = token
     return fn(*args, **kwargs)
 
@@ -116,6 +138,15 @@ def require_session(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         return _resolve(fn, args, kwargs)
+    return wrapper
+
+
+def require_session_any_scope(fn):
+    """Like require_session, but ALSO accepts the restricted password_change session.
+    Only for: password policy / code / change and logout."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        return _resolve(fn, args, kwargs, allow_restricted=True)
     return wrapper
 
 
