@@ -103,7 +103,7 @@ _SQL_ONE = "SELECT IdPartener, IdUnitate, CodPartener, CodFiscal FROM Parteneri 
 _SQL_ONE_ACTIVE = f"SELECT {_ACTIVE} AS Activ FROM Parteneri P WHERE P.IdPartener = %s"
 _SQL_INSERT = (
     "INSERT INTO Parteneri (IdUnitate, CodPartener, DenumirePartener, CodFiscal, ContIBAN, "
-    "Banca, Adresa, Tip, Ascuns) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    "Banca, Adresa, Tip, Ascuns, Provenienta) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual')"
 )
 _SQL_UPDATE = (
     "UPDATE Parteneri SET CodPartener = %s, DenumirePartener = %s, CodFiscal = %s, ContIBAN = %s, "

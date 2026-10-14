@@ -79,7 +79,7 @@ export const treeViewRenderMixin = {
       const expanderWidth = Number(this.expanderWidth);
       const checkboxWidth =
         this.options.checkable && this.hasCheckbox(node) ? Number(this.checkboxWidth) : 0;
-      const textWidth = this.getTextWidth(nodeLabel);
+      const textWidth = this.getTextWidth(node.rightText ? `${nodeLabel}   ${node.rightText}` : nodeLabel);
       const totalWidth = paddingLeft + expanderWidth + checkboxWidth + textWidth;
 
       this.flattenedItems.push({
@@ -130,7 +130,7 @@ export const treeViewRenderMixin = {
           this.options.checkable ? ` title="${this.escapeHtml(nodeLabel)}"` : ''
         }>
           ${!asParent ? this.highlightText(nodeLabel, query, this.localSearchQuery) : nodeLabel}
-        </span>${node.badge ? `<span class="treeview-badge">${this.escapeHtml(node.badge)}</span>` : ''}${
+        </span>${node.rightText ? `<span class="treeview-righttext">${this.escapeHtml(node.rightText)}</span>` : ''}${node.badge ? `<span class="treeview-badge">${this.escapeHtml(node.badge)}</span>` : ''}${
           node.rightIcon
             ? `<span class="treeview-righticon" role="button" tabindex="0" data-action="${this.escapeHtml(node.rightIcon.action)}" data-node-id="${this.escapeHtml(nodeIdStr)}"${node.rightIcon.title ? ` title="${this.escapeHtml(node.rightIcon.title)}" aria-label="${this.escapeHtml(node.rightIcon.title)}"` : ''}>${node.rightIcon.icon}</span>`
             : ''

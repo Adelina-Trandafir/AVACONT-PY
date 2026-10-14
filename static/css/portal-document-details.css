@@ -1,0 +1,43 @@
+/* ---------- slice 0110-12: details under the grids, the Extrase card, the navbar of the document cards (computers) ---------- */
+.pa__tree-head { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 0 2px 4px; }
+.pa__tree-head[hidden] { display: none; }
+.pa__tree-cap { flex: 1 1 auto; font-weight: 700; }
+.pa__menu--tree { top: 30px; right: 0; left: auto; }
+.pa__detail { flex: 0 0 auto; display: flex; gap: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+.pa__detail[hidden] { display: none; }
+.pa__detail--istoric { height: 190px; }
+.pa__detail--plati { flex-direction: column; gap: 4px; }
+.pa__det-desc { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pa__det-cap { font-weight: 700; color: var(--ink-soft); font-size: .85rem; }
+.pa__det-text { flex: 1 1 0; min-height: 0; overflow: auto; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pa__det-vals { flex: 0 0 340px; position: relative; }
+.pa__det-vals > .dgv { position: absolute; inset: 0; width: auto; height: auto; min-height: 0; }
+.pa__det-msg { color: var(--ink-soft); }
+.pa__det-msg[hidden] { display: none; }
+.pa__kv { grid-template-columns: max-content 1fr max-content 1fr; gap: 2px 18px; }
+.pa__kv[hidden] { display: none; }
+.pa__kv dt { font-size: .85rem; color: var(--ink-soft); }
+.pa__kv dd { overflow-wrap: anywhere; color: var(--ink); }
+.pa__kv--head { grid-template-columns: max-content 1fr max-content 1fr max-content 1fr; }
+.pa__ext-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.pa__ext-card[hidden] { display: none; }
+.pa__ext-card > .pa__kv { flex: 0 0 auto; max-height: 45%; overflow: auto; }
+.pa__subnav { flex: 0 0 auto; display: flex; gap: 4px; border-bottom: 2px solid var(--line); }
+.pa__subnav button { font: inherit; font-weight: 700; padding: 4px 14px; margin-bottom: -2px; cursor: pointer; color: var(--ink-soft); background: transparent; border: 0; border-bottom: 3px solid transparent; }
+.pa__subnav button:hover { background: var(--sky-1); }
+.pa__subnav button.is-active { color: var(--blue-deep); border-bottom-color: var(--blue); }
+.pa__page { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.pa__doc-head { flex: 0 0 auto; }
+.pa__doc-head[hidden] { display: none; }
+.pa__bene { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-soft); }
+.pa__bene select { font: inherit; color: var(--ink); background: transparent; border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 2px 6px; max-width: 420px; }
+@media (min-width: 901px) { .pa__page--off { display: none; } .pa__docs-list { display: none; } }
+/* a phone: no navbar, header, footer or detail; the two parts of a document card stay one column, as before */
+@media (max-width: 900px) {
+  .pa__subnav, .pa__doc-head, .pa__detail, .pa__ext-card { display: none !important; }
+  .pa__page { display: contents; }
+  .pa__kv#doc-foot { display: none !important; }
+}
+html[data-theme="dark"] .portal .pa__bene select { background: #232b38; color: var(--ink); }
+html[data-theme="dark"] .portal .pa__subnav button:hover { background: #232c3b; }
+

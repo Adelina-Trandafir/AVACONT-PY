@@ -70,8 +70,13 @@ export function createCertificate({ call, say, onSignedIn }) {
       await onSignedIn(r.data.token);
       return;
     }
-    if (r.data.reason === 'NETWORK' || r.data.reason === 'CERT_ABSENT') {
-      say('msg-login', 'Certificatul nu a putut fi folosit (nu a fost ales sau nu este conectat). Poți intra cu parola și codul.');
+    // Slice 0110-13: a fetch failure does not prove that a certificate was absent.
+    if (r.data.reason === 'NETWORK') {
+      say('msg-login', 'Nu s-a putut comunica cu serviciul de autentificare. Verifică adresa paginii și conexiunea, apoi reîncearcă. Poți intra cu parola și codul.');
+      return;
+    }
+    if (r.data.reason === 'CERT_ABSENT') {
+      say('msg-login', 'Serverul nu a primit niciun certificat. Verifică dacă tokenul este conectat și certificatul a fost selectat în browser. Poți intra cu parola și codul.');
       return;
     }
     say('msg-login', (r.data.error || 'Autentificarea cu certificat nu a reușit.') + ' Poți intra cu parola și codul.');

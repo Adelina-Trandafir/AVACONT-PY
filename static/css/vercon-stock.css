@@ -1,0 +1,19 @@
+/* VC08-01: stock workspace. Styles are scoped to this screen. */
+.vc-stock { display: grid; grid-template-columns: 230px minmax(0,1fr) 280px; gap: 10px; }
+.vc-stock__left, .vc-stock__center, .vc-stock__right { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.vc-stock__panel { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+.vc-stock h3, .vc-stock h4 { margin: 0 0 10px; color: var(--primary-color); }
+.vc-stock__tree { height: 360px; padding: 0; overflow: hidden; }
+.vc-stock__categories { height: 240px; }
+.vc-stock__filters { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.vc-stock__filters .vc-field { flex: 1 1 150px; }
+.vc-stock__only { display: flex; align-items: center; gap: 5px; font-size: .9em; }
+.vc-stock__grid.vc-dgv { height: 320px; }
+.vc-stock__movements.vc-dgv { height: 260px; }
+.vc-stock__details dl { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; font-size: .9em; }
+.vc-stock__details dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.vc-stock__details .vc-actions, .vc-stock__right .vc-actions { flex-direction: column; align-items: stretch; }
+.vc-stock__total { display: block; padding-top: 10px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vc-stock__status:empty { display: none; }
+@media (max-width: 1200px) { .vc-stock { grid-template-columns: 200px minmax(0,1fr); } .vc-stock__right { grid-column: 1 / -1; flex-direction: row; } .vc-stock__right > section { flex: 1; } }
+@media (max-width: 800px) { .vc-stock { grid-template-columns: minmax(0,1fr); } .vc-stock__left { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .vc-stock__tree { height: 220px; } .vc-stock__right { flex-direction: column; } }

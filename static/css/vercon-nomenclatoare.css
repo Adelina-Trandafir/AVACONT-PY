@@ -1,0 +1,4 @@
+.vc-nom__left { max-height: none; overflow: hidden; }
+.vc-nom__left .vc-tree-body { height: 390px; }
+.vc-nom__form { min-width: 0; }
+.vc-nom__list .vc-dgv { height: 400px; }

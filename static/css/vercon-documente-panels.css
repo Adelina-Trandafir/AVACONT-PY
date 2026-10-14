@@ -1,0 +1,16 @@
+.vc-doc__tree { padding: 0; align-self: stretch; height: auto; min-height: 240px; max-height: none; overflow: hidden; display: flex; flex-direction: column; }
+.vc-doc__tree h4, .vc-product-panel h4 { margin: 0; padding: 10px 12px; background: rgba(48,158,255,.1); border-bottom: 1px solid var(--line); color: var(--primary-color); }
+.vc-tree-body { height: 100%; min-height: 200px; }
+.vc-doc__tree > .vc-tree-body { flex: 1 1 0; }
+.vc-tree-body .treeview--inline { max-height: none; height: 100%; }
+.vc-tree-body .treeview-dropdown { flex: 1; overflow: auto; }
+.vc-tree-body .treeview-righticon { opacity: 0; color: var(--primary-color); }
+.vc-tree-body .treeview-item:hover .treeview-righticon, .vc-tree-body .treeview-item:focus-within .treeview-righticon { opacity: 1; }
+.vc-product-panel { border: 1px solid var(--line); border-radius: 6px; min-width: 0; overflow: hidden; }
+.vc-product-panel .vc-tree-body { height: 350px; }
+.vc-product-details, .vc-availability { padding: 12px; border-top: 1px solid var(--line); font-size: .9em; }
+.vc-product-details dl, .vc-availability dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; }
+.vc-product-details dd, .vc-availability dd { margin: 0; font-variant-numeric: tabular-nums; }
+.vc-doc--bc { grid-template-columns: minmax(0,1fr) 300px; }
+.vc-doc--bc:has(.vc-doc__tree[hidden]) { grid-template-columns: minmax(0,1fr); }
+.vc-doc--bc .vc-doc__main.is-wide { grid-column: auto; }

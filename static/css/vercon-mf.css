@@ -1,0 +1,10 @@
+/* VC08-02: MF date calculation dialogs; the common controls keep their own CSS. */
+.vc-mf-amortization__toolbar { align-items: end; margin-bottom: 10px; }
+.vc-mf-amortization__toolbar .vc-field { width: 190px; }
+.vc-mf-amortization__grid.vc-dgv { height: 115px; }
+.vc-mf-amortization__note { color: var(--ink-soft); font-size: .9em; }
+.vc-mf-amortization__issues { padding-top: 10px; border-top: 1px solid var(--line); font-size: .9em; }
+.vc-mf-amortization__issues p { margin: 5px 0; overflow-wrap: anywhere; }
+.vc-mf-amortization__totals { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: .9em; }
+.vc-mf-amortization__totals dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+@media (max-width: 600px) { .vc-mf-amortization__toolbar { gap: 8px; } .vc-mf-amortization__toolbar .vc-field { width: 100%; } }

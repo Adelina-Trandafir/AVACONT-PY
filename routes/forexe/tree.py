@@ -62,6 +62,33 @@ _LANT_NEINCHIS = (
     "   AND ROUND(COALESCE(lh.Total, 0), 2) <> ROUND(COALESCE(lr.SumaAntet, 0), 2))"
 )
 
+# Reservations whose chain is broken (cererea operatorului 12.10.2026): a reservation that is not
+# an initial one must start from what the PREVIOUS reservation of the same indicator ended on --
+# FX_Rezervari.R_Anterioara = the R_Definitiva of the row before it, ordered (DataRezervare, IDH),
+# 0 when there is none. A row that does not (the August 2026 case: a month computed from the base
+# of an older month) makes the figures of every later month wrong. The same walk, in step with
+# rezervari_reanaliza.py, which is what repairs it. One scalar column: NULL when every chain
+# holds, otherwise «YYYY-MM-DD~indicator~anterioara~asteptata» per bad row, joined with «|», oldest
+# first. No «%» in it, so no escaping through the driver.
+_REZ_PREV = (
+    "COALESCE((SELECT p.R_Definitiva FROM FX_Rezervari p "
+    "          WHERE p.CodAI = z.CodAI AND p.IDH IS NOT NULL "
+    "            AND (p.DataRezervare < z.DataRezervare "
+    "                 OR (p.DataRezervare = z.DataRezervare AND p.IDH < z.IDH)) "
+    "          ORDER BY p.DataRezervare DESC, p.IDH DESC LIMIT 1), 0)"
+)
+_REZERVARI_GRESITE = (
+    "(SELECT GROUP_CONCAT(CONCAT(CAST(DATE(z.DataRezervare) AS CHAR), '~', "
+    "                           COALESCE(z.CodIndicator, ''), '~', "
+    "                           CAST(ROUND(COALESCE(z.R_Anterioara, 0), 2) AS DECIMAL(18,2)), '~', "
+    "                           CAST(ROUND(" + _REZ_PREV + ", 2) AS DECIMAL(18,2))) "
+    "                     ORDER BY z.DataRezervare, z.IDH SEPARATOR '|') "
+    " FROM FX_Rezervari z "
+    " WHERE z.CodAngajament = a.CodAngajament AND z.EInitiala = 0 "
+    "   AND z.CodAI IS NOT NULL AND z.IDH IS NOT NULL "
+    "   AND ABS(COALESCE(z.R_Anterioara, 0) - " + _REZ_PREV + ") > 0.005)"
+)
+
 # Cele noua flag-uri, fiecare un EXISTS corelat — deci NICIUN join spre FX_DDF.
 # Asta nu e doar stil: un LEFT JOIN FX_DDF ar dubla randul angajamentului daca
 # vreodata apar doua DDF-uri pe acelasi CodAngajament (planul spune 1-la-cel-mult-1,
@@ -115,7 +142,9 @@ _SELECT = (
     # is not applied yet, _sql() puts a literal NULL here).
     "{alias} AS Alias, "
     # Slice 0101: the receptions whose chain does not close (see _LANT_NEINCHIS).
-    + _LANT_NEINCHIS + " AS LantNeinchis "
+    + _LANT_NEINCHIS + " AS LantNeinchis, "
+    # Broken reservation chain (see _REZERVARI_GRESITE).
+    + _REZERVARI_GRESITE + " AS RezervariGresite "
     "FROM FX_Angajamente a "
 )
 
@@ -227,7 +256,8 @@ def get_tree():
     Returneaza { db_name, count, rows: [ {CodAngajament, IDDF, Descriere, Stare,
     DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, DataActualizare, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
-    AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab, Alias, LantNeinchis}, ... ] }.
+    AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab, Alias, LantNeinchis,
+    RezervariGresite}, ... ] }.
     """
     an_raw = request.args.get("an")
     if an_raw is None or str(an_raw).strip() == "":
@@ -269,7 +299,8 @@ def get_tree():
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
              salarii, ascuns, data_actualizare, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
              are_rezervari, are_receptii, are_plati, are_ddf, are_partener,
-             are_ord, are_extrase, are_note_cab, are_primite, alias, lant_neinchis) in cursor.fetchall():
+             are_ord, are_extrase, are_note_cab, are_primite, alias, lant_neinchis,
+             rezervari_gresite) in cursor.fetchall():
             rows.append({
                 "CodAngajament": cod,
                 "IDDF": iddf,
@@ -302,6 +333,8 @@ def get_tree():
                 # Slice 0008-02: the operator's name for the angajament (None = none).
                 "Alias": alias,
                 "LantNeinchis": lant_neinchis,
+                # NULL = every reservation chain holds (see _REZERVARI_GRESITE for the shape).
+                "RezervariGresite": rezervari_gresite,
             })
         logger.info("[forexe.tree] %s: an=%s ss=%s include_hidden=%s -> %s randuri",
                     db_name, an, ss, include_hidden, len(rows))

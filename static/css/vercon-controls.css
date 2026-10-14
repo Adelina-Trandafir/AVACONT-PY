@@ -1,0 +1,40 @@
+.vc-field { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: .9em; }
+.vc-field > input:not([type="hidden"]), .vc-field .tb__input, .vc-field .combobox-input, .vc-field .kdp__field { width: 100%; box-sizing: border-box; min-height: 32px; }
+.vc-field__combo { width: 100%; }
+.vc-field-error:empty { display: none; }
+.vc-field-error, .vc-save-status[role="alert"] { color: var(--err-ink); }
+.vc-save-status { margin-right: auto; }
+.vc-doc__bar { border-top: 1px solid var(--line); padding-top: 10px; }
+.vc-actions button { border: 1px solid var(--line); border-radius: 5px; padding: 7px 14px; background: transparent; color: inherit; cursor: pointer; }
+.vc-actions button:disabled { opacity: .45; cursor: default; }
+.vc-actions .is-primary { background: var(--primary-color); color: white; }
+.vc-actions .is-danger { color: var(--err-ink); }
+.vc-dgv { min-width: 0; height: 340px; width: 100%; }
+.vc-dgv.vc-dgv--small { height: 98px; }
+.vc-dgv.vc-dgv--meal { height: 220px; }
+.vc-dgv .dgv { height: 100%; }
+.vc-dgv .dgv__cell { font-size: 13px; }
+.vc-dgv .dgv__editor { font-size: inherit; }
+.vc-dgv .dgv__footer-action { white-space: nowrap; }
+.vc-dgv .dgv__footer-action:disabled { opacity: .4; cursor: default; }
+
+/* Required drafts are marked in place, without adding a message row. */
+.portal.vc-page .vc-field.is-required-empty .combobox-input,
+.portal.vc-page .vc-field.is-required-empty .kdp__field {
+  background: var(--err-control-backcolor);
+  border-color: var(--err-control-bordercolor);
+}
+.portal.vc-page .dgv__cell.is-required-empty,
+.portal.vc-page .dgv__cell.is-required-empty .dgv__editor input {
+  background: var(--err-control-backcolor);
+}
+.portal.vc-page .combobox-input, .portal.vc-page .combobox-option { font-size: calc(13px + 2pt); }
+/* A long option wraps: its lines stay close together so they read as one row of the list. */
+.portal.vc-page .combobox-option { line-height: 1.15; max-height: none; }
+/* ...and its vertical padding shrinks by 2px top and bottom (never below 1px). `is-multiline` is set by the Combobox when the text wraps.
+   The base padding is 8px, 6px under 400px (combobox.css). */
+.portal.vc-page .combobox-option.is-multiline { padding-block: max(1px, calc(8px - 2px)); }
+@media (max-width: 400px) { .portal.vc-page .combobox-option.is-multiline { padding-block: max(1px, calc(6px - 2px)); } }
+@media (min-width: 901px) {
+  .portal.vc-page .combobox-input, .portal.vc-page .combobox-option { font-size: calc(10.33px + 2pt); }
+}

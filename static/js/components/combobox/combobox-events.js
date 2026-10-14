@@ -11,11 +11,27 @@ export const comboboxEventsMixin = {
     if (this.options.readonly) {
       this.addDOMListener(this.container, 'click', (event) => {
         // A choice already closes the dropdown; its bubbling click must not reopen it.
-        if (!this.dropdown.contains(event.target)) this.handleReadonlyClick();
+        // inside a <label> the browser repeats every click on the input, which would reopen the list right after a choice
+        // (or open and close it at once from the arrow): the repeat is cancelled here
+        event.preventDefault();
+        if (this.dropdown.contains(event.target)) return;
+        this.handleReadonlyClick();
       });
       this.addDOMListener(this.input, 'keydown', (e) => this.handleKeydown(e));
       this.addDOMListener(this.input, 'blur', (e) => this.handleBlur(e));
+      if (this.options.dropDownStyle === 'simple') {
+        // a simple box that gets the focus from the keyboard (Tab, Enter of the form) opens its list; a mouse click opens it by itself
+        this.addDOMListener(this.container, 'pointerdown', () => { this._pointerFocus = true; }, true);
+        this.addDOMListener(this.input, 'focus', () => {
+          const k_byMouse = this._pointerFocus; this._pointerFocus = false;
+          if (!k_byMouse && !this.disabled && !this.isVisible) this.showAllOptions();
+        });
+      }
     } else {
+      if (this.arrow) {
+        this.addDOMListener(this.arrow, 'mousedown', (event) => event.preventDefault());
+        this.addDOMListener(this.arrow, 'click', () => this.handleReadonlyClick());
+      }
       this.addDOMListener(this.input, 'input', (e) => this.handleInput(e));
       this.addDOMListener(this.input, 'keydown', (e) => this.handleKeydown(e));
       this.addDOMListener(this.input, 'focus', () => this.handleFocus());
@@ -70,14 +86,36 @@ export const comboboxEventsMixin = {
   showAllOptions() {
     if (this.options.staticData && this.options.staticData.length > 0) {
       this.updateResults(this.options.staticData, '');
+      this.highlightCurrent();
       this.renderResults('');
       this.show();
     } else if (this.options.onSearch) {
-      this.performSearch('');
+      return this.performSearch('').then(() => { if (this.isVisible) { this.highlightCurrent(); this.updateHighlight(); } });
     } else {
       console.warn('⚠️ Nu există date pentru readonly combobox');
       this.hide();
     }
+  },
+
+  /** A simple list opens with the current choice highlighted. */
+  highlightCurrent() {
+    if (this.options.dropDownStyle !== 'simple' || this.selectedValue == null || this.selectedValue === '') return;
+    const k_at = this.results.findIndex((k_item) => String(typeof k_item === 'string' ? k_item : k_item.value) === String(this.selectedValue));
+    if (k_at >= 0) this.selectedIndex = k_at;
+  },
+
+  /**
+   * Simple list: typing letters jumps to the first item that STARTS with them. Letters typed within 800ms of each other are one
+   * search text (two or three letters narrow the jump); the list opens by itself when it is closed.
+   */
+  async typeAhead(k_key) {
+    this._typeBuffer = (this._typeBuffer || '') + k_key.toLocaleLowerCase('ro');
+    clearTimeout(this._typeTimer);
+    this._typeTimer = this.addTimeout(() => { this._typeBuffer = ''; }, 800);
+    if (!this.isVisible) await this.showAllOptions();
+    const k_text = (k_item) => { const k_label = typeof k_item === 'string' ? k_item : k_item.label; return String(this.options.allowHtml ? this.stripHtml(k_label) : k_label).toLocaleLowerCase('ro'); };
+    const k_at = this.results.findIndex((k_item) => !k_item.disabled && k_text(k_item).startsWith(this._typeBuffer));
+    if (k_at >= 0) { this.selectedIndex = k_at; this.updateHighlight(); }
   },
 
   /**
@@ -100,7 +138,11 @@ export const comboboxEventsMixin = {
       case 'Escape':
         this.hide();
         break;
+      default:
+        if (this.options.dropDownStyle === 'simple' && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); this.typeAhead(e.key); }
+        break;
       case 'Tab':
+        if (this.isVisible && (!this.options.readonly || this.options.dropDownStyle === 'simple') && this.selectedIndex >= 0) this.selectHighlighted();   // the highlighted match is kept
         this.hide();
         break;
     }
@@ -116,6 +158,8 @@ export const comboboxEventsMixin = {
       } else if (this.input.value.length >= this.options.minSearchLength) {
         this.performSearch(this.input.value);
       }
+    } else if (this.options.dropDownOnEnter && !this.disabled && !this.isVisible) {
+      this.showAllOptions();   // editable box: the focus opens the whole list
     }
   },
 

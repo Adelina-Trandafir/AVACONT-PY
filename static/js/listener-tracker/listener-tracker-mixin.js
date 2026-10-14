@@ -3,6 +3,7 @@
  * 🎧 LISTENER TRACKER MIXIN - CORE ORCHESTRATOR
  */
 
+import { testMode } from '../utils/debug-tools.js';
 import eventBus from '../event-bus/event-bus.js';
 import { interceptDOMMethods } from './listener-tracker-dom.js';
 import { interceptEventBusMethods, interceptTimerMethods } from './listener-tracker-eventbus.js';
@@ -11,7 +12,7 @@ import { exposeGlobalDebugFunctions } from './listener-tracker-debug.js';
 
 class ListenerTracker {
   constructor() {
-    this.debugMode = true;
+    this.debugMode = testMode;
   }
 
   static applyTo(target, options = {}) {
@@ -37,7 +38,7 @@ class ListenerTracker {
     };
 
     target._trackerOptions = {
-      debugMode: true, // FORȚEAZĂ DEBUG PENTRU TESTARE
+      debugMode: testMode, // the single switch (utils/debug-tools.js)
       trackPerformance: true,
       autoCleanupOnError: true,
       logPrefix: target.constructor.name || 'Unknown',

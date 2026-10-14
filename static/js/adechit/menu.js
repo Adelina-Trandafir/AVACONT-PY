@@ -29,7 +29,7 @@ export function openMenu(k_anchor, k_entries, { label = 'Meniu', align = 'left',
     if (k_entry.run) k_item.addEventListener('click', () => { k_close(); k_entry.run(); });
     k_menu.append(k_item);
   }
-  document.body.append(k_menu); k_anchor.setAttribute('aria-expanded', 'true');
+  (k_anchor.closest('dialog') || document.body).append(k_menu); k_anchor.setAttribute('aria-expanded', 'true');
   k_menu.style.zIndex = String(window.ZIndexManager?.getNext() || 1001);
   const k_rect = k_anchor.getBoundingClientRect();
   const k_left = align === 'right' ? k_rect.right - k_menu.offsetWidth : k_rect.left;

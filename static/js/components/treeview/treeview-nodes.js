@@ -21,6 +21,17 @@ export const treeViewNodesMixin = {
         });
       }
 
+      // exclusiveRoots: opening a root closes the other open roots (with everything open under them)
+      if (this.options.exclusiveRoots && !skipAutoCollapse && (this.results || []).some((root) => String(root.id) === nodeIdStr)) {
+        (this.results || []).forEach((root) => {
+          const rootId = String(root.id);
+          if (rootId !== nodeIdStr && this.expandedNodes.has(rootId)) {
+            this.expandedNodes.delete(rootId);
+            this.collapseAllChildren(rootId);
+          }
+        });
+      }
+
       // Deschide nodul
       this.expandedNodes.add(nodeIdStr);
     }
@@ -34,6 +45,9 @@ export const treeViewNodesMixin = {
     setTimeout(() => {
       if (this.handleTreeScroll) this.handleTreeScroll();
     }, 100);
+
+    // Lets a page fill a branch when it is opened (lazy trees); the node is already drawn open here.
+    if (typeof this.options.onToggle === 'function') this.options.onToggle(nodeIdStr, this.expandedNodes.has(nodeIdStr));
   },
 
   /**

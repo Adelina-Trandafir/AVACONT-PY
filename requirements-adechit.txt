@@ -1,2 +1,2 @@
-# Additional server dependency for saved receipt PDF output.
-reportlab>=4,<5
+# Compatibility entry point; shared by ADECHIT, VERCON and future applications.
+-r requirements-reporting.txt

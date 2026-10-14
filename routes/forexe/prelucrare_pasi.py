@@ -419,10 +419,13 @@ def step3b_prelucreaza_observatii(cursor, cod: str,
 # valorile `TipRand` de rezervare («Rez_Initiala», «Rez_Definitiva», «Rez_Influenta»,
 # «Rez_Zero» si cele trei cu «+») sunt puse AICI, nu mai sus. Pasii 3c/3d filtreaza pe
 # ele, deci fara functia asta rezervarile ar fi mereu zero.
+# 12.10.2026: the seed must NOT depend on `Prelucrat`. Rows with a chain type have been through this very
+# function, whatever their flag says; on 027_SCGM the July-August 2026 reservation rows sat at
+# Prelucrat = 0 with their type computed, the seed skipped them and a later month chained from June.
 _SEED_LAST_ANG_SQL = (
     "SELECT T.CodIndicator, T.Val_AngLeg FROM FX_Istoric AS T "
     "INNER JOIN (SELECT CodIndicator, MAX(ID) AS MaxID FROM FX_Istoric "
-    "            WHERE CodAngajament = %s AND Prelucrat = 1 "
+    "            WHERE CodAngajament = %s "
     "              AND COALESCE(CodIndicator, '') <> '' "
     "              AND TipRand IN ('Rez_Initiala','Rez_Definitiva','Rez_Influenta','Rez_Zero') "
     "            GROUP BY CodIndicator) AS Q "
@@ -430,7 +433,7 @@ _SEED_LAST_ANG_SQL = (
 )
 _SEED_TIPRAND_SQL = (
     "SELECT DISTINCT CodIndicator FROM FX_Istoric "
-    "WHERE CodAngajament = %s AND Prelucrat = 1 "
+    "WHERE CodAngajament = %s "
     "  AND COALESCE(CodIndicator, '') <> '' AND TipRand = %s"
 )
 # Portul lui qFX_ISTORIC_REZERVARI_TIPRAND. `CDate(Format(DataFX,'Short Date'))` =
@@ -1672,6 +1675,32 @@ def step5_plati_incasari(cursor, cod: str, indicatori: Dict[str, dict],
 # ===========================================================================
 # PASUL 7 -- FX_Istoric_Actualizeaza_Rezolvat
 # ===========================================================================
+_TIPURI_REZERVARE_SQL = (
+    "'Rez_Initiala', 'Rez_Definitiva', 'Rez_Influenta', 'Rez_Zero', "
+    "'Rez_Initiala+', 'Rez_Definitiva+', 'Rez_Derulare+'"
+)
+
+
+def step7b_marcheaza_rezervari_tipate(cursor, cod: str) -> int:
+    """
+    `Prelucrat = 1` pe randurile de REZERVARE ale angajamentului care au acum un tip de lant.
+
+    12.10.2026. Step 7 marks only the rows this run inserted (and the receptions 4a consumed). A
+    row that was already in the table at `Prelucrat = 0` with an empty `TipRand` gets its type
+    from step 3b (`_TIPRAND_RANDURI_SQL`) but is in neither list, so it stayed at 0 for good --
+    the July-August 2026 case. A row with a reservation type has been through 3b and 3c/3d by the
+    time step 7 runs, so it is processed. Receptions and payments are NOT touched here: 4a and 5
+    read them at `Prelucrat = 0` and mark what they consume themselves.
+
+    In the «propunere» phase this rolls back with the rest.
+    """
+    cursor.execute(
+        "UPDATE FX_Istoric SET Prelucrat = 1 "
+        "WHERE CodAngajament = %s AND Prelucrat = 0 "
+        f"AND TipRand IN ({_TIPURI_REZERVARE_SQL})", (cod,))
+    return int(cursor.rowcount or 0)
+
+
 def step7_actualizeaza_rezolvat(cursor, ids: List[int]) -> int:
     """
     `Prelucrat = 1` pe randurile date: cele pe care le-a inserat rularea asta, plus

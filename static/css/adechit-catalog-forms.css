@@ -1,0 +1,70 @@
+/* SLICE-ADE6-06: three catalogs and their uniform modal forms. */
+.ade-payers-window { width: min(1560px, 96vw); height: min(720px, 92vh); }
+.ade-payers-mobile-action { display: none; }
+.ade-payers-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; min-height: 0; flex: 1; padding: 4px 16px 16px; }
+.ade-list-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line); }
+.ade-list-grid { flex: 1; min-height: 0; }
+.ade-catalog .ade-list-actions { justify-content: space-between; gap: 12px; padding: 8px; }
+.ade-record-window { width: min(920px, 96vw); }
+.ade-record-window form { display: flex; flex-direction: column; min-height: 0; max-height: 92vh; overflow: hidden; }
+.ade-record-window form > header, .ade-record-window form > footer { flex-shrink: 0; }
+.ade-record-body { display: flex; flex-direction: column; gap: 20px; min-height: 0; padding: 24px; overflow: auto; }
+.ade-record-body > * { flex-shrink: 0; }
+.ade-record-window .msg { margin: 8px 24px; }
+.ade-record-window .msg[role="status"] { color: var(--ink); background: var(--card); }
+.ade-form-section { margin: 4px 0 -6px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 1.05rem; }
+.ade-form-field { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 14px; min-width: 0; font-size: 1rem; }
+.ade-form-field > span { font-weight: 650; }
+.ade-form-field input:not([type="checkbox"]), .ade-form-field .combobox-input { box-sizing: border-box; width: 100%; height: 36px; padding: 5px 8px; color: var(--ink); background: var(--card); border: 0; border-bottom: 1px solid var(--ink-soft); border-radius: 0; font: inherit; }
+.ade-form-field input[type="checkbox"] { width: 22px; height: 22px; margin: 0; justify-self: start; accent-color: var(--blue); }
+.ade-form-field .kdp { min-width: 0; }
+.ade-form-field .combobox-container { max-width: none; }
+.ade-form-pair { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; }
+.ade-form-pair .ade-form-field { grid-template-columns: auto minmax(0, 1fr); }
+.ade-catalog .ade-record-actions { justify-content: space-between; padding: 14px 24px; }
+.ade-catalog .btn { min-width: 110px; min-height: 36px; padding: 6px 16px; color: var(--ink); background: var(--sky-2); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; font-weight: 650; }
+.ade-catalog-header { background: var(--ade-header-back); color: var(--ade-header-text); }
+.ade-catalog-header span { color: inherit; }
+.ade-payers-window .dgv { --dgv-back: var(--card); }
+.ade-group-editor { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; }
+.ade-years { box-sizing: border-box; height: 250px; overflow-y: auto; display: flex; flex-direction: column; align-items: stretch; border-radius: var(--dgv-radius); }
+.ade-years strong { box-sizing: border-box; display: grid; place-items: center; height: 28px; flex: 0 0 28px; padding: 0 8px; border-bottom: 1px solid var(--dgv-line); background: var(--dgv-head-back); color: var(--dgv-head-text); text-align: center; }
+.ade-years button { box-sizing: border-box; height: 28px; flex: 0 0 28px; padding: 0 8px; border: 0; border-bottom: 1px solid var(--dgv-line); background: var(--dgv-back); color: var(--dgv-text); font: inherit; cursor: pointer; }
+.ade-years button[aria-pressed="true"] { background: var(--dgv-select-back); color: var(--dgv-select-text); font-weight: 650; }
+.ade-educator-grid { height: 250px; }
+.ade-educator-grid .dgv { box-sizing: border-box; }
+.ade-educator-grid .dgv__head { box-sizing: border-box; }
+.ade-record-window[data-kind="group"] { width: min(1120px, 96vw); }
+.ade-record-window[data-kind="compact"] { width: min(460px, 96vw); }
+.ade-record-window[data-kind="compact"] .ade-record-body { gap: 10px; padding: 12px; }
+.ade-record-window[data-kind="compact"] .ade-form-field { grid-template-columns: 140px minmax(0, 1fr); gap: 7px; }
+.ade-record-window[data-kind="compact"] .ade-form-pair { grid-template-columns: 1fr; gap: 10px; }
+@media (max-width: 980px) {
+  .ade-payers-window { width: calc(100vw - 20px); max-width: calc(100vw - 20px); height: calc(100vh - 20px); height: calc(100dvh - 20px); max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); margin: 10px; border: 0; border-radius: 0; overflow: hidden; }
+  .ade-payers-window > .ade-catalog-header { flex-direction: row; align-items: center; flex-shrink: 0; min-height: 46px; padding: 0 8px; }
+  .ade-payers-window #ade-payers-back { margin-left: auto; color: var(--ade-header-text); background: transparent; border: 0; }
+  .ade-payers-window > .msg[role="status"] { display: none !important; }
+  .ade-payers-window > .msg[role="alert"] { flex-shrink: 0; margin: 0; overflow-wrap: anywhere; }
+  .ade-payers-columns { display: flex; padding: 8px; gap: 0; overflow: hidden; }
+  .ade-payers-window .ade-list-panel { width: 100%; flex: 1; min-height: 0; border: 0; overflow: hidden; }
+  .ade-payers-window .ade-list-panel[hidden] { display: none; }
+  .ade-payers-window .ade-list-actions { display: none; }
+  .ade-payers-window .dgv { box-sizing: border-box; border: 0; border-radius: 0; min-height: 0; }
+  .ade-payers-window .dgv__scroll { overflow-x: hidden; overscroll-behavior: contain; }
+  .ade-payers-window .dgv__row { user-select: none; -webkit-touch-callout: none; }
+  .ade-payers-window .dgv__hc { padding-inline: 4px; }
+  .ade-payers-window .dgv__rs { display: none; }
+  .ade-payers-window .ade-payers-footer { flex-shrink: 0; justify-content: space-between; padding: 6px 8px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+  .ade-years strong, .ade-years button { height: 33.6px; flex-basis: 33.6px; }
+  .ade-payers-window .ade-payers-mobile-action { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; width: 40px; height: 36px; padding: 0; font-size: 1.2rem; }
+  .ade-payers-window #ade-payers-close { display: none; }
+}
+@media (max-width: 600px) {
+  .ade-record-body { padding: 16px; gap: 16px; }
+  .ade-form-field { grid-template-columns: 1fr; gap: 4px; }
+  .ade-form-field:has(input[type="checkbox"]) { grid-template-columns: auto 1fr; }
+  .ade-form-pair { grid-template-columns: 1fr; gap: 16px; }
+  .ade-form-pair .ade-form-field { grid-template-columns: 1fr; }
+  .ade-group-editor { grid-template-columns: 1fr; }
+  .ade-record-window[data-kind="compact"] .ade-form-field { grid-template-columns: 120px minmax(0, 1fr); }
+}

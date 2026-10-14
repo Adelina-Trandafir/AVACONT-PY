@@ -1,0 +1,69 @@
+/* Bank matching uses the payer panels and the same month tree as the main ADE page. */
+.ade-bank-window { position: fixed; inset: 0; box-sizing: border-box; width: 100vw; max-width: 100vw; height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; margin: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden; }
+.ade-bank-window .ade-catalog-header { box-sizing: border-box; height: 46px; min-height: 46px; flex: 0 0 46px; flex-direction: row; align-items: center; gap: 8px; padding: 4px 12px; }
+.ade-bank-window .ade-catalog-header h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; }
+.ade-bank-window .ade-catalog-header .btn, .ade-bank-window footer .btn { min-width: 0; min-height: 28px; padding: 4px 10px; font-size: calc(.74rem + 1px); line-height: 1.2; }
+.ade-bank-window .ade-catalog-header .btn { flex-shrink: 0; }
+.ade-bank-window [hidden] { display: none !important; }
+.ade-bank-workspace { display: grid; grid-template-rows: minmax(210px, 1.2fr) minmax(180px, 1fr); gap: 8px; flex: 1; min-height: 0; padding: 8px 12px; overflow: auto; }
+.ade-bank-source-row { display: grid; grid-template-columns: 258px minmax(0, 1fr); gap: 12px; min-height: 0; }
+.ade-bank-periods { display: grid; grid-template-rows: 32px minmax(0, 1fr); border: 1px solid var(--line); min-height: 0; }
+.ade-bank-source-content { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.ade-bank-filters { display: flex; align-items: end; gap: 10px; }
+.ade-bank-filters label, .ade-bank-association label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ade-bank-filters label { flex: 1; }
+.ade-bank-window input:not([type="checkbox"]), .ade-bank-window select, .ade-bank-window textarea { box-sizing: border-box; min-height: 32px; padding: 4px 8px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; }
+.ade-bank-window h3 { flex: 0 0 auto; margin: 0; padding: 6px 8px; background: var(--sky-2); border-bottom: 1px solid var(--line); font-size: 1rem; }
+.ade-bank-periods h3 { text-align: center; }
+.ade-bank-extracts { display: flex; flex-direction: column; min-height: 0; flex: 1; border: 1px solid var(--line); }
+.ade-bank-extracts > .btn { align-self: flex-start; margin: 4px 8px; }
+.ade-bank-columns { display: grid; grid-template-columns: 220px 330px minmax(240px, 1fr) 260px; gap: 12px; min-height: 0; }
+.ade-bank-association { display: flex; flex-direction: column; align-self: start; gap: 12px; min-width: 0; width: 260px; }
+.ade-bank-association select, .ade-bank-association textarea { width: 100%; }
+.ade-bank-association textarea { resize: vertical; min-height: 84px; max-height: 180px; }
+.ade-bank-hidden { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 8px; border-top: 1px solid var(--line); }
+.ade-bank-hidden input { accent-color: var(--blue); }
+.ade-bank-window footer { box-sizing: border-box; min-height: 38px; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; padding: 4px 12px; }
+.ade-bank-window footer > .msg { flex: 1 1 160px; margin: 0; font-size: .9em; padding: 4px 8px; }
+.ade-bank-window footer > .btn { margin-left: auto; }
+.ade-bank-window .btn:disabled { opacity: .48; cursor: default; }
+.ade-bank-window .dgv { --dgv-back: var(--card); }
+.ade-bank-window .ade-bank-periods .treeview.treeview--inline { border: 0; }
+.ade-bank-modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.ade-bank-modes button[aria-pressed="true"] { color: var(--ade-header-text); background: var(--ade-header-back); }
+.ade-bank-auto-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px; }
+.ade-bank-auto-table { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); }
+.ade-bank-review-table { border-collapse: collapse; width: 100%; font: inherit; }
+.ade-bank-review-table th { position: sticky; top: 0; background: var(--sky-2); z-index: 1; }
+.ade-bank-review-table th, .ade-bank-review-table td { padding: 6px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
+.ade-bank-review-table td > div { min-width: 180px; }
+.ade-bank-review-table p { margin: 4px 0 0; font-size: .9em; }
+.ade-bank-review-table select { min-width: 270px; width: 270px; }
+.ade-bank-review-table input[type="text"] { min-width: 160px; width: 160px; }
+.ade-bank-review-table input[type="date"] { width: 130px; }
+.ade-bank-review-table input[type="number"] { width: 100px; }
+.ade-bank-review-table input[type="checkbox"] { min-height: 20px; width: 20px; accent-color: var(--blue); }
+.ade-bank-review-table td:last-child input { width: 260px; }
+.ade-bank-auto-panel > .btn { align-self: flex-start; }
+.ade-bank-window[data-mode="auto"] .ade-bank-workspace { grid-template-rows: minmax(210px, 1fr) auto; }
+.ade-bank-window[data-mode="auto"] .ade-bank-columns { grid-template-columns: 1fr; }
+.ade-bank-window[data-mode="auto"] .ade-bank-association { justify-self: end; }
+@media (min-width: 981px) and (max-width: 1250px) {
+  .ade-bank-columns { grid-template-columns: 180px 270px minmax(180px, 1fr) 230px; gap: 8px; }
+  .ade-bank-association { width: 230px; }
+}
+@media (max-width: 980px) {
+  .ade-header__left { gap: 6px; flex: 0 0 auto; }
+  .ade-header .ade-main-menu { padding-inline: 6px; }
+  .ade-bank-workspace { grid-template-rows: 440px auto; padding: 8px; }
+  .ade-bank-source-row { grid-template-columns: 150px minmax(0, 1fr); gap: 8px; }
+  .ade-bank-columns { grid-template-columns: minmax(0, 1fr); }
+  .ade-bank-window .ade-list-panel { min-height: 180px; height: 210px; }
+  .ade-bank-association { width: min(300px, 100%); }
+  .ade-bank-window[data-mode="auto"] .ade-bank-workspace { grid-template-rows: 440px auto; }
+  .ade-bank-filters { flex-wrap: wrap; gap: 6px; }
+  .ade-bank-filters label { flex-basis: 100%; }
+  .ade-bank-window .ade-catalog-header { padding-inline: 8px; }
+  .ade-bank-window footer { padding: 4px 8px; }
+  .ade-bank-window footer > .msg { flex-basis: 100%; order: -1; }
+}

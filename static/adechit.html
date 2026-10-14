@@ -1,17 +1,18 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="ro"><head><script type="module" src="/static/js/utils/debug-tools.js"></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Prezență · ADECHIT</title><meta name="robots" content="noindex">
 <script src="/static/js/adechit/gate.js"></script>
 <script src="/static/js/portal/theme-init.js"></script>
 <link rel="stylesheet" href="/static/site/site.css"><link rel="stylesheet" href="/static/css/variables.css">
 <link rel="stylesheet" href="/static/css/portal.css"><link rel="stylesheet" href="/static/css/dgv.css">
-<link rel="stylesheet" href="/static/css/treeview/treeview.css"><link rel="stylesheet" href="/static/css/combobox.css"><link rel="stylesheet" href="/static/css/datepicker.css"><link rel="stylesheet" href="/static/css/app-menu.css"><link rel="stylesheet" href="/static/css/adechit.css"><link rel="stylesheet" href="/static/css/adechit-help.css">
+<link rel="stylesheet" href="/static/css/treeview/treeview.css"><link rel="stylesheet" href="/static/css/combobox.css"><link rel="stylesheet" href="/static/css/textbox.css"><link rel="stylesheet" href="/static/css/checkbox.css"><link rel="stylesheet" href="/static/css/datepicker.css"><link rel="stylesheet" href="/static/css/app-menu.css"><link rel="stylesheet" href="/static/css/adechit.css"><link rel="stylesheet" href="/static/css/adechit-help.css">
 <script src="/static/js/utils/css.js"></script><script src="/static/js/utils/z-max.js"></script>
 <script type="module" src="/static/js/adechit/app.js"></script></head>
 <body class="portal ade-page"><header class="header ade-header">
-<button class="brand ade-brand" id="ade-apps" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Aplicații"><svg class="ade-brand__icon" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#309eff"/><text x="16" y="24" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="800" fill="#fff">A</text></svg><span class="ade-brand__name">ADECHIT</span></button>
-<div class="ade-header__center"><div id="ade-subunit" class="ade-subunit" hidden><div id="ade-subunit-combo" class="ade-picker"></div></div><div class="ade-search"><input id="ade-search" type="search" autocomplete="off" placeholder="Scrie nume sau CNP copil" aria-label="Caută copil după nume sau CNP"></div></div>
-<div class="ade-header__right"><span id="ade-context" class="ade-header__context"></span><span id="ade-session-timer" class="ade-session-timer" role="timer" hidden>⏱ <b>05:00</b></span><button class="btn ade-menu-btn ade-help-btn" id="ade-help" type="button" aria-label="Ajutor" title="Ajutor"><b>?</b></button><button class="btn ade-menu-btn" id="ade-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Meniu"><svg viewBox="0 0 14 12" width="14" height="12" aria-hidden="true"><path d="M0 1h14M0 6h14M0 11h14" stroke="currentColor" stroke-width="2" fill="none"/></svg></button></div>
+<div class="ade-header__left"><button class="brand ade-brand" id="ade-apps" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Aplicații"><svg class="ade-brand__icon" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#309eff"/><text x="16" y="24" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="800" fill="#fff">A</text></svg><span class="ade-brand__name">ADECHIT</span></button><button class="pmenu__top ade-main-menu" id="ade-menu" type="button" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 14 12" width="14" height="12" aria-hidden="true"><path d="M0 1h14M0 6h14M0 11h14" stroke="currentColor" stroke-width="2" fill="none"/></svg><span>Meniu</span></button></div>
+<div class="ade-header__center"><div id="ade-unit" class="ade-subunit" hidden><div id="ade-unit-combo" class="ade-picker"></div></div><div id="ade-subunit" class="ade-subunit" hidden><div id="ade-subunit-combo" class="ade-picker"></div></div><div class="ade-search"><input id="ade-search" type="search" autocomplete="off" placeholder="Scrie nume sau CNP copil" aria-label="Caută copil după nume sau CNP"></div></div>
+<div class="ade-header__right"><span id="ade-context" class="ade-header__context"></span><span id="ade-session-timer" class="ade-session-timer" role="timer" hidden>⏱ <b>05:00</b></span><button class="btn ade-menu-btn ade-help-btn" id="ade-help" type="button" aria-label="Ajutor" title="Ajutor"><b>?</b></button></div>
 <div class="ade-header__hidden" hidden><button id="ade-payers" type="button">Plătitori</button><button id="ade-taxes" type="button">Taxe</button></div></header>
 <main class="ade-main">
   <div class="ade-notice-row"><p id="ade-message" class="msg" role="status"></p></div>
@@ -41,6 +42,7 @@
         <h2>RAPOARTE</h2>
         <div class="ade-rep-group">
           <div class="ade-rep-item ade-rep-item--cmd" data-label="Situație lunară"><span class="ade-rep-icon" aria-hidden="true">▣</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-situation">▣ <span>Situație lunară</span></button></div></div>
+          <div class="ade-rep-item ade-rep-item--cmd" data-label="Situație de plată"><span class="ade-rep-icon" aria-hidden="true">▣</span><div class="ade-rep-body"><button type="button" class="ade-report-command" id="ade-rep-payment-notice" title="Solduri inițiale + taxa lunară integrală. Toate grupele: fiecare grupă pe pagină nouă.">▣ <span>Situație de plată</span></button></div></div>
           <div class="ade-rep-item ade-rep-item--check" data-label="Toate grupele?"><span class="ade-rep-icon" aria-hidden="true"></span><div class="ade-rep-body"><label><input type="checkbox" id="ade-rep-all"> Toate grupele?</label></div></div>
           <div class="ade-rep-item ade-rep-item--check" data-label="Separă grupe?"><span class="ade-rep-icon" aria-hidden="true"></span><div class="ade-rep-body"><label><input type="checkbox" id="ade-rep-split" disabled> Separă grupe?</label></div></div>
         </div>
@@ -68,6 +70,26 @@
     </aside>
   </section>
 </main>
+<dialog id="ade-bank-dialog" class="ade-catalog ade-bank-window" aria-labelledby="ade-bank-title">
+  <header class="ade-catalog-header"><h2 id="ade-bank-title">Asociere extrase cu copii</h2><button id="ade-bank-close" class="btn" type="button">Închide</button></header>
+  <div class="ade-bank-workspace">
+    <div class="ade-bank-source-row">
+      <aside class="ade-bank-periods"><h3>LUNA / ANUL</h3><div id="ade-bank-period-tree" class="ade-tree" aria-label="Luna extraselor"></div></aside>
+      <div class="ade-bank-source-content">
+        <div class="ade-bank-filters"><label>Caută în explicația extrasului <input id="ade-bank-search" type="search" autocomplete="off" placeholder="Scrie minimum 2 caractere, de exemplu gr"></label><button id="ade-bank-reload" class="btn" type="button">Reîncarcă</button></div>
+        <section class="ade-bank-extracts ade-bank-manual"><h3>Încasări neasociate · toate subunitățile</h3><div id="ade-bank-extract-list" class="ade-list-grid"></div><button id="ade-bank-more" class="btn" type="button" hidden>Mai multe încasări</button></section>
+        <section id="ade-bank-auto-panel" class="ade-bank-auto-panel" hidden><div id="ade-bank-auto-table" class="ade-bank-auto-table"></div><button id="ade-bank-auto-next" class="btn" type="button" hidden>Pagina următoare</button></section>
+      </div>
+    </div>
+    <div class="ade-bank-columns">
+      <section class="ade-list-panel ade-bank-manual"><h3>Grupe</h3><div id="ade-bank-groups" class="ade-list-grid"></div><label class="ade-bank-hidden"><input id="ade-bank-show-hidden" type="checkbox"><span>Arată ascunse</span></label></section>
+      <section class="ade-list-panel ade-bank-manual"><h3>Copii</h3><div id="ade-bank-children" class="ade-list-grid"></div></section>
+      <section class="ade-list-panel ade-bank-manual"><h3>Plătitori · istoricul copilului</h3><div id="ade-bank-payers" class="ade-list-grid"></div></section>
+      <div class="ade-bank-association"><label>Luna înregistrării <select id="ade-bank-month" aria-label="Luna înregistrării"><option value="">Alegeți luna</option></select></label><label class="ade-bank-explanation ade-bank-manual">Explicație document <textarea id="ade-bank-explanation" rows="3" maxlength="255" placeholder="Generată automat; poate fi editată"></textarea></label></div>
+    </div>
+  </div>
+  <footer><nav class="ade-bank-modes" aria-label="Mod asociere"><button id="ade-bank-manual-mode" class="btn" type="button" aria-pressed="true" hidden>Asociere manuală</button><button id="ade-bank-auto-mode" class="btn" type="button" aria-pressed="false">Previzualizare automată</button></nav><p id="ade-bank-message" class="msg" role="status" hidden></p><button id="ade-bank-save" class="btn ade-bank-manual" type="button" disabled>Asociază și înregistrează în Alte plăți</button><button id="ade-bank-auto-save" class="btn" type="button" hidden disabled>Generează documentele bifate</button></footer>
+</dialog>
 <dialog id="ade-catalog" class="ade-catalog" aria-labelledby="ade-catalog-title" aria-describedby="ade-catalog-message">
   <header class="ade-catalog-header"><h2 id="ade-catalog-title">Plătitori</h2><span>Salvare obligatorie înainte de închidere</span></header>
   <p id="ade-catalog-message" class="msg" role="alert" hidden></p>
@@ -110,6 +132,33 @@
       </section>
     </fieldset>
     <footer><button id="ade-annual-cancel" class="btn" type="button">Renunță</button><button id="ade-annual-save" class="btn" type="submit">Închide august și deschide septembrie</button></footer>
+  </form>
+</dialog>
+<dialog id="ade-notice-config" class="ade-catalog ade-notice-config" aria-labelledby="ade-notice-config-title">
+  <form id="ade-notice-config-form">
+    <header class="ade-catalog-header"><h2 id="ade-notice-config-title">Text situație de plată</h2></header>
+    <p id="ade-notice-config-message" class="msg" role="status" hidden></p>
+    <section class="ade-notice-config-body">
+      <p>Textul apare sub tabelul fiecărei grupe din subunitatea curentă. Variabile: <b>[UNITATE], [CONT], [COD_FISCAL], [GRUPA], [LUNA], [AN]</b>. [CONT] folosește primul cont al unității; puteți scrie direct contul dorit.</p>
+      <p>HTML simplu: paragrafe, titluri, liste, aldine, cursive și subliniere; fonturi Arial, Times New Roman și Courier New; mărimi 8–24 pt; culorile din selector. Imaginile, linkurile și scripturile sunt eliminate la afișare.</p>
+      <label class="ade-notice-source-toggle"><input id="ade-notice-source-mode" type="checkbox"> Editează sursa HTML</label>
+      <div id="ade-notice-toolbar" class="ade-notice-toolbar" role="toolbar" aria-label="Formatare text">
+        <button type="button" data-notice-command="bold" aria-label="Aldine"><b>B</b></button>
+        <button type="button" data-notice-command="italic" aria-label="Cursive"><i>I</i></button>
+        <button type="button" data-notice-command="underline" aria-label="Subliniere"><u>U</u></button>
+        <button type="button" data-notice-command="insertUnorderedList">Listă •</button>
+        <button type="button" data-notice-command="insertOrderedList">Listă 1.</button>
+        <button type="button" data-notice-command="justifyLeft">Stânga</button>
+        <button type="button" data-notice-command="justifyCenter">Centru</button>
+        <button type="button" data-notice-command="justifyRight">Dreapta</button>
+        <label>Font <select id="ade-notice-font"><option>Arial</option><option>Times New Roman</option><option>Courier New</option></select></label>
+        <label>Mărime <select id="ade-notice-size"><option value="1">8 pt</option><option value="2">10 pt</option><option value="3" selected>12 pt</option><option value="4">14 pt</option><option value="5">16 pt</option><option value="6">18 pt</option><option value="7">24 pt</option></select></label>
+        <label>Culoare <select id="ade-notice-color"><option value="#000000">Negru</option><option value="#ff0000">Roșu</option><option value="#4169e1">Albastru</option><option value="#008000">Verde</option><option value="#ff8c00">Portocaliu</option><option value="#800080">Violet</option><option value="#808080">Gri</option></select></label>
+      </div>
+      <div id="ade-notice-editor" class="ade-notice-editor rpt-richtext" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Textul de sub tabel"></div>
+      <textarea id="ade-notice-source" class="ade-notice-source" maxlength="30000" rows="16" aria-label="Sursă HTML" hidden></textarea>
+    </section>
+    <footer><button id="ade-notice-config-cancel" class="btn" type="button">Renunță</button><button id="ade-notice-config-save" class="btn" type="submit">Salvează și închide</button></footer>
   </form>
 </dialog>
 <dialog id="ade-help-dialog" class="ade-catalog ade-help" aria-labelledby="ade-help-title">

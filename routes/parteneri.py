@@ -18,6 +18,8 @@ def get_db_connection(target_db_name):
     )
 # ------------------------------
 
+# Parteneri.Provenienta: rows written by these two routes (the Access sync) are marked 'avacont' on INSERT.
+# ON DUPLICATE KEY UPDATE leaves it alone, so a row that came from elsewhere keeps its origin.
 # ==============================================================================
 # 7. INSERT PARTENERI
 # ==============================================================================
@@ -42,8 +44,8 @@ def save_parteneri():
             conn.start_transaction()
             
             sql = """INSERT INTO Parteneri 
-                     (IdUnitate, CodPartener, DenumirePartener, CodFiscal, ContIBAN, Banca, Adresa, Tip) 
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+                     (IdUnitate, CodPartener, DenumirePartener, CodFiscal, ContIBAN, Banca, Adresa, Tip, Provenienta) 
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'avacont')"""
             
             values = [(x['IdUnitate'], x['CodPartener'], x['DenumirePartener'], x['CodFiscal'], 
                        x['ContIBAN'], x['Banca'], x['Adresa'], x['Tip']) 
@@ -120,12 +122,14 @@ def upsert_parteneri():
                     ContIBAN,
                     Banca,
                     Adresa,
-                    Tip
+                    Tip,
+                    Provenienta
                 )
                 VALUES
                 (
                     %s, %s, %s, %s,
-                    %s, %s, %s, %s
+                    %s, %s, %s, %s,
+                    'avacont'
                 )
                 ON DUPLICATE KEY UPDATE
                     DenumirePartener = VALUES(DenumirePartener),

@@ -1,0 +1,26 @@
+/* slice VC06-01: nomenclatures + settings (compact grid like NIR; list/tree left, form right, buttons in the footer) */
+.vc-nom { margin-bottom: 14px; }
+.vc-nom__bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 8px; }
+.vc-nom__bar h3 { margin: 0; flex: 1 1 auto; }
+.vc-nom__bar input[type="search"] { padding: 4px 8px; min-width: 180px; }
+.vc-nom__check { display: inline-flex; align-items: center; gap: 4px; font-size: .9em; }
+.vc-nom__body { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr); gap: 12px; align-items: start; }
+.vc-nom__left { max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.vc-nom__empty { margin: 8px; opacity: .7; }
+.vc-nom__tree details { border-bottom: 1px solid var(--line); }
+.vc-nom__tree summary { padding: 4px 8px; font-weight: 600; cursor: pointer; }
+.vc-nom__leaf { display: block; width: 100%; text-align: left; padding: 3px 8px 3px 24px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.vc-nom__leaf:hover, .vc-lines tr[tabindex]:hover { background: rgba(48, 158, 255, .08); }
+.vc-nom__leaf.is-selected, .vc-lines tr.is-selected { background: rgba(48, 158, 255, .18); font-weight: 600; }
+.vc-nom .is-inactive { opacity: .5; text-decoration: line-through; }
+.vc-lines tr[tabindex] { cursor: pointer; }
+.vc-nom__form { margin-bottom: 0; }
+.vc-nom__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; grid-column: 1 / -1; }
+.vc-nom__fields label { display: flex; flex-direction: column; font-size: .9em; gap: 2px; }
+.vc-nom__fields input, .vc-nom__fields select { padding: 4px 6px; }
+.vc-nom__fields input[readonly] { background: transparent; border-color: transparent; }
+.vc-nom .vc-actions { justify-content: flex-end; }
+.vc-nom__sub { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.vc-nom__sub[hidden] { display: none; }
+@media (max-width: 700px) { .vc-nom__body { grid-template-columns: 1fr; } }
+

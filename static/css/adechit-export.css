@@ -1,0 +1,36 @@
+/* Scoped preview dialog: the same tokens, typography and controls as the ADECHIT forms. */
+.ade-export {
+  --ink: #0b2a5b; --ink-soft: #3b5a85; --card: #fff; --sky-1: #f3f9ff;
+  --sky-2: #e3f1ff; --line: #cfe3f8; --blue: #309eff; --radius-sm: 12px;
+  --ade-header-back: #3b5a85; --ade-header-text: #fff;
+  --err-ink: #8f1d17; --err-bg: #fdeceb; --err-line: #f1b5b1;
+  box-sizing: border-box; width: min(620px, 96vw); max-height: 92vh; padding: 0;
+  color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  font: 14.33px/1.4 Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
+}
+html[data-theme="dark"] .ade-export {
+  --ink: #e6ebf3; --ink-soft: #a3b0c4; --card: #1b212b; --sky-1: #12161d;
+  --sky-2: #181e28; --line: #2f3a4d; --err-ink: #ffb4ae; --err-bg: #3a1f1f; --err-line: #7a3a36;
+}
+.ade-export::backdrop { background: var(--ink); opacity: .45; }
+.ade-export form { display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
+.ade-export header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--ade-header-back); color: var(--ade-header-text); }
+.ade-export h2 { margin: 0; font: inherit; font-size: 1.2em; font-weight: 700; }
+.ade-export header button { min-width: 32px; padding: 0; color: inherit; background: transparent; border: 0; font-size: 18px; }
+.ade-export-content { min-height: 0; padding: 16px; overflow: auto; }
+.ade-export p { margin: 0 0 12px; text-align: left; }
+.ade-export-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-top: 12px; }
+.ade-export label { display: flex; align-items: center; gap: 8px; padding: 8px; min-width: 0; border: 1px solid var(--line); border-radius: 7.5px; cursor: pointer; }
+.ade-export label:hover { background: var(--sky-1); }
+.ade-export label span { overflow-wrap: anywhere; }
+.ade-export .ade-export-all { background: var(--sky-2); font-weight: 650; }
+.ade-export input { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; accent-color: var(--blue); }
+.ade-export footer { display: flex; justify-content: space-between; gap: 12px; margin: 0; padding: 14px 16px; border-top: 1px solid var(--line); }
+.ade-export button { min-height: 36px; padding: 6px 16px; color: var(--ink); background: var(--sky-2); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; font-weight: 650; cursor: pointer; }
+.ade-export button:hover { background: var(--sky-1); }
+.ade-export header button:hover { background: transparent; }
+.ade-export button:disabled { opacity: .55; cursor: default; }
+.ade-export :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ade-export [role="alert"] { margin: 12px 0 0; padding: 8px 12px; color: var(--err-ink); background: var(--err-bg); border: 1px solid var(--err-line); border-radius: var(--radius-sm); }
+@media (max-width: 480px) { .ade-export-columns { grid-template-columns: 1fr; } }
+@media print { .ade-export { display: none !important; } }

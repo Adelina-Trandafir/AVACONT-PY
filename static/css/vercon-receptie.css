@@ -1,0 +1,31 @@
+/* Equal receipt fields; annotation arrows describe widths, not actions. */
+.vc-page .vc-doc__header--nir { width: min(100%,1076px); margin-inline: auto; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; padding-top: 0; }
+.vc-doc--nir .vc-header-group { gap: 8px; grid-template-rows: none; }
+.vc-doc--nir .vc-field { position: relative; }
+.vc-doc--nir .vc-field .combobox-input { padding-right: 30px; }
+.vc-doc--nir .combobox-arrow { color: var(--primary-color); cursor: pointer; font-size: 19px; pointer-events: auto; border: 0; background: transparent; padding: 0 4px; }
+.vc-doc--nir .vc-field > .vc-nir-stock { position: absolute; right: 0; top: 0; display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: .8em; line-height: 1.6; white-space: nowrap; max-width: calc(100% - 4.5em); overflow: hidden; text-overflow: ellipsis; }
+/* Starting stock: the supplier and the invoice number are invisible but keep their place, so nothing around them moves (the checkbox stays). */
+.vc-doc--nir .vc-field.is-stock > :not(.vc-nir-stock) { visibility: hidden; }
+.vc-doc--nir .vc-nir-stock input { min-height: 0; width: auto; margin: 0; }
+.vc-doc--nir .vc-doc__lines, .vc-doc--nir .vc-doc__bar { max-width: 1450px; }
+.vc-doc--nir .dgv__editor .combobox-input { padding-right: 28px; }
+@media (max-width: 1200px) {
+  .vc-doc__header--nir { grid-template-columns: repeat(4,minmax(0,1fr)); }
+}
+@media (max-width: 800px) {
+  .vc-doc .vc-doc__header--nir { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; }
+}
+@media (max-width: 500px) {
+  .vc-doc .vc-doc__header--nir { grid-template-columns: 1fr; }
+}
+/* NIR number with an optional sub-number (707,1): the box splits inside its own cell, so nothing around it moves. */
+.vc-number-row { display: flex; align-items: stretch; gap: 4px; width: 100%; min-width: 0; }
+.vc-number-row > .tb:first-child { flex: 1 1 auto; min-width: 0; }
+.vc-number-sub { display: flex; align-items: center; gap: 2px; flex: 0 0 58px; width: 58px; }
+.vc-number-sub[hidden] { display: none; }
+.vc-number-sub .tb { flex: 1; min-width: 0; }
+/* NIR lines grid: 4px less padding on each side (cells 8px, headers 22px), never below 1px */
+.vc-doc--nir .vc-dgv .dgv__cell:not(.is-action) { padding-inline: max(1px, calc(8px - 4px)); }
+.vc-doc--nir .vc-dgv .dgv__hc:not(.is-action) { padding-inline: max(1px, calc(22px - 4px)); }
+.vc-doc--nir .vc-dgv .dgv__cell:has(> .dgv__editor) { padding-inline: 0; }

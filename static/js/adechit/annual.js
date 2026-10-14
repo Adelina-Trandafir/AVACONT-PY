@@ -2,6 +2,7 @@ import { DataGrid, ValueType } from '../dgv/datagrid.js';
 import { TreeView } from '../components/treeview/treeview.js';
 import { Combobox } from '../components/combobox/combobox.js';
 import { showMessage } from '../portal/messages.js';
+import { cnpMessage } from './cnp.js';
 
 export function bindAnnual({ api, refresh, message }) {
   const $ = (id) => document.getElementById(id);
@@ -47,10 +48,14 @@ export function bindAnnual({ api, refresh, message }) {
     educatorGrid = new DataGrid($('ade-annual-educator-grid'), { headerHeight: 32, columns: [
       { key: 'name', title: 'Educator pentru noul an', valueType: ValueType.Text, editable: true, editor: 'text', width: 260,
         validate: (value) => typeof value === 'string' && value.trim() && value.length <= 50 ? '' : 'Completați numele (maximum 50 de caractere).' },
+      { key: 'EMail', title: 'Email', valueType: ValueType.Text, editable: true, editor: 'text', width: 220, nullable: true,
+        validate: (value) => !value?.trim() || value.length <= 255 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ? '' : 'Introduceți o adresă de email validă.' },
+      { key: 'CNP', title: 'CNP', valueType: ValueType.Text, editable: true, editor: 'text', width: 155, nullable: true,
+        validate: (value) => cnpMessage(value?.trim() || '') },
       { key: 'start', title: 'Începând cu', valueType: ValueType.Text, width: 140, filter: false },
       { key: 'remove', title: 'Elimină', display: 'button', actionText: 'Șterge', width: 75, sortable: false, filter: false },
     ], rows: current().educators, rowKey: 'id', editable: true, enableGrouping: false, layout: { fill: 'name' },
-    onCellSave: async ({ row, value }) => { if (busy) throw new Error('Închiderea este în curs.'); row.name = value; return row; },
+    onCellSave: async ({ row, key, value }) => { if (busy) throw new Error('Închiderea este în curs.'); row[key] = value; return row; },
     onCellAction: async ({ row }) => {
       if (busy || !await commit()) return;
       current().educators = current().educators.filter((item) => item.id !== row.id); renderEducators();
@@ -91,7 +96,7 @@ export function bindAnnual({ api, refresh, message }) {
   $('ade-annual-name').addEventListener('input', (event) => { current().name = event.target.value; $('ade-annual-group-title').textContent = event.target.value || 'Grupă nouă'; renderTree(); });
   $('ade-annual-add-educator').addEventListener('click', async () => {
     if (busy || !await commit()) return;
-    const row = { id: nextId--, name: '', start: `01.09.${plan.month.Anul}` };
+    const row = { id: nextId--, name: '', EMail: '', CNP: '', start: `01.09.${plan.month.Anul}` };
     current().educators.push(row); renderEducators(); educatorGrid.beginEdit(row, 'name');
   });
   $('ade-annual-add-group').addEventListener('click', async () => {
@@ -115,7 +120,8 @@ export function bindAnnual({ api, refresh, message }) {
         await showGroup(group.id); say('Grupa nouă trebuie să aibă nume unic, cel puțin un educator și cel puțin un copil care rămâne.'); return;
       }
     }
-    const payload = (group) => ({ id: group.id, version: group.version, name: group.name.trim(), educators: group.educators.map((row) => row.name.trim()) });
+    const payload = (group) => ({ id: group.id, version: group.version, name: group.name.trim(),
+      educators: group.educators.map((row) => ({ Educator: row.name.trim(), EMail: row.EMail?.trim() || null, CNP: row.CNP?.trim() || null })) });
     const body = JSON.stringify({ id: plan.month.IDL, annual: { version: plan.month.Version,
       groups: groups.filter((group) => group.id >= 0).map(payload), new_groups: groups.filter((group) => group.id < 0).map(payload),
       children: children.map((child) => ({ id: child.IDP, version: child.Version, departed: child.departed, group_id: child.group_id })),
@@ -138,7 +144,8 @@ export function bindAnnual({ api, refresh, message }) {
     grid?.destroy(); grid = null; educatorGrid?.destroy(); educatorGrid = null; tree?.destroy?.(); targetCombo?.destroy?.();
     plan = data; nextId = -1; retry = null; targetId = null; $('ade-annual-message').hidden = true;
     groups = plan.groups.map((group) => ({ id: group.IDG, version: group.Version, name: group.Grupa,
-      educators: group.educators.map((name) => ({ id: nextId--, name, start: `01.09.${plan.month.Anul}` })) }));
+      educators: group.educator_details.map((row) => ({ id: nextId--, name: row.Educator, EMail: row.EMail || '',
+        CNP: row.CNP || '', start: `01.09.${plan.month.Anul}` })) }));
     children = plan.children.map((child) => ({ ...child, group_id: child.IDG, departed: false, OriginalGroup: groups.find((group) => group.id === child.IDG).name }));
     $('ade-annual-title').textContent = `Închidere anuală · august ${plan.month.Anul}`;
     targetCombo = new Combobox($('ade-annual-target'), { readonly: true, placeholder: 'Grupa destinație', staticData: [], onSelect: (id) => { targetId = Number(id); } });

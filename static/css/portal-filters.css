@@ -1,0 +1,27 @@
+/* ---------- the filter bar: one line on every screen, no labels ---------- */
+.pa__bar { flex-wrap: nowrap; align-items: center; gap: 8px; }
+.pa__f { min-width: 0; }
+.pa__f--unit { flex: 1 1 auto; max-width: none; }
+.pa__f--an { flex: 0 0 77px; }
+.pa__f--ss { flex: 0 0 105px; }
+.pa__bar .combobox-container { width: 100%; }
+.pa__bar .js-back-ang .bk-ico { font-size: 1rem; line-height: 1; }
+@media (max-width: 900px) {
+  .pa__bar { padding: 8px 10px; gap: 6px; }
+  .pa__f--an { flex-basis: 66px; }
+  .pa__f--ss { flex-basis: 90px; }
+  .pa__bar .js-back-ang { padding: 3px 6px; min-height: 0; line-height: 1; font-size: .8rem; }
+  .pa__bar .js-back-ang .bk-txt { display: none; }
+  .pa__bar .js-back-ang .bk-ico { font-size: .95rem; }
+}
+
+/* the way back has no frame; a soft background shows only on hover */
+.pa__bar .js-back-ang { border: 0; background: transparent; box-shadow: none; }
+.pa__bar .js-back-ang:hover { background: var(--sky-2); }
+
+/* the options button of the list has no frame either */
+.pa__opt { border: 0; background: transparent; }
+.pa__opt:hover, .pa__opt[aria-expanded="true"] { background: var(--sky-2); border: 0; }
+html[data-theme="dark"] .portal .pa__opt { background: transparent; }
+html[data-theme="dark"] .portal .pa__opt:hover { background: #232c3b; }
+

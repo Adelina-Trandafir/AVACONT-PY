@@ -81,8 +81,8 @@ def letterhead(issuer, right=''):
     return {'t': 'letterhead', 'left': [issuer['name'], issuer['address']], 'right': right}
 
 
-def col(label, w, align='l', tint=None):
-    return {'label': label, 'w': w, 'align': align, 'tint': tint}
+def col(label, w, align='l', tint=None, key=None):
+    return {'label': label, 'w': w, 'align': align, 'tint': tint, **({'key': key} if key else {})}
 
 
 def total_cells(label, span, values):
@@ -118,7 +118,10 @@ def situation_rows(repo, month_id, group_id):
 
 
 def _situation_table(rows):
-    columns = [col('', 420, 'c'), *[col(text, w, align, tint) for _, text, w, align, tint, _ in SITUATION_COLUMNS]]
+    keys = ('NUME', 'CNP', 'ZILE_PREZENTA', 'SID', 'SIC', 'VALOARE_CONTRACT', 'PLATA', 'PLATI',
+            'COMPENSARE', 'ANTICIPAT', 'RETUR', 'SFD', 'SFC', 'DETALII')
+    columns = [col('', 420, 'c', key='NR_CRT'),
+               *[col(text, w, align, tint, key=key) for key, (_, text, w, align, tint, _) in zip(keys, SITUATION_COLUMNS)]]
     body = []
     for index, row in enumerate(rows, 1):
         body.append({'cells': [str(index), *[
@@ -504,13 +507,22 @@ def financial_report(repo, unit, args):
     return model('Situația financiară', 'Situatia_financiara', blocks, landscape=True, font=7.5)
 
 
-BUILDERS = {'situation': situation_report, 'cash': cash_register_report, 'bank': bank_report, 'cancelled': cancelled_report,
+from .payment_notice import payment_notice_report
+
+BUILDERS = {'payment-notice': payment_notice_report, 'situation': situation_report, 'cash': cash_register_report, 'bank': bank_report, 'cancelled': cancelled_report,
             'account': account_report, 'debtor': debtor_report, 'payment-order': payment_order, 'financial': financial_report}
 
 
 HIDDEN = {'debtor', 'financial'}   # buttons hidden from the panel; the code stays in case they come back
 
+REPORT_NAMES = {'payment-notice': 'ADECHIT_SITUATIE_PLATA', 'situation': 'ADECHIT_SITUATIE_DEBITORI', 'cash': 'ADECHIT_REGISTRU_CASA',
+                'bank': 'ADECHIT_RAPORT_BANCA', 'cancelled': 'ADECHIT_DOCUMENTE_ANULATE',
+                'account': 'ADECHIT_FISA_CONT', 'debtor': 'ADECHIT_FISA_DEBITOR',
+                'payment-order': 'ADECHIT_DISPOZITIE_PLATA', 'financial': 'ADECHIT_SITUATIE_FINANCIARA'}
+
 
 def build(repo, unit, kind, args):
     require(kind in BUILDERS and kind not in HIDDEN, 'REPORT', 'Raport necunoscut.', 404)
-    return BUILDERS[kind](repo, unit, args)
+    built = BUILDERS[kind](repo, unit, args)
+    built['report_name'] = REPORT_NAMES[kind]
+    return built

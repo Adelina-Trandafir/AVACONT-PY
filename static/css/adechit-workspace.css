@@ -1,0 +1,42 @@
+/* SLICE-AD10: the Subunitate selector sits in the header, left of the search, with no label. */
+.ade-subunit { flex: 0 1 320px; min-width: 0; }
+.ade-subunit[hidden] { display: none; }
+.ade-subunit .ade-picker { width: 100%; min-width: 0; }
+/* Subunitate and the search box are the same size: 320 x 28 px. */
+.ade-subunit .combobox-input { box-sizing: border-box; height: 28px; border-radius: var(--ade-field-radius); }
+.ade-subunit .ade-picker, .ade-subunit .combobox-container { height: 28px; }
+/* The month tree is as tall as the main grid with its header and footer (app.js sets --ade-grid-h). */
+.ade-month-panel { flex: 0 0 var(--ade-grid-h, 43%); }
+.ade-group-panel { flex: 1 1 0; }
+/* Popup menus: ONE band in the application colour from top to bottom behind the icons (the icons themselves are transparent);
+   change --avacont-blue and the whole band follows. The header menu has the band and the icons on the right. */
+
+/* The left panel can be folded: the year, the months in short form and the groups with ellipsis. */
+.ade-page.is-left-collapsed .ade-month-panel .ade-h2-text { display: none; }
+.ade-page.is-left-collapsed .ade-month-panel h2 { justify-content: space-between; }
+.ade-page.is-left-collapsed .ade-group-panel { overflow: visible; }
+.ade-page.is-left-collapsed .ade-hidden-groups { position: relative; justify-content: center; padding: 6px 2px; }
+.ade-page.is-left-collapsed .ade-hidden-groups__text { display: none; }
+.ade-page.is-left-collapsed .ade-hidden-groups:hover .ade-hidden-groups__text { position: absolute; z-index: 30; left: 100%; bottom: 0; display: block; margin-left: 4px; padding: 5px 8px; white-space: nowrap; background: var(--card); border: 1px solid var(--blue); border-radius: var(--radius-sm); box-shadow: 0 4px 14px rgb(0 0 0 / .18); }
+
+/* A list waiting for the server: its content is hidden and replaced by a spinner and «Se incarca…». */
+.ade-loading { position: relative; pointer-events: none; }
+.ade-loading > * { visibility: hidden; }
+.ade-loading::before { content: ""; position: absolute; z-index: 1; left: 50%; top: 50%; width: 20px; height: 20px; margin: -22px 0 0 -10px; border: 3px solid var(--line); border-top-color: var(--blue); border-radius: 50%; animation: ade-spin .8s linear infinite; }
+.ade-loading::after { content: "Se încarcă…"; position: absolute; z-index: 1; left: 0; right: 0; top: 50%; margin-top: 6px; text-align: center; color: var(--ink-soft); font-size: calc(.72rem + 1px); }
+.ade-pickers.ade-loading { min-height: 40px; }
+.ade-pickers.ade-loading::before { margin-top: -14px; width: 14px; height: 14px; margin-left: -60px; }
+.ade-pickers.ade-loading::after { top: 0; bottom: 0; margin: 0; display: flex; align-items: center; justify-content: center; padding-left: 20px; }
+@keyframes ade-spin { to { transform: rotate(360deg); } }
+
+/* Cursor: the arrow over every text that cannot be edited; the I-beam only where typing is possible. */
+.portal.ade-page input:not([type="checkbox"]):not([type="radio"]):not([type="button"]), .portal.ade-page textarea, .portal.ade-page .dgv__cell.is-editable { cursor: text; }
+.portal.ade-page .dgv__row, .portal.ade-page .dgv__cell, .portal.ade-page .dgv__hc, .portal.ade-page .treeview-label, .portal.ade-page .ade-ledger-table td, .portal.ade-page .ade-ledger-table th { cursor: default; }
+.portal.ade-page .dgv__cell.is-editable { cursor: text; }
+.portal.ade-page .treeview-item, .portal.ade-page .treeview-item .treeview-label { cursor: pointer; }
+.portal.ade-page .combobox-container.readonly .combobox-input { cursor: pointer; }
+
+/* Dragging a child onto a group of the left tree (PC). */
+.ade-tree .treeview-item.is-drop-target { background: var(--sky-2); outline: 2px dashed var(--blue); outline-offset: -2px; }
+.is-dragging-child .ade-group-panel .treeview-item { cursor: copy; }
+

@@ -115,6 +115,7 @@ from .prelucrare_pasi import (
     step4d_calculeaza_dif,
     step5_plati_incasari,
     step7_actualizeaza_rezolvat,
+    step7b_marcheaza_rezervari_tipate,
     step8_actualizeaza_extrase,
 )
 from .prelucrare_asociere import (
@@ -635,6 +636,7 @@ def _ruleaza_pasii(cursor, cod, scalari, tabele, db_name, un, supplied, warnings
     # altfel un rand ramas cu steagul jos naste cate un instantaneu la fiecare rulare.
     with timing.stage("pas 7 rezolvat"):
         step7_actualizeaza_rezolvat(cursor, sorted(set(ids_noi) | set(ids_consumate)))
+        step7b_marcheaza_rezervari_tipate(cursor, cod)
 
     # --- pasul 8 -----------------------------------------------------------
     # NECONDITIONAT, la coada, in aceeasi tranzactie -- exact ca originalul Access.

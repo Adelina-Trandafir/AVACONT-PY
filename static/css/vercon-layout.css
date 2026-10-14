@@ -1,0 +1,21 @@
+/* VERCON v2: shared controls, NIR density and full-width document workspace. */
+.vc-main { max-width: none; padding: 10px 16px; }
+.vc-header { gap: 20px; min-height: 56px; height: auto; }
+.vc-global-search { flex: 1; max-width: 640px; display: flex; gap: 8px; align-items: center; background: var(--card, #fff); color: var(--ink); border-radius: 6px; padding: 6px 12px; }
+.vc-global-search input { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; outline-offset: 2px; }
+.vc-header__right button { background: transparent; color: inherit; border: 1px solid #ffffff50; border-radius: 5px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.vc-header__context { font-size: .8em; }
+.vc-header .vc-selectors { flex: 1; min-width: 0; max-width: 850px; margin: 0; padding: 8px 0; border: 0; }
+.vc-header .vc-picker { flex: 1 1 180px; }
+.vc-header .vc-picker--year { flex: 0 1 110px; min-width: 90px; }
+.vc-unit-label { font-weight: 600; margin-right: 12px; }
+.vc-picker { flex: 0 1 220px; }
+.vc-type { width: 150px; }
+.vc-type > div { width: 100%; }
+.vc-access { margin-left: auto; color: var(--ink); font-size: .85em; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+.vc-bar { font-size: .85em; margin: 4px 0; opacity: .8; }
+.vc-menu { border-bottom: 1px solid var(--line); margin: 4px -16px 12px; padding: 0 16px; gap: 4px; }
+.vc-menu__group { gap: 0; }
+.vc-menu button { border: 0; border-radius: 0; padding: 10px 18px; }
+.vc-menu button[aria-current="true"] { border-bottom: 3px solid var(--primary-color); background: rgba(48,158,255,.1); color: var(--primary-color); }
+.vc-work { padding: 0; border: 0; }

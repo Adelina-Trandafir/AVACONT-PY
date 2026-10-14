@@ -27,6 +27,9 @@ export const comboboxSearchMixin = {
       this.hideLoader();
     }
 
+    // find-as-you-type: once something was typed and found, the first match is the choice (Tab keeps it, no click needed)
+    if (!this.options.readonly && query && this.results.length > 0 && !this.results[0].disabled) this.selectedIndex = 0;
+
     this.renderResults(query);
 
     if (this.results.length > 0) {

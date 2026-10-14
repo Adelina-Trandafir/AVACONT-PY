@@ -412,6 +412,11 @@
         "size": 255,
         "default": ""
       },
+      "FelDoc": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
       "DataDoc": {
         "type": "Date/Time",
         "size": 8,
@@ -650,6 +655,16 @@
       "Educator": {
         "type": "Text",
         "size": 50,
+        "default": ""
+      },
+      "EMail": {
+        "type": "Text",
+        "size": 255,
+        "default": ""
+      },
+      "CNP": {
+        "type": "Text",
+        "size": 13,
         "default": ""
       },
       "DeLa": {

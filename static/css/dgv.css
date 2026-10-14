@@ -117,6 +117,8 @@
   background: inherit;
 }
 .dgv__cell.is-right { justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.dgv__cell.is-center { justify-content: center; }
+.dgv__cell.has-action { justify-content: flex-start; padding-left: 4px; }   /* + the button's own 6px: the text starts ~10px from the grid edge */
 .is-frozen { position: sticky; z-index: 3; }
 .dgv__head .is-frozen { z-index: 5; }
 .dgv__row .dgv__cell.is-frozen { box-shadow: 1px 0 0 var(--dgv-line); }
@@ -174,3 +176,8 @@
 .dgv__cell.is-checkbox input:disabled { pointer-events: none; }
 .dgv__editor input[type="checkbox"] { width: 18px; height: 18px; }
 .dgv__cell.is-checkbox .dgv__editor { display: flex; align-items: center; justify-content: center; }
+
+/* a cell that is being edited gives its whole area to the editor (no padding around it) */
+.dgv__cell:has(> .dgv__editor) { padding: 0; }
+.dgv__editor .combobox-container { display: block; width: 100%; height: 100%; max-width: none; }
+.dgv__editor .combobox-input { height: 100%; }

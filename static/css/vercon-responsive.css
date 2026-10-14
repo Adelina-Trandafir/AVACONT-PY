@@ -1,0 +1,13 @@
+@media (max-width: 1150px) {
+  .vc-header__context { display: none; }
+  .vc-header { gap: 12px; }
+}
+@media (max-width: 800px) {
+  .vc-header { flex-wrap: wrap; padding: 8px; gap: 8px; }
+  .vc-header .vc-selectors { order: 3; flex-basis: 100%; max-width: none; }
+  .vc-doc, .vc-doc--bc, .vc-doc--bc:has(.vc-doc__tree[hidden]), .vc-lista__meals, .vc-lista__overview { grid-template-columns: 1fr; }
+  .vc-doc .vc-doc__header { grid-template-columns: 1fr; }
+  .vc-doc--bc .vc-doc__header .vc-field, .vc-doc--storno .vc-doc__header .vc-field { grid-column: auto; grid-row: auto; }
+  .vc-doc__tree { height: 300px; }
+  .vc-header__right button { padding: 4px 6px; }
+}

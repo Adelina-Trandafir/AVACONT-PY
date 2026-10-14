@@ -4,6 +4,7 @@
  * ✨ UPDATE: Suport pentru prefix icons (steaguri, avatare, etc.)
  */
 
+import { testMode } from '../../utils/debug-tools.js';
 import { comboboxStateMixin } from './combobox-state.js';
 import { comboboxUIMixin } from './combobox-ui.js';
 import { comboboxEventsMixin } from './combobox-events.js';
@@ -41,12 +42,22 @@ export class Combobox {
       allowHtml: options.allowHtml || false,
       prefixIcon: options.prefixIcon || false, // ✨ activează prefix icon
       showOnlyIcon: options.showOnlyIcon || false, // ✨ afișează doar icon-ul în input
+      // 'search' (default): the operator may type to filter. 'simple': a plain drop-down list, mouse choice only (like DropDownList in VB.NET);
+      // it formats itself (no typing, whole box opens the list, same border and arrow as the typing box).
+      dropDownStyle: options.dropDownStyle || 'search',
+      // true: an editable box opens its whole list as soon as it gets the focus (a 'simple' box already opens on click, so it ignores this)
+      dropDownOnEnter: options.dropDownOnEnter || false,
+      // minimum width (px) of the opened list: the list may be wider than the box, never narrower than the box
+      dropDownMinWidth: options.dropDownMinWidth || 0,
       ...options,
     };
+    if (!(this.options.maxResults > 0)) this.options.maxResults = 50;   // rows drawn in the list; an undefined option passed through must not lift the limit
+    this.options.dropDownMinWidth = Number(this.options.dropDownMinWidth) || 0;
+    if (this.options.dropDownStyle === 'simple') this.options.readonly = true;
 
     // Aplică ListenerTracker pentru tracking automat
     ListenerTracker.applyTo(this, {
-      debugMode: false,
+      debugMode: testMode,
       logPrefix: `Combobox[${options.placeholder || 'unnamed'}]`,
     });
 

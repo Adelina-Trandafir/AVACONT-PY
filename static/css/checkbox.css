@@ -1,0 +1,4 @@
+/* CheckBox (js/components/checkbox). Low specificity: a screen adds its own class through the `className` option. */
+.cb { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.cb__input { margin: 0; accent-color: var(--blue); cursor: inherit; }
+.cb.is-disabled { opacity: .6; cursor: default; }

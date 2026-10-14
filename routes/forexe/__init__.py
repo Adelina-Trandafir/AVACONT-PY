@@ -73,6 +73,7 @@ from . import tree  # noqa: E402,F401
 from . import sumar  # noqa: E402,F401
 from . import rezervari  # noqa: E402,F401
 from . import rezervari_reanaliza  # noqa: E402,F401
+from . import istoric_luni  # noqa: E402,F401
 from . import receptii  # noqa: E402,F401
 from . import receptii_refacere  # noqa: E402,F401
 from . import plati  # noqa: E402,F401

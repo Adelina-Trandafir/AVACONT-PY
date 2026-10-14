@@ -71,6 +71,7 @@ export class DatePicker {
 
   setValue(k_date, k_notify = true) {
     this.value = k_date;
+    this.field.classList.remove('is-invalid');   // a date chosen from the calendar (or Today / Clear) is a valid one
     this.source.value = this.iso;
     this.render();
     if (k_notify) this.source.dispatchEvent(new Event('change', { bubbles: true }));

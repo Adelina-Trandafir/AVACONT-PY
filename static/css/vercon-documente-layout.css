@@ -1,0 +1,18 @@
+.vc-doc { gap: 10px; grid-template-columns: minmax(0,1fr) 300px; }
+.vc-doc__main, .vc-nom, .vc-empty-page { min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--card, transparent); padding: 12px; }
+.vc-doc__header { grid-template-columns: repeat(3,minmax(0,280px)); justify-content: start; }
+.vc-doc__header--nir { grid-template-columns: minmax(0,280px) minmax(0,240px) minmax(0,180px); }
+.vc-doc--storno .vc-field[data-field="source"] { grid-column: 1; grid-row: 1; }
+.vc-doc--storno .vc-field[data-field="IdComisie"] { grid-column: 1; grid-row: 2; }
+.vc-doc--storno .vc-field[data-field="NrFact"] { grid-column: 2; grid-row: 1; }
+.vc-doc--storno .vc-field[data-field="Numar"] { grid-column: 2; grid-row: 2; }
+.vc-doc--storno .vc-field[data-field="DataFc"] { grid-column: 3; grid-row: 1; }
+.vc-doc--storno .vc-field[data-field="Data"] { grid-column: 3; grid-row: 2; }
+.vc-doc--bc .vc-field[data-field="IDC"] { grid-column: 1; grid-row: 1; }
+.vc-doc--bc .vc-field[data-field="Data"] { grid-column: 1; grid-row: 2; }
+.vc-doc--bc .vc-field[data-field="IdMasina"] { grid-column: 2; grid-row: 1; }
+.vc-doc--bc .vc-field[data-field="Expl"] { grid-column: 2; grid-row: 2; }
+.vc-doc--bc .vc-field[data-field="Numar"] { grid-column: 3; grid-row: 1; }
+.vc-header-group { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.vc-doc__header--oi { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.vc-doc__header--oi .vc-field[data-field="Expl"] { grid-column: 1 / -1; }

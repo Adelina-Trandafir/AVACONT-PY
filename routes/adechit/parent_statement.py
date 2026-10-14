@@ -129,6 +129,26 @@ def make_statement(data, parent, issuer, start=None, end=None):
             'generated': date.today().strftime('%d.%m.%Y')}
 
 
+def statement_model(data):
+    """Keep the statement's complete letterhead and identity in spreadsheet output."""
+    issuer = data['issuer']
+    keys = ('date', 'explanation', 'debit', 'credit', 'balance', 'balance_type')
+    labels = ('Data', 'Explicație', 'DEBIT', 'CREDIT', 'Sold', 'Tip sold')
+    widths = (1320, 4020, 1020, 1020, 1020, 1020)
+    return {'title': 'Fișă cont', 'filename': 'Fisa_cont', 'landscape': False, 'report_name': 'ADECHIT_FISA_CONT_PARINTI',
+            'footer': 'Generată la ' + data['generated'], 'blocks': [
+                {'t': 'letterhead', 'left': [issuer['name'], issuer['address'], 'Cod fiscal: ' + issuer['tax_code'],
+                     'Cont: ' + ', '.join(str(row.get('Cont') or '') for row in issuer['accounts'])]},
+                {'t': 'title', 'text': 'Fișă cont'},
+                {'t': 'box', 'rows': [('Nume', data['child']), ('Adresa', data['address']), ('CNP', data['cnp']),
+                                     ('Email', data['email']), ('Perioada', data['period'])]},
+                {'t': 'table', 'cols': [{'label': label, 'w': width, 'align': 'r' if key in ('debit', 'credit', 'balance') else 'l'}
+                                       for key, label, width in zip(keys, labels, widths)],
+                 'rows': [{'cells': [row[key].replace(' ', '') if key in ('debit', 'credit', 'balance') else row[key] for key in keys],
+                           'cls': 'total' if row['kind'] == 'total' else 'sub' if row['kind'] == 'subtotal' else ''}
+                          for row in data['rows']]}]}
+
+
 def statement_pdf(data):
     try:
         import reportlab

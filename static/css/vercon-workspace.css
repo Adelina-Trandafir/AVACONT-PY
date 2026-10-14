@@ -1,0 +1,123 @@
+/* Full-window page and header, with a bounded document workspace. */
+html:has(> body.vc-page) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--sky-1);
+}
+.portal.vc-page {
+  --vc-work-max-width: 1440px;
+  --vc-work-max-height: 1080px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.vc-page .vc-header {
+  box-sizing: border-box;
+  position: static;
+  flex: 0 0 auto;
+  height: var(--vc-head-h);
+  min-height: var(--vc-head-h);
+}
+.vc-page .vc-header .vc-selectors { padding-block: 0; }
+.vc-page .vc-main {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  padding: 5px 7px 6px;
+  overflow: hidden;
+}
+.vc-page .vc-main > .msg { flex: 0 0 auto; margin: 0 0 5px; padding: 2px 8px; }
+.vc-page .vc-main > .msg:empty { display: none; }
+.vc-page .vc-state { flex: 0 0 auto; }
+.vc-page .vc-menu {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: var(--vc-work-max-width);
+  margin: 0 auto 5px;
+  padding: 0;
+}
+.vc-page .vc-work {
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  max-width: var(--vc-work-max-width);
+  margin-inline: auto;
+  max-height: var(--vc-work-max-height);
+  margin-block: auto;
+  overflow: hidden;
+}
+.vc-page .vc-work > .vc-doc {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0,1fr);
+  align-items: stretch;
+}
+.vc-page .vc-doc__main {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.vc-page .vc-doc__titlebar, .vc-page .vc-doc__header, .vc-page .vc-doc__bar { flex: 0 0 auto; }
+.vc-page .vc-doc__titlebar { margin-bottom: 8px; }
+.vc-page .vc-doc__titlebar h3 { margin: 0; }
+.vc-page .vc-doc__header { margin-bottom: 8px; }
+.vc-page .vc-doc__lines {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.vc-page .vc-doc__lines > h4 { flex: 0 0 auto; margin: 0 0 4px; }
+.vc-page .vc-doc__grid.vc-dgv { flex: 1 1 0; min-height: 0; height: auto; }
+.vc-page .vc-doc__grid > .dgv { min-height: 0; }
+.vc-page .vc-doc__lines > p { flex: 0 0 auto; margin: 4px 0 0; }
+.vc-page .vc-doc__bar { margin-top: 8px; padding-top: 8px; }
+.vc-page .vc-doc__tree { min-height: 0; height: auto; }
+.vc-page .vc-doc__tree > .vc-tree-body { min-height: 0; height: auto; overflow: hidden; }
+.vc-page .vc-lista__overview { flex: 0 0 auto; margin-bottom: 8px; }
+.vc-page .vc-lista__meals { flex: 1 1 0; min-height: 0; margin-bottom: 0; }
+.vc-page .vc-lista__meal { display: flex; flex-direction: column; min-height: 0; }
+.vc-page .vc-lista__meal > h4, .vc-page .vc-lista__summary { flex: 0 0 auto; }
+.vc-page .vc-lista__dishes.vc-dgv { flex: 1 1 0; min-height: 0; height: auto; }
+.vc-page .vc-work > :not(.vc-doc) { box-sizing: border-box; max-height: 100%; overflow: auto; }
+.vc-page .vc-work > .vc-reports {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0,1fr) auto auto auto;
+  overflow: hidden;
+}
+.vc-page .vc-reports__types, .vc-page .vc-reports__selection { height: auto; min-height: 0; }
+.vc-page .vc-reports__period { min-height: 0; overflow: auto; }
+.vc-page .vc-reports__actions + div { max-height: 5em; overflow: auto; }
+.vc-page .vc-reports__output { max-height: 36dvh; overflow: auto; }
+@media (max-width: 1000px) {
+  .vc-page .vc-work > .vc-reports { display: block; overflow: auto; }
+  .vc-page .vc-reports > * { margin-bottom: 8px; }
+  .vc-page .vc-reports__types, .vc-page .vc-reports__selection { height: 260px; }
+}
+@media (max-width: 800px) {
+  .vc-page .vc-header { height: auto; }
+  .vc-page .vc-work > .vc-doc { display: flex; flex-direction: column; }
+  .vc-page .vc-doc__main { flex: 1 1 0; }
+  .vc-page .vc-doc__header { max-height: 35dvh; overflow: auto; }
+  .vc-page .vc-doc__tree { flex: 0 1 25%; min-height: 0; }
+  .vc-page .vc-doc--lista .vc-doc__main { overflow: auto; }
+  .vc-page .vc-lista__meals { flex: 0 0 auto; }
+  .vc-page .vc-lista__dishes.vc-dgv { flex: 0 0 auto; height: 180px; }
+}

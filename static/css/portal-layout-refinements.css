@@ -1,0 +1,19 @@
+/* ---------- slice 0110-13: narrow Extrase tree, one-button menu, taller blue bar (computers), still phone page ---------- */
+@media (min-width: 901px) {
+  /* the Extrase tree keeps ~30% of its former width */
+  #ext-view { grid-template-columns: minmax(150px, 10%) 1fr; }
+  /* the bar is 40% taller and #3b5a85; its text turns light */
+  .portal .header { min-height: 53px; background: #3b5a85; border-bottom-color: #3b5a85; backdrop-filter: none; }
+  .portal .header .brand__name, .portal .header .brand__tag, .portal .header .user-email { color: #fff; }
+  .portal .header .pmenu__top, .portal .header .btn--ghost { color: #fff; border-color: rgba(255, 255, 255, .45); background: transparent; }
+  .portal .header .pmenu__top:hover, .portal .header .pmenu__top[aria-expanded="true"],
+  .portal .header .btn--ghost:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+}
+html[data-theme="dark"] .portal .header { background: rgba(21, 26, 35, .92); }
+
+/* phone: the page never scrolls and never zooms (only the PDF viewer zooms, see nozoom.js) */
+html { touch-action: manipulation; }
+@media (max-width: 900px) {
+  html:has(body.portal), .portal { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+}
+

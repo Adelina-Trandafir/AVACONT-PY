@@ -2,6 +2,7 @@ import { confirmBox } from '../utils/confirm-box.js';
 import { DataGrid, ValueType } from '../dgv/datagrid.js';
 import { Combobox } from '../components/combobox/combobox.js';
 import { DatePicker } from '../components/datepicker/datepicker.js';
+import { TextBox } from '../components/textbox/textbox.js';
 import { showMessage } from '../portal/messages.js';
 import { cnpMessage } from './cnp.js';
 
@@ -150,11 +151,20 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
   function field(key, label, value, type = 'text', parent = body, pre = '') {
     const row = document.createElement('label'); row.className = 'ade-form-field';
     const caption = document.createElement('span'); caption.textContent = label;
-    const input = document.createElement('input'); input.name = pre + key; input.id = `ade-field-${pre}${key}`;
-    input.type = type; input.setAttribute('aria-label', label);
-    if (type === 'checkbox') input.checked = Boolean(value); else input.value = value ?? '';
-    input.maxLength = context().schema[type === 'checkbox' ? 'Platitori' : 'Platitori_sub']?.fields[key]?.size || 255;
-    row.append(caption, input); parent.append(row);
+    row.append(caption);
+    const size = context().schema[type === 'checkbox' ? 'Platitori' : 'Platitori_sub']?.fields[key]?.size || 255;
+    let input;
+    if (type === 'text') {   // a plain text field is the shared TextBox (its input carries the same name / id / maxLength)
+      const box = new TextBox(row, { name: pre + key, id: `ade-field-${pre}${key}`, ariaLabel: label, value, maxLength: size, allowCopyPaste: true });
+      controls.push(box); input = box.input;
+    } else {
+      input = document.createElement('input'); input.name = pre + key; input.id = `ade-field-${pre}${key}`;
+      input.type = type; input.setAttribute('aria-label', label);
+      if (type === 'checkbox') input.checked = Boolean(value); else input.value = value ?? '';
+      input.maxLength = size;
+      row.append(input);
+    }
+    parent.append(row);
     if (type === 'date') {
       const picker = new DatePicker(input); controls.push(picker);
     }
@@ -288,11 +298,15 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
     const periods = data.educators.filter((item) => item.IDG === row?.IDG).map((item) => ({ ...item, DeLa: day(item.DeLa), PanaLa: day(item.PanaLa) }));
     const drafts = new Map(); let year = null;
     const columns = [{ ...column('Educator', 'Educator', 230), editable: true },
+      { ...column('EMail', 'Email', 220), editable: true, editor: 'text', nullable: true,
+        validate: (value) => !value?.trim() || value.length <= 255 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ? '' : 'Introduceți o adresă de email validă.' },
+      { ...column('CNP', 'CNP', 155), editable: true, editor: 'text', nullable: true,
+        validate: (value) => cnpMessage(value?.trim() || '') },
       { ...column('DeLa', 'Începând cu', 160), editable: true, editor: 'date', valueType: ValueType.DateTime },
       { ...column('PanaLa', 'Până la', 160), editable: true, editor: 'date', nullable: true, valueType: ValueType.DateTime }];
     const addEducator = async () => {
       if (editGrid.hasEdit && !await editGrid.commitEdit()) return;
-      const period = { IDGE: --sequence, Educator: '', DeLa: '', PanaLa: '' };
+      const period = { IDGE: --sequence, Educator: '', EMail: '', CNP: '', DeLa: '', PanaLa: '' };
       const previousDirty = dirty;
       periods.push(period); drafts.set(period.IDGE, period); dirty = true; filter();
       editGrid.beginNewRowEdit(period, 'Educator', () => {
@@ -325,7 +339,8 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
       if (!values.Grupa) throw new Error('Numele grupei este obligatoriu.');
       return { id: row?.IDG ?? null, version: row?.Version, values, educators: [...drafts.values()].map((item) => ({
         id: item.IDGE < 0 ? null : item.IDGE, version: item.Version,
-        values: { Educator: item.Educator, DeLa: item.DeLa || null, PanaLa: item.PanaLa || null } })) };
+        values: { Educator: item.Educator, EMail: item.EMail?.trim() || null, CNP: item.CNP?.trim() || null,
+          DeLa: item.DeLa || null, PanaLa: item.PanaLa || null } })) };
     };
   }
   async function saveHiddenGroup({ row, value }) {

@@ -42,8 +42,9 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
                             g.ade_operations = rights(context)
                             require(operation in g.ade_operations, 'FORBIDDEN', 'Nu aveți dreptul necesar pentru această operație ADE.', 403)
                             result = function(repo, *args, **kwargs)
-                        logger.info('ADE operation=%s outcome=success', operation)
-                        return result if isinstance(result, Response) else jsonify(result)
+                        response = result if isinstance(result, Response) else jsonify(result)
+                        logger.info('ADE operation=%s method=%s path=%s outcome=success', operation, request.method, request.path)
+                        return response
                     except DomainError as error:
                         logger.warning('ADE operation=%s refusal=%s', operation, error.reason)
                         body = {'error': str(error), 'reason': error.reason}
@@ -53,9 +54,16 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
                     except (KeyError, TypeError) as error:
                         logger.warning('ADE malformed request: %s', type(error).__name__)
                         return jsonify(error='Cerere incompletă sau invalidă.', reason='REQUEST'), 400
-                    except Exception:
-                        logger.exception('ADE operation=%s failed', operation)
-                        return jsonify(error='Operația nu a fost finalizată. Reîncercați cu aceeași cheie.', reason='SERVER'), 500
+                    except Exception as error:
+                        logger.exception('ADE operation=%s method=%s path=%s failed', operation, request.method, request.path)
+                        reading = request.method in ('GET', 'HEAD')
+                        if getattr(error, 'errno', None) in (1205, 1213):
+                            message = ('Baza de date este ocupată. Reîncercați încărcarea datelor.' if reading else
+                                       'Baza de date este ocupată. Reîncercați salvarea cu aceeași cheie.')
+                            return jsonify(error=message, reason='DATABASE_BUSY'), 503
+                        message = ('Datele nu au putut fi încărcate. Reîncercați.' if reading else
+                                   'Operația nu a fost finalizată. Reîncercați cu aceeași cheie.')
+                        return jsonify(error=message, reason='SERVER'), 500
                 if authenticate:
                     return authenticate(run)()
                 from routes.portal.portal import require_portal_session
@@ -124,6 +132,81 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
         body = request.get_json(silent=True)
         require(isinstance(body, dict), 'JSON', 'Este necesară o cerere JSON.', 400)
         return service.idempotent(repo, request.headers.get('Idempotency-Key'), operation, body, lambda: function(body))
+
+    @bp.get('/api/adechit/bank-extracts')
+    @guard('read')
+    def bank_extracts(repo):
+        from .bank_associations import available
+        return available(repo, request.args)
+
+    @bp.get('/api/adechit/bank-extracts/periods')
+    @guard('read')
+    def bank_extract_periods(repo):
+        from .bank_associations import available_periods
+        return available_periods(repo)
+
+    @bp.get('/api/adechit/bank-extracts/payers')
+    @guard('read')
+    def bank_extract_payers(repo):
+        from .bank_associations import payer_history
+        child_id = request.args.get('IDP', '')
+        require(child_id.isdigit(), 'FILTER', 'Filtru de copil invalid.', 400)
+        return {'rows': payer_history(repo, int(child_id))}
+
+    @bp.post('/api/adechit/bank-extracts/associate')
+    @guard('collect')
+    def bank_extract_associate(repo):
+        from .bank_associations import associate
+        require('catalog' in g.ade_operations, 'FORBIDDEN',
+                'Asocierea necesită drepturile de încasare și de modificare a plătitorilor.', 403)
+        return command(repo, 'bank-extract-associate', lambda body: associate(repo, g.portal['db_name'], body, g.portal['email']))
+
+    @bp.get('/api/adechit/bank-extracts/defaults')
+    @guard('read')
+    def bank_extract_defaults(repo):
+        from .bank_associations import default_explanation
+        month_id = request.args.get('IDL', '')
+        require(month_id.isdigit(), 'FILTER', 'Filtru de lună invalid.', 400)
+        return {'explanation': default_explanation(repo, int(month_id))}
+
+    @bp.get('/api/adechit/bank-extracts/preview')
+    @guard('read')
+    def bank_extract_preview(repo):
+        from .bank_preview import preview
+        return preview(repo, request.args)
+
+    @bp.post('/api/adechit/bank-extracts/selected')
+    @guard('collect')
+    def bank_extract_selected(repo):
+        from .bank_preview import save_selected
+        require('catalog' in g.ade_operations, 'FORBIDDEN',
+                'Generarea necesită drepturile de încasare și de modificare a plătitorilor.', 403)
+        return command(repo, 'bank-extract-selected', lambda body: save_selected(repo, g.portal['db_name'], body, g.portal['email']))
+
+    @bp.get('/api/adechit/payment-notice/config')
+    @guard('read')
+    def payment_notice_config(repo):
+        from .payment_notice import configuration
+        from .report_richtext import editable_html
+        result = configuration(repo)
+        result['preview'] = editable_html(result['html'])
+        return result
+
+    @bp.post('/api/adechit/payment-notice/config')
+    @guard('catalog')
+    def payment_notice_config_save(repo):
+        from .payment_notice import save_configuration
+        return command(repo, 'payment-notice-config', lambda body: save_configuration(repo, body))
+
+    @bp.post('/api/adechit/payment-notice/preview')
+    @guard('read')
+    def payment_notice_preview(repo):
+        from .payment_notice import MAX_HTML
+        from .report_richtext import editable_html
+        body = request.get_json(silent=True)
+        require(isinstance(body, dict) and isinstance(body.get('html'), str) and len(body['html']) <= MAX_HTML,
+                'REPORT_HTML', 'Textul HTML trebuie să aibă cel mult 30.000 de caractere.', 400)
+        return {'preview': editable_html(body['html'])}
 
     @bp.post('/api/adechit/catalog/<table>')
     @guard('catalog')
@@ -246,11 +329,15 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
     def report_output(repo, kind, output):
         # SLICE-ADE9-01: every report is a read of the current subunit; nothing is written or numbered here.
         from . import reports, report_render
-        require(output in ('pdf', 'print'), 'OUTPUT', 'Format de raport necunoscut.', 404)
+        require(output in ('pdf', 'print', 'xlsx'), 'OUTPUT', 'Format de raport necunoscut.', 404)
         built = reports.build(repo, g.portal['db_name'], kind, request.args)
         if output == 'pdf':
             response = send_file(BytesIO(report_render.pdf_bytes(built)), mimetype='application/pdf', as_attachment=True,
                                  download_name=secure_filename(built['filename'] + '.pdf'), max_age=0)
+        elif output == 'xlsx':
+            from . import report_excel
+            response = send_file(BytesIO(report_excel.xlsx_bytes(built, request.args, report_excel.configured_widths(repo, built))), mimetype=report_excel.MIMETYPE,
+                                 as_attachment=True, download_name=secure_filename(built['filename'] + '.xlsx'), max_age=0)
         else:
             response = Response(report_render.html_page(built), mimetype='text/html')
             response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'"

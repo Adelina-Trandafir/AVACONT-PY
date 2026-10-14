@@ -9,6 +9,13 @@ function fileNameOf(k_response, k_fallback) {
   return k_match ? decodeURIComponent(k_match[1]) : k_fallback;
 }
 
+async function downloadOutput(k_response, k_fallback) {
+  const k_url = URL.createObjectURL(await k_response.blob());
+  const k_link = document.createElement('a'); k_link.href = k_url; k_link.download = fileNameOf(k_response, k_fallback);
+  document.body.append(k_link); k_link.click(); k_link.remove();
+  setTimeout(() => URL.revokeObjectURL(k_url), 60000);
+}
+
 // Print: the window is opened first, from the click, so the browser accepts it; the report is written into it afterwards.
 export async function outputReport({ fetchOutput, path, pdf, title }) {
   const k_window = pdf ? null : window.open('', '_blank');
@@ -25,12 +32,17 @@ export async function outputReport({ fetchOutput, path, pdf, title }) {
       // the page keeps its opener: the PDF button asks it to download (it holds the sign-in the request needs)
       k_window.adePdf = () => outputReport({ fetchOutput, path: path.replace('/print?', '/pdf?'), pdf: true, title })
         .catch((k_error) => k_window.alert(k_error.message));
+      k_window.adeExcel = async (k_columns) => {
+        const k_url = new URL(path, window.location.origin);
+        k_url.pathname = k_url.pathname.replace(/\/print$/, '/xlsx');
+        k_url.searchParams.set('columns', k_columns.join(','));
+        const k_excel = await fetchOutput(k_url.pathname + k_url.search,
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        await downloadOutput(k_excel, 'Raport.xlsx');
+      };
       return;
     }
-    const k_url = URL.createObjectURL(await k_response.blob());
-    const k_link = document.createElement('a'); k_link.href = k_url; k_link.download = fileNameOf(k_response, 'Raport.pdf');
-    document.body.append(k_link); k_link.click(); k_link.remove();
-    setTimeout(() => URL.revokeObjectURL(k_url), 60000);
+    await downloadOutput(k_response, 'Raport.pdf');
   } catch (k_error) { k_window?.close(); throw k_error; }
 }
 
@@ -69,6 +81,13 @@ export function bindReports({ fetchOutput, snapshot, report }) {
     const k_params = { month: k_now.monthId };
     if (k_all.checked) { k_params.all = '1'; if (k_split.checked) k_params.split = '1'; } else k_params.group = k_now.groupId;
     return run('situation', k_params, false, 'Situație lunară');
+  });
+  k_click('ade-rep-payment-notice', () => {
+    const k_now = k_month();
+    if (!k_all.checked && k_now.groupId == null) throw new Error('Alegeți grupa sau bifați «Toate grupele».');
+    const k_params = { month: k_now.monthId };
+    if (k_all.checked) k_params.all = '1'; else k_params.group = k_now.groupId;
+    return run('payment-notice', k_params, false, 'Situație de plată');
   });
   const k_range = () => {
     if (!k_start.iso || !k_end.iso) throw new Error('Completați data de început și data de sfârșit.');

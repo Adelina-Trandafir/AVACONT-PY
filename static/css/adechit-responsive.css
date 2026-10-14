@@ -1,0 +1,23 @@
+.ade-pickers { display: none; }
+html[data-theme="dark"] .ade-header { background: var(--card); }
+@media (max-width: 980px) {
+  .ade-main { grid-template-rows: minmax(0, 1fr); }
+  .ade-notice-row { display: none; }
+  .ade-shell, .ade-shell.is-reports-collapsed { grid-template-columns: minmax(0,1fr); }
+  .ade-sidebar, .ade-reports { display: none; }
+  .ade-grid { user-select: none; -webkit-touch-callout: none; }
+  .ade-header__context { display: none; }
+  .ade-header { display: flex; gap: 8px; padding: 0 8px; }
+  .ade-header__center { flex: 1 1 auto; }
+  .ade-search { flex: 1 1 auto; }
+  .ade-subunit { flex: 0 1 45%; }
+  .ade-center { grid-template-rows: 40px minmax(190px, 1fr) minmax(220px, 38%); }
+  .ade-toolbar { display: flex; }
+  .ade-ledger-table col.ade-col-number { width: 60px; min-width: 60px; }
+  .ade-ledger-table col.ade-col-date { width: 110px; min-width: 110px; }
+  .ade-ledger-table col.ade-col-value { width: 80px; min-width: 80px; }
+  .ade-pickers { display: grid; grid-template-columns: minmax(65px, .7fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; flex: 1; min-width: 0; }
+  .ade-picker { min-width: 0; }
+  .ade-tablist button { min-width: 100px; padding-inline: 8px; }
+}
+

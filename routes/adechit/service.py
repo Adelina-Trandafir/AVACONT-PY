@@ -50,6 +50,22 @@ def validate_values(table, values):
     return result
 
 
+def validate_educator(values):
+    """Optional educator contacts belong to the web catalog, not parent identities."""
+    from .parent_identity import normalize_email
+    require(set(values) <= {'Educator', 'EMail', 'CNP', 'DeLa', 'PanaLa'},
+            'FIELDS', 'Câmpuri educator invalide.', 400)
+    fields = validate_values('Grupe_Educator', values)
+    require(bool((fields.get('Educator') or '').strip()), 'NAME', 'Numele educatorului este obligatoriu.', 400)
+    fields['Educator'] = fields['Educator'].strip()
+    if 'EMail' in fields:
+        fields['EMail'] = normalize_email(fields['EMail']) or None
+    if 'CNP' in fields:
+        fields['CNP'] = (fields['CNP'] or '').strip() or None
+        validate_cnp(fields['CNP'])
+    return fields
+
+
 def save_catalog(repo, table, body, previous_active=()):
     require(table in EDITABLE and table != 'Prezenta', 'TABLE', 'Catalogul nu este editabil.', 400)
     changes = body.get('values', {})

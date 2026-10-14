@@ -1041,6 +1041,8 @@ def _parser():
     p.add_argument("--days", type=int, default=7)
     p.add_argument("--bots", action="store_true")
     p.set_defaults(fn=cmd_visits)
+    from routes.admin_cli import vercon_reports
+    vercon_reports.register(sub)
     return parser
 
 

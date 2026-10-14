@@ -17,15 +17,15 @@ const PORTAL_URL = '/portal';
 
 // slice AD10-01: /portal?next=/adechit -- a page that needs the sign-in sends the user here and takes
 // them back once a unit is open. Only these pages are allowed, never a free address.
-const NEXT_PAGES = ['/adechit'];
+const NEXT_PAGES = ['/adechit', '/vercon'];
 const TRUST_KEY = 'kbot-portal-trust'; // the code typed in this browser: password alone is enough for the rest of the hour
 const nextPage = (() => {
   const wanted = new URLSearchParams(window.location.search).get('next') || '';
   return NEXT_PAGES.includes(wanted) ? wanted : '';
 })();
 // The application chosen on the sign-in card: K-BOT stays here, ADECHIT goes straight to its page (the portal never shows).
-let chosenApp = nextPage === '/adechit' ? 'adechit' : 'kbot';
-const chosenPage = () => (chosenApp === 'adechit' ? '/adechit' : '');
+let chosenApp = nextPage === '/adechit' ? 'adechit' : nextPage === '/vercon' ? 'vercon' : 'kbot';
+const chosenPage = () => (chosenApp === 'adechit' ? '/adechit' : chosenApp === 'vercon' ? '/vercon' : '');
 function goNext() {
   if (chosenPage()) window.location.replace(chosenPage());
 }
@@ -169,12 +169,12 @@ $('form-login').addEventListener('submit', async (ev) => {
 const appCombo = new Combobox($('p-app-combo'), {
   readonly: true, placeholder: 'Aplicația', allowHtml: true,
   // the blue letter badge comes from CSS (data-letter), so the text shown in the field stays plain
-  staticData: [['kbot', 'K', 'K-BOT'], ['adechit', 'A', 'ADECHIT'], ['vercon', 'V', 'Vercon · în curând'], ['avacont', 'C', 'Avacont · în curând']]
-    .map(([value, letter, name]) => ({ value, label: `<span class="p-app" data-letter="${letter}">${name}</span>`, disabled: value === 'vercon' || value === 'avacont' })),
+  staticData: [['kbot', 'K', 'K-BOT'], ['adechit', 'A', 'ADECHIT'], ['vercon', 'V', 'VERCON'], ['avacont', 'C', 'Avacont · în curând']]
+    .map(([value, letter, name]) => ({ value, label: `<span class="p-app" data-letter="${letter}">${name}</span>`, disabled: value === 'avacont' })),
   onSelect: (value) => { chosenApp = value; },
 });
 appCombo.input.id = 'p-app-combo-input';
-appCombo.setValue(chosenApp, chosenApp === 'adechit' ? 'ADECHIT' : 'K-BOT');
+appCombo.setValue(chosenApp, chosenApp === 'adechit' ? 'ADECHIT' : chosenApp === 'vercon' ? 'VERCON' : 'K-BOT');
 
 // ---- step 2: the code
 $('btn-code-back').addEventListener('click', () => {
@@ -231,7 +231,8 @@ async function openApp() {
     return;
   }
   me = r.data;
-  if (chosenApp === 'adechit' && me.db_name) { goNext(); return; } // straight to the chosen page, the portal is never painted
+  // straight to the chosen page, the portal is never painted; ADECHIT asks for the unit itself when none is open yet
+  if (chosenPage() && (me.db_name || chosenApp === 'adechit')) { goNext(); return; }
   $('user-email').textContent = me.email;
   show('card-app');
   startMonitor();

@@ -17,13 +17,15 @@ clasificatii_bp = Blueprint('clasificatii', __name__)
 logger = logging.getLogger(__name__)
 
 def get_db_connection(target_db_name):
-    """Conectare dinamica la baza specificata, folosind user/pass din config."""
+    """Conectare la baza unitatii de pe serverul K-BOT (DB_CONFIG_NEW).
+
+    Rutele /insert si /clasificatii_complete_upsert scriu Sector/Sursa/SS ca randuri obisnuite
+    (slice 0075-00): asta merge doar pe schema K-BOT. Pe serverul VECHI (DB_CONFIG) acele coloane
+    sunt generate si MariaDB refuza INSERT-ul cu eroarea 1906.
+    """
     if not DB_NAME_REGEX.match(target_db_name):
         raise ValueError("Nume baza de date invalid.")
-    return mysql.connector.connect(
-        **DB_CONFIG,            # Despachetam host, user, password din config
-        database=target_db_name # Suprascriem baza de date
-    )
+    return get_kbot_connection(target_db_name)
 
 # ============================================================
 # HELPERS - VALIDARE / NORMALIZARE INPUT
@@ -109,6 +111,55 @@ def _to_str(value, field_name, required=False, strip_value=True):
     return value
 
 # ==============================================================================
+# RECTIFICARI - shared by /insert and /clasificatii_complete_upsert
+# ==============================================================================
+SQL_UPSERT_RECTIFICARE = """
+    INSERT INTO Clasificatii_Rectificari
+        (IdClsf, Capitol, Subcapitol, Articol, Alineat, Data, Document, Trim1, Trim2, Trim3, Trim4)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+        Capitol    = VALUES(Capitol),
+        Subcapitol = VALUES(Subcapitol),
+        Articol    = VALUES(Articol),
+        Alineat    = VALUES(Alineat),
+        Trim1      = VALUES(Trim1),
+        Trim2      = VALUES(Trim2),
+        Trim3      = VALUES(Trim3),
+        Trim4      = VALUES(Trim4)
+"""
+
+
+def _save_rectificari(cursor, id_clsf, capitol, subcapitol, articol, alineat, rect_list, where):
+    """Upserts the optional 'rectificari' list of one classification (unique IdClsf + Data + Document),
+    on the caller's cursor, so it is part of the caller's transaction. Raises ValueError on a bad entry.
+    Returns how many were written."""
+    if rect_list is None:
+        return 0
+    if not isinstance(rect_list, list):
+        raise ValueError(f"'rectificari' la {where} trebuie sa fie lista")
+    written = 0
+    for ridx, r in enumerate(rect_list, start=1):
+        if not isinstance(r, dict):
+            raise ValueError(f"Rectificarea {ridx} de la {where} nu este obiect")
+        w = f"{where}.rectificari[{ridx}]"
+        r_data = _to_str(r.get("Data"), w + ".Data", required=True)
+        try:
+            datetime.strptime(r_data[:10], "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"{w}.Data trebuie sa fie yyyy-mm-dd")
+        r_doc = _to_str(r.get("Document"), w + ".Document", required=True)
+        cursor.execute(SQL_UPSERT_RECTIFICARE, (
+            id_clsf, capitol, subcapitol, articol, alineat, r_data[:10], r_doc,
+            _to_float(r.get("Trim1"), w + ".Trim1", required=False),
+            _to_float(r.get("Trim2"), w + ".Trim2", required=False),
+            _to_float(r.get("Trim3"), w + ".Trim3", required=False),
+            _to_float(r.get("Trim4"), w + ".Trim4", required=False),
+        ))
+        written += 1
+    return written
+
+
+# ==============================================================================
 # 4. INSERT CLASIFICATII
 # ==============================================================================
 @clasificatii_bp.route('/api/clasificatii/insert', methods=['POST'])
@@ -144,6 +195,7 @@ def insert():
                            VALUES (%s, %s, %s, MAKEDATE(%s, 1), %s, %s, %s, %s)"""
 
             inserted_count = 0
+            rectificari_saved = 0
             mapping = {}
             
             for item in data_list:
@@ -158,6 +210,10 @@ def insert():
                 val_b = (new_id, b['IdUnitate'], b['An'], b['An'], b['Trim1'], b['Trim2'], b['Trim3'], b['Trim4'])
                 cursor.execute(sql_buget, val_b)
 
+                rectificari_saved += _save_rectificari(
+                    cursor, new_id, s['Capitol'], s['Subcapitol'], s['Articol'], s['Alineat'],
+                    item.get('rectificari'), f"data[{inserted_count + 1}]")
+
                 mapping[s['IdClsfAcc']] = new_id
                 
                 inserted_count += 1
@@ -167,6 +223,7 @@ def insert():
             return jsonify({
                 "status": "success",
                 "count": inserted_count,
+                "rectificari": rectificari_saved,
                 "mapping": mapping
             }), 200
 
@@ -331,6 +388,8 @@ def save_clasificatii_complete_upsert():
 
         seen_payload_keys = set()
 
+        rectificari_upserted = 0
+
         # ------------------------------------------------------------
         # 5. Procesare item cu item
         # ------------------------------------------------------------
@@ -493,6 +552,13 @@ def save_clasificatii_complete_upsert():
                     )
 
                 # ----------------------------------------------------
+                # 5.6b Rectificari (optional, lista 'rectificari' pe item)
+                # ----------------------------------------------------
+                rectificari_upserted += _save_rectificari(
+                    cursor, current_id_clsf, s_clean["Capitol"], s_clean["Subcapitol"], s_clean["Articol"],
+                    s_clean["Alineat"], item.get("rectificari"), f"data[{idx}]")
+
+                # ----------------------------------------------------
                 # 5.7 Mapping raspuns
                 # ----------------------------------------------------
                 mapping_key = str(s_clean["IdClsfAcc"]) if s_clean["IdClsfAcc"] is not None else f"row_{idx}"
@@ -554,6 +620,7 @@ def save_clasificatii_complete_upsert():
                 "inserted": inserted_buget,
                 "skipped": skipped_buget
             },
+            "rectificari": rectificari_upserted,
             "mapping": mapping
         }), 200
 

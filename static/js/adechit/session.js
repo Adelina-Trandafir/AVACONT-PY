@@ -30,7 +30,9 @@ export function startSessionTimer({ token, onExpired, host }) {
     if (k_seconds <= 0) k_leave();
   };
   k_sync().then(k_tick);
-  setInterval(k_tick, 1000);
-  setInterval(k_sync, RESYNC_MS);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) k_sync().then(k_tick); });
+  const tick = setInterval(k_tick, 1000);
+  const sync = setInterval(k_sync, RESYNC_MS);
+  const wake = () => { if (!document.hidden) k_sync().then(k_tick); };
+  document.addEventListener('visibilitychange', wake);
+  return () => { clearInterval(tick); clearInterval(sync); document.removeEventListener('visibilitychange', wake); };
 }

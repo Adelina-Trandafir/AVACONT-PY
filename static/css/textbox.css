@@ -1,0 +1,19 @@
+/* TextBox (js/components/textbox). Colours come from the page tokens, so it follows light/dark.
+   Kept low in specificity: an application restyles `.tb__input` (height, border) with its own selector. */
+.tb { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; box-sizing: border-box; }
+.tb__input { box-sizing: border-box; flex: 1; min-width: 0; width: 100%; padding: 4px 8px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 3px; }
+.tb--align-right .tb__input { text-align: right; }
+.tb--align-center .tb__input { text-align: center; }
+.tb__input:focus { border-color: var(--blue); outline: 1px solid var(--blue); }
+.tb--cursor-ibeam .tb__input { cursor: text; }
+.tb--cursor-arrow .tb__input { cursor: default; }
+.tb__input:disabled { opacity: .6; }
+.tb .tb__input:disabled { cursor: default; }   /* a disabled field is the arrow, whatever mouseCursor says */
+/* the error state: set by validate() / setError(), left again when the field is left with a valid text */
+.tb.is-invalid .tb__input { border-color: var(--tb-error-color, var(--err-control-bordercolor, #c0392b)); background: var(--tb-error-back, var(--err-control-backcolor, #fbe4e2)); }
+.tb[hidden] { display: none; }
+/* search: room for the clear button, shown only while there is text */
+.tb--search .tb__input { padding-right: 24px; }
+.tb__clear { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 22px; padding: 0; color: inherit; background: transparent; border: 0; font-size: 1.1em; line-height: 1; cursor: pointer; }
+.tb__clear:hover { background: var(--sky-2); }
+.tb.is-empty .tb__clear, .tb.is-readonly .tb__clear { display: none; }

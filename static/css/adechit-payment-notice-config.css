@@ -1,0 +1,19 @@
+.ade-notice-config { width: min(1000px, 96vw); }
+.ade-notice-config form { display: flex; flex-direction: column; max-height: 90vh; min-height: 0; }
+.ade-notice-config-body { padding: 12px 24px; overflow: auto; }
+.ade-notice-config-body > p { margin: 0 0 12px; }
+.ade-notice-config .msg { margin: 8px 24px; }
+.ade-notice-source-toggle { display: block; margin-bottom: 12px; }
+.ade-notice-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center; }
+.ade-notice-toolbar button, .ade-notice-toolbar select { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); }
+.ade-notice-editor { min-height: 260px; padding: 16px; border: 1px solid var(--line); color: #000; background: #fff; font: 12pt Arial, sans-serif; }
+.ade-notice-editor font[size="1"] { font-size: 8pt; }
+.ade-notice-editor font[size="2"] { font-size: 10pt; }
+.ade-notice-editor font[size="3"] { font-size: 12pt; }
+.ade-notice-editor font[size="4"] { font-size: 14pt; }
+.ade-notice-editor font[size="5"] { font-size: 16pt; }
+.ade-notice-editor font[size="6"] { font-size: 18pt; }
+.ade-notice-editor font[size="7"] { font-size: 24pt; }
+.ade-notice-source { width: 100%; box-sizing: border-box; padding: 12px; font: 13px/1.5 monospace; color: var(--ink); background: var(--card); border: 1px solid var(--line); resize: vertical; }
+.ade-notice-config footer { flex-shrink: 0; }
+.ade-notice-config [hidden] { display: none; }

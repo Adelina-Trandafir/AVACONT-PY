@@ -383,6 +383,24 @@ def portal_logout():
     return _json({"ok": True})
 
 
+@portal_bp.route("/api/test-mode", methods=["GET"])
+def test_mode():
+    """The ONE switch of the pages' test mode (console logs, debug tools). Public, read-only. Read from config.py (TEST_MODE = True / False)
+    on the server; when config.py has no such line, from the KBOT_TEST_MODE environment variable; when neither is set it is ON.
+    config.py is read when the service starts: restart it after a change."""
+    try:
+        import config
+        value = getattr(config, "TEST_MODE", None)
+    except ImportError:
+        value = None
+    if value is None:
+        value = os.environ.get("KBOT_TEST_MODE", "1")
+    on = value if isinstance(value, bool) else str(value).strip().lower() not in ("0", "false", "off", "no")
+    response = _json({"test_mode": on})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @portal_bp.route("/api/portal/me", methods=["GET"])
 def portal_me():
     token, note, refusal = _live_session()

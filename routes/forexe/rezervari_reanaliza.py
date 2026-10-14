@@ -30,6 +30,10 @@ DOUA MODURI, ACEEASI PLIMBARE
 `aplica = false` (implicit) e o PROBA: numara si arata ce s-ar schimba, fara sa scrie.
 `aplica = true` scrie, intr-o singura tranzactie.
 
+VERIFICAT (12.10.2026) pe jurnalele unui utilizator (Istoric.txt / Rezervari.txt, simulare in node): cu
+filtrul vechi (doar Prelucrat = 1) plimbarea da exact stricaciunea raportata (14 randuri din septembrie);
+cu filtrul de acum schimba DOAR cele 14 randuri gresite din august. Nu a rulat pe MariaDB.
+
 NEVERIFICAT: ca ID-ul crescator reproduce ordinea in care FOREXE a dat randurile la
 randurile migrate din Access; ca bucla se reia dintr-o singura bucata (ingestia o reia la
 fiecare descarcare, cu steagurile resetate).
@@ -60,12 +64,25 @@ _EPS = 0.005
 _ISTORIC_SQL = (
     "SELECT ID, DataFX, Descriere, Observatii, CodIndicator, CodAI, Val_AngLeg, "
     "       Rez_Ord, TipRand, Val_Rezervare_Ant, Val_Rezervare_Dif "
-    "FROM FX_Istoric WHERE CodAngajament = %s AND Prelucrat = 1 ORDER BY ID"
+    "FROM FX_Istoric WHERE CodAngajament = %s "
+    # Prelucrat = 1 ALONE is not enough: on real data (027_SCGM, iulie-august 2026) the reservation
+    # rows of whole months have Prelucrat = 0 while already carrying their chain type. Leaving them
+    # out walked the chain from the month before, and the repair wrote September from June's values
+    # (12.10.2026). A row that already has a chain type has been through step 3b, so it belongs.
+    "AND (Prelucrat = 1 OR TipRand IN ('Rez_Initiala', 'Rez_Definitiva', 'Rez_Influenta', 'Rez_Zero')) "
+    "ORDER BY ID"
 )
 _ORDINE_SQL = "SELECT CodAI, NrCrt FROM FX_Indicatori WHERE CodAngajament = %s"
 _REZ_SQL = (
-    "SELECT IDRZ, IDH, EInitiala, R_Anterioara, R_Valoare, EMarire, EMicsorare "
+    "SELECT IDRZ, IDH, IDREV, AreDDF, EInitiala, R_Anterioara, R_Valoare, EMarire, EMicsorare "
     "FROM FX_Rezervari WHERE CodAngajament = %s AND IDH IS NOT NULL"
+)
+# Months in which the angajament has DDF revisions (operator, 12.10.2026: a month with revisions is
+# never repaired). YEAR()*100+MONTH(): no «%» for the driver to choke on.
+_REV_LUNI_SQL = (
+    "SELECT DISTINCT YEAR(R.DataRev) * 100 + MONTH(R.DataRev) AS Luna "
+    "FROM FX_DDF_REV R JOIN FX_DDF D ON D.IDDF = R.IDDF "
+    "WHERE D.CodAngajament = %s AND R.DataRev IS NOT NULL"
 )
 _UPD_ISTORIC_SQL = (
     "UPDATE FX_Istoric SET Rez_Ord = %s, TipRand = %s, Val_Rezervare_Ant = %s, "
@@ -84,6 +101,22 @@ def _json_utf8(payload, status):
 
 def _diferit(a, b) -> bool:
     return abs(float(a or 0) - float(b or 0)) > _EPS
+
+
+class RevizieBlocata(Exception):
+    """The repair would touch a month that has DDF revisions: nothing is written. The text is for the operator."""
+
+
+def _luna_cod(v) -> int:
+    """A date -> YYYYMM (0 when there is none)."""
+    try:
+        return v.year * 100 + v.month
+    except AttributeError:
+        return 0
+
+
+def _luna_text(cod_luna: int) -> str:
+    return f"{cod_luna % 100:02d}.{cod_luna // 100}"
 
 
 def _zi(v) -> str:
@@ -190,6 +223,13 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
     cursor.execute(_REZ_SQL, (cod,))
     rez_dupa_idh = {int(x["IDH"]): x for x in cursor.fetchall()}
 
+    # Everything the repair would write is collected first and written only after the check on
+    # months with revisions: a refused repair must not leave a half-written chain behind.
+    actiuni_istoric: List[tuple] = []
+    actiuni_rez: List[tuple] = []
+    luni_atinse = set()
+    luni_legate = set()    # touched months in which a touched reservation is linked to a DDF revision
+
     for rid, n in noi.items():
         r = n["rand"]
         istoric_diferit = (
@@ -200,10 +240,8 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
         )
         if istoric_diferit:
             rez["istoric_de_corectat"] += 1
-            if aplica:
-                cursor.execute(_UPD_ISTORIC_SQL, (
-                    n["rez_ord"], n["tip"], n["ant"], n["dif"], rid))
-                rez["istoric_corectat"] += 1
+            luni_atinse.add(_luna_cod(r["DataFX"]))
+            actiuni_istoric.append((n["rez_ord"], n["tip"], n["ant"], n["dif"], rid))
 
         rz = rez_dupa_idh.get(rid)
         if rz is None:
@@ -226,6 +264,9 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
         ant_noua = float(n["ant"] or 0)
         if _diferit(rz["R_Valoare"], val_noua) or _diferit(rz["R_Anterioara"], ant_noua):
             rez["rezervari_de_corectat"] += 1
+            luni_atinse.add(_luna_cod(r["DataFX"]))
+            if rz["IDREV"] is not None or bool(rz["AreDDF"]):
+                luni_legate.add(_luna_cod(r["DataFX"]))
             if len(detalii) < _MAX_DETALII:
                 detalii.append({
                     "data": _zi(r["DataFX"]), "indicator": r["CodIndicator"],
@@ -233,11 +274,30 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
                     "anterioara_veche": float(rz["R_Anterioara"] or 0),
                     "anterioara_noua": ant_noua,
                 })
-            if aplica:
-                cursor.execute(_UPD_REZ_SQL, (
-                    ant_noua, val_noua,
-                    1 if val_noua > 0 else 0, 1 if val_noua < 0 else 0, int(rz["IDRZ"])))
-                rez["rezervari_corectate"] += 1
+            actiuni_rez.append((
+                ant_noua, val_noua,
+                1 if val_noua > 0 else 0, 1 if val_noua < 0 else 0, int(rz["IDRZ"])))
+
+    # --- luni cu revizii: nu se repara (nici proba nu trece) ---------------------
+    if luni_atinse:
+        cursor.execute(_REV_LUNI_SQL, (cod,))
+        luni_revizii = {int(x["Luna"]) for x in cursor.fetchall() if x["Luna"] is not None}
+        blocate = sorted(l for l in luni_atinse if l in luni_revizii or l in luni_legate)
+        if blocate:
+            raise RevizieBlocata(
+                "Repararea nu se face: ar atinge " +
+                ("luna " if len(blocate) == 1 else "lunile ") +
+                ", ".join(_luna_text(l) for l in blocate) +
+                ", care " + ("are" if len(blocate) == 1 else "au") +
+                " revizii de fundamentare. Nu s-a schimbat nimic.")
+
+    if aplica:
+        for valori in actiuni_istoric:
+            cursor.execute(_UPD_ISTORIC_SQL, valori)
+            rez["istoric_corectat"] += 1
+        for valori in actiuni_rez:
+            cursor.execute(_UPD_REZ_SQL, valori)
+            rez["rezervari_corectate"] += 1
 
     if rez["rezervari_de_corectat"] > _MAX_DETALII:
         avertismente.append(
@@ -278,6 +338,11 @@ def post_rezervari_reanaliza():
                     g.session.db_name, cod, aplica,
                     {k: v for k, v in rezultat.items() if k not in ("detalii", "avertismente")})
         return _json_utf8(rezultat, 200)
+    except RevizieBlocata as e:
+        if conn is not None:
+            conn.rollback()
+        logger.info("[forexe.rezervari.reanaliza] %s: cod=%s refuzat: %s", g.session.db_name, cod, e)
+        return _json_utf8({"error": str(e)}, 409)
     except Exception as e:
         if conn is not None:
             conn.rollback()

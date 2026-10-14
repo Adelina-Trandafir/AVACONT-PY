@@ -7,6 +7,10 @@
     --err-bg: #fdeceb;
     --err-ink: #8f1d17;
     --err-line: #f1b5b1;
+    /* A control marked as wrong (it failed validation, or a required one was left empty): the SAME background and border on every control
+       (TextBox, list, date, grid cell). Use these, never a literal colour. */
+    --err-control-backcolor: #fbe4e2;
+    --err-control-bordercolor: #c0392b;
     /* Layout */
     --header-height: 50px;
     --modal-header-height: 40px;

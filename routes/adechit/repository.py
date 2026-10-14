@@ -3,7 +3,7 @@
 The ADE context is DC + subunit (SLICE-ADE10). Every table access below is limited to the repository's
 subunit, so no helper can read or write a row of another subunit of the same DC.
 
-Lock order: AD_Lock(subunit) -> permission -> business rows -> receipt configuration of the subunit.
+Lock order: AD_Lock(0) -> AD_Lock(subunit) -> permission -> business rows -> receipt configuration.
 No automatic retry around business writes; operation keys handle lost responses.
 """
 from contextlib import contextmanager
@@ -170,6 +170,13 @@ class Repository:
     def data(self):
         return {table: self.rows(table) for table in SCHEMA}
 
+    def acquire_lock(self, lock_id):
+        """Create or exclusively lock the row without upgrading a duplicate-insert shared lock."""
+        statement = ('INSERT OR IGNORE INTO AD_Lock (ID) VALUES (%s)' if self.sqlite else
+                     'INSERT INTO AD_Lock (ID) VALUES (%s) ON DUPLICATE KEY UPDATE ID=ID')
+        self.execute(statement, (lock_id,))
+        self.execute('SELECT ID FROM AD_Lock WHERE ID=%s FOR UPDATE', (lock_id,)).fetchall()
+
 
 @contextmanager
 def transaction(db_name, factory=None, subunit=None, optional_subunit=False, email=None):
@@ -194,13 +201,10 @@ def transaction(db_name, factory=None, subunit=None, optional_subunit=False, ema
             connection.start_transaction()
         chosen = repo.select_subunit(subunit, optional=optional_subunit)
         # Unit-wide parent identity precedes every subunit lock, including migration.
-        repo.execute('INSERT IGNORE INTO AD_Lock (ID) VALUES (0)' if not repo.sqlite else 'INSERT OR IGNORE INTO AD_Lock (ID) VALUES (0)')
-        repo.execute('SELECT ID FROM AD_Lock WHERE ID=0 FOR UPDATE').fetchall()
+        repo.acquire_lock(0)
         if chosen is not None:
             # The lock row of a subunit has the subunit's id; create it for subunits made after AD_05.
-            repo.execute('INSERT IGNORE INTO AD_Lock (ID) VALUES (%s)' if not repo.sqlite else 'INSERT OR IGNORE INTO AD_Lock (ID) VALUES (%s)',
-                         (repo.subunit_id,))
-            repo.execute('SELECT ID FROM AD_Lock WHERE ID=%s FOR UPDATE', (repo.subunit_id,)).fetchall()
+            repo.acquire_lock(repo.subunit_id)
         yield repo
         connection.commit()
     except Exception:

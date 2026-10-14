@@ -1,0 +1,18 @@
+.vc-modal { width: min(1100px,94vw); max-width: 94vw; max-height: 90vh; }
+.vc-modal__body { padding: 12px; overflow: auto; }
+.vc-modal__body h4 { margin: 0 0 6px; }
+.vc-modal__body .vc-tree-body { height: 330px; }
+.vc-modal__body .vc-dgv { height: 280px; }
+.vc-pdf { position: relative; height: 65vh; }
+.vc-modal--report { width: calc(100vw - 16px); max-width: none; height: calc(100dvh - 16px); max-height: none; margin: auto; display: flex; flex-direction: column; }
+.vc-modal--report > header, .vc-modal--report > footer { flex: 0 0 auto; }
+.vc-modal--report .vc-modal__body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.vc-modal--report .vc-pdf { flex: 1; height: auto; min-height: 0; }
+.vc-report-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--sky-2); }
+.vc-report-toolbar button { min-width: 0; min-height: 32px; padding: 4px 10px; font-size: .85rem; }
+.vc-report-toolbar button:last-child { margin-left: auto; }
+.vc-report-page, .vc-report-zoom { padding: 0 6px; font-size: .85em; font-variant-numeric: tabular-nums; }
+.vc-report-status:empty { display: none; }
+.vc-modal--report > footer:has(.vc-report-status:empty) { display: none; }
+.vc-file-download { display: none; }
+.vc-print-frame { position: fixed; left: -10000px; top: 0; width: 1px; height: 1px; border: 0; }

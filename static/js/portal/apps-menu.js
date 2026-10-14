@@ -14,7 +14,7 @@ if (brand) {
       { icon: '🏢', label: k_email, disabled: true },
       { icon: '🤖', label: 'K-BOT', rule: true, disabled: true },
       { icon: '📋', label: 'ADECHIT', run: () => { window.location.href = '/adechit'; } },
-      { icon: '🏗️', label: 'Vercon · în curând', disabled: true },
+      { icon: '🏗️', label: 'VERCON', run: () => { window.location.href = '/vercon'; } },
       { icon: '📒', label: 'Avacont · în curând', disabled: true },
     ], { label: 'Aplicații', below: brand.closest('header') });
   });

@@ -1,0 +1,5 @@
+/* Administrative contact conflicts remain visible independently of transient messages. */
+.ade-portal-issues { flex-shrink: 0; margin: 0 10px 8px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--sky-2); color: var(--ink); }
+.ade-portal-issues summary { cursor: pointer; }
+.ade-portal-issues > div { display: grid; gap: 6px; max-height: 160px; overflow-y: auto; margin-top: 8px; }
+.ade-portal-issues .btn { text-align: left; white-space: normal; }

@@ -3,6 +3,7 @@
  * 🌐 DEBUG TOOLS - GLOBAL WINDOW FUNCTIONS
  */
 
+import { testMode } from '../utils/debug-tools.js';
 import { getInstance, getAvailableInstances } from '../instances-registry.js';
 
 /**
@@ -14,7 +15,7 @@ const createDebugLogger = () => {
   const log = (message, data = null) => {
     // Verifică MIXIN_DEBUG_OVERRIDE mai întâi, apoi default true
     const globalOverride = window.MIXIN_DEBUG_OVERRIDE;
-    const shouldLog = globalOverride !== undefined ? globalOverride : true;
+    const shouldLog = globalOverride !== undefined ? globalOverride : testMode;
 
     if (!shouldLog) return;
 

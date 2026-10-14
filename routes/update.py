@@ -35,6 +35,15 @@ per kind (a kind that was never published is simply absent):
       "notes":         "free text shown to the operator"
     }
 
+Playwright driver package (the .playwright folder: node.exe + cli, ~100 MB, unchanged for months).
+It is NOT inside the app packages: latest.json may carry ONE shared top-level `driver` block
+(same for both kinds), written by push-update.ps1 only when the Playwright version changes:
+
+    "driver": { "version": "1.49.0", "file": "KBot_Driver_1.49.0.zip", "size": 1, "sha256": "..." }
+
+GET /api/update/latest adds it as `driver` to the answer; GET /api/update/driver downloads it.
+A client downloads it only when the version it has installed differs.
+
 The OLD shape -- the block itself at the top level, written before slice 0104 -- is still
 read, as the "access" block: the first push after this slice rewrites the file in the
 new shape and keeps that block under "access".
@@ -135,6 +144,42 @@ def _validate_block(data, where):
     return data
 
 
+def _validate_driver(data):
+    """The optional shared driver block; None when absent."""
+    block = data.get("driver") if isinstance(data, dict) else None
+    if block is None:
+        return None
+    where = f"{LATEST_NAME}[driver]"
+    if not isinstance(block, dict):
+        raise LatestInvalid(f"{where}: not an object")
+    for key in ("version", "file", "size", "sha256"):
+        if key not in block:
+            raise LatestInvalid(f"{where}: missing key {key}")
+    if not isinstance(block["version"], str) or not _VERSION_RE.match(block["version"]):
+        raise LatestInvalid(f"{where}: version is not a version: {block[version]!r}")
+    if not isinstance(block["file"], str) or not _SAFE_FILE_RE.match(block["file"]):
+        raise LatestInvalid(f"{where}: file is not a plain file name: {block[file]!r}")
+    if not isinstance(block["size"], int) or block["size"] < 0:
+        raise LatestInvalid(f"{where}: size is not a non-negative integer")
+    if not isinstance(block["sha256"], str) or len(block["sha256"]) != 64:
+        raise LatestInvalid(f"{where}: sha256 is not a 64-char hex digest")
+    return block
+
+
+def read_driver(update_dir=None):
+    """The shared driver block of latest.json, or None when none was published."""
+    update_dir = update_dir or get_update_dir()
+    path = os.path.join(update_dir, LATEST_NAME)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        raise LatestInvalid(f"{LATEST_NAME}: {e}") from e
+    return _validate_driver(data)
+
+
 def read_latest(update_dir=None, access=True):
     """
     Read and validate latest.json and return the block of the asked kind (access=True ->
@@ -196,6 +241,13 @@ def latest():
         "published_utc": data.get("published_utc"),
         "notes": data.get("notes") or "",
     }
+    try:
+        driver_block = read_driver()
+    except LatestInvalid as e:
+        logger.error("latest.json driver block invalid: %s", e)
+        driver_block = None      # the app package is still good; no driver offered
+    if driver_block:
+        body["driver"] = {k: driver_block[k] for k in ("version", "file", "size", "sha256")}
     return jsonify(body), 200
 
 
@@ -235,6 +287,32 @@ def download():
     except Exception as e:
         logger.error("update package could not be sent: %s", e, exc_info=True)
         return _error("Pachetul de actualizare nu a putut fi trimis.", "PACKAGE_SEND_FAILED", 500)
+
+
+@update_bp.route("/api/update/driver", methods=["GET"])
+def driver():
+    """The Playwright driver package latest.json names, streamed as a file (Range supported)."""
+    try:
+        block = read_driver()
+    except LatestInvalid as e:
+        logger.error("latest.json invalid: %s", e)
+        return _error("Descrierea actualizării de pe server este invalidă.", "LATEST_INVALID", 500)
+    if not block:
+        return _error("Nu există niciun pachet driver publicat.", "NO_DRIVER_PUBLISHED", 404)
+    path = os.path.join(get_update_dir(), block["file"])
+    if not os.path.isfile(path):
+        logger.error("driver package listed in latest.json is missing on disk: %s", path)
+        return _error("Pachetul driver lipsește de pe server.", "PACKAGE_MISSING", 500)
+    try:
+        response = send_file(path, mimetype="application/zip", as_attachment=True,
+                             download_name=block["file"], conditional=True)
+        response.headers["X-KBot-Version"] = block["version"]
+        response.headers["X-KBot-Sha256"] = block["sha256"]
+        logger.info("driver package sent: %s (v%s)", block["file"], block["version"])
+        return response
+    except Exception as e:
+        logger.error("driver package could not be sent: %s", e, exc_info=True)
+        return _error("Pachetul driver nu a putut fi trimis.", "PACKAGE_SEND_FAILED", 500)
 
 
 # The first install of a NEW user (no Access): the Inno Setup .exe, not the update zip.

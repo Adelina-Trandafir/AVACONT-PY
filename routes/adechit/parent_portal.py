@@ -231,7 +231,7 @@ def create_parent_blueprint(repository_factory=None, deliver=None, preview_units
     @authenticated
     def statement(repo,parents,unit,child_id,output):
         parent=select_child(repo,parents,child_id)
-        require(output in ('print','pdf'),'OUTPUT','Format necunoscut.',404)
+        require(output in ('print','pdf','xlsx'),'OUTPUT','Format necunoscut.',404)
         start=end=None
         require(request.args.get('interval','0') in ('0','1'),'DATE','Interval invalid.',400)
         if request.args.get('interval')=='1':
@@ -243,10 +243,17 @@ def create_parent_blueprint(repository_factory=None, deliver=None, preview_units
                 raise DomainError('DATE','Completați ambele date ale intervalului.',400) from error
             require(start<=end,'DATE','Data început nu poate depăși data sfârșit.',400)
         data=child_data(repo,child_id)
-        monthly_rows(data) # refuse incomplete closed histories in both outputs
+        monthly_rows(data) # refuse incomplete closed histories in every output
         report=make_statement(data,parent,issuer_data(repo,unit),start,end)
         if output=='print':
-            return Response(render_template('adechit/statement.html',statement=report),mimetype='text/html')
+            from .parent_statement import statement_model
+            from .report_excel import dialog_html
+            return Response(render_template('adechit/statement.html',statement=report,excel_dialog=dialog_html(statement_model(report))),mimetype='text/html')
+        if output=='xlsx':
+            from .parent_statement import statement_model
+            from .report_excel import MIMETYPE, configured_widths, xlsx_bytes
+            excel_model=statement_model(report)
+            return send_file(BytesIO(xlsx_bytes(excel_model,request.args,configured_widths(repo,excel_model))),mimetype=MIMETYPE,as_attachment=True,download_name='Fisa_cont.xlsx',max_age=0)
         return send_file(BytesIO(statement_pdf(report)),mimetype='application/pdf',as_attachment=True,download_name='Fisa_cont.pdf',max_age=0)
 
     return bp

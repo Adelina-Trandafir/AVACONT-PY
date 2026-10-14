@@ -22,8 +22,9 @@
     /* z-index: 2; */
 }
 
-.combobox-container.readonly .combobox-input{cursor: pointer;min-height: 24px;}
-.combobox-container.readonly .combobox-input:hover{background: var(--green-hover-background);}
+.combobox-container.readonly .combobox-input{cursor: pointer;}
+.combobox-container.readonly:not(.simple) .combobox-input{min-height: 24px;}   /* 'simple' keeps the height of the typing box, so both look alike side by side */
+.combobox-container.readonly:not(.simple) .combobox-input:hover{background: var(--green-hover-background);}
 
 .combobox-input{
     width: 100%;

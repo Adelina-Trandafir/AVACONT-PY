@@ -1,0 +1,9 @@
+/* ---------- the Extrase page ---------- */
+.pa__ext { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px; box-sizing: border-box; }
+.pa__ext[hidden] { display: none; }
+.pa__ext-grid { flex: 1 1 0; min-height: 0; position: relative; }
+.pa__ext-grid > .dgv { position: absolute; inset: 0; width: auto; height: auto; min-height: 0; }
+.portal__app.is-extrase .pa__body, .portal__app.is-extrase .pa__f--an, .portal__app.is-extrase .pa__f--ss, .portal__app.is-extrase .pa__hint { display: none; }
+.pc__detail { flex: 0 0 auto; max-height: 45%; overflow: auto; }
+.pc__detail[hidden] { display: none; }
+

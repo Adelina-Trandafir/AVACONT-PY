@@ -6,6 +6,8 @@
  * Înlocuiește window globals cu module management curat
  */
 
+import { testMode } from './utils/debug-tools.js';
+
 // Map pentru instanțe (memory efficient)
 const instances = new Map();
 const instanceMetadata = new Map();
@@ -13,9 +15,6 @@ const instanceMetadata = new Map();
 // Case-insensitive key mapping
 const keyMapping = new Map();
 
-// 🎯 DEFINEȘTE debugMode LOCAL - ca să nu depindă de alte module
-const debugMode =
-  typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location?.hostname);
 
 /**
  * 📝 REGISTER INSTANCE
@@ -125,7 +124,7 @@ export function getRegistryStats() {
  */
 const log = (() => {
   const fn = (message, data = null) => {
-    if (debugMode) {
+    if (testMode) {
       const now = new Date();
       const ts = `${now.toLocaleTimeString('en-GB', { hour12: false })}.${now
         .getMilliseconds()

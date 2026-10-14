@@ -12,6 +12,7 @@
  * @author Adelina Trandafir - Avatar Soft SRL
  */
 
+import { testMode } from '../utils/debug-tools.js';
 import { EVENTS } from './event-bus-events.js';
 import { EventBusLogger } from './event-bus-logger.js';
 import { EventBusStats } from './event-bus-stats.js';
@@ -415,7 +416,7 @@ class EventBus {
 export class EventBusHeavy extends EventBus {
   constructor(options = {}) {
     super({
-      debugMode: true,
+      debugMode: testMode,
       maxHistorySize: 100,
       returnBehavior: 'always-true',
       ...options,
@@ -425,7 +426,7 @@ export class EventBusHeavy extends EventBus {
 
 // ==================== SINGLETON INSTANCE ====================
 
-window.MIXIN_DEBUG_OVERRIDE = true;
+window.MIXIN_DEBUG_OVERRIDE = testMode;
 
 const eventBusInstance = new EventBusHeavy();
 

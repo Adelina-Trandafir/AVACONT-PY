@@ -1,0 +1,9 @@
+.vc-lista__overview { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr); gap: 12px; margin-bottom: 14px; }
+.vc-doc--lista .vc-doc__header { grid-template-columns: minmax(0,1fr); align-content: start; margin: 0; }
+.vc-lista__bons { min-width: 0; }
+.vc-lista__bons > .vc-dgv:not(.vc-lista__summary) { height: 180px; }
+.vc-lista__meals { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
+.vc-meal, .vc-lista__meal { border: 1px solid var(--line); border-radius: 4px; min-width: 0; overflow: hidden; }
+.vc-meal h4, .vc-lista__meal h4, .vc-lista__bons h4 { margin: 0; padding: 8px 10px; background: rgba(48,158,255,.1); }
+.vc-lista__summary.vc-dgv { height: 96px; }
+.vc-lista__dishes.vc-dgv { height: 380px; }

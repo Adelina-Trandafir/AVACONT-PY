@@ -30,12 +30,99 @@ export const editing = {
   beginNewRowEdit(row, key, onCancelRow) {
     return this.beginEdit(row, key, { onCancelRow });
   },
+  // newRowAlwaysVisible: the grid always ends with one empty "new row" (like an Access datasheet). The host creates it (onNewRow) and
+  // recognises an empty one (isBlankRow); the grid only keeps track of it. Returns the new-row slot, or null when the option is off.
+  ensureNewRow() {
+    if (!this._opts.newRowAlwaysVisible || !this._opts.editable || typeof this._opts.onNewRow !== 'function') return null;
+    const k_last = this._rows[this._rows.length - 1];
+    if (k_last && this._opts.isBlankRow?.(k_last)) return (this._newSlot = k_last);
+    const k_row = this._opts.onNewRow();
+    if (!k_row) return null;
+    if (!this._rows.includes(k_row)) this._rows.push(k_row);
+    return (this._newSlot = k_row);
+  },
+  /** Starts editing the cell `key` of the empty new row (the "add row" command of a grid that keeps one always visible). */
+  async beginEditNewRow(key) {
+    const k_row = this.ensureNewRow();
+    if (k_row && !this._items.some((k_item) => k_item.row === k_row)) this._refresh();
+    if (!k_row || !await this._leaveRow(k_row)) return false;
+    return this.beginEdit(k_row, key);
+  },
+  // Leaving a row that was edited: it is judged on the spot (rowIssue(row) -> '' or the reason). An incomplete row asks the operator
+  // (confirmRowIssue({ row, message }) -> 'continue' | 'cancel'): continue (the default) goes back into the row, cancel drops a new row or
+  // puts an existing one back as it was when the editing of it began. Needs both options; without them nothing is checked.
+  async _leaveRow(nextRow) {
+    const k_e = this._editedRow;
+    if (!k_e || k_e.row === nextRow) return true;
+    if (this._leaving) return false;
+    const k_check = typeof this._opts.rowIssue === 'function' && typeof this._opts.confirmRowIssue === 'function' && !this._opts.isBlankRow?.(k_e.row);
+    const k_message = k_check ? this._opts.rowIssue(k_e.row) : '';
+    if (!k_message) { this._editedRow = null; return true; }
+    this._leaving = true;
+    try {
+      const k_answer = await this._opts.confirmRowIssue({ row: k_e.row, message: k_message });
+      if (this._destroyed) return true;
+      if (k_answer === 'cancel') {
+        this._editedRow = null;
+        if (this._pendingRow?.row === k_e.row) this.cancelPendingRow();
+        else { Object.assign(k_e.row, k_e.snapshot); this._refresh(); this._emit('onCellSaved', { row: k_e.row, key: null }); }
+        return true;
+      }
+      const k_columns = this._visibleColumns().filter((k_c) => this.canEdit(k_e.row, k_c));
+      const k_column = k_columns.find((k_c) => k_e.row[k_c.key] == null || String(k_e.row[k_c.key]).trim() === '') || k_columns[0];
+      if (k_column) this.beginEdit(k_e.row, k_column.key);
+      return false;
+    } finally { this._leaving = false; }
+  },
+  // The focus left the grid: no editor stays open (the cell is saved, or dropped when it cannot be saved), then the row is judged.
+  _onFocusOut(ev) {
+    if (this._destroyed || this._leaving || (ev.relatedTarget && this._root.contains(ev.relatedTarget))) return;
+    setTimeout(async () => {
+      if (this._destroyed || this._leaving || this._edit?.pending || !document.hasFocus() || this._root.contains(document.activeElement)) return;
+      if (this._edit) { if (!await this.commitEdit() && this._edit && !this._edit.pending) this.cancelEdit(true); }
+      if (!this._destroyed && !this._edit) await this._leaveRow(null);
+    }, 0);
+  },
+  // A new row (made by beginNewRowEdit, or the new-row slot once the operator starts on it) stays "not validated" until the operator
+  // moves to another row or presses Esc. Leaving it empty drops it; Esc drops it with its content.
+  _removeRow(row, handler) {
+    if (handler) { handler(row); return; }
+    const k_at = this._rows.indexOf(row);
+    if (k_at >= 0) { this._rows.splice(k_at, 1); this._refresh(); }
+  },
+  _leavePendingRow(row) {
+    const k_p = this._pendingRow;
+    if (!k_p || k_p.row === row) return;
+    this._pendingRow = null;
+    if (this._opts.isBlankRow?.(k_p.row)) this._removeRow(k_p.row, k_p.onCancelRow || this._opts.onCancelNewRow);
+  },
+  /** Esc with no cell in edit: cancels the whole row that is not validated yet. True when there was one. */
+  cancelPendingRow() {
+    const k_p = this._pendingRow;
+    if (!k_p) return false;
+    this._pendingRow = null;
+    this._removeRow(k_p.row, k_p.onCancelRow || this._opts.onCancelNewRow);
+    if (!this._destroyed) { this.ensureNewRow(); this._renderWindow(true); }
+    return true;
+  },
   beginEdit(row, key, { onCancelRow } = {}) {
     if (this._edit || this._destroyed) return false;
     const column = this._col(key);
     if (!this.canEdit(row, column)) return false;
+    // editGuard(row, column) returns a reason text when the grid must stay locked for now (e.g. the header above it is incomplete)
+    const k_blocked = typeof this._opts.editGuard === 'function' ? this._opts.editGuard(row, column) : '';
+    if (k_blocked) { this._emit('onEditBlocked', { message: k_blocked }); return false; }
     if (!this._opts.rowKey || row[this._opts.rowKey] == null || !this._opts.onCellSave) {
       throw new Error('Editing requires rowKey and onCellSave');
+    }
+    if (this._editedRow?.row !== row) this._editedRow = { row, snapshot: { ...row } };
+    this._leavePendingRow(row);
+    if (onCancelRow) this._pendingRow = { row, onCancelRow };
+    else if (this._opts.newRowAlwaysVisible && row === this._newSlot) {   // the operator starts on the new row: it is pending, the next empty one appears
+      this._pendingRow = { row, onCancelRow: null };
+      this._newSlot = null;
+      this.ensureNewRow();
+      this._refresh();
     }
     const host = document.createElement('div');
     host.className = 'dgv__editor';
@@ -43,12 +130,19 @@ export const editing = {
       abort: new AbortController(), value: row[key], onCancelRow };
     this._edit = state;
     this._activeKey = key;
+    const markRequired = () => {
+      const value = column.editor === 'list' ? state.value : state.input?.value;
+      state.host.closest('.dgv__cell')?.classList.toggle('is-required-empty', !!column.required && this._requiredShown(state.row, key) && (value == null || String(value).trim() === ''));
+    };
     if (column.editor === 'list') {
-      state.combo = new Combobox(host, { staticData: column.options || [],
-        onSelect: (value) => { state.raw = value; state.value = value; } });
-      const selected = (column.options || []).find((item) => item.value === row[key]);
-      state.combo.setValue(row[key], selected?.text ?? String(row[key] ?? ''));
+      const items = typeof column.options === 'function' ? column.options(row) : (column.options || []);
+      state.combo = new Combobox(host, { staticData: items, readonly: !column.searchable, showArrow: column.showArrow, dropDownOnEnter: column.dropDownOnEnter, maxResults: column.maxResults, dropDownMinWidth: column.dropDownMinWidth,
+        onSearch: column.onSearch ? (query) => column.onSearch(query, row) : async (query) => items.filter((item) => String(item.label || item.text || '').toLocaleLowerCase('ro').includes(query.toLocaleLowerCase('ro'))),
+        onSelect: (value) => { state.raw = value; state.value = value; markRequired(); } });
+      const selected = items.find((item) => String(item.value) === String(row[key]));
+      state.combo.setValue(row[key], selected?.label ?? selected?.text ?? String(row[key] ?? ''));
       state.input = state.combo.input;
+      if (column.searchable) state.input.addEventListener('input', () => { state.value = null; markRequired(); }, { signal: state.abort.signal });
     } else {
       state.input = document.createElement('input');
       state.input.type = column.editor === 'checkbox' ? 'checkbox' : column.editor === 'date' ? 'date' : 'text';
@@ -69,12 +163,13 @@ export const editing = {
       state.picker = new DatePicker(state.source);
       state.input = state.picker.field;
     }
+    state.input.addEventListener('input', markRequired, { signal: state.abort.signal });
     host.addEventListener('click', (event) => event.stopPropagation(), { signal: state.abort.signal });
     host.addEventListener('dblclick', (event) => event.stopPropagation(), { signal: state.abort.signal });
     host.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       event.preventDefault(); event.stopImmediatePropagation();
-      if (this.cancelEdit()) state.onCancelRow?.(state.row);
+      this.cancelEdit();   // Esc in a cell: only the cell goes back to what it was; the row is cancelled by a second Esc
     }, { capture: true, signal: state.abort.signal });
     host.addEventListener('keydown', (event) => {
       event.stopPropagation();
@@ -93,10 +188,33 @@ export const editing = {
     this._emit('onEditState', { state: 'editing', key });
     return true;
   },
+  // A required cell is not marked while untouched: only after it was left (a cell the operator has been in) or once validate() ran.
+  // The always-visible new row (empty) is never judged: nothing in it is marked as required.
+  _isNewRow(row) { return !!this._opts.newRowAlwaysVisible && (row === this._newSlot || !!this._opts.isBlankRow?.(row)); },
+  _requiredShown(row, key) { return !this._isNewRow(row) && (!!this._requiredAll || !!this._requiredSeen?.get(row)?.has(key)); },
+  _seen(row, key) {
+    this._requiredSeen ||= new WeakMap();
+    let k_keys = this._requiredSeen.get(row);
+    if (!k_keys) this._requiredSeen.set(row, k_keys = new Set());
+    k_keys.add(key);
+  },
+  /** The validation event: every empty required editable cell is marked from now on. Returns { ok }. */
+  validate() {
+    this._requiredAll = true;
+    let k_empty = false;
+    const k_columns = this._visibleColumns();
+    for (const k_row of this._rows) for (const k_col of k_columns) {
+      if (this._isNewRow(k_row)) continue;
+      if (k_col.required && this.canEdit(k_row, k_col) && (k_row[k_col.key] == null || String(k_row[k_col.key]).trim() === '')) k_empty = true;
+    }
+    if (!this._destroyed) this._renderWindow(true);
+    return { ok: !k_empty };
+  },
   cancelEdit(force = false) {
     const state = this._edit;
     if (!state || (state.pending && !force)) return false;
     this._edit = null;
+    this._seen(state.row, state.key);   // the cell was left: from now on it shows "required and empty"
     state.abort.abort();
     state.combo?.destroy();
     state.picker?.destroy();
@@ -111,14 +229,22 @@ export const editing = {
     try {
       if (state.picker) {
         state.picker.commitText();
-        if (state.input.classList.contains('is-invalid')) throw new Error('Introduceți o dată validă, în format zz.ll.aaaa.');
-        state.raw = state.source.value;
+        const invalid = state.input.classList.contains('is-invalid');
+        if (invalid && !this._opts.allowIncompleteEdits) throw new Error('Introduceți o dată validă, în format zz.ll.aaaa.');
+        state.raw = invalid ? state.input.value : state.source.value;
         state.picker.close();
       }
-      const value = state.column.editor === 'checkbox' ? state.input.checked
-        : state.column.editor === 'list' ? state.value : parseCell(String(state.raw), state.column);
+      let value;
+      try {
+        value = state.column.editor === 'checkbox' ? state.input.checked
+          : state.column.editor === 'list' ? state.value : parseCell(String(state.raw), state.column);
+      } catch (error) {
+        // Document drafts preserve unfinished input; document Save performs strict validation.
+        if (!this._opts.allowIncompleteEdits) throw error;
+        value = String(state.raw).trim() === '' ? null : state.raw;
+      }
       const message = state.column.validate?.(value, state.row);
-      if (message) throw new Error(message);
+      if (message && !this._opts.allowIncompleteEdits) throw new Error(message);
       // Nothing changed: no write on the server (new rows always save).
       const unchanged = !state.onCancelRow && (value === state.row[state.key] || (value == null && state.row[state.key] == null));
       state.pending = true;
@@ -143,6 +269,7 @@ export const editing = {
         const at = rows.indexOf(state.row);
         for (let index = at + (direction === 'down' ? 1 : -1); at >= 0 && index >= 0 && index < rows.length; index += direction === 'down' ? 1 : -1) {
           if (this.canEdit(rows[index], state.column)) {
+            if (!await this._leaveRow(rows[index])) return false;
             if (await this._opts.onRowValidate?.({ row: state.row }) === false) return false;
             this.beginEdit(rows[index], state.key); return true;
           }
@@ -157,10 +284,12 @@ export const editing = {
         for (let index = current + direction; current >= 0 && index >= 0 && index < cells.length; index += direction) {
           const next = cells[index];
           if (this.canEdit(next.row, next.column)) {
+            if (next.row !== state.row && !await this._leaveRow(next.row)) return false;
             if (next.row !== state.row && await this._opts.onRowValidate?.({ row: state.row }) === false) return false;
             this.beginEdit(next.row, next.column.key); return true;
           }
         }
+        if (!await this._leaveRow(null)) return false;
         if (await this._opts.onRowValidate?.({ row: state.row }) === false) return false;
       }
       return true;

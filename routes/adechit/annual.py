@@ -1,6 +1,16 @@
 """August rollover drafts and changes, inside the month-close transaction."""
 from .domain import require
-from .service import validate_values
+from .service import validate_values, validate_educator
+
+
+def educator_values(item, existing=None):
+    """Keep the legacy name-only payload compatible without losing web contacts."""
+    fields = {'Educator': item} if isinstance(item, str) else item
+    require(isinstance(fields, dict) and set(fields) <= {'Educator', 'EMail', 'CNP'},
+            'FIELDS', 'Câmpuri educator invalide.', 400)
+    fields = validate_educator(fields)
+    previous = next((row for row in existing or [] if row['Educator'] == fields['Educator']), {})
+    return {key: fields.get(key, previous.get(key)) for key in ('Educator', 'EMail', 'CNP')}
 
 
 def preview(repo, month_id):
@@ -15,9 +25,14 @@ def preview(repo, month_id):
     day = f"{month['Anul']:04d}-09-01"
     for group in groups:
         periods = [row for row in history if row['IDG'] == group['IDG']]
-        group['educators'] = list(dict.fromkeys(row['Educator'] for row in periods
+        active_periods = [row for row in periods
             if row.get('Educator') and (not row.get('DeLa') or row['DeLa'][:10] <= day)
-            and (not row.get('PanaLa') or row['PanaLa'][:10] >= day))) if periods else ([group['Educator']] if group.get('Educator') else [])
+            and (not row.get('PanaLa') or row['PanaLa'][:10] >= day)]
+        group['educators'] = list(dict.fromkeys(row['Educator'] for row in active_periods)) if periods else (
+            [group['Educator']] if group.get('Educator') else [])
+        group['educator_details'] = [{key: row.get(key) for key in ('Educator', 'EMail', 'CNP')}
+            for name in group['educators']
+            for row in [next((item for item in active_periods if item['Educator'] == name), {'Educator': name})]]
     return {'month': month, 'groups': groups, 'children': children, 'history': history}
 
 
@@ -44,11 +59,11 @@ def validate(repo, month, draft):
         validate_values('Grupe', {'Grupa': row.get('name')})
         require(isinstance(row.get('name'), str) and bool(row['name'].strip()), 'NAME', 'Completați numele tuturor grupelor.', 400)
         names = row.get('educators')
-        require(isinstance(names, list) and len(names) <= 100 and all(isinstance(name, str) and name.strip() for name in names),
+        require(isinstance(names, list) and len(names) <= 100,
                 'NAME', 'Lista educatorilor este invalidă.', 400)
-        require(len({name.strip().casefold() for name in names}) == len(names), 'NAME', 'Un educator apare de două ori în aceeași grupă.', 400)
-        for name in names:
-            validate_values('Grupe_Educator', {'Educator': name.strip()})
+        fields = [educator_values(item) for item in names]
+        require(len({item['Educator'].casefold() for item in fields}) == len(fields),
+                'NAME', 'Un educator apare de două ori în aceeași grupă.', 400)
         if row['id'] < 0:
             require(bool(names), 'EDUCATOR', 'Fiecare grupă nouă trebuie să aibă cel puțin un educator.', 400)
     names = {row['id']: row['name'].strip().casefold() for row in draft['groups'] + new_groups}
@@ -74,16 +89,25 @@ def apply(repo, month, draft, current, username):
     for item in draft.get('new_groups', []):
         group = repo.insert('Grupe', {'Grupa': item['name'].strip(), 'Tip': 'NORMALA'})
         new_ids[item['id']] = group['IDG']
-        for name in item['educators']:
-            repo.insert('Grupe_Educator', {'IDG': group['IDG'], 'Educator': name.strip(), 'DeLa': start})
+        for educator in item['educators']:
+            repo.insert('Grupe_Educator', {**educator_values(educator), 'IDG': group['IDG'], 'DeLa': start})
     for item in draft['groups']:
         group = groups[item['id']]
         if item['name'].strip() != group['Grupa']:
             repo.update('Grupe', group, {'Grupa': item['name'].strip()})
-        names = [name.strip() for name in item['educators']]
-        if names == group['educators']:
-            continue
+        educators = [educator_values(row, group['educator_details']) for row in item['educators']]
+        names = [row['Educator'] for row in educators]
         periods = [row for row in current['history'] if row['IDG'] == group['IDG']]
+        if names == group['educators'] and (periods or not any(row['EMail'] or row['CNP'] for row in educators)):
+            for educator in educators:
+                for period in periods:
+                    if (period.get('Educator') == educator['Educator']
+                            and (not period.get('DeLa') or period['DeLa'][:10] <= start)
+                            and (not period.get('PanaLa') or period['PanaLa'][:10] >= start)):
+                        changes = {key: educator[key] for key in ('EMail', 'CNP') if period.get(key) != educator[key]}
+                        if changes:
+                            repo.update('Grupe_Educator', period, changes)
+            continue
         require(not any(row.get('DeLa') and row['DeLa'][:10] > start for row in periods),
                 'EDUCATOR_PERIOD', 'Există educatori programați după 1 septembrie. Corectați perioadele în catalog înainte de închidere.', 400)
         # Preserve all earlier periods and replace assignments from September onward.
@@ -94,8 +118,8 @@ def apply(repo, month, draft, current, username):
                 repo.delete('Grupe_Educator', row)
             elif not row.get('PanaLa') or row['PanaLa'][:10] >= start:
                 repo.update('Grupe_Educator', row, {'PanaLa': end})
-        for name in names:
-            repo.insert('Grupe_Educator', {'IDG': group['IDG'], 'Educator': name, 'DeLa': start})
+        for educator in educators:
+            repo.insert('Grupe_Educator', {**educator, 'IDG': group['IDG'], 'DeLa': start})
     children = {row['IDP']: row for row in current['children']}
     for item in draft['children']:
         child = children[item['id']]

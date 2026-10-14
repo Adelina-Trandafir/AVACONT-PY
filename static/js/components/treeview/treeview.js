@@ -13,6 +13,7 @@
  *
  * @version 4.1.0
  */
+import { testMode } from '../../utils/debug-tools.js';
 import ListenerTracker from '../../listener-tracker/listener-tracker-mixin.js';
 import { treeViewUtilsMixin } from './treeview-utils.js';
 import { treeViewUIMixin } from './treeview-ui.js';
@@ -30,7 +31,7 @@ export class TreeView {
     // Generează ID unic pentru această instanță
     TreeView.instanceCounter++;
     this.instanceId = `treeview-${TreeView.instanceCounter}`;
-    this.debugMode = true;
+    this.debugMode = testMode;
 
     // Elemente UI
     this.container = container;
@@ -93,6 +94,8 @@ export class TreeView {
       searchDelay: options.searchDelay || 300,
       onSearch: options.onSearch || null,
       onSelect: options.onSelect || null, // callback la selecție
+      onToggle: options.onToggle || null, // (nodeId, isOpen) => void, după deschiderea / închiderea unui nod
+      exclusiveRoots: options.exclusiveRoots || false, // true: un singur nod rădăcină deschis odată (deschiderea unuia îl închide pe cel vechi)
       showLoader: options.showLoader !== false,
       minSearchLength: options.minSearchLength || 0,
       maxResults: options.maxResults || 100,

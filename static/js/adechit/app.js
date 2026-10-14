@@ -9,6 +9,8 @@ import { bindCatalogs } from './catalogs.js';
 import { bindAnnual } from './annual.js';
 import { bindReports, outputReport } from './reports.js';
 import { bindHelp } from './help.js';
+import { bindNoticeConfig } from './payment-notice-config.js';
+import { bindBankAssociations } from './bank-associations.js';
 import { confirmBox, pickBox, reasonBox } from '../utils/confirm-box.js';
 
 const $ = (id) => document.getElementById(id);
@@ -421,9 +423,15 @@ async function loadSituation() {
 
 async function chooseMonth(id) {
   if (!Number.isFinite(id) || id === state.monthId) return;
+  const k_previousYear = state.year;
   state.monthId = id;
   state.groupsRequest = null; state.groupsSequence += 1;
   state.year = selectedMonth()?.Anul;
+  if (state.monthTree && state.year != null && state.year !== k_previousYear) {
+    state.monthTree.expandedNodes.delete(`year:${k_previousYear}`);
+    state.monthTree.expandedNodes.add(`year:${state.year}`);
+    renderMonthTree();
+  }
   syncPickers();
   await loadGroups();
   await loadSituation();
@@ -857,10 +865,12 @@ async function logoutNow() {
 
 function bind() {
   const catalogs = state.payers = bindCatalogs({ api, context: () => state.context, refresh: () => loadContext(true).catch(report), moveToSubunit });
+  const bankAssociations = bindBankAssociations({ api, context: () => state.context, refresh: () => loadContext(true), monthId: () => state.monthId });
   const annual = bindAnnual({ api, refresh: () => loadContext(true), message: (text) => showMessage($('ade-message'), text, 'info') });
   state.annual = annual;
   wireLongPress();
   bindHelp({ fetchOutput, report });
+  const noticeConfig = bindNoticeConfig({ api, context: () => state.context, report });
   state.reports = bindReports({ fetchOutput, report,
     snapshot: () => ({ month: state.context ? selectedMonth() : null, monthId: state.monthId, groupId: state.groupId, selected: state.selected }) });
   $('ade-search').addEventListener('input', filterGrid);
@@ -886,21 +896,23 @@ function bind() {
     document.documentElement.dataset.theme = k_dark ? 'light' : 'dark';
     state.grid?.setTheme(k_dark ? 'modern' : 'dark');
   };
-  // Plătitori, Taxe and the theme live in one menu at the right end of the header; the two windows keep their own buttons (hidden).
+  // The application menu sits next to the brand, like the portal menu.
   $('ade-menu').addEventListener('click', () => {
     const k_dark = document.documentElement.dataset.theme === 'dark';
     openMenu($('ade-menu'), [
       { icon: '👥', label: 'Plătitori', run: () => $('ade-payers').click() },
+      { icon: '🏦', label: 'Asociere extrase cu copii', run: () => bankAssociations.open() },
       { icon: '💶', label: 'Taxe', run: () => $('ade-taxes').click() },
+      { icon: '📝', label: 'Text situație de plată', run: () => noticeConfig.open() },
       { icon: k_dark ? '☀️' : '🌙', label: k_dark ? 'Tema luminoasă' : 'Tema întunecată', rule: true, run: toggleTheme },
-    ], { label: 'Meniu', align: 'right', iconRight: true, below: $('ade-menu').closest('header') });
+    ], { label: 'Meniu', below: $('ade-menu').closest('header') });
   });
   // The «A» opens the applications of the account (ADECHIT is this page, so it is not listed).
   $('ade-apps').addEventListener('click', () => {
     openMenu($('ade-apps'), [
       { icon: '🏢', label: $('ade-context').textContent || 'Contul curent', disabled: true },
       { icon: '🤖', label: 'K-BOT', rule: true, run: () => { window.location.href = '/portal'; } },
-      { icon: '🏗️', label: 'Vercon · în curând', disabled: true },
+      { icon: '🏗️', label: 'VERCON', run: () => { window.location.href = '/vercon'; } },
       { icon: '📒', label: 'Avacont · în curând', disabled: true },
     ], { label: 'Aplicații', below: $('ade-apps').closest('header') });
   });
@@ -1058,9 +1070,39 @@ async function loadContext(rebuildTrees = false) {
   await loadSituation();
 }
 
+// The portal sends a user here without a unit opened when ADECHIT was chosen on its sign-in card:
+// the unit is picked in this page's header (one choice, no portal screen in between).
+// Returns true when a unit is open and the page can load.
+async function ensureUnit() {
+  const k_response = await fetch('/api/portal/me', { headers: { Accept: 'application/json', 'X-Portal-Token': portalToken() }, cache: 'no-store' });
+  const k_me = await k_response.json().catch(() => ({}));
+  if (k_response.status === 401) { toPortal(true); return false; }
+  if (!k_response.ok) throw new Error(k_me.error || `Eroare HTTP ${k_response.status}`);
+  if (k_me.db_name) return true;
+  const k_units = k_me.units || [];
+  if (!k_units.length) { showMessage($('ade-message'), 'Contul nu are nicio unitate.', 'error'); return false; }
+  const k_combo = new Combobox($('ade-unit-combo'), {
+    readonly: true, placeholder: 'Unitate',
+    staticData: k_units.map((k_row) => ({ value: k_row.DC, label: k_row.NumeUnitate })),
+    onSelect: async (k_value) => {
+      try {
+        const k_opened = await fetch('/api/portal/unit', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Portal-Token': portalToken() }, body: JSON.stringify({ db_name: k_value }) });
+        if (!k_opened.ok) { const k_body = await k_opened.json().catch(() => ({})); throw new Error(k_body.error || 'Unitatea nu a putut fi deschisă.'); }
+        window.location.reload();
+      } catch (k_error) { console.error('[ade] opening the unit failed', k_error); report(k_error); }
+    },
+  });
+  k_combo.input.id = 'ade-unit-combo-input';
+  k_combo.input.setAttribute('aria-label', 'Unitate');
+  $('ade-unit').hidden = false;
+  showMessage($('ade-message'), 'Alegeți unitatea în care lucrați.', 'info');
+  return false;
+}
+
 async function start() {
   state.unit = new URLSearchParams(location.search).get('unit') || 'preview';
   bind();
+  if (document.documentElement.dataset.adePreview !== 'true' && !(await ensureUnit())) return;
   await loadContext();
   const k_pending = takePendingOpen();
   if (k_pending && k_pending.subunit_id === state.subunit) await state.payers.openForChild(k_pending.group_id, k_pending.child_id);

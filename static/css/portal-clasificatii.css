@@ -1,0 +1,25 @@
+/* ---------- the Clasificatii page and its budget check ---------- */
+.pc { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(300px, 32%) 1fr; grid-template-rows: minmax(0, 1fr); gap: 12px; }
+.pc[hidden] { display: none; }
+.pc__left, .pc__right { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 14px; gap: 10px; box-sizing: border-box; position: relative; }
+.pc__filters { display: flex; flex-direction: column; gap: 4px; font-size: .88rem; color: var(--ink-soft); }
+.pc__filters label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.pc__g { flex: 1 1 0; min-height: 0; position: relative; }
+.pc__tot { flex: 0 0 auto; position: relative; }
+.pc__g > .dgv, .pc__tot > .dgv { position: absolute; inset: 0; width: auto; height: auto; min-height: 0; }
+.portal__app.is-clsf .pa__body, .portal__app.is-clsf .pa__f--ss, .portal__app.is-clsf .pa__hint,
+.portal__app.is-clsfcheck .pa__body, .portal__app.is-clsfcheck .pa__f--ss, .portal__app.is-clsfcheck .pa__f--an { display: none; }
+.portal__app.is-part .pa__body, .portal__app.is-part .pa__f--an, .portal__app.is-part .pa__f--ss, .portal__app.is-part .pa__hint { display: none; }
+.pc .pa__h .btn { margin-left: auto; flex: 0 0 auto; }
+/* the way back to the list of angajamente: in the filter bar, always there while a menu page is open */
+.pa__bar .js-back-ang { display: none; margin-left: auto; align-self: flex-end; }
+.portal__app.is-clsf .pa__bar .js-back-ang, .portal__app.is-clsfcheck .pa__bar .js-back-ang,
+.portal__app.is-part .pa__bar .js-back-ang, .portal__app.is-extrase .pa__bar .js-back-ang { display: inline-flex; }
+.pc__kv { flex: 0 0 auto; }
+.pc__kv dd { overflow-wrap: anywhere; color: var(--ink); }
+#check-state { margin: 0; color: var(--ink-soft); }
+@media (max-width: 900px) {
+  .pc { display: flex; flex-direction: column; }
+  .pc__left, .pc__right { flex: 1 1 0; padding: 10px; }
+}
+

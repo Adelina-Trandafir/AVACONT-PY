@@ -1,0 +1,2 @@
+.vc-lista__totals { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0; }
+.vc-lista__totals span { border: 1px solid var(--line); padding: 5px 12px; font-size: .9em; font-variant-numeric: tabular-nums; }

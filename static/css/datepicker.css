@@ -2,7 +2,7 @@
 .kdp { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
 .kdp__field { box-sizing: border-box; flex: 1; min-width: 0; height: 23px; padding: 1px 24px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 2px; font: inherit; text-align: center; }
 .kdp__field:focus { border-color: var(--blue); outline: 1px solid var(--blue); }
-.kdp__field.is-invalid { border-color: var(--danger, #c0392b); outline: 1px solid var(--danger, #c0392b); }
+.kdp__field.is-invalid { border-color: var(--tb-error-color, var(--err-control-bordercolor, #c0392b)); outline: 1px solid var(--tb-error-color, var(--err-control-bordercolor, #c0392b)); background: var(--tb-error-back, var(--err-control-backcolor, #fbe4e2)); }
 .kdp__button { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 22px; padding: 0; color: inherit; background: transparent; border: 0; font-size: .95em; line-height: 1; cursor: pointer; }
 .kdp__button:hover { background: var(--sky-2); }
 .kdp__popup { position: fixed; z-index: 100000; box-sizing: border-box; width: 272px; padding: 8px; color: var(--ink); background: var(--card); border: 1px solid var(--blue); border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .25); font-size: 14.33px; user-select: none; }

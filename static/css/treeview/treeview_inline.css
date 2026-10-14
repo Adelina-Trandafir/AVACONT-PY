@@ -41,7 +41,10 @@
    the hover tint stops above that line (background-clip) and has room around the icon. */
 .treeview-righticon { flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; box-sizing: border-box; justify-content: center; width: 33px; margin: -4px -6px 0 0; padding: 0 4px 0 0; line-height: 1; cursor: pointer; border-radius: 3px; border-bottom: 1px solid #d3d1d1; background-clip: content-box; font-size: calc(1em + 1.33px); }
 .treeview-righticon:hover, .treeview-righticon:focus-visible { background-color: rgba(48, 158, 255, .18); outline: none; }
-.treeview-item.is-error .treeview-label { color: #c0392b; }
+.treeview-item.is-error .treeview-label, .treeview-item.is-error .treeview-righttext { color: #c0392b; }
+/* node.rightText: a short text (an amount) at the right end of the row, right-aligned; the label gives up the room (it ellipsizes).
+   It carries the row's own line, like rightIcon, so the separator runs unbroken under it. Same height as the label (20px + line). */
+.treeview-righttext { flex: 0 0 auto; box-sizing: border-box; min-height: 21px; padding: 0 6px 0 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; border-bottom: 1px solid #d3d1d1; }
 
 .treeview-badge {
   flex: 0 0 auto;

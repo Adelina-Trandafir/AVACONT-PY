@@ -1,0 +1,130 @@
+/* ---------- slice 0110-06: the signed-in page ---------- */
+.portal__main:has(.portal__app:not([hidden])) { align-items: stretch; padding: 16px; }
+.portal__app { max-width: 1600px; margin: 0 auto; flex-direction: column; justify-content: flex-start; gap: 12px; }
+
+.pa__bar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding: 14px 18px; }
+.pa__f { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+.pa__f--unit { flex: 1 1 280px; min-width: 240px; max-width: 420px; }
+.pa__f--an { min-width: 100px; flex: 0 0 110px; }
+.pa__f label { font-weight: 700; font-size: .85rem; color: var(--ink-soft); }
+.pa__f .combobox-container { max-width: none; }
+.pa__count { margin-left: 6px; color: var(--ink-soft); font-size: .85em; font-weight: 400; }
+.pa__hint { margin: 0; }
+
+/* pc: the page is exactly one screen. The header, the filter bar and the cards share it; the cards
+   take what is left (every padding and gap counts) and keep that size whatever they hold --
+   each scrolls inside its own control. */
+.portal:has(.portal__app:not([hidden])) { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+.portal:has(.portal__app:not([hidden])) .portal__main { flex: 1 1 auto; min-height: 0; display: flex; }
+.portal__app { flex: 1 1 auto; min-height: 0; width: 100%; }
+.pa__body { display: grid; grid-template-columns: minmax(260px, 27%) 1fr; grid-template-rows: minmax(0, 1fr); gap: 12px; flex: 1 1 auto; min-height: 0; }
+.pa__body[hidden] { display: none; }
+.pa__left, .pa__right { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 14px; gap: 10px; box-sizing: border-box; }
+.pa__h { font-size: 1.05rem; margin: 0; display: flex; align-items: center; gap: 8px; }
+.pa__title { flex: 1 1 auto; min-width: 0; }
+.pa__opt { margin-left: auto; flex: 0 0 auto; padding: 2px 9px; font-size: 1rem; line-height: 1.4; cursor: pointer; background: #fff; border: 1.5px solid var(--line); border-radius: 8px; }
+.pa__opt:hover, .pa__opt[aria-expanded="true"] { background: var(--sky-1); border-color: var(--blue); }
+.pa__left { position: relative; }
+.pa__menu { position: absolute; z-index: 30; top: 46px; right: 14px; padding: 6px; display: flex; flex-direction: column; min-width: 190px; }
+.pa__menu[hidden] { display: none; }
+.pa__menu button { font: inherit; text-align: left; padding: 8px 12px; cursor: pointer; background: transparent; border: 0; border-radius: 6px; color: var(--ink); }
+.pa__menu button:hover { background: var(--sky-1); }
+.pa__menu button[aria-checked="true"] { font-weight: 700; color: var(--blue-deep); }
+.pa__sel { font-weight: 700; min-height: 1.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa__grid { flex: 1 1 auto; min-height: 0; position: relative; }
+/* a grid always fills its container, whatever the number of rows */
+.pa__grid > .dgv, .pa__docs-list > .dgv { position: absolute; inset: 0; width: auto; height: auto; min-height: 0; }
+.pa__docs-list { position: relative; }
+
+/* the right card: vertical nav on the left, the tab content beside it */
+.pa__right { flex-direction: row; gap: 14px; }
+.pa__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.pa__tabs { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; padding-right: 12px; border-right: 2px solid var(--line); align-self: stretch; }
+.pa__tabs button {
+  font: inherit;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-align: left;
+  white-space: nowrap;
+  /* right gap (label end -> the vertical line) = left gap (card edge -> icon): 14 card padding + 4 button
+     padding on the left; on the right 15 + the 3 px marker = 18. Keep the two in step. */
+  padding: 4px 15px 4px 4px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-right: 3px solid transparent;
+  margin-right: -14px;
+  border-radius: 8px 0 0 8px;
+}
+.pa__ico { font-size: 1.25rem; line-height: 1; }
+.pa__tabs .pa__back { display: none; }
+.pa__tabs button:hover { background: var(--sky-1); }
+.pa__tabs button.is-active { color: var(--blue-deep); background: var(--sky-1); border-right-color: var(--blue); }
+
+@media (max-width: 900px) {
+  /* phone: the page never scrolls. The header, then ONE screen -- either the list (filters + tree)
+     or, once an angajament is picked, its data -- each scrolling only inside its own control. */
+  .portal:has(.portal__app:not([hidden])) { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  .portal:has(.portal__app:not([hidden])) .portal__main { flex: 1 1 auto; min-height: 0; padding: 8px; display: flex; }
+  .portal__app { flex: 1 1 auto; min-height: 0; width: 100%; gap: 8px; overflow: hidden; }
+  .pa__body[hidden] { display: none; }
+  .pa__body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: auto; }
+  .pa__left, .pa__right { flex: 1 1 0; min-height: 0; height: auto; padding: 10px; gap: 8px; }
+  .pa__right { display: none; flex-direction: column; }
+  .portal__app.is-detail .pa__right { display: flex; }
+  .portal__app.is-detail .pa__left, .portal__app.is-detail .pa__bar, .portal__app.is-detail .pa__hint { display: none; }
+  .pa__main { min-height: 0; overflow: hidden; }
+  .pa__grid { flex: 1 1 auto; min-height: 0; }
+  .pa__bar { padding: 10px 12px; gap: 6px 10px; }
+
+  /* the header never wraps: the e-mail gives way, the button stays small */
+  .header { flex-wrap: nowrap; gap: 10px; padding: 6px 12px; min-height: 0; }
+  .header .user-info { margin-left: auto; width: auto; min-width: 0; flex-wrap: nowrap; gap: 8px; }
+  .user-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
+  #btn-logout { padding: 3px 12px; min-height: 0; height: auto; line-height: 1.2; font-size: .85rem; flex: 0 0 auto; }
+
+  /* nav: a row of equal buttons, emoji over a small label; ⬆ Lista goes back to the list */
+  .pa__tabs .pa__back { display: flex; flex: 0 0 auto; padding-left: 8px; padding-right: 8px; border-right: 2px solid var(--line); border-radius: 0; margin-right: 2px; }
+  .pa__tabs { flex-direction: row; gap: 2px; padding: 0 0 6px; border-right: 0; border-bottom: 2px solid var(--line); align-self: auto; }
+  .pa__tabs button { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; justify-content: center; text-align: center; padding: 6px 2px; margin: 0; font-size: .72rem; border-right: 0; border-radius: 8px; }
+  .pa__tabs button.is-active { border-bottom: 3px solid var(--blue); }
+  .pa__ico { font-size: 1.4rem; }
+  /* phone: smaller text everywhere in the signed-in area */
+  .portal__app { font-size: 14px; }
+  .portal .dgv { --dgv-size: 12px; }
+  .pa__left .treeview, .pa__left .treeview-search-input { font-size: 13px; }
+  .pa__h { font-size: .95rem; }
+  .pa__sel { font-size: .85rem; }
+  .pa__f label, .pa__count { font-size: .78rem; }
+  .pa__docs-note { font-size: .78rem; }
+  /* phone: the grid's menu and filter popups -- tighter, smaller */
+  .portal .dgv__popup { font-size: 12px; }
+  .portal .dgv__menu { min-width: 180px; padding: 2px; }
+  .portal .dgv__mi { padding: 4px 8px; }
+  .portal .dgv__sep { margin: 2px 4px; }
+  .portal .dgv__filter { width: 240px; padding: 8px; gap: 5px; }
+  .portal .dgv__ptitle--sub { margin-top: 0; }
+  .portal .dgv__search, .portal .dgv__op, .portal .dgv__operand { padding: 3px 6px; }
+  .portal .dgv__operands { gap: 4px; }
+  .portal .dgv__list { max-height: 130px; padding: 2px; }
+  .portal .dgv__chk { padding: 1px 2px; gap: 6px; }
+  .portal .dgv__note { font-size: 10.5px; }
+  .portal .dgv__pbar { margin-top: 2px; }
+  .portal .dgv__btn { padding: 3px 10px; }
+}
+
+/* phone: the eight tabs of an angajament share one slim row -- small icons, small labels; if a narrow
+   screen still cannot hold them all, the row scrolls sideways instead of clipping or overlapping */
+@media (max-width: 900px) {
+  .pa__tabs { gap: 0; padding-bottom: 3px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .pa__tabs::-webkit-scrollbar { display: none; }
+  .pa__tabs button { flex: 1 0 auto; min-width: 42px; gap: 0; padding: 3px 3px 2px; font-size: .62rem; line-height: 1.15; }
+  .pa__tabs .pa__back { padding-left: 4px; padding-right: 6px; margin-right: 0; }
+  .pa__tabs .pa__lbl { padding: 0; font-size: .62rem; }
+  .pa__ico {font-size: 1.5rem;line-height: 1.1;}
+  .pa__tabs button.is-active { border-bottom-width: 2px; }
+}
+

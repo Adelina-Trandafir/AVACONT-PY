@@ -1,0 +1,10 @@
+.vc-save-status.is-error { color: var(--err-ink, #c0392b); }
+.vc-modal footer a { color: var(--primary-color); padding: 7px 14px; }
+.vc-doc:has(> .vc-doc__tree[hidden]) { grid-template-columns: minmax(0,1fr); }
+.vc-doc--bc:has(> .vc-doc__tree[hidden]) { grid-template-columns: minmax(0,1fr); }
+.vc-nom__fields.vc-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.vc-field__combo.combobox-container { max-width: none; }
+.vc-page .vc-field > input:not([type="hidden"]), .vc-page .combobox-input, .vc-page .kdp__field { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 3px; }
+.vc-page .combobox-input:disabled { background: var(--card) !important; color: var(--ink); opacity: .7; }
+.vc-page .combobox-dropdown { background: var(--card); color: var(--ink); border-color: var(--line); }
+.vc-page .vc-nom__bar > button { padding: 5px 10px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; }

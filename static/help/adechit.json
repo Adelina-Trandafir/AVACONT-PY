@@ -22,6 +22,7 @@
     },
     {
       "id": "ecran",
+      "slice": "ADE9-04",
       "title": "Ecranul principal",
       "blocks": [
         {"p": "Ecranul are patru zone:"},
@@ -35,7 +36,7 @@
         {"ul": [
           "**Sigla A** deschide lista aplicațiilor contului. De acolo puteți trece la K-BOT.",
           "**Căutarea** („Scrie nume sau CNP copil”) filtrează copiii din tabel după nume sau CNP.",
-          "**Meniul** (cele trei linii) conține **Plătitori**, **Taxe** și comutarea între tema luminoasă și cea întunecată ([vezi Plătitori](#platitori), [Taxe](#taxe))."
+          "**Meniul** (cele trei linii) conține **Plătitori**, **Taxe**, **Text situație de plată** și comutarea între tema luminoasă și cea întunecată ([vezi Plătitori](#platitori), [Taxe](#taxe), [Rapoarte](#rapoarte))."
         ]},
         {"h": "Tema luminoasă și întunecată", "id": "ecran-tema"},
         {"p": "Din meniu puteți alege tema. Rapoartele deschise pe ecran urmăresc tema aleasă; la listare și în PDF rămân pe alb."},
@@ -141,6 +142,7 @@
         {"p": "Doar **ultima** lună închisă poate fi redeschisă, cu lacătul închis."},
         {"note": "Redeschiderea unei luni **șterge** luna deschisă în prezent, cu toată prezența introdusă în ea, iar acțiunea nu se poate anula. Dacă acea lună are deja plăți sau restituiri, redeschiderea poate fi blocată. Aplicația vă avertizează înainte."},
         {"h": "Închiderea anuală (august)", "id": "inchidere-anuala"},
+        {"p": "Tabelul educatorilor pentru noul an include **Email** și **CNP**, ambele opționale. Datele deja completate sunt preluate; le puteți modifica sau șterge înainte de închiderea anului.", "slice": "ADE6-24"},
         {"p": "La închiderea lunii **august** se deschide o fereastră în care pregătiți noul an: mutați copiii în grupele noi, marcați copiii **Plecat** și stabiliți educatorii grupelor. Fereastra apare numai pe calculator; pe telefon, închiderea lunii august nu este disponibilă."},
         {"ul": [
           "În stânga sunt grupele, în dreapta copiii grupei alese. Prima coloană bifează copiii; **Ctrl** adaugă sau scoate un copil din selecție, iar **Shift** bifează un interval.",
@@ -159,7 +161,8 @@
         {"p": "Din **meniu → Plătitori** se deschide fereastra de administrare. Ea are trei liste legate între ele: **Grupe → Copii → Plătitori**. Alegeți o grupă ca să vedeți copiii ei, apoi un copil ca să vedeți plătitorii lui."},
         {"p": "Fiecare listă are butoanele **Adaugă** și **Modifică**. Dublu clic pe un rând deschide direct fereastra de modificare. Coloana **I** (bifa) înseamnă: la grupe — grupă închisă; la copii — plecat; la plătitori — inactiv."},
         {"h": "Grupa", "id": "platitori-grupa"},
-        {"p": "Formularul grupei conține denumirea, bifa **Grupă închisă**, anii și tabelul educatorilor, cu perioadele lor (**Începând cu**, **Până la**). Perioadele aceluiași educator nu se pot suprapune. Coloana **A** din lista grupelor ascunde grupa din ecranul principal."},
+        {"p": "Formularul grupei conține denumirea, bifa **Grupă închisă**, anii și tabelul educatorilor, cu **Email**, **CNP** și perioadele lor (**Începând cu**, **Până la**). Perioadele aceluiași educator nu se pot suprapune. Coloana **A** din lista grupelor ascunde grupa din ecranul principal.", "slice": "ADE6-24"},
+        {"p": "**Email** și **CNP** sunt opționale pentru fiecare educator. Le completați sau le ștergeți direct în tabel, apoi apăsați **Salvează**. Dacă sunt completate, emailul trebuie să aibă un format valid, iar CNP-ul să conțină 13 cifre și o cifră de control corectă. CNP-ul se păstrează ca text, inclusiv zerourile de la început.", "slice": "ADE6-24"},
         {"h": "Copilul", "id": "platitori-copil"},
         {"p": "Formularul copilului conține nume, CNP, grupa, data intrării, **Plecat** și data ieșirii. Pentru un copil plecat, data ieșirii este obligatorie; invers, o dată de ieșire cere bifa **Plecat**. Mutarea în altă grupă și schimbarea stării **Plecat** cer dreptul de transfer ([vezi Drepturi](#drepturi))."},
         {"p": "**Adaugă copil** deschide același formular ca ➕ din prezență, cu părintele în aceeași fereastră ([vezi Adăugarea unui copil](#copii-adaugare))."},
@@ -177,7 +180,8 @@
         {"h": "Părinți cu acces blocat la portal", "id": "platitori-blocati"},
         {"p": "Dacă există părinți ale căror CNP sau email intră în conflict cu alte înregistrări, în fereastra Plătitori apare un avertisment: „Portal blocat pentru părinții cu conflicte CNP/email”. Fiecare rând al listei se poate apăsa: se deschide direct formularul părintelui de corectat. Accesul lor în portal rămâne blocat până la corectare."},
         {"h": "Ferestrele de modificare", "id": "platitori-ferestre"},
-        {"p": "Ferestrele de modificare blochează restul ecranului. **Escape** și clicul în afara ferestrei nu o închid. **Salvează** închide fereastra numai dacă salvarea a reușit; la o eroare, datele rămân în formular. **Renunță** abandonează modificările."}
+        {"p": "Ferestrele de modificare blochează restul ecranului. **Escape** și clicul în afara ferestrei nu o închid. **Salvează** închide fereastra numai dacă salvarea a reușit; la o eroare, datele rămân în formular. **Renunță** abandonează modificările."},
+        {"p": "Dacă apare mesajul **Baza de date este ocupată. Reîncercați încărcarea datelor.** la deschiderea unui formular, repetați **Modifică**. Dacă eroarea apare la salvare, păstrați formularul și repetați **Salvează**, pentru a reîncerca aceeași operație.", "slice": "ADE6-25"}
       ]
     },
     {
@@ -197,6 +201,7 @@
     },
     {
       "id": "rapoarte",
+      "slice": "ADE9-04",
       "title": "Rapoarte",
       "blocks": [
         {"p": "Panoul **RAPOARTE** din dreapta ecranului listează sau descarcă în PDF situații pe luna, grupa sau copilul alese. Rapoartele doar citesc datele: nu emit numere și nu schimbă situația."},
@@ -204,6 +209,7 @@
           "head": ["Raport", "Ce conține", "Ce alegeți"],
           "rows": [
             ["Situație lunară", "Situația grupei pe luna aleasă", "Luna, grupa; opțional **Toate grupele?** și **Separă grupe?**"],
+            ["Situație de plată", "Restanță, bani în cont, taxa lunară integrală și suma de plată", "Luna, grupa sau **Toate grupele?**; fiecare grupă începe automat pe o pagină nouă"],
             ["Registru casă", "Încasările în numerar dintr-un interval", "**Dată început** și **Dată sfârșit** (completate cu luna aleasă)"],
             ["Raport bancă", "Încasările prin bancă dintr-un interval", "**Dată început** și **Dată sfârșit**"],
             ["Fișă cont", "Contul unui copil", "Copilul selectat, sau **Toți copiii din grupă**"],
@@ -211,6 +217,10 @@
           ]
         }},
         {"p": "Pentru o lună închisă, rapoartele folosesc situația salvată la închidere."},
+        {"h": "Situație de plată și textul de sub tabel", "id": "rapoarte-situatie-plata"},
+        {"p": "**Situație de plată** calculează: **sold inițial debit + zilele configurate ale lunii × taxa zilnică a lunii − sold inițial credit**. Taxa este pentru luna integrală, indiferent de zilele de prezență. Dacă bifați **Toate grupele?**, fiecare grupă începe pe pagină nouă, fără să fie necesară bifa **Separă grupe?**. O sumă negativă indică bani rămași în cont după acoperirea taxei lunare."},
+        {"p": "Din **meniu → Text situație de plată**, utilizatorii cu dreptul **Catalog** configurează textul pentru subunitatea curentă. Selectați text și folosiți butoanele pentru aldine, cursive, subliniere, liste, aliniere, font, mărime și culoare. **Editează sursa HTML** permite introducerea HTML-ului simplu. Lipirea în editor adaugă text simplu; pentru formatare HTML folosiți modul sursă. La sfârșit apăsați **Salvează și închide**."},
+        {"p": "Variabilele **[UNITATE]**, **[CONT]**, **[COD_FISCAL]**, **[GRUPA]**, **[LUNA]** și **[AN]** se completează în fiecare raport. **[CONT]** folosește primul cont al unității; pentru un alt cont scrieți direct IBAN-ul dorit. Textul se repetă sub tabelul fiecărei grupe, cu formatare în listare și PDF. În Excel se exportă ca text simplu. Scripturile, imaginile și linkurile nu sunt incluse în raport."},
         {"h": "Pe ecran, la imprimantă sau în PDF", "id": "rapoarte-iesire"},
         {"p": "Raportul se deschide într-o fereastră nouă, cu butoane pentru **Listare**, **Selecție imprimantă**, **Export PDF**, micșorare și mărire (doar pe ecran) și **Înapoi**. Pe ecran, raportul urmărește tema luminoasă sau întunecată; la imprimantă și în PDF, rămâne pe alb. Fereastra raportului se închide singură dacă treceți pe altă filă a browserului."},
         {"note": "Dacă browserul blochează fereastra raportului, permiteți ferestrele popup pentru această pagină."}

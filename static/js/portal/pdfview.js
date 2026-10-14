@@ -33,7 +33,7 @@ async function loadLibs() {
   }
 }
 
-export function createPdfView(container) {
+export function createPdfView(container, { onState } = {}) {
   container.classList.add('pdfview');
   const scroll = document.createElement('div');
   scroll.className = 'pdfview__scroll';
@@ -80,7 +80,10 @@ export function createPdfView(container) {
       const linkService = new l.pdfjsViewer.PDFLinkService({ eventBus });
       const v = new l.pdfjsViewer.PDFViewer({ container: scroll, viewer: pages, eventBus, linkService, enableXfa: true });
       linkService.setViewer(v);
-      eventBus.on('pagesinit', () => { v.currentScaleValue = 'page-width'; });
+      const notify = () => onState?.({ page: v.currentPageNumber, pages: v.pagesCount, scale: v.currentScale });
+      eventBus.on('pagesinit', () => { v.currentScaleValue = 'page-width'; notify(); });
+      eventBus.on('pagechanging', notify);
+      eventBus.on('scalechanging', notify);
       let doc;
       try {
         // Copy: pdf.js takes ownership of (transfers) the buffer it is given.
@@ -97,6 +100,17 @@ export function createPdfView(container) {
       current = doc;
       v.setDocument(doc);
       linkService.setDocument(doc, null);
+    },
+
+    zoom(step) {
+      if (!viewer?.pagesCount) return;
+      viewer.currentScale = Math.max(.25, Math.min(4, viewer.currentScale + step));
+    },
+
+    fitWidth() { if (viewer?.pagesCount) viewer.currentScaleValue = 'page-width'; },
+    actualSize() { if (viewer?.pagesCount) viewer.currentScaleValue = 'page-actual'; },
+    goToPage(page) {
+      if (viewer?.pagesCount) viewer.currentPageNumber = Math.max(1, Math.min(viewer.pagesCount, page));
     },
 
     clear() {

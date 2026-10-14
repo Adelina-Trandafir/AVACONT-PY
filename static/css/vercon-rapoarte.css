@@ -1,0 +1,31 @@
+/* Access arrangement, using VERCON cards, colors and shared controls. */
+.vc-reports { display: grid; grid-template-columns: minmax(190px,240px) minmax(250px,340px) minmax(0,1fr); gap: 12px; align-items: stretch; }
+.vc-reports__period, .vc-reports__types, .vc-reports__selection { min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+.vc-reports__types, .vc-reports__selection { display: flex; flex-direction: column; height: clamp(420px,calc(100dvh - 230px),760px); overflow: hidden; }
+.vc-reports h4 { margin: 0; padding: 10px 12px; background: rgba(48,158,255,.1); border-bottom: 1px solid var(--line); color: var(--primary-color); font-size: .95em; }
+.vc-reports__period > .vc-field { margin: 12px; }
+.vc-reports__options { margin-top: 20px; border-top: 1px solid var(--line); }
+.vc-reports__check { display: flex; gap: 8px; align-items: start; padding: 12px; font-size: .9em; }
+.vc-reports .vc-tree-body { flex: 1 1 0; height: auto; min-height: 0; }
+.vc-reports__selection > .vc-hint { margin: 0; padding: 10px 12px; border-top: 1px solid var(--line); }
+.vc-reports__actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.vc-reports__status { margin: 0 auto 0 0; font-size: .9em; }
+.vc-reports > .vc-reports__output, .vc-reports > .vc-reports__actions + div { grid-column: 1 / -1; min-width: 0; }
+.vc-reports__output { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 12px; }
+.vc-reports__output[hidden] { display: none; }
+.vc-reports__output h3, .vc-reports__output h4 { text-align: center; }
+.vc-reports__table { height: 310px; margin: 8px 0 16px; min-width: 0; }
+.vc-reports__columns { display: grid; gap: 8px; }
+.vc-reports__columns--2 { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.vc-reports__columns--3 { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.vc-reports__metadata { display: grid; grid-template-columns: minmax(150px,35%) 1fr; border: 1px solid var(--line); }
+.vc-reports__metadata dt, .vc-reports__metadata dd { margin: 0; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.vc-reports__signatures { padding: 15px 6px; border: 1px solid var(--line); text-align: center; white-space: pre-wrap; }
+@media (max-width: 1000px) {
+  .vc-reports { grid-template-columns: 200px minmax(0,1fr); }
+  .vc-reports__selection { grid-column: 1 / -1; height: 380px; }
+}
+@media (max-width: 600px) {
+  .vc-reports, .vc-reports__columns--2, .vc-reports__columns--3 { grid-template-columns: 1fr; }
+  .vc-reports__types, .vc-reports__selection { height: 360px; }
+}

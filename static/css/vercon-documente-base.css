@@ -1,0 +1,36 @@
+/* slice VC06-02..05: documents (NIR / storno / BC / BR). Grid = the NIR reference: contiguous cells, thin borders,
+   compact rows, small editors in the cell, calculated values as right-aligned text; Adauga rand small in the footer. */
+.vc-doc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); gap: 14px; align-items: start; }
+.vc-doc__main.is-wide { grid-column: 1 / -1; }
+.vc-doc:has(.vc-doc__tree[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.vc-doc__titlebar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.vc-doc__titlebar h3 { margin: 0; }
+.vc-pill { padding: 1px 10px; border-radius: 12px; font-size: .85em; background: rgba(48, 158, 255, .15); }
+.vc-pill[data-state="draft"] { background: #fdebc8; }
+.vc-pill[data-state="annulled"] { background: #f6d2cf; color: #8a1f17; }
+.vc-pill[hidden] { display: none; }
+.vc-doc__header { margin-bottom: 10px; }
+.vc-doc__header select, .vc-doc__header input { padding: 4px 6px; }
+.vc-doc__header input[readonly]:not(.combobox-input) { background: transparent; border-color: transparent; }
+.vc-hint { font-size: .8em; opacity: .7; }
+.vc-doc__lines { overflow-x: auto; }
+.vc-lines--doc th { background: rgba(48, 158, 255, .1); font-weight: 600; font-size: .85em; white-space: nowrap; }
+.vc-lines--doc td { padding: 1px 3px; font-size: .9em; }
+.vc-lines--doc td.is-num, .vc-lines--doc td[data-calc] { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vc-lines--doc input, .vc-lines--doc select { width: 100%; min-width: 70px; box-sizing: border-box; padding: 2px 4px; border: 1px solid transparent; background: transparent; color: inherit; font: inherit; }
+.vc-lines--doc input:not([readonly]):not(:disabled), .vc-lines--doc select:not(:disabled) { border-color: var(--line); background: rgba(255, 255, 255, .5); }
+.vc-lines--doc td:nth-child(2) input { min-width: 180px; }
+.vc-doc__linesfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.vc-doc__total { font-weight: 700; font-variant-numeric: tabular-nums; }
+.vc-doc__bar { justify-content: flex-end; margin-top: 12px; }
+.vc-doc__bar .is-primary { background: #309eff; color: #fff; border-color: #309eff; }
+.vc-doc__bar .is-danger { color: #c0392b; border-color: #c0392b; }
+.vc-doc__tree { border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 520px; overflow: auto; }
+.vc-doc__tree[hidden] { display: none; }
+.vc-doc__tree h4 { margin: 0 0 6px; }
+.vc-doc__tree details details { margin-left: 10px; }
+.vc-doc__tree .vc-nom__leaf { padding-left: 12px; font-size: .9em; }
+@media (max-width: 800px) { .vc-doc { grid-template-columns: 1fr; } }
+
+/* editor shown as a modal (ModalFrame): the consultation tree takes the whole page behind it */
+.vc-doc.is-modal { grid-template-columns: minmax(0, 1fr); }

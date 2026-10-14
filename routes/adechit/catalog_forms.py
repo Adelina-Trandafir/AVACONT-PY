@@ -1,7 +1,7 @@
 """SLICE-ADE6-06: atomic group histories and audited child form commands."""
 from datetime import date, datetime
 from .domain import require, validate_cnp, group_educators
-from .service import validate_values, prepare_attendance, month_order
+from .service import validate_values, validate_educator, prepare_attendance, month_order
 
 
 def iso_day(value):
@@ -49,9 +49,7 @@ def save_group(repo, body):
     for item in educators:
         require(isinstance(item, dict) and isinstance(item.get('values'), dict), 'VALUES', 'Educator invalid.', 400)
         fields = item['values']
-        require(set(fields) <= {'Educator', 'DeLa', 'PanaLa'}, 'FIELDS', 'Câmpuri educator invalide.', 400)
-        fields = validate_values('Grupe_Educator', fields)
-        require(bool((fields.get('Educator') or '').strip()), 'NAME', 'Numele educatorului este obligatoriu.', 400)
+        fields = validate_educator(fields)
         start, end = iso_day(fields.get('DeLa')), iso_day(fields.get('PanaLa'))
         require(bool(start), 'DATE', 'Completați data «Începând cu».', 400)
         require(not end or start <= end, 'DATE', 'Data «Până la» nu poate fi înaintea începerii.', 400)

@@ -46,6 +46,8 @@ from routes.access import access_bp  # slice 0104: POST /api/access/client-type 
 from routes.efactura import efactura_bp  # slice 00EF-04: /api/efactura/token/* (ANAF e-Factura token, bearer)
 from routes.adechit import adechit_bp
 from routes.adechit.parent_portal import parent_portal_bp
+from routes import actiuni  # recent actions of the operator (Jurnal writes + read route)
+from routes.vercon import vercon_bp  # slice VC01-01: VERCON skeleton, section VR
 
 # 1. Initializam logger-ul global (ca sa scrie in fisierul .log)
 logger = setup_logger()
@@ -117,6 +119,9 @@ app.register_blueprint(access_bp)  # slice 0104: POST /api/access/client-type
 app.register_blueprint(efactura_bp)  # slice 00EF-04: /api/efactura/token/start, /cod, /stare
 app.register_blueprint(adechit_bp)
 app.register_blueprint(parent_portal_bp)
+app.register_blueprint(vercon_bp)  # slice VC01-01/02: /api/vercon/context, /vercon
+
+actiuni.init_app(app)  # recent actions: Jurnal rows for data writes + GET /api/actiuni
 
 logger.info("=== RUTE ÎNREGISTRATE ===")
 for rule in app.url_map.iter_rules():

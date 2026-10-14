@@ -29,12 +29,22 @@ def _total_width(columns):
 def _html_table(block, landscape):
     columns = block['cols']
     total = _total_width(columns)
-    out = ['<table class="rpt-table" width="100%"><colgroup>']
+    extra = ' rpt-payment-table' if block.get('payment_notice') else ''
+    out = [f'<table class="rpt-table{extra}" width="100%"><colgroup>']
     out += [f'<col width="{column["w"] * 100 / total:.2f}%">' for column in columns]
     out.append('</colgroup>')
     if block.get('head', True):
-        out.append('<thead><tr>' + ''.join(
-            f'<th class="{_tint(column)}">{escape(column["label"]).replace(chr(10), "<br>")}</th>' for column in columns) + '</tr></thead>')
+        headers = []
+        for index, column in enumerate(columns):
+            rowspan = ' rowspan="2"' if block.get('formula') and index < 2 else ''
+            label = escape(column['label']).replace('\n', '<br>')
+            if block.get('payment_notice') and index in (2, 3):
+                label = label.replace('<br>SOLD ', '<br><small>SOLD ') + '</small>'
+            headers.append(f'<th class="{_tint(column)}"{rowspan}>{label}</th>')
+        formula = ''
+        if block.get('formula'):
+            formula = '<tr class="rpt-formula">' + ''.join(f'<th>{escape(value)}</th>' for value in block['formula'][2:]) + '</tr>'
+        out.append('<thead><tr>' + ''.join(headers) + '</tr>' + formula + '</thead>')
     out.append('<tbody>')
     for row in block['rows']:
         cells, index, parts = row['cells'], 0, []
@@ -64,6 +74,9 @@ def _html_block(block, landscape):
         return f'<p class="rpt-text {block.get("align", "")} {"bold" if block.get("bold") else ""}">{escape(block["text"])}</p>'
     if kind == 'table':
         return _html_table(block, landscape)
+    if kind == 'richtext':
+        from .report_richtext import paragraphs_html
+        return '<section class="rpt-richtext">' + paragraphs_html(block['paragraphs']) + '</section>'
     if kind == 'box':
         rows = ''.join(f'<tr><th>{escape(label)}</th><td>{escape(str(value))}</td></tr>' for label, value in block['rows'])
         title = f'<div class="rpt-box-title">{escape(block["title"])}</div>' if block.get('title') else ''
@@ -80,27 +93,34 @@ def _html_block(block, landscape):
 
 
 def html_page(model):
+    from .report_excel import dialog_html
     landscape = bool(model['landscape'])
-    css = [url_for('static', filename='css/adechit-report.css', _external=True)]
+    css = [url_for('static', filename='css/adechit-report.css', _external=True),
+           url_for('static', filename='css/adechit-export.css', _external=True)]
     if landscape:
         css.append(url_for('static', filename='css/adechit-report-landscape.css', _external=True))
+    if model.get('payment_notice'):
+        css += [url_for('static', filename='css/adechit-payment-notice.css', _external=True),
+                url_for('static', filename='css/adechit-richtext.css', _external=True)]
     script = url_for('static', filename='js/adechit/report-print.js', _external=True)
+    excel_script = url_for('static', filename='js/adechit/report-excel.js', _external=True)
     body = ''.join(_html_block(block, landscape) for block in model['blocks'])
     footer = f'<footer class="rpt-footer">{escape(model["footer"])}</footer>' if model.get('footer') else ''
     links = ''.join(f'<link rel="stylesheet" href="{escape(href)}">' for href in css)
     return (f'<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{escape(model["title"])}</title>{links}<script src="{escape(script)}" defer></script></head>'
-            f'<body class="rpt{" rpt-wide" if landscape else ""}"><nav class="rpt-bar">'
+            f'<title>{escape(model["title"])}</title>{links}<script src="{escape(excel_script)}" defer></script><script src="{escape(script)}" defer></script></head>'
+            f'<body class="rpt{" rpt-wide" if landscape else ""}{" rpt-payment-notice" if model.get("payment_notice") else ""}"><nav class="rpt-bar">'
             f'<button id="report-print" type="button" title="Listare la imprimanta implicită">🖨️ Listare</button>'
             f'<button id="report-printer" type="button" title="Alegeți imprimanta">🖨️ Selecție imprimantă</button>'
             f'<button id="report-pdf" type="button" title="Salvează raportul ca PDF">📄 Export PDF</button>'
+            f'<button id="report-excel" type="button" title="Alege coloanele și exportă raportul în Excel">📊 Export Excel</button>'
             f'<span class="rpt-bar-gap"></span>'
             f'<button id="report-zoom-out" type="button" title="Micșorează (doar pe ecran)">➖</button>'
             f'<span id="report-zoom-level" class="rpt-zoom">100%</span>'
             f'<button id="report-zoom-in" type="button" title="Mărește (doar pe ecran)">➕</button>'
             f'<span class="rpt-bar-gap"></span>'
             f'<button id="report-back" type="button" title="Închide raportul">⬅ Înapoi</button></nav>'
-            f'<main>{body}</main>{footer}</body></html>')
+            f'<main>{body}</main>{footer}{dialog_html(model)}</body></html>')
 
 
 # ---- PDF -----------------------------------------------------------------------------------------------------------
@@ -131,7 +151,7 @@ def pdf_bytes(model):
     aligns = {'l': TA_LEFT, 'c': TA_CENTER, 'r': TA_RIGHT}
 
     def style(name, **kw):
-        return ParagraphStyle(name, fontName='AdeReport', fontSize=kw.pop('size', size), leading=kw.pop('leading', size * 1.25), **kw)
+        return ParagraphStyle(name, fontName=kw.pop('fontName', 'AdeReport'), fontSize=kw.pop('size', size), leading=kw.pop('leading', size * 1.25), **kw)
 
     def para(text, st):
         return Paragraph(escape(str(text)).replace('\n', '<br/>'), st)
@@ -166,12 +186,22 @@ def pdf_bytes(model):
                 for index, column in enumerate(columns):
                     if column.get('tint'):
                         commands.append(('BACKGROUND', (index, 0), (index, 0), tints[column['tint']]))
+                if block.get('formula'):
+                    data.append([para(value, style('formula', fontName='Helvetica-Bold', alignment=TA_CENTER))
+                                 for value in block['formula']])
+                    commands += [('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)),
+                                 ('BACKGROUND', (2, 1), (-1, 1), colors.yellow)]
+                if block.get('payment_notice'):
+                    commands.append(('BACKGROUND', (0, 0), (-1, 0), colors.white))
             offset = len(data)
             for row_index, row in enumerate(block['rows']):
                 line, index = [], 0
                 for cell in row['cells']:
                     text, span = _cell(cell)
-                    line.append(para(text, cell_styles[columns[index].get('align', 'l')]))
+                    cell_style = cell_styles[columns[index].get('align', 'l')]
+                    if block.get('payment_notice') and (index == len(columns) - 1 or row.get('cls') == 'total'):
+                        cell_style = style('payment-total', fontName='Helvetica-Bold', alignment=aligns[columns[index].get('align', 'l')])
+                    line.append(para(text, cell_style))
                     if span > 1:
                         commands.append(('SPAN', (index, offset + row_index), (index + span - 1, offset + row_index)))
                         line += [''] * (span - 1)
@@ -179,14 +209,19 @@ def pdf_bytes(model):
                 line += [''] * (len(columns) - len(line))
                 data.append(line)
                 if row.get('cls') in ('total', 'grand', 'sub'):
-                    commands.append(('BACKGROUND', (0, offset + row_index), (-1, offset + row_index), grey))
+                    commands.append(('BACKGROUND', (0, offset + row_index), (-1, offset + row_index),
+                                     colors.white if block.get('payment_notice') else grey))
                 if row.get('cls') == 'cancelled':
                     commands.append(('TEXTCOLOR', (0, offset + row_index), (-1, offset + row_index), colors.HexColor('#7f7f7f')))
-            table = Table(data, colWidths=scaled(columns), repeatRows=1 if block.get('head', True) else 0, hAlign='LEFT')
-            table.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), .25, border), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            table = Table(data, colWidths=scaled(columns), repeatRows=offset, hAlign='LEFT')
+            table.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), .7 if block.get('payment_notice') else .25,
+                                        colors.black if block.get('payment_notice') else border), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                                        ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 2),
                                        ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5), *commands]))
             story.append(table)
+        elif kind == 'richtext':
+            from .report_richtext import pdf_flowables
+            story += [Spacer(1, 2 * mm), *pdf_flowables(block['paragraphs'])]
         elif kind == 'box':
             inner = [[para(label, style('kvl')), para(value, style('kvv'))] for label, value in block['rows']]
             rows = ([[para(block['title'], style('boxt', size=size + 3, alignment=TA_CENTER)), '']] if block.get('title') else []) + inner

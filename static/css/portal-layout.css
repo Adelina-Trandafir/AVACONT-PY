@@ -1,0 +1,68 @@
+/* Slice 0110-03 -- the web area of registered users. Rides on site.css (tokens, .card, .btn) and
+   detalii.css (.field, .msg, .actions). */
+
+.portal { background: var(--sky-1); }
+/* Calibri everywhere in the portal, in every mode (controls, popups and tooltips included);
+   Carlito is its metric-compatible twin for phones that lack it. The PDF viewer is left alone:
+   its text layer must keep the fonts of the document to line up with the page image. */
+.portal, .portal :not(.pdfview *) { font-family: Calibri, Carlito, "Segoe UI", system-ui, sans-serif !important; }
+.portal .dgv { --dgv-font: Calibri, Carlito, "Segoe UI", system-ui, sans-serif; }
+
+/* pc: every size 2 pt (2.67 px) below what it was; rem sizes follow the root */
+@media (min-width: 901px) {
+  html:has(body.portal) { font-size: 13.33px; }
+  .portal { font-size: 14.33px; }
+  .portal .dgv { --dgv-size: 11.33px; }
+  .portal .combobox-input, .portal .combobox-option { font-size: 10.33px; }
+  .portal .combobox-arrow { font-size: 12.33px; }
+  .portal .dgv__sort { font-size: 7.33px; }
+  .pa__tabs .pa__lbl {font-size: 12px;padding-right: 4px;}
+  .portal .dgv__note, .portal .treeview-no-results { font-size: 9.33px; }
+  /* the trees (angajamente, cards, Extrase, Clasificatii, Parteneri): 2 pt smaller than the page text */
+  /* the tree copies the font of its container when it is made, so the size is set on the container */
+  /* (the class treeview-container is added after the tree has read the font, so the hosts are named) */
+  #grid-ang, #tab-tree, #tree-ext, #tree-clsf, #tree-part, .portal .treeview-container, .portal .treeview, .portal .treeview-search-input { font-size: 11.67px; }
+}
+
+.header {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  min-height: 0; padding: 4px 28px;
+  background: rgba(255, 255, 255, .92); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.header .user-info { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.header .user-info[hidden] { display: none; }
+.header .brand img { width: 30px; height: 30px; }
+.header .btn { padding: 3px 14px; min-height: 0; line-height: 1.2; font-size: .88rem; }
+.user-email { color: var(--ink-soft); font-size: .92rem; }
+.unit-pick { display: flex; align-items: center; gap: 8px; font-size: .9rem; }
+.unit-pick__label { font-weight: 700; }
+.unit-pick select {
+  font: inherit; color: var(--ink); max-width: 320px;
+  padding: 8px 12px; background: #fff; border: 1.5px solid var(--line); border-radius: var(--radius-sm);
+}
+.unit-pick select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(48, 158, 255, .25); }
+
+.portal__main { padding: 48px 16px 72px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+.portal__card { width: 100%; max-width: 460px; padding: 32px; }
+.portal__card--wide { max-width: 1000px; }
+.portal__card h1 { font-size: 1.7rem; margin-bottom: 10px; }
+.portal__card .lead { margin-bottom: 22px; }
+.portal__app { width: 100%; display: flex; justify-content: center; }
+.portal__app[hidden], .portal__card[hidden] { display: none; }
+.portal__note { margin-top: 20px; font-size: .9rem; color: var(--ink-soft); }
+.portal__card .actions { gap: 12px; }
+
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; }
+.kv dt { font-weight: 700; }
+.kv dd { margin: 0; color: var(--ink-soft); }
+
+@media (max-width: 640px) {
+  .header { padding: 8px 16px; }
+  .header .user-info { margin-left: 0; width: 100%; }
+  .unit-pick { flex: 1 1 100%; }
+  .unit-pick select { max-width: none; width: 100%; }
+  .portal__card { padding: 22px 18px; }
+}
+

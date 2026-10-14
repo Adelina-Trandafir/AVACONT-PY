@@ -10,6 +10,7 @@
  * @author Avatar Soft SRL
  */
 
+import { testMode } from '../utils/debug-tools.js';
 import eventBus, { EVENTS } from '../event-bus/event-bus.js';
 import { registerInstance } from '../instances-registry.js';
 import ListenerTracker from '../listener-tracker/listener-tracker-mixin.js';
@@ -24,7 +25,7 @@ const SESSION_CONFIG = {
   SESSION_DURATION: null, // Se va seta din server (minute)
   WARNING_TIME: 60000, // Avertizează cu 1 minut înainte
   ACTIVITY_EVENTS: ['click', 'keypress', 'scroll', 'touchstart'],
-  DEBUG_MODE: false,
+  DEBUG_MODE: testMode,   // the single switch (utils/debug-tools.js)
   ACTIVITY_DEBOUNCE: 5000, // Nu trimite activitate mai des de 5 secunde
   CHECK_BEFORE_WARNING: 10000, // Verifică cu server cu 10s înainte de warning
   MAX_EXTENSIONS: 2, // replaced by the server's value in init()
