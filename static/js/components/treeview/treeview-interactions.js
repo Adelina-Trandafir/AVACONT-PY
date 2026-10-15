@@ -106,7 +106,7 @@ export const treeviewInteractionsMixin = {
 
     // Click pe item
     const item = target.closest('.treeview-item');
-    if (!item) return;
+    if (!item || item.dataset.selectable === 'false') return;
 
     const nodeId = item.dataset.value;
     const nodeLevel = parseInt(item.dataset.level || '1');
@@ -153,7 +153,7 @@ export const treeviewInteractionsMixin = {
     }
 
     const item = target.closest('.treeview-item');
-    if (!item) return;
+    if (!item || item.dataset.selectable === 'false') return;
 
     const nodeLevel = parseInt(item.dataset.level || '1');
     const hasChildren = item.dataset.hasChildren === 'true';
@@ -170,6 +170,7 @@ export const treeviewInteractionsMixin = {
   },
 
   selectFromItem(item) {
+    if (item.dataset.selectable === 'false') return;
     const value = item.dataset.value;
     const text = item.dataset.text || `Item ${value}`;
 
@@ -253,7 +254,7 @@ export const treeviewInteractionsMixin = {
     if (this.highlightedIndex < 0) return;
 
     const item = this.flattenedItems[this.highlightedIndex];
-    if (!item) return;
+    if (!item || item.node.selectable === false) return;
 
     // Checkbox mode: Enter ticks what has a box (a leaf, or a branch under
     // `branchChecks`) and opens or closes a branch that has none.

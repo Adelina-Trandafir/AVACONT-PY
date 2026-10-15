@@ -8,14 +8,14 @@
 .ade-header .ade-main-menu:hover, .ade-header .ade-main-menu[aria-expanded="true"] { color: var(--ade-header-text); background: rgba(255, 255, 255, .16); }
 .ade-header__right { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
 .ade-header__hidden { display: none; }
-.ade-session-timer { flex: 0 0 auto; padding: 2px 9px; color: #fff; background: rgba(255, 255, 255, .18); border-radius: 12px; font-size: calc(.74rem + 1px); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ade-session-timer { flex: 0 0 auto; padding: 2px 9px; color: #fff; background: rgba(255, 255, 255, .18); border-radius: 12px; font-size: var(--fs-ms); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ade-session-timer[hidden] { display: none; }
 .ade-session-timer.is-urgent { background: #c0392b; }
 .ade-page.is-reports-collapsed .ade-header__context { display: none; }
-.ade-header .brand { justify-self: start; font-size: calc(.9rem + 1px); }
+.ade-header .brand { justify-self: start; font-size: var(--fs-mp); }
 button.ade-brand { padding: 0; background: none; border: 0; cursor: pointer; font: inherit; }
-.ade-header__context { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(.74rem + 1px); }
-.ade-header .btn, .ade-header a.btn { min-height: 28px; padding: 4px 10px; border-radius: var(--radius-sm); font-size: calc(.74rem + 1px); box-shadow: none; transform: none; }
+.ade-header__context { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-ms); }
+.ade-header .btn, .ade-header a.btn { min-height: 28px; padding: 4px 10px; border-radius: var(--radius-sm); font-size: var(--fs-ms); box-shadow: none; transform: none; }
 .portal.ade-page .ade-header, html[data-theme="dark"] .portal.ade-page .ade-header { background: var(--ade-header-back); border-color: var(--ade-header-back); backdrop-filter: none; color: var(--ade-header-text); }
 .ade-brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; text-decoration: none; }
 .ade-brand__name { font-weight: 800; letter-spacing: .04em; color: #fff; }
@@ -23,7 +23,7 @@ button.ade-brand { padding: 0; background: none; border: 0; cursor: pointer; fon
 .ade-header .btn, .ade-header a.btn { color: #fff; background: transparent; border: 1px solid rgba(255, 255, 255, .45); }
 .ade-header .btn:hover, .ade-header a.btn:hover { background: rgba(255, 255, 255, .16); }
 /* .ade-header .btn (more specific) sets calc(.74rem + 1px); the menu icon is 2pt larger than that. */
-.ade-header .ade-menu-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 0; font-size: calc(.74rem + 1px + 2pt); line-height: 1; }
+.ade-header .ade-menu-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 0; font-size: var(--fs-lg); line-height: 1; }
 .ade-menu-btn svg { display: block; }
 /* Over the main grid: Subunitate at its left edge, the search at its right edge. */
 .ade-header__center { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
@@ -31,7 +31,7 @@ button.ade-brand { padding: 0; background: none; border: 0; cursor: pointer; fon
 .ade-search input { box-sizing: border-box; width: 100%; height: 28px; padding: 3px 8px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--ade-field-radius); }
 .ade-main { box-sizing: border-box; width: 100%; max-width: 2048px; height: calc(100vh - 46px); margin-inline: auto; padding: 5px 7px 6px; display: grid; grid-template-rows: 24px minmax(0,1fr) auto; gap: 5px; }
 .ade-notice-row { display: flex; align-items: center; min-width: 0; gap: 8px; }
-.ade-notice-row .msg { margin: 0; padding: 2px 8px; border-radius: var(--radius-sm); font-size: calc(.72rem + 1px); }
+.ade-notice-row .msg { margin: 0; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--fs-ms); }
 .ade-page.is-left-collapsed { --ade-left: 96px; }
 .ade-page.is-reports-collapsed { --ade-right: 46px; }
 .ade-shell { min-height: 0; display: grid; justify-content: center; grid-template-columns: var(--ade-left) minmax(0,1100px) var(--ade-right); gap: 5px; transition: grid-template-columns 160ms ease; }
@@ -40,24 +40,24 @@ button.ade-brand { padding: 0; background: none; border: 0; cursor: pointer; fon
 .ade-side-panel, .ade-center { background: var(--card); border: 1px solid var(--line); }
 .ade-side-panel { min-height: 0; display: grid; grid-template-rows: var(--ade-head-h) minmax(0,1fr); overflow: hidden; }
 .ade-group-panel { grid-template-rows: var(--ade-head-h) minmax(0,1fr) auto; }
-.ade-hidden-groups { display: flex; align-items: center; gap: 5px; padding: 6px; font-size: 12px; }
-.ade-side-panel h2 { margin: 0; display: flex; align-items: center; justify-content: center; padding: 0 2px; font-size: calc(.72rem + 1px + 2pt); letter-spacing: .04em; background: var(--sky-2); border-bottom: 1px solid var(--line); }
+.ade-hidden-groups { display: flex; align-items: center; gap: 5px; padding: 6px; font-size: var(--fs-sm); }
+.ade-side-panel h2 { margin: 0; display: flex; align-items: center; justify-content: center; padding: 0 2px; font-size: var(--fs-mp); letter-spacing: .04em; background: var(--sky-2); border-bottom: 1px solid var(--line); }
 .ade-h2-text { flex: 1; text-align: center; }
 .ade-h2-btn { flex: 0 0 auto; width: 28px; height: 26px; padding: 0; color: var(--ink); background: transparent; border: 0; border-radius: 3px; font: inherit; line-height: 1; cursor: pointer; }
 .ade-h2-btn:hover:not(:disabled) { background: var(--sky-1); }
 .ade-h2-btn:disabled { opacity: .45; cursor: default; }
-#ade-refresh { font-size: calc(1rem + 2.33px); }
-.ade-left__toggle { font-size: calc(1.2rem + 1px); font-weight: 800; }
+#ade-refresh { font-size: var(--fs-xl); }
+.ade-left__toggle { font-size: var(--fs-2xl); font-weight: 800; }
 .ade-tree { min-height: 0; position: relative; overflow: hidden; }
 .ade-tree .treeview.treeview--inline { border: 0; }
 .ade-tree .treeview-search-wrapper { padding: 4px; }
-.ade-tree .treeview-search-input { min-height: 26px; font-size: calc(.72rem + 2.33px); }
-.ade-tree .treeview-item { min-height: 26px; font-size: calc(.74rem + 2.33px); }
+.ade-tree .treeview-search-input { min-height: 26px; font-size: var(--fs-md); }
+.ade-tree .treeview-item { min-height: 26px; font-size: var(--fs-md); }
 .ade-tree--roots .treeview-search-wrapper { display: none; }
 .ade-center { position: relative; display: grid; grid-template-rows: minmax(190px, 1fr) minmax(220px, 38%); overflow: hidden; }
 .ade-toolbar { display: none; align-items: center; gap: 10px; padding: 5px 8px; background: var(--sky-1); border-bottom: 1px solid var(--line); }
 .ade-toolbar__info { display: none; }
-.ade-main .btn { min-height: 28px; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); color: var(--ink); font: inherit; font-size: calc(.72rem + 1px); font-weight: 700; cursor: pointer; }
+.ade-main .btn { min-height: 28px; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); color: var(--ink); font: inherit; font-size: var(--fs-ms); font-weight: 700; cursor: pointer; }
 .ade-main .btn:hover:not(:disabled) { border-color: var(--blue); background: var(--sky-1); }
 .ade-main .btn:disabled { opacity: .48; cursor: default; }
 .ade-main .btn.is-danger { color: var(--danger, var(--ink)); }

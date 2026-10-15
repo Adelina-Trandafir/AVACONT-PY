@@ -10,6 +10,11 @@
 .dgv__hc.is-action { padding: 0; justify-content: center; }
 .dgv__cell.is-action { padding: 0; }
 .dgv__cell-action:focus-visible { outline: 2px solid var(--dgv-accent); outline-offset: -2px; }
+.dgv__cell-caption { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dgv__cell-inline-action { flex: 0 0 28px; align-self: stretch; padding: 0; border: 0; border-left: 1px solid var(--dgv-line); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.dgv__cell-inline-action:hover { background: var(--dgv-hover); }
+.dgv__cell-inline-action:focus-visible { outline: 2px solid var(--dgv-accent); outline-offset: -2px; }
+.dgv__cell--action-on-select:not(.is-current-cell) > .dgv__cell-inline-action { display: none; }
 .dgv__editor .kdp { width: 100%; height: 100%; }
 .dgv__editor .kdp__field { padding-inline: 24px; }
 .dgv__footer-action { height: 100%; padding: 0 6px; border: 0; color: var(--dgv-text); background: transparent; font: inherit; font-weight: 650; cursor: pointer; }
@@ -25,8 +30,8 @@
    of the theme block, so a page can also override one variable. */
 
 .dgv {
-  --dgv-font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
-  --dgv-size: 14px;
+  --dgv-font: var(--font-ui);
+  --dgv-size: var(--fs-table);
   --dgv-back: #ffffff;
   --dgv-alt: #f4f7fc;
   --dgv-text: #16233a;
@@ -84,15 +89,16 @@
   border-right: 1px solid var(--dgv-line); background: var(--dgv-head-back);
 }
 .dgv__hc:hover { background: var(--dgv-hover); }
-/* the header text is ALWAYS centred, whatever the alignment of the column's cells; the filter V sits at the right edge */
+/* Header text is centred; the filter command sits at the right edge. */
 .dgv__hc { justify-content: center; text-align: center; padding: 0 22px; }
 .dgv__title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dgv__sort { flex: none; font-size: 10px; color: var(--dgv-accent); }
+.dgv__sort { flex: none; font-size: var(--fs-2xs); color: var(--dgv-accent); }
 .dgv__fb {
   position: absolute; right: 3px; top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity .12s;
   flex: none; width: 20px; height: 20px; padding: 0; line-height: 1; cursor: pointer;
-  border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--dgv-dim); font-size: 14px;
+  border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--dgv-dim); font-size: calc(var(--fs-md) - 2pt);
 }
+.dgv__fb svg { width: 1em; height: 1em; fill: currentColor; vertical-align: middle; }
 .dgv__fb:hover { border-color: var(--dgv-line); background: var(--dgv-back); color: var(--dgv-text); }
 .dgv__hc:hover .dgv__fb, .dgv__fb:focus-visible, .dgv__fb.is-active { opacity: 1; }
 /* touch / phone: no hover, so the V is always there */
@@ -165,7 +171,7 @@
 .dgv__list { max-height: 200px; overflow: auto; border: 1px solid var(--dgv-line); border-radius: 4px; padding: 4px; background: var(--dgv-back); }
 .dgv__chk { display: flex; align-items: center; gap: 8px; padding: 2px 4px; cursor: pointer; }
 .dgv__chk span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dgv__note { font-size: 12px; color: var(--dgv-dim); }
+.dgv__note { font-size: var(--fs-sm); color: var(--dgv-dim); }
 .dgv__note:empty { display: none; }
 .dgv__pbar { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
 .dgv__btn { padding: 6px 12px; font: inherit; cursor: pointer; color: inherit; background: var(--dgv-head-back); border: 1px solid var(--dgv-popup-border); border-radius: 4px; }

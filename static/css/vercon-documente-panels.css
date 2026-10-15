@@ -1,5 +1,6 @@
 .vc-doc__tree { padding: 0; align-self: stretch; height: auto; min-height: 240px; max-height: none; overflow: hidden; display: flex; flex-direction: column; }
 .vc-doc__tree h4, .vc-product-panel h4 { margin: 0; padding: 10px 12px; background: rgba(48,158,255,.1); border-bottom: 1px solid var(--line); color: var(--primary-color); }
+.vc-doc__tree h4:has(button) { padding-top: 4px; padding-bottom: 4px; padding-right: 4px; }
 .vc-tree-body { height: 100%; min-height: 200px; }
 .vc-doc__tree > .vc-tree-body { flex: 1 1 0; }
 .vc-tree-body .treeview--inline { max-height: none; height: 100%; }

@@ -53,6 +53,15 @@ export const treeViewRenderMixin = {
 
     this.treeContainer.innerHTML = html;
 
+    // Keep indentation outside the painted row. A leaf's invisible expander slot
+    // belongs to that indentation too; its label/checkbox stays in the same place.
+    this.treeContainer.querySelectorAll('.treeview-item').forEach((item) => {
+      const level = Number(item.dataset.level) || 1;
+      const indent = Math.max(0, Number(this.options.indent ?? 12) || 0);
+      const spacer = item.dataset.hasChildren === 'true' ? 0 : Number(this.expanderWidth) || 0;
+      item.style.setProperty('--tv-node-start', `${(level - 1) * indent + spacer}px`);
+    });
+
     this.isTreeRendered = true;
   },
 
@@ -66,8 +75,8 @@ export const treeViewRenderMixin = {
       const isExpanded = this.expandedNodes.has(nodeIdStr);
       const currentPath = [...parentPath, { id: node.id, label: nodeLabel }];
       const pathString = currentPath.map((p) => `${p.id},${p.label}`).join(';');
-      const isSelectable =
-        this.options.selectableLevel === null || this.options.selectableLevel === level;
+      const isSelectable = node.selectable !== false &&
+        (this.options.selectableLevel === null || this.options.selectableLevel === level);
 
       // Verifică stilizarea pentru search
       const isMatched = this.matchedNodes.has(nodeIdStr);
@@ -106,8 +115,8 @@ export const treeViewRenderMixin = {
       html += `
     <div class="treeview-item-wrapper">
       <div class="${itemClasses}" 
-           style="padding-left: ${paddingLeft}px;"
            data-value="${this.escapeHtml(nodeIdStr)}"
+           data-selectable="${node.selectable !== false}"
            data-text="${this.escapeHtml(nodeLabel)}"
            data-level="${level}"
            data-has-children="${hasChildren}"

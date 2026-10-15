@@ -12,9 +12,10 @@ What comes out (`parse(xml_bytes)` -> dict):
   header   NrFact, DataFact, DataScad, Tip («FC» / «NC»), Semn, CUI (as written, «RO» kept), CuiNormalizat, DenumireP, Adresa,
            Valoare (taxable amount), TVA, CotaTVA (the rate of the biggest taxable amount), Total (payable), Atasament
            (file name of the first embedded document), Ref («number / date» of the invoice a credit note refers to)
-  linii    NrLinie, Denumire, Explicatie, Unit, Cant, Pret, Valoare
+  linii    NrLinie, Denumire, Explicatie, Cpv («» when the line has no STI code), Unit, Cant, Pret, Valoare
   note     the document-level notes (text)
   atasamente  [{nume, mime, octeti}] the embedded documents (the bytes are decoded by `atasament_bytes`)
+  cumparator  {nume, cui, adresa} the buyer;  plati  [{cod, cont}] the accounts the supplier asks to be paid into (not stored: read when shown)
 
 The rule for `CuiNormalizat` is the same as `EfCui.Normalize` in KBot.Migrator and the partner join of the DDF view: letters and
 digits only, upper case, a leading «RO» before digits dropped. Change it in all places or in none.
@@ -104,6 +105,27 @@ def _supplier(root):
     return cui, name, ", ".join(part for part in parts if part)
 
 
+def _customer(root):
+    """(name, tax code, address) of the buyer, as the supplier wrote them (the invoice shows them as they are)."""
+    party = _find(root, "AccountingCustomerParty/Party")
+    cui = _text(party, "PartyTaxScheme/CompanyID") or _text(party, "PartyLegalEntity/CompanyID") or _text(party, "PartyIdentification/ID")
+    name = _text(party, "PartyLegalEntity/RegistrationName") or _text(party, "PartyName/Name")
+    address = _find(party, "PostalAddress")
+    parts = [_text(address, "StreetName"), _text(address, "AdditionalStreetName"), _text(address, "CityName"),
+             _text(address, "CountrySubentity")]
+    return name, cui, ", ".join(part for part in parts if part)
+
+
+def _payments(root):
+    """[{cod, cont}] one per PaymentMeans that names an account: the means code and the IBAN the supplier asks to be paid into."""
+    out = []
+    for means in _findall(root, "PaymentMeans"):
+        account = _text(means, "PayeeFinancialAccount/ID")
+        if account:
+            out.append({"cod": _text(means, "PaymentMeansCode"), "cont": account})
+    return out
+
+
 def _due_date(root):
     due = _date(_text(root, "DueDate"))
     if due:
@@ -157,6 +179,14 @@ def _attachments(root):
     return out
 
 
+def _cpv(line):
+    """The CPV code of a line: `Item/CommodityClassification/ItemClassificationCode` with listID «STI». «» when the line has none."""
+    for code in _findall(line, "Item/CommodityClassification/ItemClassificationCode"):
+        if code.attrib.get("listID", "").strip().upper() == "STI" and _text(code):
+            return _clip(_text(code), 16)
+    return ""
+
+
 def _lines(root, credit):
     lines = []
     for index, line in enumerate(_findall(root, "CreditNoteLine" if credit else "InvoiceLine"), 1):
@@ -168,6 +198,7 @@ def _lines(root, credit):
             "NrLinie": _clip(_text(line, "ID") or str(index), 16),
             "Denumire": _clip(_text(line, "Item/Name") or _text(line, "Item/Description"), 500),
             "Explicatie": "\n".join(dict.fromkeys(text for text in explanation if text)) or None,
+            "Cpv": _cpv(line),
             "Unit": _clip(quantity.attrib.get("unitCode", "") if quantity is not None else "", 16) or None,
             "Cant": _number(quantity.text if quantity is not None else ""),
             "Pret": _money(line, "Price/PriceAmount"),
@@ -216,6 +247,8 @@ def parse(xml_bytes):
         "linii": _lines(root, credit),
         "note": [text for text in (_text(note) for note in _findall(root, "Note")) if text],
         "atasamente": [{key: value for key, value in item.items() if not key.startswith("_")} for item in attachments],
+        "cumparator": dict(zip(("nume", "cui", "adresa"), _customer(root))),
+        "plati": _payments(root),
     }
 
 

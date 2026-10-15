@@ -77,7 +77,8 @@ export function mountLista(host, opts) {
         columns: [
           { key: 'ordinal', title: '#', width: 36, editable: false, filter: false, sortable: false },
           column({ key: 'portions', label: 'Porții', type: 'int' }, { width: 60, editable: false, filter: false, sortable: false }),
-          column({ key: 'Tip', label: 'Fel de mâncare', type: 'text' }, { width: 130, filter: false, sortable: false }),
+          column({ key: 'Tip', label: 'Fel de mâncare', type: 'text' }, { width: 130, editor: 'list',
+            options: state.lookups.dishes.map((dish) => ({ value: dish.label, label: dish.label })), filter: false, sortable: false }),
           column({ key: 'Explicatie', label: 'Explicații', type: 'text' }, { width: 200, filter: false, sortable: false }),
           { key: 'actions', title: '⋮', width: 36, editable: false, filter: false, sortable: false, display: 'button', actionText: '⋮' }],
         footer: true, footerCaption: '', footerAction: { label: '+ Adaugă rând', span: 2, disabled: !editing() }, onFooterAction: async () => {
@@ -85,6 +86,7 @@ export function mountLista(host, opts) {
         },
         onCellSave: ({ row, key: cell, value: raw }) => {
           const item = meal.items.find((it) => it.key === row.key); const patch = { [cell]: cell === 'IdFel' && raw ? Number(raw) : raw };
+          if (cell === 'Tip') patch.IdFel = state.lookups.dishes.find((dish) => dish.label === raw)?.id ?? null;
           Object.assign(item, patch); state.dirty = true; return patch;
         },
         onCellAction: ({ row }) => rowMenu(dishGrid, row, [{ label: 'Elimină rândul', disabled: !editing(), run: async () => {

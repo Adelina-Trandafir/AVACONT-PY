@@ -1,4 +1,5 @@
 """Report catalog, filters, snapshots and exact exports for Materiale/Alimente."""
+from decimal import Decimal
 from flask import Response, current_app, g, request
 from . import report_catalog, report_data, report_output, report_service, report_excel, protocol, stock
 from .nomenclatoare import NomError
@@ -84,7 +85,7 @@ def register(bp, guard, scoped, session, build):
         return {'variants': [{'id': r['variant'], 'product': r['product'], 'category': r['category'], 'account': r['account'],
                              'name': r['name'], 'um': r['um'],
                              'label': (r['name'] or '') + ' · ' + str(r['code'] or r['variant']),
-                             'variant_label': str(r['code'] or r['variant']) + ' / ' + (stock.quantity_text(int(r['price']), ctx['scale']) if r['price'] is not None else '—') + ' lei'} for r in variants],
+                             'variant_label': str(r['code'] or r['variant']) + ' / ' + (stock.quantity_text(Decimal(r['price']), ctx['scale']) if r['price'] is not None else '—') + ' lei'} for r in variants],
                 'categories': options(categories), 'suppliers': options(suppliers), 'receivers': options(receivers),
                 'documents': options(documents), 'spec': spec}
 

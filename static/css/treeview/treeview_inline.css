@@ -35,7 +35,7 @@
   box-shadow: inset 3px 0 0 var(--blue, #309eff);
 }
 
-.treeview-item.is-bold .treeview-label { font-weight: 700; }
+.treeview-item.is-bold .treeview-label { font-weight: var(--tv-bold-weight, 700); }
 /* node.rightIcon: a button at the right end of the row, always visible (not only on hover) */
 /* It stretches over the whole row and carries the row's own line, so the separator runs unbroken under it;
    the hover tint stops above that line (background-clip) and has room around the icon. */

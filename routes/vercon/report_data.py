@@ -1,4 +1,4 @@
-"""Report data from owner-editable SQL. Exact integers until the output boundary."""
+"""Report data from owner-editable SQL. Exact decimals until the output boundary."""
 from collections import defaultdict
 from decimal import Decimal, localcontext
 from . import numeric, report_query, report_store, stock
@@ -45,7 +45,7 @@ class Source:
 
 
 def exact(value, scale):
-    return None if value is None else stock.quantity_text(int(value), scale)
+    return None if value is None else stock.quantity_text(Decimal(value), scale)
 
 
 def selected(value, params, key):
@@ -82,8 +82,8 @@ def documents(source, family=None):
             # explicit and kept separate from historical stored NIR/BC values.
             if raw['quantity'] is None or raw['price'] is None:
                 raise NomError('REPORT_SOURCE', 'Lipsesc cantitatea/prețul pentru derivarea returului sau stornoului.', 409)
-            value = numeric.to_int(numeric.calc_round(numeric.from_int(raw['quantity'], ctx['scale']) *
-                                    numeric.from_int(raw['price'], ctx['scale']), ctx['zec']), ctx['scale'])
+            value = numeric.to_stored(numeric.calc_round(numeric.from_stored(raw['quantity'], ctx['scale']) *
+                                    numeric.from_stored(raw['price'], ctx['scale']), ctx['zec']), ctx['scale'])
             row['value_origin'] = 'derived_quantity_document_price'
         else:
             row['value_origin'] = 'stored_document_line'
@@ -118,7 +118,7 @@ def balances(source, final=False):
     ledger = source.rows('ledger')
     if any(m['q'] is None for m in ledger if m['p'] in selected):
         raise NomError('REPORT_SOURCE', 'O mișcare selectată nu are cantitate.', 409)
-    movements = [{**m, 'q': int(m['q'])} for m in ledger if m['p'] in selected]
+    movements = [{**m, 'q': Decimal(m['q'])} for m in ledger if m['p'] in selected]
     if params.get('supplier') is not None or params.get('supplier_ids') is not None:
         eligible = {m['p'] for m in movements if selected(m['supplier'], params, 'supplier') and stock.day_of(m['d']) <= params['end']}
         movements = [m for m in movements if m['p'] in eligible]

@@ -1,0 +1,40 @@
+/* Common add-action button: page styles should only set layout and the public CSS variables. */
+button.k-action-add-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: var(--action-add-button-gap, 6px);
+  min-width: var(--action-add-button-min-width, 44px);
+  height: var(--action-add-button-height, 40px);
+  padding: 0 var(--action-add-button-padding-x, 10px);
+  margin: 0;
+  border: 1px solid var(--action-add-button-border, var(--line, #cdd5e0));
+  border-radius: var(--action-add-button-radius, 8px);
+  background: var(--action-add-button-back, var(--card, #fff));
+  color: var(--action-add-button-color, var(--ink, inherit));
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: var(--action-add-button-font-size, var(--fs-button, 16px));
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+button.k-action-add-button--icon-only {
+  width: var(--action-add-button-min-width, 44px);
+  padding-inline: 0;
+}
+.k-action-add-button > .k-action-add-button__icon { flex: 0 0 auto; font-size: var(--action-add-button-icon-size, 24px); line-height: 1; }
+.k-action-add-button > [hidden], button.k-action-add-button[hidden] { display: none; }
+button.k-action-add-button:not(:disabled):hover {
+  background: var(--action-add-button-hover-back, var(--sky-2, #dceaff));
+  border-color: var(--action-add-button-hover-border, var(--accent, #2684ff));
+}
+button.k-action-add-button:not(:disabled):active { background: var(--action-add-button-active-back, var(--sky-2, #dceaff)); }
+button.k-action-add-button:focus-visible {
+  outline: 2px solid var(--action-add-button-focus-color, var(--accent, #2684ff));
+  outline-offset: 2px;
+}
+button.k-action-add-button:disabled { cursor: default; opacity: .5; }

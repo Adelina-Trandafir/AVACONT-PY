@@ -16,7 +16,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .op-user span {
@@ -56,7 +56,7 @@
 .op-h3 {
   margin: 24px 0 8px;
   color: var(--primary-color-dark);
-  font-size: 16px;
+  font-size: var(--fs-lg);
 }
 
 .op-tabs {
@@ -73,7 +73,7 @@
   background: #ffffff;
   color: #374151;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-md);
   cursor: pointer;
 }
 
@@ -98,7 +98,7 @@
 .op-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .op-table th,
@@ -145,7 +145,7 @@
   display: inline-block;
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -193,7 +193,7 @@
   padding: 0 0 0 4px;
   overflow-y: auto;
   list-style: none;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .op-codes li + li {
@@ -202,13 +202,13 @@
 
 .op-codes code,
 .op-code {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-ms);
 }
 
 .op-dbname {
   max-width: 160px;
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-family: var(--font-mono);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -253,8 +253,8 @@
   border-radius: 8px;
   background: #0f172a;
   color: #e2e8f0;
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-ms);
   line-height: 1.6;
   max-height: 420px;
   overflow-y: auto;

@@ -1,6 +1,6 @@
 /* ---- slice 0110-04: digital certificate (computers only; the markup is removed on a phone) */
 .portal__cert[hidden], #btn-cert[hidden], #btn-cert-enrol[hidden] { display: none; }
-.portal__or { display: flex; align-items: center; gap: 12px; margin: 22px 0 14px; color: var(--ink-soft); font-size: .9rem; }
+.portal__or { display: flex; align-items: center; gap: 12px; margin: 22px 0 14px; color: var(--ink-soft); font-size: var(--fs-md); }
 .portal__or::before, .portal__or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 .portal__cert-btn { width: 100%; justify-content: center; }
 .portal__dlg { width: min(560px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--line); }
@@ -8,6 +8,6 @@
 .portal__dlg h2 { margin-bottom: 8px; }
 .portal__dlg .actions { gap: 12px; margin-top: 16px; }
 .portal__certs { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.portal__certs li { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .92rem; overflow-wrap: anywhere; }
+.portal__certs li { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: var(--fs-mp); overflow-wrap: anywhere; }
 .portal__certs li.is-off { color: var(--ink-soft); text-decoration: line-through; }
 

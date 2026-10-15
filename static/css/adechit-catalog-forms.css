@@ -12,8 +12,8 @@
 .ade-record-body > * { flex-shrink: 0; }
 .ade-record-window .msg { margin: 8px 24px; }
 .ade-record-window .msg[role="status"] { color: var(--ink); background: var(--card); }
-.ade-form-section { margin: 4px 0 -6px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 1.05rem; }
-.ade-form-field { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 14px; min-width: 0; font-size: 1rem; }
+.ade-form-section { margin: 4px 0 -6px; padding-top: 12px; border-top: 1px solid var(--line); font-size: var(--fs-lg); }
+.ade-form-field { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 14px; min-width: 0; font-size: var(--fs-lg); }
 .ade-form-field > span { font-weight: 650; }
 .ade-form-field input:not([type="checkbox"]), .ade-form-field .combobox-input { box-sizing: border-box; width: 100%; height: 36px; padding: 5px 8px; color: var(--ink); background: var(--card); border: 0; border-bottom: 1px solid var(--ink-soft); border-radius: 0; font: inherit; }
 .ade-form-field input[type="checkbox"] { width: 22px; height: 22px; margin: 0; justify-self: start; accent-color: var(--blue); }
@@ -56,7 +56,7 @@
   .ade-payers-window .dgv__rs { display: none; }
   .ade-payers-window .ade-payers-footer { flex-shrink: 0; justify-content: space-between; padding: 6px 8px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
   .ade-years strong, .ade-years button { height: 33.6px; flex-basis: 33.6px; }
-  .ade-payers-window .ade-payers-mobile-action { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; width: 40px; height: 36px; padding: 0; font-size: 1.2rem; }
+  .ade-payers-window .ade-payers-mobile-action { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; width: 40px; height: 36px; padding: 0; font-size: var(--fs-2xl); }
   .ade-payers-window #ade-payers-close { display: none; }
 }
 @media (max-width: 600px) {

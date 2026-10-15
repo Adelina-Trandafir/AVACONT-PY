@@ -1,4 +1,61 @@
-.vc-nom__left { max-height: none; overflow: hidden; }
-.vc-nom__left .vc-tree-body { height: 390px; }
-.vc-nom__form { min-width: 0; }
-.vc-nom__list .vc-dgv { height: 400px; }
+/* Nomenclatures use the bounded workspace, including its padding and grid gaps. */
+.vc-page .vc-main .vc-work > .vc-nom-page {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.vc-page .vc-main .vc-work > .vc-nom-page--database {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+.vc-nom-page--database > .vc-nom-panel--categorii { grid-column: 1; grid-row: 1 / 3; }
+.vc-nom-page--database > .vc-nom-panel--tva { grid-column: 2; grid-row: 1; }
+.vc-nom-page--database > .vc-nom-panel--feluri { grid-column: 2; grid-row: 2; }
+.vc-page .vc-main .vc-work > .vc-nom-page--committees,
+.vc-page .vc-main .vc-work > .vc-nom-page--products { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.vc-page .vc-main .vc-work > .vc-nom-page--products:has(> [hidden]) { grid-template-rows: minmax(0, 1fr); }
+.vc-nom-panel { display: flex; min-width: 0; min-height: 0; overflow: hidden; }
+.vc-nom-panel[hidden] { display: none; }
+.vc-nom-page .vc-nom--grid {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.vc-nom--grid > .vc-nom__bar { flex: 0 0 auto; gap: 6px 10px; }
+.vc-nom--grid .vc-nom__bar input[type="search"] { box-sizing: border-box; min-width: 0; width: 145px; max-width: 100%; }
+.vc-nom--grid .vc-nom__list {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.vc-nom--grid .vc-nom__list > .vc-dgv { flex: 1 1 0; width: 100%; min-width: 0; min-height: 0; height: auto; }
+.vc-nom--grid .dgv { box-sizing: border-box; min-width: 0; min-height: 0; }
+.vc-nom--grid .dgv__scroll { overflow-x: hidden; }
+.vc-nom--grid .dgv__hc, .vc-nom--grid .dgv__cell { box-sizing: border-box; min-width: 0; }
+.vc-nom--grid .dgv__hc[data-key="actions"] { padding: 0; }
+.vc-nom--grid > .vc-save-status { flex: 0 0 auto; font-size: .85em; }
+.vc-nom--grid > .vc-save-status:empty { display: none; }
+.vc-nom__statement { flex: 0 0 auto; margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.vc-nom__statement h4, .vc-nom__statement p { margin: 0 0 5px; }
+.vc-nom__totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.vc-nom__totals > div { min-width: 0; padding: 5px; background: var(--sky-1); border-radius: 4px; }
+.vc-nom__totals dt { font-size: .85em; }
+.vc-nom__totals dd { margin: 3px 0 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

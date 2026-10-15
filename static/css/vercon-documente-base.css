@@ -32,5 +32,3 @@
 .vc-doc__tree .vc-nom__leaf { padding-left: 12px; font-size: .9em; }
 @media (max-width: 800px) { .vc-doc { grid-template-columns: 1fr; } }
 
-/* editor shown as a modal (ModalFrame): the consultation tree takes the whole page behind it */
-.vc-doc.is-modal { grid-template-columns: minmax(0, 1fr); }

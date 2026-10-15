@@ -30,11 +30,11 @@ def assets(cursor, ctx):
     holders = {}
     for r in _all(cursor, 'SELECT o.IdProdus, o.IDC_PTC, c.Denumire, SUM(o.Cant) AS q FROM VC_OI_Produse o LEFT JOIN VC_Clienti c ON c.SubunitId=o.SubunitId AND c.GestiuneId=o.GestiuneId AND c.IDC=o.IDC_PTC '
                   'WHERE o.SubunitId=%s AND o.GestiuneId=%s GROUP BY o.IdProdus, o.IDC_PTC, c.Denumire HAVING SUM(o.Cant)<>0', (s, g)):
-        holders.setdefault(r['IdProdus'], []).append({'holder': r['Denumire'] or '', 'qty': _money(int(r['q']), scale)})
+        holders.setdefault(r['IdProdus'], []).append({'holder': r['Denumire'] or '', 'qty': _money(Decimal(r['q']), scale)})
     out = []
     for r in rows:
         out.append({'id': r['IdProdus'], 'version': r['Version'], 'name': r['DenumireP'], 'um': r['UM'], 'code': r['COD'], 'entry_date': _iso(r['DataIntrare']), 'DNF': r['DNF'], 'DF': r['DF'],
-                    'value': _money(int(r['Valoare'] or 0), scale), 'monthly': _money(r['ValoareLuna'], scale), 'written_off': _money(int(r['Casat'] or 0), scale),
+                    'value': _money(Decimal(r['Valoare'] or 0), scale), 'monthly': _money(r['ValoareLuna'], scale), 'written_off': _money(Decimal(r['Casat'] or 0), scale),
                     'holders': holders.get(r['IdProdus'], [])})
     return out
 
@@ -60,8 +60,8 @@ def update(cursor, repo, ctx, variant, body, request_id):
     cost = _one(cursor, 'SELECT COALESCE(SUM(i.ValoareCUTVA),0) AS v FROM VC_Intrari i JOIN VC_NIR n ON n.SubunitId=i.SubunitId AND n.GestiuneId=i.GestiuneId AND n.ExercitiuId=i.ExercitiuId AND n.IdIntrare=i.IdIntrare '
                          'WHERE i.SubunitId=%s AND i.GestiuneId=%s AND i.IdProdus=%s AND n.Anulat=0 AND COALESCE(n.Storno,0)=0', (ctx['subunit'], ctx['gestiune'], variant))
     monthly = before['ValoareLuna']
-    if cost and int(cost['v']):
-        monthly = numeric.to_int(numeric.calc_round(numeric.from_int(int(cost['v']), ctx['scale']) / Decimal(dnf), ctx['zec']), ctx['scale'])
+    if cost and Decimal(cost['v']):
+        monthly = numeric.to_stored(numeric.calc_round(numeric.from_stored(Decimal(cost['v']), ctx['scale']) / Decimal(dnf), ctx['zec']), ctx['scale'])
     if repo.update('VC_ProduseM', {'DataIntrare': entry, 'DNF': dnf, 'DF': df, 'ValoareLuna': monthly}, {'IdProdus': variant, 'Version': version}, bump_version=True) != 1:
         raise NomError('CONFLICT', 'Evidența a fost modificată de altcineva. Reîncărcați lista.', 409)
     protocol.audit(cursor, ctx, 'mf.update', 'VC_ProduseM', variant, {'DNF': before['DNF'], 'DF': before['DF'], 'DataIntrare': before['DataIntrare'], 'ValoareLuna': before['ValoareLuna']},

@@ -26,7 +26,7 @@ from .tokens import EfEroare
 logger = logging.getLogger(__name__)
 
 SQL_FILES = ("sql/00EF_02_efactura_unitate.sql si sql/00EF_17_primite_asocieri.sql si sql/00EF_17_primite_tva.sql "
-             "si sql/00EF_23_mesaje_zip.sql")
+             "si sql/00EF_23_mesaje_zip.sql si sql/00EF_27_primite_linii_cpv.sql")
 DEFAULT_BATCH = 20
 MAX_BATCH = 50
 MAX_LIST = 2000
@@ -68,9 +68,9 @@ def _store_message(cursor, message, cui, zip_bytes, parsed):
     new_id = cursor.lastrowid
     if parsed["linii"]:
         cursor.executemany(
-            "INSERT INTO EF_PrimiteLinii (IdPrimita, NrLinie, Denumire, Explicatie, Unit, Cant, Pret, Valoare) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            [(new_id, ln["NrLinie"], ln["Denumire"], ln["Explicatie"], ln["Unit"], ln["Cant"], ln["Pret"], ln["Valoare"])
+            "INSERT INTO EF_PrimiteLinii (IdPrimita, NrLinie, Denumire, Explicatie, Cpv, Unit, Cant, Pret, Valoare) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            [(new_id, ln["NrLinie"], ln["Denumire"], ln["Explicatie"], ln["Cpv"], ln["Unit"], ln["Cant"], ln["Pret"], ln["Valoare"])
              for ln in parsed["linii"]])
     if parsed["cote"]:
         cursor.executemany("INSERT INTO EF_PrimiteTVA (IdPrimita, Categorie, CotaTVA, Baza, TVA) VALUES (%s, %s, %s, %s, %s)",
@@ -163,7 +163,13 @@ def lista(dc, year=None, month=None, q=None, iddf=None, cui=None):
            + f" ORDER BY p.DataFact DESC, p.IdPrimita DESC LIMIT {MAX_LIST}")
     with F._unit(dc, SQL_FILES) as conn:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute(sql, tuple(params))
+        # The number of booked operations of each invoice (EF_PrimiteOperatii, filled by the migrator). The table may not exist
+        # yet (its script was not run): then every invoice has 0, and the list still works.
+        cursor.execute("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                       "AND TABLE_NAME = 'EF_PrimiteOperatii'")
+        has_ops = bool(cursor.fetchone()["n"])
+        ops = ("(SELECT COUNT(*) FROM EF_PrimiteOperatii o WHERE o.IdPrimita = p.IdPrimita)" if has_ops else "0")
+        cursor.execute(sql.replace("FROM EF_Primite p", f", {ops} AS NrOperatii FROM EF_Primite p", 1), tuple(params))
         return {"facturi": [_plain(row) for row in cursor.fetchall()]}
 
 
@@ -181,7 +187,7 @@ def detaliu(dc, id_primita):
     with F._unit(dc, SQL_FILES) as conn:
         cursor = conn.cursor(dictionary=True)
         row = _row(cursor, id_primita)
-        cursor.execute("SELECT NrLinie, Denumire, Explicatie, Unit, Cant, Pret, Valoare FROM EF_PrimiteLinii "
+        cursor.execute("SELECT NrLinie, Denumire, Explicatie, Cpv, Unit, Cant, Pret, Valoare FROM EF_PrimiteLinii "
                        "WHERE IdPrimita = %s ORDER BY IdLinie", (id_primita,))
         lines = [_plain(r) for r in cursor.fetchall()]
         cursor.execute("SELECT Categorie, CotaTVA, Baza, TVA FROM EF_PrimiteTVA WHERE IdPrimita = %s ORDER BY CotaTVA DESC",
@@ -199,10 +205,32 @@ def detaliu(dc, id_primita):
                        + " = %s", (row["CuiNormalizat"] or "-",))
         auto = [_plain(r) for r in cursor.fetchall()]
         xml = _xml_of(cursor, row["IdSol"])
-    files = primite_ubl.parse(xml)["atasamente"] if xml else []
+        unit = _unit_party(cursor, dc)
+    files, buyer, payments = [], {}, []
+    if xml:
+        try:
+            parsed = primite_ubl.parse(xml)
+            files, buyer, payments = parsed["atasamente"], parsed["cumparator"], parsed["plati"]
+        except primite_ubl.XmlNeinteles as err:
+            # the header and lines are already in the database; a stored file that is not UBL only loses the attachment list
+            logger.warning("EF_Primite IdPrimita=%s: fisier XML neinteles (%s), %d octeti", id_primita, err, len(xml))
+    # the buyer is what the supplier wrote in the XML; a field the XML does not carry is the unit's own (AVACONT_COMUN)
+    buyer = {key: buyer.get(key) or unit.get(key, "") for key in ("nume", "cui", "adresa")}
     row.pop("DataAdaugare", None)
     return {"factura": _plain(row), "linii": lines, "cote": rates, "note": notes, "mesaje": messages, "atasamente": files,
-            "legaturi": {"auto": auto, "manual": manual}}
+            "cumparator": buyer, "plati": payments, "legaturi": {"auto": auto, "manual": manual}}
+
+
+def _unit_party(cursor, dc):
+    """{nume, cui, adresa} of the unit from AVACONT_COMUN: its issuer data (Unitati_Date) when filled in, else Unitati."""
+    data = F.store.furnizor_get(cursor, dc)
+    if data is not None and (data.get("Denumire") or data.get("CodFiscal")):
+        address = ", ".join(part.strip() for part in (data.get("Adresa"), data.get("Orasul"), data.get("Judetul")) if part and part.strip())
+        return {"nume": data.get("Denumire") or "", "cui": data.get("CodFiscal") or "", "adresa": address}
+    unit = F.store.furnizor_unit(cursor, dc)
+    if unit is None:
+        return {}
+    return {"nume": unit.get("NumeUnitate") or "", "cui": unit.get("CF") or "", "adresa": ""}
 
 
 def _xml_of(cursor, id_sol):
@@ -210,12 +238,15 @@ def _xml_of(cursor, id_sol):
     A migrated message keeps the zip only (the signature file sits next to the XML in it), a new one keeps the XML."""
     cursor.execute("SELECT XmlContinut, ZipContinut FROM EF_Mesaje WHERE IdSol = %s", (id_sol,))
     row = cursor.fetchone()
-    if row["XmlContinut"]:
-        return bytes(row["XmlContinut"])
-    if not row["ZipContinut"]:
+    kept = bytes(row["XmlContinut"]) if row["XmlContinut"] else b""
+    if kept and not kept.startswith(b"PK\x03\x04"):
+        return kept
+    # Access kept the ANAF archive in the XML column of some rows: a zip there is read like ZipContinut
+    archive_bytes = kept or (bytes(row["ZipContinut"]) if row["ZipContinut"] else b"")
+    if not archive_bytes:
         return None
     try:
-        with zipfile.ZipFile(io.BytesIO(bytes(row["ZipContinut"]))) as archive:
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
             for name in archive.namelist():
                 base = name.rsplit("/", 1)[-1].lower()
                 if base.endswith(".xml") and not base.startswith("semnatura_"):
@@ -241,8 +272,10 @@ def zip_anaf(dc, id_primita):
     with F._unit(dc, SQL_FILES) as conn:
         cursor = conn.cursor(dictionary=True)
         row = _row(cursor, id_primita)
-        cursor.execute("SELECT ZipContinut FROM EF_Mesaje WHERE IdSol = %s", (row["IdSol"],))
-        kept = cursor.fetchone()["ZipContinut"]
+        cursor.execute("SELECT XmlContinut, ZipContinut FROM EF_Mesaje WHERE IdSol = %s", (row["IdSol"],))
+        stored = cursor.fetchone()
+        # a migrated row keeps the whole ANAF zip in XmlContinut (see _xml_of)
+        kept = stored["ZipContinut"] or (stored["XmlContinut"] if bytes(stored["XmlContinut"] or b"")[:4] == b"PK\x03\x04" else None)
     if kept:
         return bytes(kept), _file_name(row) + ".zip"
     _, token = tokens.access_token(dc)
@@ -270,6 +303,40 @@ def atasament(dc, id_primita, index):
 def _file_name(row):
     base = "_".join(part for part in (row["CuiNormalizat"], row["NrFact"] or row["IdSol"]) if part)
     return re.sub(r"[^A-Za-z0-9._-]", "_", base)[:100] or str(row["IdPrimita"])
+
+
+MAX_MESAJ = 2000
+
+
+def trimite_mesaj(dc, id_primita, text):
+    """Sends a message about the received invoice through ANAF (the buyer's message, standard RASP) and keeps it in
+    EF_PrimiteMesaje. Answers the stored row. ANAF is called first: when it takes the message and the database write then
+    fails, its number is written to the log (not a secret) so the message can be reconciled by hand."""
+    text = (text or "").strip()
+    if not text:
+        raise EfEroare("Mesajul este gol.", "CAMP_INVALID", 400)
+    if len(text) > MAX_MESAJ:
+        raise EfEroare(f"Mesajul poate avea cel mult {MAX_MESAJ} de caractere.", "CAMP_INVALID", 400)
+    cui, token = tokens.access_token(dc)
+    with F._unit(dc, SQL_FILES) as conn:
+        cursor = conn.cursor(dictionary=True)
+        id_sol = _row(cursor, id_primita)["IdSol"]
+    index = anaf_api.trimite_mesaj(token, cui, id_sol, text)
+    if not index:
+        # Access kept the message only when ANAF's answer carried the `index_incarcare` of the message
+        raise EfEroare("ANAF nu a confirmat trimiterea mesajului (răspuns fără număr de încărcare).", "ANAF_RASPUNS", 502)
+    try:
+        with F._unit(dc, SQL_FILES) as conn:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("INSERT INTO EF_PrimiteMesaje (IdPrimita, IdSol, IdMesajAnaf, Mesaj, DataMesaj) VALUES (%s, %s, %s, %s, NOW())",
+                           (id_primita, id_sol, index or None, text))
+            new_id = cursor.lastrowid
+            conn.commit()
+    except Exception:
+        logger.error("[efactura] message for IdSol=%s WAS SENT (index_incarcare=%s) but the database write failed", id_sol, index,
+                     exc_info=True)
+        raise
+    return {"mesaj": {"IdMsg": new_id, "IdMesajAnaf": index, "Mesaj": text, "DataMesaj": datetime.now().isoformat(timespec="seconds")}}
 
 
 def marcheaza_citita(dc, id_primita):

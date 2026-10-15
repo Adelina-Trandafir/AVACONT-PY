@@ -17,11 +17,6 @@
 .vc-state[data-state="error"] { border-color: #c0392b; }
 .vc-menu { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0; }
 .vc-menu[hidden], .vc-work[hidden], .vc-type[hidden] { display: none; }
-.vc-menu__group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.vc-menu__group > b { margin-right: 4px; opacity: .7; }
-.vc-menu button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
-.vc-menu button[disabled] { opacity: .5; cursor: not-allowed; }
-.vc-menu button[aria-current="true"] { border-color: #309eff; font-weight: 700; }
 .vc-work { padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .vc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; margin-bottom: 12px; }
 .vc-grid label { display: flex; flex-direction: column; font-size: .9em; gap: 2px; }

@@ -1,4 +1,4 @@
-"""VC08-02: calendar depreciation of ONE MF variant. Pure integer arithmetic.
+"""VC08-02: calendar depreciation of ONE MF variant. Exact decimal arithmetic.
 
 The Access basis is ProduseP.PUTVA; ValoareLuna is the raw monthly amount and
 ValoareLunara is its historical companion, not a second amount to accumulate.
@@ -6,6 +6,8 @@ DF is the duration already used at the first handover. A transfer never restarts
 No database, clock, float, writes or automatic historical corrections.
 """
 from datetime import date, datetime
+from decimal import Decimal
+from . import numeric
 
 
 def calendar_months(start, end):
@@ -30,13 +32,12 @@ def rounded_ratio(numerator, denominator):
 
 
 def monthly_amount(value, normal, raw, legacy, scale, zec):
-    """Round once at ZEC, retain SCARA. NULL differs from a stored zero."""
-    step = 10 ** (scale - zec)
+    """Round once at calculation ZEC; amounts are unscaled decimals."""
     if raw is not None:
-        return rounded_ratio(raw, step) * step, 'ValoareLuna'
+        return numeric.calc_round(raw, zec), 'ValoareLuna'
     if legacy is not None:
-        return rounded_ratio(legacy, step) * step, 'ValoareLunara'
-    return rounded_ratio(value, normal * step) * step, 'value_divided_by_DNF'
+        return numeric.calc_round(legacy, zec), 'ValoareLunara'
+    return numeric.calc_round(Decimal(value) / normal, zec), 'value_divided_by_DNF'
 
 
 def accumulated(value, monthly, used, normal):
@@ -45,7 +46,7 @@ def accumulated(value, monthly, used, normal):
 
 
 def calculate(asset, events, on_date, scale, zec):
-    """Result with integer amounts or explicit uncalculable state, never fabricated 0.
+    """Result with decimal amounts or explicit uncalculable state, never fabricated 0.
 
     events: {kind: receipt|storno|handover|transfer|scrapping, date, quantity}.
     A unique inventory variant must represent one unit. Multiple document lines
@@ -69,7 +70,7 @@ def calculate(asset, events, on_date, scale, zec):
         issue('MF_DUPLICATE_REGISTER', 'Varianta are mai multe rânduri în registrul MF; calculul nu le adună.')
         return result
     value, normal, used_before = asset.get('price'), asset.get('DNF'), asset.get('DF')
-    if not isinstance(value, int) or value < 0:
+    if not isinstance(value, (int, Decimal)) or isinstance(value, bool) or value < 0:
         issue('MF_VALUE_INVALID', 'Valoarea variantei lipsește sau este negativă.')
     if not isinstance(normal, int) or normal <= 0:
         issue('MF_DURATION_INVALID', 'Durata normală lipsește sau este zero/negativă.')
@@ -78,7 +79,7 @@ def calculate(asset, events, on_date, scale, zec):
         issue('MF_DF_INVALID', 'DF lipsește, este negativ sau depășește durata normală.')
     for field in ('ValoareLuna', 'ValoareLunara'):
         raw = asset.get(field)
-        if raw is not None and (not isinstance(raw, int) or raw < 0):
+        if raw is not None and (not isinstance(raw, (int, Decimal)) or isinstance(raw, bool) or raw < 0):
             issue('MF_MONTHLY_INVALID', '%s este negativă sau invalidă.' % field)
     entry = as_date(asset.get('DataIntrare'))
     if entry is None:
@@ -96,7 +97,7 @@ def calculate(asset, events, on_date, scale, zec):
             issue('MF_DOCUMENT_DATE_MISSING', 'Un document al activului nu are dată validă.')
             continue
         quantity = event.get('quantity')
-        if not isinstance(quantity, int) or quantity < 0:
+        if not isinstance(quantity, (int, Decimal)) or isinstance(quantity, bool) or quantity < 0:
             issue('MF_DOCUMENT_QUANTITY_INVALID', 'Un document al activului are cantitate invalidă.')
             continue
         dated.append({**event, 'date': day})
@@ -114,7 +115,7 @@ def calculate(asset, events, on_date, scale, zec):
     if not receipts:
         issue('MF_RECEIPT_MISSING', 'Activul nu are recepție neanulată la data calculului.')
         return result
-    if quantity != 10 ** scale:
+    if quantity != 1:
         issue('MF_QUANTITY_AMBIGUOUS', 'Varianta nu reprezintă o singură bucată la data calculului. Nu se repartizează arbitrar valoarea amortizării.')
         return result
     if not handovers or handovers[0]['date'] > on_date:
@@ -143,7 +144,7 @@ def calculate(asset, events, on_date, scale, zec):
         return result
     monthly, monthly_source = monthly_amount(value, normal, asset.get('ValoareLuna'),
                                               asset.get('ValoareLunara'), scale, zec)
-    if abs(monthly * normal - value) * 2 > normal * 10 ** (scale - zec):
+    if abs(monthly * normal - value) * 2 > normal * Decimal(1).scaleb(-zec):
         issue('MF_MONTHLY_BASIS_DIFFERENCE', 'Valoarea lunară stocată nu corespunde valorii curente împărțite la DNF. Se păstrează valoarea lunară sursă, cu restul în ultima lună.')
     if asset.get('ValoareLuna') is not None and asset.get('ValoareLunara') is not None:
         if asset['ValoareLuna'] != asset['ValoareLunara']:

@@ -18,7 +18,7 @@
     transform: translateY(-50%);
     pointer-events: none;
     color: #6b7280;
-    font-size: 15px;
+    font-size: var(--fs-mp);
     /* z-index: 2; */
 }
 
@@ -31,7 +31,7 @@
     padding: 4px 8px;
     border: 1px solid #ced4da;
     border-radius: 3px;
-    font-size: 13px;
+    font-size: var(--fs-ms);
     font-family: inherit;
     background: #fff;
     box-sizing: border-box;
@@ -103,7 +103,7 @@
     padding: 8px 12px;
     cursor: pointer;
     border-bottom: 1px solid #f0f0f0;
-    font-size: 13px;
+    font-size: var(--fs-ms);
     color: #333;
     transition: background-color .15s ease;
     max-height: 32px;
@@ -117,8 +117,8 @@
 .combobox-option.selected{background: #e8f5e8; color: #2e7d32; font-weight: 500;}
 
 /* mesaje */
-.combobox-no-results{padding: 12px; text-align: center; color: #999; font-style: italic; font-size: 12px;}
-.combobox-error{padding: 12px; text-align: center; color: #f44336; font-size: 12px; background: #ffebee;}
+.combobox-no-results{padding: 12px; text-align: center; color: #999; font-style: italic; font-size: var(--fs-sm);}
+.combobox-error{padding: 12px; text-align: center; color: #f44336; font-size: var(--fs-sm); background: #ffebee;}
 
 /* highlight text */
 .combobox-highlight{background: #fff3cd; font-weight: 500;}
@@ -141,9 +141,9 @@
 @media (max-width: 400px){
     .combobox-dropdown{
         max-width: clamp(160px, 100%, 260px);
-        font-size: 11px;
+        font-size: var(--fs-xs);
     }
-    .combobox-option{padding: 6px 8px; font-size: 11px;}
+    .combobox-option{padding: 6px 8px; font-size: var(--fs-xs);}
 }
 /* nu depășește ecranul */
 @media (max-width: 350px){
@@ -186,7 +186,7 @@
 
 /* ========== FLAG ICONS (flag-icons library) ========== */
 .combobox-prefix-icon .fi {
-  font-size: 20px;
+  font-size: var(--fs-2xl);
   line-height: 1;
   border-radius: 3px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -202,7 +202,7 @@
 
 /* ========== EMOJI FLAGS ========== */
 .combobox-prefix-icon .emoji-flag {
-  font-size: 22px;
+  font-size: calc(var(--fs-base) + 8px);
   line-height: 1;
 }
 
@@ -233,7 +233,7 @@
   }
 
   .combobox-prefix-icon .fi {
-    font-size: 18px;
+    font-size: var(--fs-xl);
   }
 }
 

@@ -9,7 +9,7 @@ Rules, the same for every nomenclature:
   * every change carries the revision (Version) the client saw; an old revision is a conflict, never an overwrite;
   * a create carries a RequestKey (VC_Operations): a lost answer is replayed, never applied twice;
   * every change writes a VC_Audit row in the same transaction (the CNP of a client is masked there);
-  * values are validated here, whatever the page did: length, required, VAT 0-100%, price >= 0 on the INT/scale of
+  * values are validated here, whatever the page did: length, required, VAT 0-100%, price >= 0 on the DECIMAL(20,4) of
     the gestiune (refused, never rounded, when it has more decimals than the scale).
 Pure rules + statements over a ScopedRepository; no connection is opened here.
 """
@@ -48,7 +48,7 @@ SPECS = {
     'produse': {
         'label': 'Produse', 'table': 'VC_Produse', 'pk': 'ID', 'title': 'DenumireP', 'stamp': True,
         'fields': [
-            _text('DenumireP', 'Denumire produs', 255, True), _text('UM', 'UM', 50), _text('CPV', 'CPV', 255),
+            _text('DenumireP', 'Denumire produs', 255, True), _text('UM', 'UM', 50, True), _text('CPV', 'CPV', 255),
             {'key': 'IdMasina', 'label': 'Categorie / cont', 'type': 'ref', 'ref': 'categorii', 'required': True},
             _text('CC', 'Clasificare M.F.', 255, False, frozenset({MF})),
             {'key': 'DNF', 'label': 'Durată normală de funcționare (luni)', 'type': 'int', 'min': 0, 'required': False, 'types': frozenset({MF})},
@@ -74,7 +74,7 @@ SPECS = {
     },
     'feluri': {
         'label': 'Feluri de mâncare', 'table': 'VC_FeluriMancare', 'pk': 'IDFel', 'title': 'DenFel', 'stamp': False,
-        'fields': [_text('DenFel', 'Denumire fel', 255, True), _text('Explicatie', 'Explicație', 255)],
+        'fields': [_text('DenFel', 'Denumire fel', 50, True), _text('Explicatie', 'Explicație', 255)],
     },
     'comisie_inventar': {
         'label': 'Comisie de inventariere', 'table': 'VC_ComisieInventar', 'pk': 'IdComisieInv', 'title': 'Receptie1', 'stamp': False,
@@ -84,13 +84,10 @@ SPECS = {
 
 # form key (capabilities.FORMS) -> the nomenclatures that form edits (the first one is the main list)
 FORM_KINDS = {
-    'categorii': ('categorii',),
+    'baza_date': ('categorii', 'tva', 'feluri'),
+    'comisii': ('comisie_nir', 'comisie_inventar'),
     'produse': ('produse', 'variante'),
     'gestionari': ('clienti',),
-    'tva': ('tva',),
-    'comisie_nir': ('comisie_nir',),
-    'comisie_inventar': ('comisie_inventar',),
-    'feluri': ('feluri',),
 }
 
 
@@ -162,8 +159,8 @@ def _clean_one(field, raw, scale, repo):
             if kind == 'percent':
                 if number > 100:
                     return None, 'Cota nu poate depăși 100%.'
-                return numeric.vat_to_int(number / 100), None
-            return numeric.to_int(number, scale), None
+                return numeric.vat_to_stored(number / 100), None
+            return numeric.to_stored(number, scale), None
         except numeric.NumericError as error:
             return None, str(error)
     if kind == 'ref':
@@ -208,9 +205,9 @@ def present(spec, gestiune_type, row, scale):
         if value is None:
             out[field['key']] = None
         elif field['type'] == 'percent':
-            out[field['key']] = _plain(numeric.from_int(value, numeric.VAT_SCALE) * 100)
+            out[field['key']] = _plain(numeric.from_stored(value, numeric.VAT_SCALE) * 100)
         elif field['type'] == 'money':
-            out[field['key']] = format(numeric.from_int(value, scale), 'f')
+            out[field['key']] = format(numeric.from_stored(value, scale), 'f')
         else:
             out[field['key']] = value
     return out
@@ -258,7 +255,7 @@ def audit(cursor, ctx, operation, table, row_key, before, after, request_key, re
 
 
 def _freeze_scale(cursor, ctx):
-    """The first stored price fixes the scale (and with it the type) of the gestiune: values are INT * 10^Scara."""
+    """The first stored price fixes the scale (and with it the type) of the gestiune: values are direct DECIMAL(20,4)."""
     cursor.execute('UPDATE VC_Gestiuni SET Populated=1 WHERE SubunitId=%s AND GestiuneId=%s AND Populated=0',
                    (ctx['subunit'], ctx['gestiune']))
 
@@ -282,8 +279,14 @@ def _fingerprint(kind, parent, values):
     return hashlib.sha256(json.dumps([kind, parent, values], sort_keys=True, ensure_ascii=False, default=str).encode('utf-8')).hexdigest()
 
 
+def _allow_nom_write(kind):
+    if kind == 'variante':
+        raise NomError('PRICES_FROM_NIR_ONLY', 'Prețurile se adaugă și se modifică numai din NIR.', 403)
+
+
 def create(repo, cursor, ctx, kind, gestiune_type, scale, values, parent=None, request_key=None, request_id=None):
     """Insert one row. ctx = {subunit, gestiune, email}. Returns (row as presented, replayed)."""
+    _allow_nom_write(kind)
     spec = spec_of(kind)
     fingerprint = _fingerprint(kind, parent, values)
     if request_key:
@@ -295,6 +298,9 @@ def create(repo, cursor, ctx, kind, gestiune_type, scale, values, parent=None, r
                 raise NomError('KEY_REUSED', 'Cheia cererii a fost folosită pentru altă cerere.', 409)
             return json.loads(seen['Result']), True
     cleaned = clean(spec, gestiune_type, values, scale, repo)
+    if kind == 'produse' and cleaned.get('CPV'):
+        from .cpv_catalog import validate
+        validate(cursor, cleaned['CPV'])
     if spec.get('parent'):
         column, parent_kind = spec['parent']
         parent_spec = spec_of(parent_kind)
@@ -326,12 +332,16 @@ def _version(raw):
 
 
 def update(repo, cursor, ctx, kind, gestiune_type, scale, row_id, values, base_version, request_id=None):
+    _allow_nom_write(kind)
     spec = spec_of(kind)
     version = _version(base_version)
     before = _fetch(repo, spec, row_id)
     if before['Version'] != version:
         _conflict(repo, spec, row_id)
     cleaned = clean(spec, gestiune_type, values, scale, repo)
+    if kind == 'produse' and cleaned.get('CPV') and cleaned['CPV'] != before.get('CPV'):
+        from .cpv_catalog import validate
+        validate(cursor, cleaned['CPV'])
     if repo.update(spec['table'], _stamped(spec, cleaned), {spec['pk']: row_id, 'Version': version}, bump_version=True) != 1:
         _conflict(repo, spec, row_id)
     if _has_money(spec):
@@ -344,12 +354,16 @@ def update(repo, cursor, ctx, kind, gestiune_type, scale, row_id, values, base_v
 
 def set_active(repo, cursor, ctx, kind, gestiune_type, scale, row_id, active, base_version, request_id=None):
     """Switch a row on/off. Nothing is deleted: documents that point at it keep their history."""
+    _allow_nom_write(kind)
     spec = spec_of(kind)
     version = _version(base_version)
     before = _fetch(repo, spec, row_id)
     if before['Version'] != version:
         _conflict(repo, spec, row_id)
     flag = 1 if active else 0
+    if not flag:
+        from .nomenclator_usage import require_deactivation
+        require_deactivation(cursor, ctx, kind, row_id)
     if repo.update(spec['table'], {'Activ': flag}, {spec['pk']: row_id, 'Version': version}, bump_version=True) != 1:
         _conflict(repo, spec, row_id)
     audit(cursor, ctx, 'nom.activate' if flag else 'nom.deactivate', spec['table'], row_id,

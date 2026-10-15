@@ -56,8 +56,8 @@ def app():
 
 
 RETIRED_PATHS = [
-    ("POST", "/api/tools/say_hello"), ("GET", "/api/tools/pdfium_dll"), ("GET", "/api/tools/check_update"),
-    ("POST", "/api/tools/check_updates"), ("POST", "/api/tools/upload"),
+    ("POST", "/api/tools/say_hello"), ("GET", "/api/tools/pdfium_dll"), 
+    # check_update / check_updates / upload are back on purpose (routes/legacy_updater.py, temporary bridge)
     ("GET", "/api/mfp/template_ddf"), ("GET", "/api/mfp/template_ord"), ("GET", "/api/mfp/get_ef_token"),
     ("GET", "/api/admin/download_baza"), ("GET", "/api/admin/download_ef"), ("GET", "/api/admin/download_forexe"),
     ("POST", "/api/admin/check_db"), ("POST", "/api/admin/setup_db"), ("POST", "/api/admin/ping_db"),
@@ -65,7 +65,7 @@ RETIRED_PATHS = [
     ("POST", "/api/clasificatii/rectificari"), ("POST", "/api/clasificatii/rectificari_upsert"),
     ("POST", "/api/parteneri/get_partner_ids_by_codes"), ("POST", "/api/parteneri/upsert_coduri"),
     ("POST", "/api/forexe/seed/schema"), ("POST", "/api/forexe/seed/rows"), ("GET", "/api/forexe/seed/columns"),
-    ("GET", "/api/forexe/seed/ids"), ("GET", "/api/ftp/get_avacont_version"), ("POST", "/api/ftp/init_upload"),
+    ("GET", "/api/forexe/seed/ids"),
     ("POST", "/api/salarii/save_document"), ("POST", "/api/ddf/save"), ("POST", "/api/ord/save"),
 ]
 

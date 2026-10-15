@@ -4,7 +4,7 @@ of a receipt (FCS), consumption bon (BC) and return of a consumption (BR).
 One write = one transaction (the route owns it): header, lines, MF rows, numbering, RequestKey, audit and the stock check
 are committed together or not at all. Rules shared by the four families:
   * the values of a NEW document are computed here, from the quantity, the price and the VAT rate, once per line at the
-    gestiune's ZEC (CONTRACT_CALCULE section 2.2) and stored at its SCARA; nothing the page computed is trusted;
+    gestiune's ZEC (CONTRACT_CALCULE section 2.2) and stored directly as DECIMAL(20,4); nothing the page computed is trusted;
   * the header total follows N01/N02 (a declared total of 0, empty, or more than 1 leu away from the lines' sum is
     replaced by the sum);
   * a price is never negative and a quantity is always positive; stock never goes negative (protocol.check_timeline);
@@ -54,7 +54,7 @@ def _text(raw, key, errors, required=False, max_len=255):
 
 
 def _money(stored, scale):
-    return None if stored is None else format(numeric.from_int(stored, scale), 'f')
+    return None if stored is None else format(numeric.from_stored(stored, scale), 'f')
 
 
 def _iso(value):
@@ -106,26 +106,26 @@ def _scope(ctx):
 
 
 # ---- the arithmetic of a line (CONTRACT_CALCULE 2.2) ------------------------------------------------------------------
-def receipt_line(cant, pret, rate_basis_points, zec, scale):
-    """cant/pret: real Decimals. Returns the stored integers. Raises NumericError on a precision or INT-capacity breach."""
-    cota = Decimal(rate_basis_points) / Decimal(10000)
+def receipt_line(cant, pret, rate, zec, scale):
+    """Direct decimal quantities, prices and fractional VAT rate; calculation rounds at ZEC."""
+    cota = Decimal(rate)
     putva = numeric.calc_round(pret * (1 + cota), zec)
     valoare = numeric.calc_round(cant * pret, zec)
     cutva = numeric.calc_round(cant * putva, zec)
-    return {'Cant': numeric.to_int(cant, scale), 'Pret': numeric.to_int(pret, scale), 'PUTVA': numeric.to_int(putva, scale),
-            'Valoare': numeric.to_int(valoare, scale), 'ValoareCUTVA': numeric.to_int(cutva, scale),
-            'TVA': numeric.to_int(cutva - valoare, scale)}
+    return {'Cant': numeric.to_stored(cant, scale), 'Pret': numeric.to_stored(pret, scale), 'PUTVA': numeric.to_stored(putva, scale),
+            'Valoare': numeric.to_stored(valoare, scale), 'ValoareCUTVA': numeric.to_stored(cutva, scale),
+            'TVA': numeric.to_stored(cutva - valoare, scale)}
 
 
 def priced_line(cant, putva_int, zec, scale):
     """A line priced from a stored price with VAT (a variant's PUTVA, or the price of the document it refers to)."""
-    putva = numeric.from_int(putva_int, scale)
-    return {'Cant': numeric.to_int(cant, scale), 'PUTVA': putva_int,
-            'ValoareCUTVA': numeric.to_int(numeric.calc_round(cant * putva, zec), scale)}
+    putva = numeric.from_stored(putva_int, scale)
+    return {'Cant': numeric.to_stored(cant, scale), 'PUTVA': putva_int,
+            'ValoareCUTVA': numeric.to_stored(numeric.calc_round(cant * putva, zec), scale)}
 
 
 def total_of(lines, scale):
-    return sum((numeric.from_int(line['ValoareCUTVA'], scale) for line in lines), Decimal(0))
+    return sum((numeric.from_stored(line['ValoareCUTVA'], scale) for line in lines), Decimal(0))
 
 
 # ---- reading ---------------------------------------------------------------------------------------------------------
@@ -179,7 +179,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
                                  ' WHERE s.SubunitId=%s AND s.GestiuneId=%s AND s.ExercitiuId=%s AND s.IdIntrare=%s ORDER BY s.ID', (s, g, e, doc_id))
             out_lines = [{'id': r['ID'], 'variant': r['IdProdus'], 'name': r['DenumireP'], 'um': r['UM'], 'Cant': _money(r['Cant'], scale),
                           'PUTVA': _money(r['PUTVA'], scale), 'ValoareCUTVA': _money(
-                              numeric.to_int(numeric.calc_round(numeric.from_int(r['Cant'], scale) * numeric.from_int(r['PUTVA'] or 0, scale), ctx['zec']), scale), scale)}
+                              numeric.to_stored(numeric.calc_round(numeric.from_stored(r['Cant'], scale) * numeric.from_stored(r['PUTVA'] or 0, scale), ctx['zec']), scale), scale)}
                          for r in lines]
         return {'family': family, 'id': doc_id, 'version': h['Version'], 'annulled': bool(h['Anulat']), 'reason': h['MotivAnulare'],
                 'annulled_by': h['AnulatDe'], 'number': abs(h['Numar'] or 0), 'sub_number': h.get('NumarSub', 0), 'doc_type': h['TipDoc'],
@@ -198,7 +198,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
     out_lines = []
     for r in lines:
         if family == 'br':
-            value = numeric.to_int(numeric.calc_round(numeric.from_int(r['Cant'], scale) * numeric.from_int(r['PUTVA'] or 0, scale), ctx['zec']), scale)
+            value = numeric.to_stored(numeric.calc_round(numeric.from_stored(r['Cant'], scale) * numeric.from_stored(r['PUTVA'] or 0, scale), ctx['zec']), scale)
         else:
             value = r['ValoareCUTVA']
         out_lines.append({'id': r['ID'], 'variant': r['IdProdus'], 'name': r['DenumireP'], 'um': r['UM'], 'Cant': _money(r['Cant'], scale),
@@ -228,7 +228,7 @@ def lookups(cursor, ctx, family):
         out['partners'] = receipt_choices.partners(cursor)
         out['commissions'] = [{'id': r['IdComisie'], 'label': ', '.join(x for x in (r['Receptie1'], r['Receptie2'], r['Receptie3'], r['Receptie4']) if x)} for r in _all(
             cursor, 'SELECT IdComisie, Receptie1, Receptie2, Receptie3, Receptie4 FROM VC_ComisieNIR WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1', (s, g))]
-        out['vat'] = [{'id': r['IdTVA'], 'label': r['Explicatie'] or '', 'percent': format(numeric.from_int(r['TVA'] or 0, numeric.VAT_SCALE) * 100, 'f').rstrip('0').rstrip('.') or '0'} for r in _all(
+        out['vat'] = [{'id': r['IdTVA'], 'label': r['Explicatie'] or '', 'percent': format(numeric.from_stored(r['TVA'] or 0, numeric.VAT_SCALE) * 100, 'f').rstrip('0').rstrip('.') or '0'} for r in _all(
             cursor, 'SELECT IdTVA, TVA, Explicatie FROM VC_TVA WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1 ORDER BY TVA', (s, g))]
     else:
         out['receivers'] = [{'id': r['IDC'], 'label': r['Denumire'] or ''} for r in _all(
@@ -439,7 +439,7 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None):
             if not tva_row:
                 bad('IDTVA', 'Alegeți cota TVA.')
             else:
-                rate = int(tva_row[0]['TVA'] or 0)
+                rate = Decimal(tva_row[0]['TVA'] or 0)
                 line['IDTVA'] = tva_id
         if mf:
             product = _int(raw.get('product'))
@@ -477,7 +477,7 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None):
                 if family == 'nir':
                     line['v'] = receipt_line(cant, pret, rate, ctx['zec'], ctx['scale'])
                     if mf and line.get('DNF'):
-                        line['ValoareLuna'] = numeric.to_int(numeric.calc_round(numeric.from_int(line['v']['ValoareCUTVA'], ctx['scale']) / line['DNF'], ctx['zec']), ctx['scale'])
+                        line['ValoareLuna'] = numeric.to_stored(numeric.calc_round(numeric.from_stored(line['v']['ValoareCUTVA'], ctx['scale']) / line['DNF'], ctx['zec']), ctx['scale'])
             except numeric.NumericError as error:
                 bad('Cant', str(error))
         out['lines'].append(line)
@@ -496,7 +496,7 @@ def _nir_total(ctx, parsed, errors_ok=True):
     total_calc = total_of([l['v'] for l in parsed['lines']], ctx['scale'])
     total, _ = numeric.header_total(parsed['declared'], total_calc)
     try:
-        return numeric.to_int(total, ctx['scale'])
+        return numeric.to_stored(total, ctx['scale'])
     except numeric.NumericError as error:
         raise NomError('INVALID', 'Corectați câmpurile marcate.', 422, {'h.Valoare': str(error)})
 
@@ -639,12 +639,12 @@ def storno_eligible(cursor, ctx, nir_id, exclude=None):
     scale = ctx['scale']
     rows = _all(cursor, 'SELECT i.IdProdus, pr.DenumireP, pr.UM, SUM(i.Cant) AS q, MIN(i.PUTVA) AS putva FROM VC_Intrari i ' + _name_join('i') +
                 ' WHERE i.SubunitId=%s AND i.GestiuneId=%s AND i.ExercitiuId=%s AND i.IdIntrare=%s GROUP BY i.IdProdus, pr.DenumireP, pr.UM ORDER BY pr.DenumireP', (s, g, e, nir_id))
-    done = {r['IdProdus']: int(r['q']) for r in _all(
+    done = {r['IdProdus']: Decimal(r['q']) for r in _all(
         cursor, 'SELECT x.IdProdus, SUM(x.Cant) AS q FROM VC_IntrariStorno x JOIN VC_NIR n ON n.SubunitId=x.SubunitId AND n.GestiuneId=x.GestiuneId AND n.ExercitiuId=x.ExercitiuId AND n.IdIntrare=x.IdIntrare '
                 'WHERE x.SubunitId=%s AND x.GestiuneId=%s AND x.ExercitiuId=%s AND n.IdStorno=%s AND n.Anulat=0 AND x.Anulat=0 AND n.IdIntrare<>%s GROUP BY x.IdProdus',
         (s, g, e, nir_id, exclude or 0))}
-    return [{'variant': r['IdProdus'], 'name': r['DenumireP'], 'um': r['UM'], 'qty': _money(int(r['q']), scale), 'done': _money(done.get(r['IdProdus'], 0), scale),
-             'left': _money(int(r['q']) - done.get(r['IdProdus'], 0), scale), 'PUTVA': _money(r['putva'], scale)} for r in rows]
+    return [{'variant': r['IdProdus'], 'name': r['DenumireP'], 'um': r['UM'], 'qty': _money(Decimal(r['q']), scale), 'done': _money(done.get(r['IdProdus'], 0), scale),
+             'left': _money(Decimal(r['q']) - done.get(r['IdProdus'], 0), scale), 'PUTVA': _money(r['putva'], scale)} for r in rows]
 
 
 def _clean_stornolines(cursor, ctx, source_id, raw_lines, exclude=None):
@@ -666,16 +666,16 @@ def _clean_stornolines(cursor, ctx, source_id, raw_lines, exclude=None):
             errors['l|%s|Cant' % key] = 'Cantitatea trebuie să fie pozitivă.'
             continue
         try:
-            quantity = numeric.to_int(cant, ctx['scale'])
+            quantity = numeric.to_stored(cant, ctx['scale'])
         except numeric.NumericError as error:
             errors['l|%s|Cant' % key] = str(error)
             continue
-        left = numeric.to_int(Decimal(entry['left']), ctx['scale'])
+        left = numeric.to_stored(Decimal(entry['left']), ctx['scale'])
         if quantity > left:
             errors['l|%s|Cant' % key] = 'Cantitate peste cea rămasă de stornat (%s).' % entry['left']
             continue
         price = Decimal(entry['PUTVA'] or '0')
-        lines.append({'variant': variant, 'Cant': quantity, 'PUTVA': numeric.to_int(price, ctx['scale']), 'ValoareCUTVA': numeric.to_int(numeric.calc_round(cant * price, ctx['zec']), ctx['scale'])})
+        lines.append({'variant': variant, 'Cant': quantity, 'PUTVA': numeric.to_stored(price, ctx['scale']), 'ValoareCUTVA': numeric.to_stored(numeric.calc_round(cant * price, ctx['zec']), ctx['scale'])})
     _fail(errors)
     return lines
 
@@ -704,7 +704,7 @@ def create_storno(cursor, repo, ctx, exercise, body, request_key, request_id):
     lines = _clean_stornolines(cursor, ctx, source['IdIntrare'], body.get('lines'))
     number, _ = _assign_number(cursor, ctx, 'storno', header.get('Numar'), errors)
     _fail(errors)
-    total = numeric.to_int(total_of(lines, ctx['scale']), ctx['scale'])
+    total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     values = {**cols, 'Valoare': total, 'Numar': -number}
     if _has_numarsub(cursor):
         values['NumarSub'] = 0
@@ -740,7 +740,7 @@ def edit_storno(cursor, repo, ctx, exercise, doc_id, body, request_id):
         number, _ = _assign_number(cursor, ctx, 'storno', manual, errors, exclude=doc_id)
     _fail(errors)
     cols['Numar'] = -number
-    cols['Valoare'] = numeric.to_int(total_of(lines, ctx['scale']), ctx['scale'])
+    cols['Valoare'] = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     repo.delete('VC_IntrariStorno', {'IdIntrare': doc_id})
     now = datetime.now()
     for line in lines:
@@ -758,7 +758,7 @@ def _variant_prices(repo, variants):
     for variant in set(variants):
         rows = repo.select('VC_ProduseP', {'IdProdus': variant, 'Activ': 1})
         if rows:
-            out[variant] = int(rows[0]['PUTVA'] or 0)
+            out[variant] = Decimal(rows[0]['PUTVA'] or 0)
     return out
 
 
@@ -790,7 +790,7 @@ def create_bc(cursor, repo, ctx, exercise, body, request_key, request_id):
     _fail(errors)
     number, text = _assign_number(cursor, ctx, 'bc', header.get('Numar'), errors)
     _fail(errors)
-    total = numeric.to_int(total_of(lines, ctx['scale']), ctx['scale'])
+    total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     doc_id = repo.insert('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'Retur': 0, 'DataSalvare': datetime.now()})
     now = datetime.now()
     for line in lines:
@@ -852,10 +852,10 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     total_lines = []
     for line in lines:
         if line['variant'] in old_price and old_price[line['variant']] is not None:
-            line = {'variant': line['variant'], **priced_line(numeric.from_int(line['Cant'], ctx['scale']), old_price[line['variant']], ctx['zec'], ctx['scale'])}
+            line = {'variant': line['variant'], **priced_line(numeric.from_stored(line['Cant'], ctx['scale']), old_price[line['variant']], ctx['zec'], ctx['scale'])}
         total_lines.append(line)
         repo.insert('VC_Iesiri', {'IdBonConsum': doc_id, 'IdProdus': line['variant'], 'Cant': line['Cant'], 'PUTVA': line['PUTVA'], 'ValoareCUTVA': line['ValoareCUTVA'], 'DataSalvare': now})
-    total = numeric.to_int(total_of(total_lines, ctx['scale']), ctx['scale'])
+    total = numeric.to_stored(total_of(total_lines, ctx['scale']), ctx['scale'])
     if repo.update('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'DataSalvare': now}, {'IdBonConsum': doc_id, 'Version': before['Version']}, bump_version=True) != 1:
         raise NomError('CONFLICT', 'Documentul a fost modificat de altcineva. Reîncărcați documentul.', 409)
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in total_lines} | {r['IdProdus'] for r in old_lines})
@@ -869,12 +869,12 @@ def return_eligible(cursor, ctx, bc_id, exclude=None):
     scale = ctx['scale']
     rows = _all(cursor, 'SELECT o.IdProdus, pr.DenumireP, pr.UM, SUM(o.Cant) AS q, MIN(o.PUTVA) AS putva FROM VC_Iesiri o ' + _name_join('o') +
                 ' WHERE o.SubunitId=%s AND o.GestiuneId=%s AND o.ExercitiuId=%s AND o.IdBonConsum=%s GROUP BY o.IdProdus, pr.DenumireP, pr.UM ORDER BY pr.DenumireP', (s, g, e, bc_id))
-    done = {r['IdProdus']: int(r['q']) for r in _all(
+    done = {r['IdProdus']: Decimal(r['q']) for r in _all(
         cursor, 'SELECT x.IdProdus, SUM(x.Cant) AS q FROM VC_IesiriRetur x JOIN VC_Iesiri_H h ON h.SubunitId=x.SubunitId AND h.GestiuneId=x.GestiuneId AND h.ExercitiuId=x.ExercitiuId AND h.IdBonConsum=x.IdBonConsum '
                 'WHERE x.SubunitId=%s AND x.GestiuneId=%s AND x.ExercitiuId=%s AND h.IdRetur=%s AND COALESCE(h.Retur,0)=1 AND h.Anulat=0 AND h.IdBonConsum<>%s GROUP BY x.IdProdus',
         (s, g, e, bc_id, exclude or 0))}
-    return [{'variant': r['IdProdus'], 'name': r['DenumireP'], 'um': r['UM'], 'qty': _money(int(r['q']), scale), 'done': _money(done.get(r['IdProdus'], 0), scale),
-             'left': _money(int(r['q']) - done.get(r['IdProdus'], 0), scale), 'PUTVA': _money(r['putva'], scale)} for r in rows]
+    return [{'variant': r['IdProdus'], 'name': r['DenumireP'], 'um': r['UM'], 'qty': _money(Decimal(r['q']), scale), 'done': _money(done.get(r['IdProdus'], 0), scale),
+             'left': _money(Decimal(r['q']) - done.get(r['IdProdus'], 0), scale), 'PUTVA': _money(r['putva'], scale)} for r in rows]
 
 
 def _source_bc(repo, source_id):
@@ -904,14 +904,14 @@ def _clean_return_lines(cursor, ctx, source_id, raw_lines, exclude=None):
             errors['l|%s|Cant' % key] = 'Cantitatea trebuie să fie pozitivă.'
             continue
         try:
-            quantity = numeric.to_int(cant, ctx['scale'])
+            quantity = numeric.to_stored(cant, ctx['scale'])
         except numeric.NumericError as error:
             errors['l|%s|Cant' % key] = str(error)
             continue
-        if quantity > numeric.to_int(Decimal(entry['left']), ctx['scale']):
+        if quantity > numeric.to_stored(Decimal(entry['left']), ctx['scale']):
             errors['l|%s|Cant' % key] = 'Cantitate peste cea rămasă de returnat (%s).' % entry['left']
             continue
-        lines.append({'variant': variant, **priced_line(cant, numeric.to_int(Decimal(entry['PUTVA'] or '0'), ctx['scale']), ctx['zec'], ctx['scale'])})
+        lines.append({'variant': variant, **priced_line(cant, numeric.to_stored(Decimal(entry['PUTVA'] or '0'), ctx['scale']), ctx['zec'], ctx['scale'])})
     _fail(errors)
     return lines
 
@@ -925,7 +925,7 @@ def create_br(cursor, repo, ctx, exercise, body, request_key, request_id):
     lines = _clean_return_lines(cursor, ctx, source['IdBonConsum'], body.get('lines'))
     number, text = _assign_number(cursor, ctx, 'br', header.get('Numar'), errors)
     _fail(errors)
-    total = numeric.to_int(total_of(lines, ctx['scale']), ctx['scale'])
+    total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     doc_id = repo.insert('VC_Iesiri_H', {**cols, 'IdRetur': source['IdBonConsum'], 'NumarBC': text, 'ValoareBC': total, 'Retur': 1, 'DataSalvare': datetime.now()})
     now = datetime.now()
     for line in lines:
@@ -952,7 +952,7 @@ def edit_br(cursor, repo, ctx, exercise, doc_id, body, request_id):
     now = datetime.now()
     for line in lines:
         repo.insert('VC_IesiriRetur', {'IdBonConsum': doc_id, 'IdProdus': line['variant'], 'Cant': line['Cant'], 'PUTVA': line['PUTVA'], 'DataSalvare': now})
-    total = numeric.to_int(total_of(lines, ctx['scale']), ctx['scale'])
+    total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     if repo.update('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'DataSalvare': now}, {'IdBonConsum': doc_id, 'Version': before['Version']}, bump_version=True) != 1:
         raise NomError('CONFLICT', 'Documentul a fost modificat de altcineva. Reîncărcați documentul.', 409)
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in lines})

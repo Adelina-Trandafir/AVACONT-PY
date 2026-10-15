@@ -15,7 +15,4 @@
 .vc-access { margin-left: auto; color: var(--ink); font-size: .85em; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
 .vc-bar { font-size: .85em; margin: 4px 0; opacity: .8; }
 .vc-menu { border-bottom: 1px solid var(--line); margin: 4px -16px 12px; padding: 0 16px; gap: 4px; }
-.vc-menu__group { gap: 0; }
-.vc-menu button { border: 0; border-radius: 0; padding: 10px 18px; }
-.vc-menu button[aria-current="true"] { border-bottom: 3px solid var(--primary-color); background: rgba(48,158,255,.1); color: var(--primary-color); }
 .vc-work { padding: 0; border: 0; }

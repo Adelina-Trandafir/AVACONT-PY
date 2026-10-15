@@ -1,8 +1,8 @@
 /* The popup menu shared by ADECHIT and the K-BOT portal (js/adechit/menu.js): one look for every application menu. */
 :root { --avacont-blue: #3b5a85; }
-.ade-receipt-menu { position: fixed; min-width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 3px; box-shadow: 2px 4px 12px rgb(0 0 0 / .25); font-size: 13px; }
+.ade-receipt-menu { position: fixed; min-width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 3px; box-shadow: 2px 4px 12px rgb(0 0 0 / .25); font-size: var(--fs-ms); }
 .ade-receipt-menu > button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 30px; padding: 4px 10px 4px 0; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 2px; font: inherit; text-align: left; cursor: pointer; }
-.ade-receipt-menu__icon { display: grid; place-items: center; width: 30px; align-self: stretch; border-right: 1px solid var(--line); font-size: 16px; }
+.ade-receipt-menu__icon { display: grid; place-items: center; width: 30px; align-self: stretch; border-right: 1px solid var(--line); font-size: var(--fs-lg); }
 .ade-receipt-menu > button:hover:enabled, .ade-receipt-menu > button:focus-visible { background: var(--sky-2); border-color: var(--blue); outline: none; }
 .ade-receipt-menu > button:disabled { opacity: .5; cursor: default; }
 .ade-receipt-menu > button[aria-checked="true"] .ade-receipt-menu__icon { font-weight: 700; color: var(--blue); }

@@ -53,7 +53,7 @@
 .treeview-arrow {
   pointer-events: all;
   color: #666;
-  font-size: 15px;
+  font-size: var(--fs-mp);
   transition: transform 0.2s, font-size 0.2s;
   user-select: none;
   position: absolute;
@@ -130,7 +130,7 @@
 
 /* ========== TREE FIRST ROW ========== */
 .treeview-input-mini-header {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     position: relative;
     width: 100%;
     padding: 2px;

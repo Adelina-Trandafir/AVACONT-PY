@@ -1,0 +1,39 @@
+/* TYPOGRAPHY - the one place where the fonts of the whole web application are decided (everything except the presentation site, static/site/).
+   Change --fs-base to resize all text at once; change a family to change the face everywhere. Every size below is the base plus or minus a
+   fixed step, so the proportions between the categories never change. Pages load this file FIRST. Documents meant for print (reports,
+   receipts, statements, notices) keep their own point sizes and fonts on purpose.
+   Try values live (debug mode only): kbotDebug.fontBase(16), kbotDebug.fontFamily('ui', 'Arial, sans-serif'), kbotDebug.fontReset(). */
+:root {
+  /* families */
+  --font-ui: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;   /* text, controls, tables */
+  --font-heading: var(--font-ui);                                    /* titles and headers */
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;   /* codes, numbers that must align */
+
+  /* size: THE base, and the steps from it */
+  --fs-base: 16px;
+  --fs-2xs: calc(var(--fs-base) - 4px);
+  --fs-xs: calc(var(--fs-base) - 3px);
+  --fs-sm: calc(var(--fs-base) - 2px);
+  --fs-ms: calc(var(--fs-base) - 1px);
+  --fs-md: var(--fs-base);
+  --fs-mp: calc(var(--fs-base) + 1px);
+  --fs-lg: calc(var(--fs-base) + 2px);
+  --fs-xl: calc(var(--fs-base) + 4px);
+  --fs-2xl: calc(var(--fs-base) + 6px);
+
+  /* roles (add more as they are needed): what a piece of the interface is, mapped to a step */
+  --fs-control: var(--fs-md);   /* inputs, lists, calendars */
+  --fs-button: var(--fs-md);
+  --fs-menu: var(--fs-ms);    /* popup menus */
+  --fs-nav: var(--fs-lg);     /* the bar of a page's navigation */
+  --fs-nav-icon: calc(var(--fs-nav) + 2px);    /* the emoji of a bar item: its own size, 2px more than the text */
+  --fs-menu-icon: calc(var(--fs-menu) + 2px);  /* the emoji of a popup entry: its own size, 2px more than the text */
+  --fs-label: var(--fs-ms);     /* field captions */
+  --fs-table: var(--fs-ms);     /* grid cells and headers */
+  --fs-hint: var(--fs-sm);      /* tooltips, notes, small print of the screen */
+  --fs-heading: var(--fs-xl);
+
+  /* weights */
+  --fw-normal: 400;
+  --fw-strong: 700;
+}

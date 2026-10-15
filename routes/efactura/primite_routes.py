@@ -114,6 +114,21 @@ def primite_atasament(id_primita, index):
     return _file_response(data, name, mime, inline=mime == "application/pdf")
 
 
+@efactura_bp.route("/api/efactura/primite/<int:id_primita>/mesaj", methods=["POST"])
+@require_session
+@_guarded("primite/mesaj")
+def primite_mesaj(id_primita):
+    body = _body()
+    if set(body) - {"mesaj"}:
+        raise EfEroare("Corpul poate contine doar «mesaj».", "CAMP_NEPERMIS", 400)
+    text = body.get("mesaj")
+    if not isinstance(text, str):
+        raise EfEroare("«mesaj» trebuie sa fie text.", "CAMP_INVALID", 400)
+    answer = primite.trimite_mesaj(g.session.db_name, id_primita, text)
+    _audit("EF_PRIMITE_MESAJ", str(id_primita), "IdMsg=%s" % answer["mesaj"]["IdMsg"])
+    return _json(answer, 201)
+
+
 @efactura_bp.route("/api/efactura/primite/<int:id_primita>/asociere", methods=["POST"])
 @require_session
 @_guarded("primite/asociere")

@@ -18,7 +18,7 @@ from datetime import datetime
 
 from flask import g, request
 
-from . import depreciation_read, documents, lista, mf, oi, protocol, stock_routes, report_routes, receipt_number, receipt_choices, receipt_tree
+from . import depreciation_read, documents, lista, mf, oi, protocol, stock_routes, report_routes, receipt_number, receipt_choices, receipt_tree, receipt_context
 from .capabilities import FormUnavailable
 from .nomenclatoare import NomError
 
@@ -123,6 +123,8 @@ def register(bp, guard, scoped, open_db):
     def _need(family):
         if RIGHT[family] not in g.vercon_operations:
             raise FormUnavailable('FORBIDDEN', 'Nu aveți dreptul necesar pentru această operație VERCON.', 403)
+
+    receipt_context.register(bp, guard, scoped, session, build, _need)
 
     @bp.get('/api/vercon/doc/<family>/lookups')
     @guard('read')
@@ -292,8 +294,8 @@ def register(bp, guard, scoped, open_db):
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, None, False)
             stock = protocol.available(cursor, ctx, on, products or None, exclude)
-        from .numeric import from_int
-        return {'date': on.isoformat(), 'available': {str(k): format(from_int(v, ctx['scale']), 'f') for k, v in stock.items()}}
+        from .numeric import from_stored
+        return {'date': on.isoformat(), 'available': {str(k): format(from_stored(v, ctx['scale']), 'f') for k, v in stock.items()}}
 
     # ---- writes ----------------------------------------------------------------------------------------------------
     @bp.post('/api/vercon/doc/<family>')

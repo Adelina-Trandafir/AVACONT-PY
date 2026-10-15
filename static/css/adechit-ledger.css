@@ -2,7 +2,7 @@
 .ade-grid .dgv__cell[data-key="ZilePrezenta"] { font-weight: 800; background: var(--sky-1); }
 .ade-ledger { min-height: 0; display: grid; grid-template-rows: var(--ade-head-h) minmax(0,1fr); overflow: hidden; }
 .ade-tablist { display: flex; align-items: end; gap: 1px; padding: 3px 6px 0; border-bottom: 1px solid var(--line); background: var(--sky-1); }
-.ade-tablist button { align-self: stretch; min-width: 130px; padding: 4px 14px; color: var(--ink-soft); background: transparent; border: 1px solid transparent; border-bottom: 0; border-radius: var(--radius-sm) var(--radius-sm) 0 0; font: inherit; font-size: calc(.75rem + 1px); font-weight: 800; cursor: pointer; }
+.ade-tablist button { align-self: stretch; min-width: 130px; padding: 4px 14px; color: var(--ink-soft); background: transparent; border: 1px solid transparent; border-bottom: 0; border-radius: var(--radius-sm) var(--radius-sm) 0 0; font: inherit; font-size: var(--fs-ms); font-weight: 800; cursor: pointer; }
 /* Each ledger tab has its own soft tint (dark mode: same hues, darker); the table header takes the tint of the open tab. */
 .portal.ade-page { --ade-tab-receipt: #dcf0e1; --ade-tab-other: #fbeed0; --ade-tab-refund: #f8dcdd; }
 html[data-theme="dark"] .portal.ade-page { --ade-tab-receipt: #1f3a2b; --ade-tab-other: #3f3721; --ade-tab-refund: #412628; }
@@ -14,9 +14,9 @@ html[data-theme="dark"] .portal.ade-page { --ade-tab-receipt: #1f3a2b; --ade-tab
 .ade-ledger[data-kind="receipt"] { --ade-head-bg: var(--ade-tab-receipt); }
 .ade-ledger[data-kind="other"] { --ade-head-bg: var(--ade-tab-other); }
 .ade-ledger[data-kind="refund"] { --ade-head-bg: var(--ade-tab-refund); }
-#ade-selected-child { display: none; /* ascuns tot timpul (operator, 08.10.2026); app.js il mai scrie, dar nu se vede */ margin: 0 6px 5px auto; color: var(--ink-soft); font-size: calc(.68rem + 1px); }
+#ade-selected-child { display: none; /* ascuns tot timpul (operator, 08.10.2026); app.js il mai scrie, dar nu se vede */ margin: 0 6px 5px auto; color: var(--ink-soft); font-size: var(--fs-sm); }
 .ade-ledger-body { min-height: 0; overflow-x: hidden; overflow-y: auto; }
-.ade-ledger-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: calc(.72rem + 1px); }
+.ade-ledger-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--fs-ms); }
 .ade-ledger-table col.ade-col-number { width: 7%; }
 .ade-ledger-table col.ade-col-document { width: 14%; }
 .ade-ledger-table col.ade-col-date { width: 14%; }
@@ -31,7 +31,7 @@ html[data-theme="dark"] .portal.ade-page { --ade-tab-receipt: #1f3a2b; --ade-tab
 .ade-ledger-table input:focus { border-color: var(--blue); outline: 1px solid var(--blue); }
 .ade-ledger-table td.ade-row-actions, .ade-ledger-table th.ade-row-actions { padding: 0; text-align: center; }
 /* The save button IS the cell: no padding, border or rounding of its own. */
-.ade-ledger-table .ade-cell-button { display: block; width: 100%; height: 100%; min-height: 27px; margin: 0; padding: 0; color: inherit; background: transparent; border: 0; border-radius: 0; font-size: calc(1rem + 1px); line-height: 1; cursor: pointer; }
+.ade-ledger-table .ade-cell-button { display: block; width: 100%; height: 100%; min-height: 27px; margin: 0; padding: 0; color: inherit; background: transparent; border: 0; border-radius: 0; font-size: var(--fs-xl); line-height: 1; cursor: pointer; }
 .ade-ledger-table .ade-cell-button:hover { background: var(--sky-2); }
 .ade-ledger-table .ade-cell-button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .ade-ledger-buttons { display: flex; height: 100%; }

@@ -29,6 +29,7 @@ from routes.forexe import forexe_bp  # Importam Blueprint-ul FOREXE (ListaAngaja
 from routes.auth import auth_bp  # Importam Blueprint-ul de login al aplicatiei K-BOT
 from routes.migrare.migrare import migrare_bp  # felia 0044: migrarea prin fisier .accdb impins
 from routes.update import update_bp  # slice 0067: application update channel (public, read-only)
+from routes.legacy_updater import legacy_updater_bp  # TEMPORARY: old X-Api-Key update routes for not-yet-updated clients
 from routes.inregistrare.inregistrare import inregistrare_bp  # felia 0075: pagina publica de inregistrare
 from routes.landing.landing import landing_bp  # public presentation page: GET / (k-bot.ro)
 from routes.landing.seo import seo_bp  # robots.txt + sitemap.xml
@@ -104,6 +105,7 @@ app.register_blueprint(forexe_bp)  # Inregistram Blueprint-ul FOREXE
 app.register_blueprint(auth_bp)  # Inregistram Blueprint-ul de login
 app.register_blueprint(migrare_bp)
 app.register_blueprint(update_bp)
+app.register_blueprint(legacy_updater_bp)  # TEMPORARY bridge; LEGACY_UPDATER_ENABLED=False in config.py retires it
 app.register_blueprint(inregistrare_bp)  # Inregistrarea publica a unei unitati noi
 app.register_blueprint(landing_bp)  # GET / : the K-BOT presentation page
 app.register_blueprint(seo_bp)  # robots.txt + sitemap.xml

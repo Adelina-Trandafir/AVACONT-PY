@@ -2,7 +2,7 @@
 .pc { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(300px, 32%) 1fr; grid-template-rows: minmax(0, 1fr); gap: 12px; }
 .pc[hidden] { display: none; }
 .pc__left, .pc__right { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 14px; gap: 10px; box-sizing: border-box; position: relative; }
-.pc__filters { display: flex; flex-direction: column; gap: 4px; font-size: .88rem; color: var(--ink-soft); }
+.pc__filters { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-md); color: var(--ink-soft); }
 .pc__filters label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .pc__g { flex: 1 1 0; min-height: 0; position: relative; }
 .pc__tot { flex: 0 0 auto; position: relative; }

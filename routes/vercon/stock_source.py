@@ -1,9 +1,10 @@
 """VC08-01: scoped stock movements shared by validation, statements and balances.
 
 No date lower bound is applied in SQL: earlier movements are needed for opening stock.
-All quantities remain scaled integers. OI custody is a separate ledger from warehouse
+All quantities remain direct decimals. OI custody is a separate ledger from warehouse
 stock: a BP creates one warehouse BC, never a second consumption here.
 """
+from decimal import Decimal
 
 WAREHOUSE = (
     ('nir', 'VC_Intrari', 'i', 'VC_NIR', 'n', 'IdIntrare',
@@ -47,7 +48,7 @@ def warehouse(cursor, ctx, products=None, exclude=None):
                 a=a, h=h, day=day, sign=sign, kind=kind, key=key, number=number,
                 supplier=supplier, lines=lines, header=header, valid=valid, extra=extra))
     cursor.execute(' UNION ALL '.join(parts), params)
-    return [{**row, 'q': int(row['q'] or 0)} for row in cursor.fetchall()]
+    return [{**row, 'q': Decimal(row['q'] or 0)} for row in cursor.fetchall()]
 
 
 def custody(cursor, ctx):
@@ -73,7 +74,7 @@ def custody(cursor, ctx):
                 holder=holder, table=table))
     cursor.execute(' UNION ALL '.join(parts),
                    {'s': ctx['subunit'], 'g': ctx['gestiune'], 'e': ctx['exercitiu']})
-    return [{**row, 'q': int(row['q'] or 0)} for row in cursor.fetchall()]
+    return [{**row, 'q': Decimal(row['q'] or 0)} for row in cursor.fetchall()]
 
 
 def variants(cursor, ctx):

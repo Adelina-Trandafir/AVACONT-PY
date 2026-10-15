@@ -22,7 +22,7 @@ def day_of(raw):
 
 
 def balance(movements, start, end, dimensions=('p',)):
-    """Integer quantities grouped independently by the FULL key (N09).
+    """Exact decimal quantities grouped independently by the FULL key (N09).
 
     Closed interval [start,end] for every family, including BS (N07).
     Supplier grouping is document provenance, never a fictional FIFO allocation.
@@ -39,7 +39,7 @@ def balance(movements, start, end, dimensions=('p',)):
             continue
         key = tuple(movement.get(dimension) for dimension in dimensions)
         row = groups.setdefault(key, {'opening': 0, **{b: 0 for b in BUCKETS.values()}, 'closing': 0})
-        quantity = int(movement['q'])
+        quantity = Decimal(str(movement['q']))
         row['closing'] += quantity
         if day < start:
             row['opening'] += quantity
@@ -59,7 +59,7 @@ def balance(movements, start, end, dimensions=('p',)):
 def available(movements, on_date, draft=None):
     """Informative availability after excluding the edited document and its draft.
 
-    Draft quantities are scaled integers aggregated per variant, never rounded to 2.
+    Draft quantities are direct decimals aggregated per variant, never rounded to 2.
     The write protocol still checks the complete timeline inside its transaction.
     """
     result = {}
@@ -68,22 +68,24 @@ def available(movements, on_date, draft=None):
             product = movement['p']
             result[product] = result.get(product, 0) + movement['q']
     for product, quantity in (draft or {}).items():
-        if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 0:
+        if not isinstance(quantity, (int, Decimal)) or isinstance(quantity, bool) or quantity < 0:
             raise NomError('INVALID', 'Cantitatea draftului trebuie să fie pozitivă și exactă.', 422)
         result[product] = result.get(product, 0) - quantity
     return result
 
 
 def quantity_text(coef, scale):
-    # Explicit precision accommodates sums larger than a storage INT.
+    # Explicit precision accommodates sums larger than one stored decimal value.
     with localcontext() as context:
         context.prec = max(40, len(str(abs(coef))) + scale + 4)
-        return format(Decimal(coef).scaleb(-scale), 'f')
+        return format(Decimal(str(coef)), 'f')
 
 
 def value_text(quantity, price, scale):
     # Exact valuation, no rounding per movement; UI/report rounds only for display.
-    return quantity_text(quantity * price, 2 * scale)
+    with localcontext() as context:
+        context.prec = 50
+        return quantity_text(Decimal(str(quantity)) * Decimal(str(price)), scale)
 
 
 def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=None,
@@ -129,7 +131,7 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
 
     rows = []
     totals = {bucket: 0 for bucket in ('opening', *dict.fromkeys(BUCKETS.values()), 'closing')}
-    # Totals of values use integer products at scale 2*SCARA, exact across variants.
+    # Totals use direct decimal products, without per-variant display rounding.
     for key, quantities in sorted(grouped.items(), key=lambda pair: tuple(-1 if v is None else v for v in pair[0])):
         info = identity(key)
         price = selected[key[-1]]['price'] or 0
@@ -156,4 +158,4 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
             'rows': rows, 'statement': sheet,
             'categories': [{'id': key, 'label': label or 'Fără categorie'} for key, label in
                            dict((info['category'], info['category_name']) for info in metadata.values()).items()],
-            'value_totals': {k: quantity_text(v, 2 * scale) for k, v in totals.items()}}
+            'value_totals': {k: quantity_text(v, scale) for k, v in totals.items()}}

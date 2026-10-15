@@ -78,8 +78,8 @@
     /* Modal Vars */
     --modal-header-background: linear-gradient(135deg, #005dae 0%, #004683 100%);
     --modal-border-radius-header: 12px 12px 0 0;
-    --modal-header-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --modal-header-font: bold 16px var(--modal-header-font-family);
+    --modal-header-font-family: var(--font-ui);
+    --modal-header-font: bold var(--fs-lg) var(--modal-header-font-family);
     --modal-header-font-color-light: #fff;
     --modal-header-font-color-dark: #000;
 

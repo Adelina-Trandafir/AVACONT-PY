@@ -44,9 +44,9 @@ def build(source, spec, layout):
     prior = [row for row in source.rows('food_history') if stock.day_of(row['date']) < day]
     if any(row['difference'] is None for row in prior):
         raise NomError('REPORT_SOURCE', 'O listă anterioară nu are diferența păstrată în antet.', 409)
-    initial = next((int(row['IntValue']) for row in source.rows('settings') if row['SettingKey'] == 'SI_LA'), 0)
-    before = initial - sum(int(row['difference']) for row in prior)
-    current = None if head['DEP'] is None else -int(head['DEP'])
+    initial = next((Decimal(row['IntValue']) for row in source.rows('settings') if row['SettingKey'] == 'SI_LA'), 0)
+    before = initial - sum(Decimal(row['difference']) for row in prior)
+    current = None if head['DEP'] is None else -Decimal(head['DEP'])
     def difference(label, amount):
         return {'period': label, 'economy': report_data.exact(-amount, scale) if amount is not None and amount < 0 else '',
                 'overrun': report_data.exact(amount, scale) if amount is not None and amount >= 0 else ''}

@@ -90,7 +90,7 @@ def audit(cursor, ctx, operation, table, row_key, before, after, request_key=Non
 
 
 def freeze(cursor, ctx):
-    """The first document fixes the scale and the type of the gestiune (values are INT * 10^Scara)."""
+    """The first document fixes the scale and the type of the gestiune (values are direct DECIMAL(20,4))."""
     cursor.execute('UPDATE VC_Gestiuni SET Populated=1 WHERE SubunitId=%s AND GestiuneId=%s AND Populated=0', (ctx['subunit'], ctx['gestiune']))
 
 
@@ -182,4 +182,4 @@ def _label(cursor, ctx, variant):
 
 def _plain(stored, scale):
     from . import numeric
-    return format(numeric.from_int(stored, scale), 'f')
+    return format(numeric.from_stored(stored, scale), 'f')

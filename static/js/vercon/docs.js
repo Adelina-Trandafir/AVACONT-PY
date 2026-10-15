@@ -6,6 +6,11 @@ import { el, scope, field, column, grid, paintTree, refreshTree, markSelected, g
 import { receiptTree } from './receipt-tree.js';
 import { ModalFrame } from '../components/modal-frame/modal-frame.js';
 import { subText, subHundredths, numberText } from './receipt-number.js';
+import { receiptContext } from './receipt-context.js';
+import { ActionAddButton } from '../components/action-add-button/action-add-button.js';
+
+// Keep the modal implementation available; receipt editing temporarily stays inline.
+const RECEIPT_MODAL_ENABLED = false;
 
 const families = {
   nir: { title: 'Recepție NIR', number: 'Număr NIR', lines: 'Produse recepționate', groups: ['party', 'date'] },
@@ -26,7 +31,7 @@ export function mountDocuments(host, opts) {
   const state = { docs: [], lookups: null, doc: null, draft: null, mode: 'view', dirty: false, requestKey: null, pendingBody: null, canWrite: false, closed: false, zec: 4, eligible: [], sources: [], available: {}, busy: false };
   const headerUi = scope(), linesUi = scope(), treeUi = scope(), dialogs = scope();
   const inputs = new Map(), errors = new Map();
-  let savedTree = null, treeDirty = true, linesGrid = null, availabilityTimer = null, numberTimer = null, numberSequence = 0, availabilitySequence = 0, openSequence = 0, eligibleSequence = 0;
+  let savedTree = null, treeAddButton = null, treeDirty = true, linesGrid = null, availabilityTimer = null, numberTimer = null, numberSequence = 0, availabilitySequence = 0, openSequence = 0, eligibleSequence = 0;
   const status = el('span', { className: 'vc-save-status', role: 'status' });
   const say = (text, bad = false) => showMessage(status, text, bad ? 'error' : 'info');
   const report = (error) => { if (!abort.signal.aborted && error.name !== 'AbortError') say(error.message || 'Operația a eșuat.', true); };
@@ -49,6 +54,12 @@ export function mountDocuments(host, opts) {
   const main = el('div', { className: 'vc-doc__main' }, el('div', { className: 'vc-doc__titlebar' }, title, pill), headerHost, linesHost, bar);
   const savedHost = el('aside', { className: 'vc-doc__tree' });
   const root = el('section', { className: `vc-doc vc-doc--${family}` }, main, savedHost); host.replaceChildren(root);
+  const treeHost = family === 'nir' ? el('div', { className: 'vc-receipt-tree' }) : savedHost;
+  if (treeHost !== savedHost) savedHost.append(treeHost);
+  const side = family === 'nir' ? receiptContext(savedHost, { root, main, headerHost, linesHost, treeHost,
+    api: opts.api, selection: opts.sel, context: () => ({ draft: state.draft }),
+    validLine: (line) => !isBlankLine(line) && !lineProblems(line).length,
+    blankLine: (line) => isBlankLine(line) }) : null;
 
   function headerSpecs() {
     const lookup = state.lookups || {}, specs = [], ref = (name, label, items, required = true) => ({ key: name, label, type: 'ref', required, showArrow: family === 'nir', options: options(items) });
@@ -84,7 +95,7 @@ export function mountDocuments(host, opts) {
     treeDirty = true; Object.assign(state, { docs: list.documents || [], canWrite: list.can_write && !list.closed, closed: list.closed, zec: list.zec, lookups }); if (config.source) state.sources = (await opts.api(url('/sources'))).documents;
   }
   // The open nodes of the saved tree: of the live tree, or kept for the next one while it is hidden.
-  const openNodes = () => savedTree ? savedTree.expandedNodes : (savedHost._vcExpanded ||= new Set());
+  const openNodes = () => savedTree ? savedTree.expandedNodes : (treeHost._vcExpanded ||= new Set());
   async function refresh() {
     if (lazy) { const shown = await receipts.refresh(state.doc ? { party: state.doc.header.party || '', month: String(state.doc.header.Data || '').slice(0, 7) } : null); if (!abort.signal.aborted && shown.length) { const open = openNodes(), root = shown[0]; for (const id of [...open]) if (id.startsWith('party:') ? id !== root : id.startsWith('month:') && !id.startsWith(`month:${root.slice(6)}|`)) open.delete(id); shown.forEach((id) => open.add(id)); } treeDirty = true; return; }
     const answer = await opts.api(url('/list')); if (!abort.signal.aborted) { state.docs = answer.documents; treeDirty = true; }
@@ -121,11 +132,12 @@ export function mountDocuments(host, opts) {
       line.Valoare = fixed(net, state.zec); line.TVA = fixed(total != null && net != null ? total - net : null, state.zec); line.ValoareCUTVA = fixed(total, state.zec); if (mf()) line.ValoareLuna = fixed(number(line.DNF) > 0 && total != null ? total / number(line.DNF) : null, state.zec);
     } else { line.ValoareCUTVA = fixed(qty != null && price != null ? qty * price : null, state.zec); if (bon()) line.PUTVA = fixed(price, state.zec); } return line;
   }
-  // Adding / editing a document: the editor is a fixed-size modal over the blurred page (the consultation tree stays behind it).
+  // The modal route is retained, but disabled for NIR while its context cards are in use.
   let frame = null;
   function syncModal() {
-    if (editing() && !frame) { frame = new ModalFrame(main, { width: 1240, height: 800, onRequestClose: () => discard().catch(report) }); frame.open(); root.classList.add('is-modal'); }
-    else if (!editing() && frame) { frame.close(); frame = null; root.classList.remove('is-modal'); }
+    const modal = editing() && (family !== 'nir' || RECEIPT_MODAL_ENABLED);
+    if (modal && !frame) { frame = new ModalFrame(main, { width: 1240, height: 800, caption: title.parentElement, onRequestClose: () => discard().catch(report) }); frame.open(); root.classList.add('is-modal'); }
+    else if (!modal && frame) { frame.close(); frame = null; root.classList.remove('is-modal'); }
   }
   function paint() {
     if (abort.signal.aborted) return; inputs.clear(); errors.clear(); syncModal();
@@ -162,6 +174,7 @@ export function mountDocuments(host, opts) {
         }
         if (spec.key === accountKey()) { const incompatible = state.draft.lines.filter((line) => (line.variant || line.product) && !inAccount(family === 'nir' ? product(line.product) : variant(line.variant))); if (incompatible.length) { state.draft.lines = state.draft.lines.filter((line) => !incompatible.includes(line)); say('Produsele incompatibile cu noul cont au fost scoase din ciornă.', true); } paintLines(); }
         if (spec.key === 'Data') availability();
+        side?.refresh();
       }, headerUi);
       inputs.set(spec.key, item.input); errors.set(`h.${spec.key}`, item.error); if (spec.hint && editing()) item.input.title = spec.hint;
       if (family === 'nir' && spec.key === 'Numar' && editing()) attachSub(item, header);
@@ -172,6 +185,7 @@ export function mountDocuments(host, opts) {
             state.draft.tip = checked ? 'STOC_INITIAL' : 'NIR'; state.dirty = true;
             for (const name of ['IdPartener', 'NrFact']) { const input = inputs.get(name); input?._setRequired(!checked); if (checked) { input?._clearValue(); state.draft.header[name] = null; } }
             stockHidden();
+            side?.refresh();
           } }));
       }
     }
@@ -258,7 +272,7 @@ export function mountDocuments(host, opts) {
   // The NIR grid always ends with one empty row (the new row, as in an Access datasheet); an empty line is never saved.
   const isBlankLine = (line) => !line.product && [line.Cant, line.Pret].every((value) => value == null || String(value).trim() === '');
   const draftRows = () => { const rows = state.draft.lines.map(calculate); rows.forEach((row, index) => { row._index = index + 1; }); return rows; };
-  function dropLine(line) { state.draft.lines = state.draft.lines.filter((other) => other.key !== line.key); linesGrid.setRows(draftRows(), { keepWidths: true }); totals(); availability(); }
+  function dropLine(line) { state.draft.lines = state.draft.lines.filter((other) => other.key !== line.key); linesGrid.setRows(draftRows(), { keepWidths: true }); totals(); availability(); side?.refresh(); }
   // A line that was edited is judged when the operator leaves it: what is missing or wrong (the same rules as the save) and the question.
   function lineProblems(line) {
     return lineSpecs().filter((spec) => spec.editable).filter((spec) => spec.type === 'ref' ? line[spec.key] == null || line[spec.key] === '' : !parse(String(line[spec.key] ?? ''), { ...spec, type: spec.type || 'text' }).ok).map((spec) => spec.label);
@@ -285,9 +299,11 @@ export function mountDocuments(host, opts) {
         if (name === '_choice') { const item = state.eligible[Number(value)]; if (!item) throw new Error('Alegeți un produs al predătorului.'); if (state.draft.lines.some((other) => other !== line && other.variant === item.variant && (other.origin ?? other.batch) === item.origin)) throw new Error('Produsul din acest lot este deja în document.'); const id = line.variant === item.variant && (line.origin ?? line.batch) === item.origin ? line.id : null; Object.assign(line, { ...item, _choice: Number(value), id }); }
         else { line[name] = ['variant', 'product', 'IDTVA'].includes(name) ? value == null || value === '' ? null : Number(value) : value; if (['variant', 'product'].includes(name)) { const item = family === 'nir' ? product(value) : variant(value); line.name = item?.name || ''; line.um = item?.um || ''; if (name === 'product') line.variant = null; } }
         state.dirty = true; return { ...calculate(line) };
-      }, onCellSaved: () => { totals(); availability(); }, onEditError: ({ error }) => say(error.message, true),
+      }, onCellSaved: ({ row }) => { totals(); availability(); side?.refresh(row); }, onEditError: ({ error }) => say(error.message, true),
+      onSelect: (row) => side?.refresh(row),
+      onEditState: ({ state: mode }) => { if (mode === 'editing') side?.refresh(linesGrid?.getSelectedRows()[0]); },
       onCellAction: ({ row }) => rowMenu(linesGrid, row, [{ icon: '×', label: 'Scoate rândul', disabled: !editing() || !!config.source, run: async () => { if (!await linesUi.commit()) return; state.draft.lines = state.draft.lines.filter((item) => item.key !== row.key); state.dirty = true; paintLines(); } }]),
-    }, linesUi); totals(); availability();
+    }, linesUi); totals(); availability(); side?.refresh();
   }
   // The lines grid stays locked until every required header field is filled; the reason is the message shown on a click in it.
   function headerLock() {
@@ -335,20 +351,36 @@ export function mountDocuments(host, opts) {
   const treeNodes = () => lazy ? receipts.nodes() : groupedNodes(state.docs, config.groups.map((name) => (doc) => name === 'date' ? dateText(doc.date) : doc[name]), docLabel);
   function paintSaved() {
     savedHost.hidden = false;
+    side?.setVisible(editing() && !RECEIPT_MODAL_ENABLED);
+    if (side && editing() && !RECEIPT_MODAL_ENABLED) return;
     if (savedTree?.treeContainer?.isConnected) {   // the tree is kept alive: opening a document only moves the mark; new data is drawn in place
       if (savedHost.hidden) return;
       if (treeDirty) refreshTree(savedTree, treeNodes(), state.doc?.id); else markSelected(savedTree, state.doc?.id);
+      paintTreeAdd();
       treeDirty = false; return;
     }
     treeUi.clear(); savedTree = null; if (savedHost.hidden) return; treeDirty = false;
-    savedTree = paintTree(savedHost, treeNodes(), { title: family === 'bc' ? 'Bonuri salvate' : 'Documente salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onToggle: lazy ? opened : undefined, exclusiveRoots: lazy, onSelect: (id) => open(Number(id)).catch(report), onAction: (id, anchor) => {
+    savedTree = paintTree(treeHost, treeNodes(), { title: family === 'bc' ? 'Bonuri salvate' : 'Documente salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onToggle: lazy ? opened : undefined, exclusiveRoots: lazy, onSelect: (id) => open(Number(id)).catch(report), onAction: (id, anchor) => {
       const doc = lazy ? receipts.find(id) : state.docs.find((item) => String(item.id) === id); if (!doc) return; const run = async (action) => { if (state.doc?.id !== doc.id) await open(doc.id); if (state.doc?.id === doc.id) await action(); };
       openMenu(anchor, [{ icon: '✎', label: 'Modifică', disabled: !state.canWrite || doc.annulled, run: () => run(edit).catch(report) }, { icon: '◉', label: 'Previzualizează', run: () => run(preview).catch(report) }, { icon: '◷', label: 'Istoric', run: () => run(history).catch(report) }, { icon: '×', label: 'Anulează', rule: true, disabled: !state.canWrite || doc.annulled, run: () => run(cancel).catch(report) }], { align: 'right' });
     } }, treeUi);
+    paintTreeAdd();
+  }
+  function paintTreeAdd() {
+    if (family !== 'nir') return;
+    const heading = treeHost.querySelector(':scope > h4');
+    if (!heading) return;
+    if (!treeAddButton || treeAddButton.element.parentElement !== heading) {
+      treeAddButton?.destroy();
+      treeAddButton = new ActionAddButton(heading, { className: 'vc-receipt-tree__add',
+        title: 'Adaugă NIR', onClick: () => add().catch(report) });
+      treeUi.own(treeAddButton);
+    }
+    treeAddButton.setEnabled(state.canWrite);
   }
   function paintBar() {
     bar.replaceChildren(); const button = (text, action, attrs = {}) => { const node = el('button', { type: 'button', textContent: text, ...attrs }); node.addEventListener('click', () => Promise.resolve(action()).catch(report), { signal: abort.signal }); return node; };
-    if (editing()) bar.append(button('Renunță', discard), button('Previzualizează', preview), button(`Salvează ${family === 'nir' ? 'NIR' : 'bonul'}`, save, { className: 'is-primary' })); else { bar.append(button('+ Adaugă', add, { disabled: !state.canWrite })); if (state.doc) bar.append(button('Modifică', edit, { disabled: !state.canWrite || state.doc.annulled }), button('Previzualizează', preview)); } bar.append(status); if (state.closed) bar.append(el('span', { className: 'vc-hint', textContent: 'Perioadă închisă: numai consultare.' }));
+    if (editing()) bar.append(button('Renunță', discard), button('Previzualizează', preview), button(`Salvează ${family === 'nir' ? 'NIR' : 'bonul'}`, save, { className: 'is-primary' })); else { if (family !== 'nir') bar.append(button('+ Adaugă', add, { disabled: !state.canWrite })); if (state.doc) bar.append(button('Modifică', edit, { disabled: !state.canWrite || state.doc.annulled }), button('Previzualizează', preview)); } bar.append(status); if (state.closed) bar.append(el('span', { className: 'vc-hint', textContent: 'Perioadă închisă: numai consultare.' }));
   }
   function collect() {
     const out = { header: {}, lines: [], source: state.draft.source }, invalid = {};
@@ -412,5 +444,5 @@ export function mountDocuments(host, opts) {
     paint(); if (opts.startAdd) say('Nu aveți dreptul să adăugați documente în această gestiune.', true);
   }).catch(report);
   if (!opts.startAdd) paint();
-  return { ready, startAdd: async () => { await ready; if (abort.signal.aborted) return; if (state.canWrite) await add(); else say('Nu aveți dreptul să adăugați documente în această gestiune.', true); }, isDirty: () => state.dirty || headerUi.dirty() || linesUi.dirty(), search: (text) => { const input = savedHost.querySelector('.treeview-search-input'); if (input) { input.value = text; input.dispatchEvent(new Event('input')); } }, destroy: () => { frame?.destroy(); abort.abort(); numberSequence++; openSequence++; availabilitySequence++; eligibleSequence++; clearTimeout(numberTimer); clearTimeout(availabilityTimer); [headerUi, linesUi, treeUi, dialogs].forEach((owner) => owner.clear()); host.replaceChildren(); } };
+  return { ready, startAdd: async () => { await ready; if (abort.signal.aborted) return; if (state.canWrite) await add(); else say('Nu aveți dreptul să adăugați documente în această gestiune.', true); }, isDirty: () => state.dirty || headerUi.dirty() || linesUi.dirty(), search: (text) => { const input = savedHost.querySelector('.treeview-search-input'); if (input) { input.value = text; input.dispatchEvent(new Event('input')); } }, destroy: () => { frame?.destroy(); side?.destroy(); abort.abort(); numberSequence++; openSequence++; availabilitySequence++; eligibleSequence++; clearTimeout(numberTimer); clearTimeout(availabilityTimer); [headerUi, linesUi, treeUi, dialogs].forEach((owner) => owner.clear()); host.replaceChildren(); } };
 }

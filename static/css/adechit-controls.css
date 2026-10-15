@@ -1,26 +1,26 @@
 /* Every font of the ADE page is 1px larger than the portal default (operator request 08.10.2026).
    The rem sizes above carry their own +1px; these are the sizes the portal sets in px. */
-.portal.ade-page { font-size: 18px; }
-.portal.ade-page .dgv { --dgv-size: 13px; }
-.portal.ade-page .dgv__sort { font-size: 11px; }
-.portal.ade-page .dgv__note, .portal.ade-page .treeview-no-results { font-size: 13px; }
-.portal.ade-page .combobox-input, .portal.ade-page .combobox-option { font-size: 15.33px; }
-.portal.ade-page .combobox-arrow { font-size: 16px; }
+.portal.ade-page { font-size: var(--fs-xl); }
+.portal.ade-page .dgv { --dgv-size: var(--fs-ms); }
+.portal.ade-page .dgv__sort { font-size: var(--fs-xs); }
+.portal.ade-page .dgv__note, .portal.ade-page .treeview-no-results { font-size: var(--fs-ms); }
+.portal.ade-page .combobox-input, .portal.ade-page .combobox-option { font-size: var(--fs-mp); }
+.portal.ade-page .combobox-arrow { font-size: var(--fs-lg); }
 @media (min-width: 901px) {
-  .portal.ade-page { font-size: 15.33px; }
-  .portal.ade-page .dgv { --dgv-size: 12.33px; }
-  .portal.ade-page .dgv__sort { font-size: 8.33px; }
-  .portal.ade-page .dgv__note, .portal.ade-page .treeview-no-results { font-size: 10.33px; }
-  .portal.ade-page .combobox-input, .portal.ade-page .combobox-option { font-size: 12.67px; }
-  .portal.ade-page .combobox-arrow { font-size: 13.33px; }
-  .portal.ade-page .treeview-container, .portal.ade-page .treeview, .portal.ade-page .treeview-search-input { font-size: 14px; }
+  .portal.ade-page { font-size: var(--fs-mp); }
+  .portal.ade-page .dgv { --dgv-size: var(--fs-sm); }
+  .portal.ade-page .dgv__sort { font-size: calc(var(--fs-base) - 6px); }
+  .portal.ade-page .dgv__note, .portal.ade-page .treeview-no-results { font-size: var(--fs-2xs); }
+  .portal.ade-page .combobox-input, .portal.ade-page .combobox-option { font-size: var(--fs-ms); }
+  .portal.ade-page .combobox-arrow { font-size: var(--fs-ms); }
+  .portal.ade-page .treeview-container, .portal.ade-page .treeview, .portal.ade-page .treeview-search-input { font-size: var(--fs-md); }
 }
 @media (max-width: 900px) {
-  .portal.ade-page .combobox-input, .portal.ade-page .combobox-option { font-size: 14px; } /* 1pt below the phone size above */
+  .portal.ade-page .combobox-input, .portal.ade-page .combobox-option { font-size: var(--fs-md); } /* 1pt below the phone size above */
   .portal.ade-page .combobox-option { display: block; box-sizing: border-box; height: 44px; max-height: none; line-height: 42px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .portal.ade-page .combobox-dropdown { --combobox-min-width: 170px; max-height: 240px; max-width: calc(100vw - 16px); overflow-x: hidden; } /* at least 5 rows, never a sideways scroll */
   .portal.ade-page .combobox-input { min-height: 32px; }
-  .ade-combo-lock { position: absolute; right: 32px; top: 0; bottom: 0; display: flex; align-items: center; font-size: 14px; pointer-events: none; }
+  .ade-combo-lock { position: absolute; right: 32px; top: 0; bottom: 0; display: flex; align-items: center; font-size: var(--fs-md); pointer-events: none; }
   .ade-combo-lock[hidden] { display: none; }
   #ade-month-combo .combobox-input { padding-right: 52px; text-overflow: ellipsis; }
   .ade-mo-lock { float: right; margin-left: 8px; }

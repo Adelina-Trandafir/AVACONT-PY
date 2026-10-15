@@ -39,3 +39,14 @@ export function registerDebugTool(k_name, k_fn, k_help = '') {
 }
 
 export function debugLog(...k_args) { if (testMode) console.log(...k_args); }
+
+// Typography (css/typography.css), debug only: try the base size and the families live, e.g. kbotDebug.fontBase(16).
+const k_root = typeof document !== 'undefined' ? document.documentElement : null;
+registerDebugTool('fontBase', (k_px) => { k_root.style.setProperty('--fs-base', `${Number(k_px)}px`); return `--fs-base = ${Number(k_px)}px`; },
+  'fontBase(px) sets the base text size of the whole application (default 14)');
+registerDebugTool('fontFamily', (k_kind, k_stack) => {
+  if (!['ui', 'heading', 'mono'].includes(k_kind)) return "the kinds are 'ui', 'heading', 'mono'";
+  k_root.style.setProperty(`--font-${k_kind}`, k_stack); return `--font-${k_kind} = ${k_stack}`;
+}, "fontFamily('ui' | 'heading' | 'mono', 'Arial, sans-serif') changes a family everywhere");
+registerDebugTool('fontReset', () => { for (const k_name of ['--fs-base', '--font-ui', '--font-heading', '--font-mono']) k_root.style.removeProperty(k_name); return 'typography: the values of typography.css'; },
+  'fontReset() puts the values of typography.css back');

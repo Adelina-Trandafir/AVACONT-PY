@@ -8,8 +8,8 @@
 .ade-tax-validation-text { padding: 12px 16px; margin: 0; }
 .ade-tax-validation footer { gap: 10px; flex-wrap: wrap; }
 .ade-catalog-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--sky-2); border-bottom: 1px solid var(--line); }
-.ade-catalog-header h2 { margin: 0; font-size: 1.2rem; }
-.ade-catalog-header span { color: var(--ink-soft); font-size: .8rem; }
+.ade-catalog-header h2 { margin: 0; font-size: var(--fs-2xl); }
+.ade-catalog-header span { color: var(--ink-soft); font-size: var(--fs-ms); }
 /* Shared error notice (tokens in variables.css); links inside it are real buttons that open a record. */
 .msg[role="alert"] { color: var(--err-ink); background: var(--err-bg); border: 1px solid var(--err-line); border-radius: var(--radius-sm); padding: 8px 12px; font-weight: 600; overflow-wrap: anywhere; }
 .msg[role="alert"] .ade-link { padding: 0; color: inherit; background: none; border: 0; font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }

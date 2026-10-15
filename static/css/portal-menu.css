@@ -5,10 +5,10 @@
 .pmenu__top, .pmenu__sub {
   font: inherit; cursor: pointer; color: var(--ink); background: transparent; border: 0; border-radius: 8px; white-space: nowrap;
 }
-.pmenu__top { padding: 4px 12px; font-weight: 700; font-size: .92rem; display: inline-flex; align-items: center; gap: 6px; }
+.pmenu__top { padding: 4px 12px; font-weight: 700; font-size: var(--fs-mp); display: inline-flex; align-items: center; gap: 6px; }
 .pmenu__top:hover, .pmenu__top[aria-expanded="true"] { background: var(--sky-2); color: var(--blue-deep); }
 .pmenu__ico { font-size: 1.25em; line-height: 1; }
-.pmenu__group { padding: 6px 12px 2px; font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); cursor: default; }
+.pmenu__group { padding: 6px 12px 2px; font-size: var(--fs-sm); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); cursor: default; }
 .pmenu__sub--nested { padding-left: 24px; }
 .pmenu__list {
   position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; min-width: 210px;
@@ -19,7 +19,7 @@
 .pmenu__sub:hover { background: var(--sky-1); }
 @media (max-width: 900px) {
   .header .brand__text { display: none; }
-  .pmenu__top { padding: 4px 8px; font-size: .85rem; }
+  .pmenu__top { padding: 4px 8px; font-size: var(--fs-md); }
   .pmenu__txt { display: none; }
 }
 

@@ -4,10 +4,17 @@
  */
 
 /* ========== ITEMS ========== */
+/* PER-TREE LOOK. A tree takes its font from the application's typography (--fs-base, --font-ui) and does NOT obey the bold, italic or colour
+   of whatever surrounds it. To configure one tree, set these on its container (CSS or the control's API); all are optional:
+   --tv-font-family --tv-font-size --tv-font-weight --tv-font-style --tv-color
+   --tv-parent-weight --tv-parent-color --tv-leaf-color --tv-hover-weight --tv-hover-color --tv-disabled-color --tv-bold-weight */
 .treeview-item-wrapper {
   position: relative;
   overflow: hidden;
-  font-size: inherit;
+  font-family: var(--tv-font-family, var(--font-ui));
+  font-size: var(--tv-font-size, var(--fs-sm));
+  font-weight: var(--tv-font-weight, normal);
+  font-style: var(--tv-font-style, normal);
 }
 
 .treeview-item {
@@ -19,6 +26,10 @@
   border-radius: 4px;
   padding-top: 4px;
   padding-bottom: 0;
+  /* The node's original position is preserved; only its painted/clickable area
+     begins 4px before its visible content instead of at the tree's left edge. */
+  margin-inline-start: max(0px, calc(var(--tv-node-start, 0px) - 4px));
+  padding-inline-start: min(4px, var(--tv-node-start, 0px));
   align-content: space-between;
   flex-direction: row;
 }
@@ -61,13 +72,9 @@
 }
 
 /* Parent și leaf items */
-.treeview-parent-item {
-  font-weight: 500;
-}
+/* .treeview-parent-item / .treeview-leaf-item no longer carry a weight: --tv-parent-weight on the label does */
 
-.treeview-leaf-item {
-  font-weight: 400;
-}
+
 
 /* Double-click mode */
 .treeview-item.dblclick-mode {
@@ -89,7 +96,7 @@
   text-align: center;
   cursor: pointer;
   user-select: none;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: #666;
   flex-shrink: 0;
   transition: all 0.2s ease;
@@ -114,7 +121,8 @@
 
 /* ========== SPACER ========== */
 .treeview-spacer {
-  display: inline-block;
+  /* Its width is now part of --tv-node-start, outside the highlighted row. */
+  display: none;
   width: 20px;
   flex-shrink: 0;
   margin-right: 4px;
@@ -126,32 +134,33 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #1f2937;
-  font-weight: 400;
+  color: var(--tv-color, var(--ink, #1f2937));
+  font-weight: var(--tv-font-weight, normal);
+  font-style: var(--tv-font-style, normal);
   transition: color 0.2s ease;
   min-height: 20px;
   border-bottom: 1px solid #d3d1d1;
 }
 
 .treeview-item[data-has-children="true"] .treeview-label {
-  font-weight: 500;
-  color: #111827;
+  font-weight: var(--tv-parent-weight, var(--tv-font-weight, normal));
+  color: var(--tv-parent-color, var(--tv-color, var(--ink, #1f2937)));
 }
 
 .treeview-item[data-has-children="false"] .treeview-label {
-  color: #000000;
+  color: var(--tv-leaf-color, var(--tv-color, var(--ink, #1f2937)));
 }
 
 .treeview-item[data-has-children="false"]:hover .treeview-label {
-  font-weight: 600;
+  font-weight: var(--tv-hover-weight, var(--tv-font-weight, normal));
 }
 
 .treeview-item:hover .treeview-label {
-  color: #1e40af;
+  color: var(--tv-hover-color, var(--tv-color, var(--ink, #1f2937)));
 }
 
 .treeview-item.not-selectable:hover .treeview-label {
-  color: #6b7280;
+  color: var(--tv-disabled-color, #6b7280);
 }
 
 .treeview-item.highlighted .treeview-label {

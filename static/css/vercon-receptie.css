@@ -3,7 +3,7 @@
 .vc-doc--nir .vc-header-group { gap: 8px; grid-template-rows: none; }
 .vc-doc--nir .vc-field { position: relative; }
 .vc-doc--nir .vc-field .combobox-input { padding-right: 30px; }
-.vc-doc--nir .combobox-arrow { color: var(--primary-color); cursor: pointer; font-size: 19px; pointer-events: auto; border: 0; background: transparent; padding: 0 4px; }
+.vc-doc--nir .combobox-arrow { color: var(--primary-color); cursor: pointer; font-size: var(--fs-2xl); pointer-events: auto; border: 0; background: transparent; padding: 0 4px; }
 .vc-doc--nir .vc-field > .vc-nir-stock { position: absolute; right: 0; top: 0; display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: .8em; line-height: 1.6; white-space: nowrap; max-width: calc(100% - 4.5em); overflow: hidden; text-overflow: ellipsis; }
 /* Starting stock: the supplier and the invoice number are invisible but keep their place, so nothing around them moves (the checkbox stays). */
 .vc-doc--nir .vc-field.is-stock > :not(.vc-nir-stock) { visibility: hidden; }

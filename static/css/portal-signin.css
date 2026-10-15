@@ -1,7 +1,7 @@
 /* Sign-in card: the application combobox is as wide as the other fields, with a larger arrow and room to its right. */
 #p-app-combo.combobox-container { max-width: none; display: block; width: 100%; }
 #p-app-combo .combobox-input { padding-right: 46px; }
-#p-app-combo .combobox-arrow { right: 16px; font-size: 22px; }
-.p-app { display: flex; align-items: center; gap: 12px; font-size: 17px; }
-.p-app::before { content: attr(data-letter); flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; color: #fff; background: #309eff; border-radius: 7px; font-size: 16px; font-weight: 800; }
+#p-app-combo .combobox-arrow { right: 16px; font-size: calc(var(--fs-base) + 8px); }
+.p-app { display: flex; align-items: center; gap: 12px; font-size: var(--fs-xl); }
+.p-app::before { content: attr(data-letter); flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; color: #fff; background: #309eff; border-radius: 7px; font-size: var(--fs-lg); font-weight: 800; }
 .combobox-option:has(.p-app) { padding: 7px 12px; }

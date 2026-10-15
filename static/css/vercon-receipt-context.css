@@ -1,0 +1,36 @@
+/* The NIR tree and context cards share one fixed layout slot, including while editing. */
+.vc-doc--nir .vc-doc__tree { position: relative; }
+.vc-receipt-tree { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; }
+.vc-receipt-tree[hidden], .vc-receipt-context[hidden] { display: none; }
+.vc-receipt-tree > .vc-tree-body { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; }
+.vc-receipt-tree > h4 { display: flex; align-items: center; gap: 8px; }
+.vc-doc--nir .vc-receipt-tree__add {
+  margin-inline-start: auto;
+  --action-add-button-font-size: var(--fs-ms);
+  --action-add-button-icon-size: var(--fs-lg);
+}
+.vc-receipt-context { position: absolute; inset: 0; overflow: hidden; visibility: hidden; }
+.vc-receipt-context.is-aligned { visibility: visible; }
+.vc-receipt-card { position: absolute; box-sizing: border-box; left: 0; right: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--card); border-block: 1px solid var(--line); }
+.vc-receipt-card:first-child { top: 0; height: var(--receipt-grid-top, 210px); }
+.vc-receipt-card:last-child { top: var(--receipt-grid-top, 210px); bottom: 0; }
+.vc-doc--nir .vc-receipt-card > h4 { flex: 0 0 auto; padding: 5px 8px; font-size: var(--fs-ms); }
+.vc-receipt-card__identity { flex: 0 0 auto; margin: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-ms); font-weight: 600; }
+.vc-receipt-card__body { flex: 1 1 0; min-height: 0; overflow: auto; }
+.vc-receipt-card table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.vc-receipt-card th { position: sticky; top: 0; background: var(--sky-2); font-weight: 600; }
+.vc-receipt-card th, .vc-receipt-card td { padding: 3px 5px; border-bottom: 1px solid var(--line); text-align: left; }
+.vc-receipt-card .is-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vc-receipt-card__message { min-height: 0; overflow: auto; margin: 8px; font-size: var(--fs-ms); }
+.vc-receipt-card__total { box-sizing: border-box; display: flex; align-items: center; flex: 0 0 auto; margin: 0; padding: 6px 8px; background: var(--sky-1); color: var(--ink); border-top: 1px solid var(--line); font-size: var(--fs-ms); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vc-receipt-card:first-child > .vc-receipt-card__total { min-height: var(--receipt-supplier-footer-height, 32px); }
+.vc-receipt-card:last-child > .vc-receipt-card__total { min-height: var(--receipt-stock-footer-height, 32px); }
+.vc-receipt-card__message:has(+ .vc-receipt-card__total) { flex: 1 1 0; }
+.vc-receipt-card__note { flex: 0 0 auto; margin: 3px 8px; font-size: var(--fs-xs); color: var(--ink-muted, var(--ink)); }
+/* On the existing stacked mobile layout, both cards share the tree's lower slot. */
+@media (max-width: 800px) {
+  .vc-receipt-card:first-child { top: 0; height: 45%; }
+  .vc-receipt-card:last-child { top: 45%; height: 55%; bottom: auto; }
+  .vc-receipt-card:first-child > .vc-receipt-card__total,
+  .vc-receipt-card:last-child > .vc-receipt-card__total { min-height: 32px; }
+}

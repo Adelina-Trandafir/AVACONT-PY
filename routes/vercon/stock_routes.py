@@ -64,7 +64,7 @@ def register(bp, guard, scoped, session, build):
                     if isinstance(line.get('variant'), bool) or not isinstance(line.get('quantity'), (str, int)) or isinstance(line.get('quantity'), bool):
                         raise ValueError()
                     product = int(line['variant'])
-                    quantity = numeric.to_int(line['quantity'], ctx['scale'])
+                    quantity = numeric.to_stored(line['quantity'], ctx['scale'])
                     if product <= 0 or quantity < 0:
                         raise ValueError()
                     draft[product] = draft.get(product, 0) + quantity

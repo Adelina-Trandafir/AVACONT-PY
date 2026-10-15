@@ -51,7 +51,7 @@ def list_documents(cursor, ctx, family):
                          'WHERE t.SubunitId=%s AND t.GestiuneId=%s AND t.ExercitiuId=%s AND t.{k} IS NOT NULL AND t.{k}<>0 GROUP BY t.{k} ORDER BY d DESC, t.{k} DESC').format(
         k=spec['key'], n=spec['num'], d=spec['date'], h=spec['holder'], tb=spec['table'], old=old_sql, oj=old_join), (s, g, e))
     return [{'id': r['id'], 'number': r['number'], 'date': _iso(r['d']), 'holder_id': r['holder_id'], 'holder': r['holder'] or '',
-             'old_id': r['old_id'], 'old': r['old_name'] or '', 'total': _money(int(r['total'] or 0), ctx['scale']), 'annulled': bool(r['annulled']),
+             'old_id': r['old_id'], 'old': r['old_name'] or '', 'total': _money(Decimal(r['total'] or 0), ctx['scale']), 'annulled': bool(r['annulled']),
              'version': r['version'], 'lines': r['lines']} for r in rows]
 
 
@@ -86,7 +86,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
         header.update({'IdMasina': first['IdMasina'], 'IdMasinaP': first['IdMasinaP'], 'IdBonConsum': first['IdBonConsum']})
     if 'old' in spec:
         header['IDC_OLD'] = first['IDC_OLD']
-    header['Valoare'] = _money(sum(int(r['ValoareCUTVA'] or 0) for r in rows), scale)
+    header['Valoare'] = _money(sum(Decimal(r['ValoareCUTVA'] or 0) for r in rows), scale)
     return {'family': family, 'id': doc_id, 'version': _rev(rows), 'annulled': any(r['Anulat'] for r in rows), 'reason': first['MotivAnulare'],
             'annulled_by': first['AnulatDe'], 'number': first[spec['num']], 'header': header, 'lines': lines}
 
@@ -124,7 +124,7 @@ def holder_batches(cursor, ctx, holder, exclude=None):
     for r in rows:
         if column and (r[column] or 0) == exclude[1]:
             continue
-        quantity = int(r['Cant'] or 0)
+        quantity = Decimal(r['Cant'] or 0)
         origin = (r['IDBP'] or r['IDBT']) if quantity > 0 else r['IDBO']
         if not origin:
             continue
@@ -264,7 +264,7 @@ def _bp_lines(repo, ctx, raw_lines, errors, account=None):
             errors['l|%s|Cant' % key] = 'Cantitatea trebuie să fie pozitivă.'
             continue
         try:
-            out.append({'variant': variant, **priced_line(cant, int(rows[0]['PUTVA'] or 0), ctx['zec'], ctx['scale'])})
+            out.append({'variant': variant, **priced_line(cant, Decimal(rows[0]['PUTVA'] or 0), ctx['zec'], ctx['scale'])})
         except numeric.NumericError as error:
             errors['l|%s|Cant' % key] = str(error)
     return out
@@ -272,7 +272,7 @@ def _bp_lines(repo, ctx, raw_lines, errors, account=None):
 
 def _write_bp(cursor, repo, ctx, doc_id, number, header, lines, bc_id, now):
     """BC (the stock side), OI_Predare lines and register rows, for a handover. Returns the id of the BC."""
-    total = numeric.to_int(total_of(lines, ctx['scale']), ctx['scale'])
+    total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     bc_values = {'IDC': header['IDC_BP'], 'IdMasina': header['IdMasinaP'], 'DataBC': header['_date'], 'Expl': header['Expl'], 'NumarBC': number,
                  'ValoareBC': total, 'Retur': 0, 'DataSalvare': now}
     if bc_id:
@@ -338,7 +338,7 @@ def edit_bp(cursor, repo, ctx, exercise, doc_id, body, request_id):
     old_products = {r['IdProdus'] for r in rows}
     old_price = {r['IdProdus']: r['PUTVA'] for r in rows if r['PUTVA'] is not None}
     # a product already on the document keeps the price it was handed over at (the nomenclature may have moved on)
-    lines = [({'variant': l['variant'], **priced_line(numeric.from_int(l['Cant'], ctx['scale']), int(old_price[l['variant']]), ctx['zec'], ctx['scale'])} if l['variant'] in old_price else l) for l in lines]
+    lines = [({'variant': l['variant'], **priced_line(numeric.from_stored(l['Cant'], ctx['scale']), Decimal(old_price[l['variant']]), ctx['zec'], ctx['scale'])} if l['variant'] in old_price else l) for l in lines]
     bc_id = rows[0]['IdBonConsum']
     _forget(repo, 'bp', doc_id)
     repo.delete('VC_OI_Predare', {'IDBP': doc_id})
@@ -368,7 +368,7 @@ def _taken_lines(cursor, ctx, family, holder, exclude_id, raw_lines, document_da
             errors['l|%s|Cant' % key] = 'Cantitatea trebuie să fie pozitivă.'
             continue
         try:
-            quantity = numeric.to_int(cant, ctx['scale'])
+            quantity = numeric.to_stored(cant, ctx['scale'])
         except numeric.NumericError as error:
             errors['l|%s|Cant' % key] = str(error)
             continue
@@ -380,8 +380,8 @@ def _taken_lines(cursor, ctx, family, holder, exclude_id, raw_lines, document_da
         if document_date and entered and document_date < entered.date():
             errors['l|%s|Cant' % key] = 'Documentul nu poate fi înaintea intrării produsului la deținător (%s).' % entered.strftime('%d.%m.%Y')
             continue
-        putva = int(batch['putva'] or 0)
-        value = numeric.to_int(numeric.calc_round(numeric.from_int(quantity, ctx['scale']) * numeric.from_int(putva, ctx['scale']), ctx['zec']), ctx['scale'])
+        putva = Decimal(batch['putva'] or 0)
+        value = numeric.to_stored(numeric.calc_round(numeric.from_stored(quantity, ctx['scale']) * numeric.from_stored(putva, ctx['scale']), ctx['zec']), ctx['scale'])
         out.append({'origin': origin, 'variant': variant, 'Cant': quantity, 'PUTVA': putva, 'ValoareCUTVA': value, 'idm': batch['idm']})
     return out
 

@@ -18,6 +18,10 @@ from flask import g, request
 from . import nomenclatoare as nom
 from .capabilities import FormUnavailable
 from .nomenclatoare import NomError
+from .nomenclator_usage import annotate, category_statement
+from .nomenclator_stock import product_statement
+from .nomenclator_products import used_products
+from . import cpv_catalog
 
 _DEFAULT_ZEC = 4
 _DEFAULT_SCARA = 4
@@ -58,6 +62,20 @@ def register(bp, guard, scoped, open_db):
     def request_id():
         return (request.headers.get('X-Request-Id') or '')[:64] or None
 
+    @bp.get('/api/vercon/cpv')
+    @guard('read')
+    def cpv_read():
+        scoped('read')
+        with session(False) as cursor:
+            return cpv_catalog.read(cursor, request.args.get('parent'), request.args.get('name', ''), request.args.get('code', ''))
+
+    @bp.get('/api/vercon/cpv/<code>')
+    @guard('read')
+    def cpv_detail(code):
+        scoped('read')
+        with session(False) as cursor:
+            return cpv_catalog.detail(cursor, code)
+
     @bp.get('/api/vercon/nom/<kind>')
     @guard('read')
     def nom_list(kind):
@@ -67,9 +85,31 @@ def register(bp, guard, scoped, open_db):
         with session(False) as cursor:
             repo = repo_of(cursor, ctx)
             rows = nom.list_rows(repo, kind, gest_type, scale, request.args.get('parent'))
+            rows = annotate(cursor, who['subunit'], who['gestiune'], kind, rows)
             options = nom.lookups(repo, kind, gest_type)
+            labels = options
+            if kind == 'produse':
+                used = used_products(cursor, ctx)
+                rows = [{**row, 'used_in_year': row['id'] in used} for row in rows]
+                labels = {**options, 'IdMasina': [{'id': row['IdMasina'], 'label': row['Masina'] or ''}
+                          for row in repo.select('VC_Masini', columns=('IdMasina', 'Masina'))]}
         return {'kind': kind, 'label': nom.SPECS[kind]['label'], 'columns': nom.columns_for(kind, gest_type), 'rows': rows,
-                'lookups': options, 'scale': scale, 'can_write': 'nomenclatoare' in g.vercon_operations}
+                'lookups': options, 'labels': labels, 'scale': scale,
+                'can_write': kind != 'variante' and 'nomenclatoare' in g.vercon_operations}
+
+    @bp.get('/api/vercon/nom/produse/<int:row_id>/statement')
+    @guard('read')
+    def nom_product_statement(row_id):
+        ctx = scoped('read')
+        with session(False) as cursor:
+            return product_statement(cursor, ctx, row_id)
+
+    @bp.get('/api/vercon/nom/categorii/<int:row_id>/statement')
+    @guard('read')
+    def nom_category_statement(row_id):
+        ctx = scoped('read')
+        with session(False) as cursor:
+            return category_statement(cursor, ctx, row_id)
 
     @bp.post('/api/vercon/nom/<kind>')
     @guard('nomenclatoare')
@@ -119,7 +159,7 @@ def register(bp, guard, scoped, open_db):
         with session(False) as cursor:
             cursor.execute('SELECT SettingKey, IntValue FROM VC_Settings WHERE SubunitId=%s AND GestiuneId=%s ORDER BY SettingKey',
                            (who['subunit'], who['gestiune']))
-            stored = [{'key': r['SettingKey'], 'value': r['IntValue']} for r in cursor.fetchall()]
+            stored = [{'key': r['SettingKey'], 'value': format(r['IntValue'], 'f')} for r in cursor.fetchall()]
         gest = ctx['gestiune']
         return {'name': gest['name'], 'type': gest_type, 'zec': int(gest.get('zec', _DEFAULT_ZEC)), 'scara': scale,
                 'populated': bool(gest.get('populated')), 'settings': stored,
@@ -136,13 +176,13 @@ def register(bp, guard, scoped, open_db):
             raise NomError('INVALID', 'Zecimalele și scara sunt numere întregi.', 422, {'zec': 'Număr întreg 0-4.', 'scara': 'Număr întreg 0-4.'})
         if not 0 <= zec <= 4:
             raise NomError('INVALID', 'Zecimalele afișate trebuie să fie între 0 și 4.', 422, {'zec': 'Între 0 și 4.'})
-        if not zec <= scara <= 4:
-            raise NomError('INVALID', 'Scara de stocare trebuie să fie între zecimalele afișate și 4.', 422, {'scara': 'Între %d și 4.' % zec})
+        if scara != 4:
+            raise NomError('INVALID', 'Precizia de stocare DECIMAL(20,4) este fixă la 4.', 422, {'scara': 'Precizie fixă: 4.'})
         with session(True) as cursor:
             cursor.execute('UPDATE VC_Gestiuni SET Zec=%s, Scara=%s, Version=Version+1 '
-                           'WHERE SubunitId=%s AND GestiuneId=%s AND Populated=0', (zec, scara, who['subunit'], who['gestiune']))
+                           'WHERE SubunitId=%s AND GestiuneId=%s', (zec, scara, who['subunit'], who['gestiune']))
             if cursor.rowcount != 1:
-                raise NomError('SCALE_LOCKED', 'Zecimalele și scara nu se mai pot schimba: gestiunea conține date.', 409)
+                raise NomError('NOT_FOUND', 'Gestiunea nu mai există sau setările sunt deja aplicate.', 409)
             nom.audit(cursor, who, 'settings.precision', 'VC_Gestiuni', who['gestiune'], {'Zec': ctx['gestiune'].get('zec'), 'Scara': scale},
                        {'Zec': zec, 'Scara': scara}, None, request_id())
         return {'zec': zec, 'scara': scara}

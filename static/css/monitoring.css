@@ -7,7 +7,7 @@
   position: relative; z-index: 1; max-width: 420px; margin: 16px; padding: 26px 28px;
   background: #fff; color: #0b2a5b; border-radius: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, .3);
 }
-.session-modal-content h3 { margin: 0 0 12px; font-size: 1.2rem; }
+.session-modal-content h3 { margin: 0 0 12px; font-size: var(--fs-2xl); }
 
 .session-header-warning {
   flex: 1 1 auto; text-align: center; font-weight: 700; color: #fff;

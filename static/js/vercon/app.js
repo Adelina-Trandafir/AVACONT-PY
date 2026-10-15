@@ -2,7 +2,7 @@
 // every change; the page keeps only the last ACCEPTED answer. A response is accepted only if it answers the latest
 // request (sequence number) and carries the version the server computed for it. The menu comes from the server
 // (type + rights + occupation); retired navigation entries are hidden locally. Cleanup: one AbortController tied to `pagehide`.
-import { openMenu } from '../adechit/menu.js';
+import { openMenu, Menu } from '../components/menu/menu.js';
 import { startSessionTimer } from '../adechit/session.js';
 import { Combobox } from '../components/combobox/combobox.js';
 import { confirmBox } from '../utils/confirm-box.js';
@@ -88,42 +88,65 @@ function applyContext(k_ctx) {
   paintMenu(k_ctx);
 }
 
+// one emoji per operation (the key comes from the server menu)
+const MENU_ICONS = {
+  nir: '🧾', storno: '↩️', bc: '📤', br: '🔄', lista_alimente: '🥗', mf_registru: '📒', bp: '🤝', bt: '🚚', bs: '🗑️', rapoarte: '📊',
+  produse: '📦', baza_date: '🗂️', comisii: '👥', parteneri: '🏢', gestionari: '🧑‍💼', setari: '🏫', inchidere_an: '🔒',
+};
+let mainMenu = null;   // the Menu control (js/components/menu) that draws the operations bar
 function paintMenu(k_ctx) {
-  const k_nav = $('vc-menu');
-  k_nav.hidden = !k_ctx.menu.length;
-  k_nav.replaceChildren();
+  mainMenu ||= new Menu($('vc-menu'), { label: 'Operații' });
+  const k_groupDocuments = ['ALIMENTE', 'MATERIALE'].includes(k_ctx.selection.type);
   const k_groups = new Map();
   for (const k_item of k_ctx.menu) {
     if (k_item.key === 'stocuri') continue;
     if (!k_groups.has(k_item.group)) k_groups.set(k_item.group, []);
     k_groups.get(k_item.group).push(k_item);
   }
-  for (const [k_group, k_items] of k_groups) {
-    const k_div = document.createElement('div'); k_div.className = 'vc-menu__group';
-    const k_config = k_group === 'Configurari';
-    if (k_config) {
-      const button = el('button', { type: 'button', textContent: '▤ Nomenclatoare', 'aria-haspopup': 'menu' });
-      button.addEventListener('click', () => openMenu(button, k_items.map((item) => ({ icon: '▤', label: item.label, disabled: !item.enabled, run: () => openForm(item.key).catch(report) })), { label: 'Nomenclatoare și setări' }), { signal: lifetime.signal });
-      if (k_items.some((item) => item.key === state.form)) button.setAttribute('aria-current', 'true');
-      k_div.append(button);
+  const k_items = [];
+  for (const [k_group, k_list] of k_groups) {
+    if (k_group === 'Configurari') {   // nomenclatures and settings: one button with a popup
+      k_items.push({ key: '_config', label: 'Configurări', icon: '⚙️', group: k_group, dropdownMinWidth: 224,
+        children: k_list.map((k_item) => ({ key: k_item.key, label: k_item.label, icon: MENU_ICONS[k_item.key] || '▫️', enabled: k_item.enabled, run: () => openForm(k_item.key).catch(report) })) });
+      continue;
     }
-    for (const k_item of k_config ? [] : k_items) {
-      const k_btn = Object.assign(document.createElement('button'), { type: 'button', textContent: k_item.label, disabled: !k_item.enabled, title: k_item.reason || '' });
-      if (state.form === k_item.key) k_btn.setAttribute('aria-current', 'true');
-      if (k_item.key === 'nir' && !IS_PREVIEW) {   // purchase invoice: the same popup menu as in ADECHIT
-        k_btn.setAttribute('aria-haspopup', 'menu');
-        k_btn.addEventListener('click', () => openMenu(k_btn, [
-          { icon: '➕', label: 'Adăugare', run: () => openReceipt(true).catch(report) },
-          { icon: '✎', label: 'Editare / Modificare', run: () => openReceipt(false).catch(report) },
-          { icon: '🖨', label: 'Listare', rule: true, run: () => {} },
-        ], { label: k_item.label }), { signal: lifetime.signal });
-        k_div.append(k_btn); continue;
+    if (k_groupDocuments && ['Intrari', 'Iesiri'].includes(k_group)) {
+      const k_incoming = k_group === 'Intrari';
+      const k_specs = k_incoming
+        ? [{ key: 'nir', label: 'Factură cumpărare (NIR)' }, { key: 'storno', label: 'Factură Stornare' }]
+        : [{ key: 'bc', label: 'Bon Consum' }, { key: 'br', label: 'Bon Retur' }, { key: 'lista_alimente', label: 'Lista Alimente', rule: true }];
+      const k_children = k_specs.flatMap((k_spec) => {
+        const k_item = k_list.find((k_candidate) => k_candidate.key === k_spec.key);
+        if (!k_item) return [];
+        return [{ ...k_spec, icon: MENU_ICONS[k_item.key], enabled: k_item.enabled, reason: k_item.reason || '',
+          run: () => openForm(k_item.key).catch(report) }];
+      });
+      if (k_incoming && !IS_PREVIEW) {
+        const k_nir = k_children.find((k_child) => k_child.key === 'nir');
+        if (k_nir) k_children.push({ key: 'nir:list', icon: '🖨', label: 'Listare', rule: true,
+          enabled: k_nir.enabled, reason: k_nir.reason, run: () => {} });
       }
-      k_btn.addEventListener('click', () => openForm(k_item.key).catch(report), { signal: lifetime.signal });
-      k_div.append(k_btn);
+      if (k_children.length) k_items.push({ key: k_incoming ? '_intrari' : '_iesiri',
+        label: k_incoming ? 'INTRARI' : 'IESIRI', icon: k_incoming ? '📥' : '📤', group: k_group,
+        dropdownMinWidth: k_incoming ? 260 : 224, enabled: k_children.some((k_child) => k_child.enabled !== false),
+        reason: k_children.every((k_child) => k_child.enabled === false) ? k_children[0].reason : '', children: k_children });
+      continue;
     }
-    k_nav.append(k_div);
+    for (const k_item of k_list) {
+      const k_entry = { key: k_item.key, label: k_item.label, icon: MENU_ICONS[k_item.key], group: k_group, enabled: k_item.enabled, reason: k_item.reason || '', run: () => openForm(k_item.key).catch(report) };
+      if (k_item.key === 'nir' && !IS_PREVIEW) {   // purchase invoice: Add / Edit / List
+        delete k_entry.run;
+        k_entry.children = [
+          { key: 'nir:add', icon: '➕', label: 'Adăugare', run: () => openReceipt(true).catch(report) },
+          { key: 'nir:edit', icon: '✎', label: 'Editare / Modificare', run: () => openReceipt(false).catch(report) },
+          { key: 'nir:list', icon: '🖨', label: 'Listare', rule: true, run: () => {} },
+        ];
+      }
+      k_items.push(k_entry);
+    }
   }
+  mainMenu.active = state.form;
+  mainMenu.setItems(k_items);
 }
 
 // Purchase invoice menu: "Adaugare" opens the page straight on a new document, "Editare" just opens the page.
@@ -160,7 +183,7 @@ async function openForm(k_key) {
   if (state.form === k_key) return;
   if (!(await allowLeave())) return;
   if (formLoading) return;
-  formLoading = true; $('vc-menu').inert = true;
+  formLoading = true; mainMenu?.setBusy(true);
   try {
   const opening = ++formSequence;
   const k_version = state.ctx.version; const k_sel = state.ctx.selection;
@@ -221,7 +244,7 @@ async function openForm(k_key) {
     onSaved: (k_revision) => { if (k_revision != null) state.revision = k_revision; },
     simulate: () => new URLSearchParams(location.search).get('simulate') || '',
   });
-  } finally { formLoading = false; $('vc-menu').inert = false; }
+  } finally { formLoading = false; mainMenu?.setBusy(false); }
 }
 
 // ---- start ------------------------------------------------------------------------------------------------------

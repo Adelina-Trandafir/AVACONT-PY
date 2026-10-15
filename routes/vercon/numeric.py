@@ -1,12 +1,12 @@
 """VERCON numeric contract (PLAN rule 2, CONTRACT_CALCULE section 1). Pure functions, no database.
 
 ZEC   = displayed/calculated decimals of a gestiune (NR.ZEC, fallback 4).
-SCARA = storage scale of a gestiune: smallest scale >= ZEC that holds all source data exactly.
-Values are stored as INT = value * 10^SCARA; nothing is rounded at migration; display rounds half up.
+SCARA = fixed storage precision 4, independent of ZEC.
+Values are unscaled DECIMAL(20,4); display and calculation retain their own rounding rules.
 """
 from decimal import Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN
 
-INT_MAX = 2147483647
+DECIMAL_LIMIT = Decimal('10000000000000000')
 DEFAULT_ZEC = 4
 MAX_SCALE = 4
 VAT_SCALE = 4
@@ -48,7 +48,7 @@ def needed_scale(value, max_scale=MAX_SCALE):
 
 
 def storage_scale(values, zec=DEFAULT_ZEC, max_scale=MAX_SCALE):
-    """SCARA for a gestiune: smallest scale >= zec that represents every value exactly."""
+    """Validate source precision; storage is always four decimal places."""
     zec = check_zec(zec)
     scale = zec
     for v in values:
@@ -58,7 +58,7 @@ def storage_scale(values, zec=DEFAULT_ZEC, max_scale=MAX_SCALE):
         if n is None:
             raise NumericError("PRECISION", "Valoare cu prea multe zecimale pentru scara maxima.")
         scale = max(scale, n)
-    return scale
+    return MAX_SCALE
 
 
 def check_zec(zec):
@@ -69,31 +69,33 @@ def check_zec(zec):
     return zec
 
 
-def to_int(value, scale):
-    """Exact INT for value at scale. Refuses on loss of precision or INT overflow (never rounds)."""
+def to_stored(value, scale=MAX_SCALE):
+    """Direct DECIMAL(20,4). Only floating point noise is normalised; no scaling."""
     d = exact_decimal(value)
-    scaled = d.scaleb(scale)
-    rounded = scaled.quantize(Decimal(1), rounding=ROUND_HALF_UP)
-    if abs(scaled - rounded) >= FLOAT_TOLERANCE * Decimal(10) ** scale:
-        raise NumericError("PRECISION", "Valoarea are mai multe zecimale decat scara de stocare.")
-    result = int(rounded)
-    if abs(result) > INT_MAX:
-        raise NumericError("OVERFLOW", "Valoarea depaseste capacitatea INT la scara data.")
-    return result
+    if not d.is_finite():
+        raise NumericError("TYPE", "Valoare numerică invalidă.")
+    if abs(d) >= DECIMAL_LIMIT:
+        raise NumericError("OVERFLOW", "Valoarea depășește capacitatea DECIMAL(20,4).")
+    rounded = d.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+    if abs(d - rounded) >= FLOAT_TOLERANCE:
+        raise NumericError("PRECISION", "Valoarea are mai mult de 4 zecimale.")
+    if abs(rounded) >= DECIMAL_LIMIT:
+        raise NumericError("OVERFLOW", "Valoarea depășește capacitatea DECIMAL(20,4).")
+    return rounded
 
 
-def from_int(stored, scale):
-    return Decimal(int(stored)).scaleb(-scale)
+def from_stored(stored, scale=MAX_SCALE):
+    return exact_decimal(stored)
 
 
 def display(stored, scale, zec):
     """Value shown on screen: exact stored value rounded half up to zec decimals."""
-    return from_int(stored, scale).quantize(Decimal(1).scaleb(-zec), rounding=ROUND_HALF_UP)
+    return from_stored(stored, scale).quantize(Decimal(1).scaleb(-zec), rounding=ROUND_HALF_UP)
 
 
-def vat_to_int(rate):
-    """VAT rate (e.g. 19 or 0.19 percent as given by the source) stored as rate * 10000."""
-    return to_int(rate, VAT_SCALE)
+def vat_to_stored(rate):
+    """Direct fractional rate: e.g. 0.19 for 19 percent."""
+    return to_stored(rate, VAT_SCALE)
 
 
 def calc_round(value, zec):

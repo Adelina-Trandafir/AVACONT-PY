@@ -5,14 +5,14 @@
 .pa__f--an { flex: 0 0 77px; }
 .pa__f--ss { flex: 0 0 105px; }
 .pa__bar .combobox-container { width: 100%; }
-.pa__bar .js-back-ang .bk-ico { font-size: 1rem; line-height: 1; }
+.pa__bar .js-back-ang .bk-ico { font-size: var(--fs-lg); line-height: 1; }
 @media (max-width: 900px) {
   .pa__bar { padding: 8px 10px; gap: 6px; }
   .pa__f--an { flex-basis: 66px; }
   .pa__f--ss { flex-basis: 90px; }
-  .pa__bar .js-back-ang { padding: 3px 6px; min-height: 0; line-height: 1; font-size: .8rem; }
+  .pa__bar .js-back-ang { padding: 3px 6px; min-height: 0; line-height: 1; font-size: var(--fs-ms); }
   .pa__bar .js-back-ang .bk-txt { display: none; }
-  .pa__bar .js-back-ang .bk-ico { font-size: .95rem; }
+  .pa__bar .js-back-ang .bk-ico { font-size: var(--fs-mp); }
 }
 
 /* the way back has no frame; a soft background shows only on hover */

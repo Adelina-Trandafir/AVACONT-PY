@@ -34,6 +34,7 @@ export const editing = {
   // recognises an empty one (isBlankRow); the grid only keeps track of it. Returns the new-row slot, or null when the option is off.
   ensureNewRow() {
     if (!this._opts.newRowAlwaysVisible || !this._opts.editable || typeof this._opts.onNewRow !== 'function') return null;
+    if (this._opts.singleNewRow && this._pendingRow) return null;
     const k_last = this._rows[this._rows.length - 1];
     if (k_last && this._opts.isBlankRow?.(k_last)) return (this._newSlot = k_last);
     const k_row = this._opts.onNewRow();
@@ -52,14 +53,18 @@ export const editing = {
   // (confirmRowIssue({ row, message }) -> 'continue' | 'cancel'): continue (the default) goes back into the row, cancel drops a new row or
   // puts an existing one back as it was when the editing of it began. Needs both options; without them nothing is checked.
   async _leaveRow(nextRow) {
+    if (this._opts.suspendRowLeave?.()) return false;
     const k_e = this._editedRow;
     if (!k_e || k_e.row === nextRow) return true;
     if (this._leaving) return false;
     const k_check = typeof this._opts.rowIssue === 'function' && typeof this._opts.confirmRowIssue === 'function' && !this._opts.isBlankRow?.(k_e.row);
     const k_message = k_check ? this._opts.rowIssue(k_e.row) : '';
-    if (!k_message) { this._editedRow = null; return true; }
     this._leaving = true;
     try {
+      if (!k_message) {
+        if (await this._opts.onRowLeave?.({ row: k_e.row, nextRow }) === false || this._destroyed) return false;
+        this._editedRow = null; return true;
+      }
       const k_answer = await this._opts.confirmRowIssue({ row: k_e.row, message: k_message });
       if (this._destroyed) return true;
       if (k_answer === 'cancel') {

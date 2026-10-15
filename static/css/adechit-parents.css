@@ -3,14 +3,14 @@
 /* AD11-02: this dashboard scrolls as a document, including on phones. */
 html:has(body.parent-page) { height: auto; min-height: 100%; overflow-x: clip; overflow-y: auto; overscroll-behavior-y: auto; scroll-snap-type: none; }
 body.portal.parent-page { position: static; display: block; height: auto; min-height: 100dvh; overflow: visible; overscroll-behavior-y: auto; }
-.portal.parent-page .combobox-option { font-size: 16px; line-height: 1.4; min-height: 44px; max-height: none; }
+.portal.parent-page .combobox-option { font-size: var(--fs-lg); line-height: 1.4; min-height: 44px; max-height: none; }
 .parent-page [hidden] { display: none !important; }
 .parent-header { padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--card); }
 .parent-header span { color: var(--ink-soft); font-weight: normal; }
 .parent-main { width: 100%; max-width: 1240px; min-width: 0; padding: 20px; margin: auto; }
 .parent-card { min-width: 0; max-width: 100%; padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 20px; box-shadow: var(--shadow-sm); overflow-wrap: anywhere; }
 .parent-login { max-width: 460px; margin: 30px auto; }
-.parent-page h1 { font-size: 1.8rem; }.parent-page h2 { font-size: 1.2rem; margin-bottom: 10px; }
+.parent-page h1 { font-size: calc(var(--fs-base) + 15px); }.parent-page h2 { font-size: var(--fs-2xl); margin-bottom: 10px; }
 .parent-page p { color: var(--ink-soft); margin-bottom: 16px; }
 .parent-page label { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; }
 .parent-page input:not([type=checkbox]):not([type=hidden]) { width: 100%; padding: 10px 12px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; }
@@ -20,13 +20,13 @@ body.portal.parent-page { position: static; display: block; height: auto; min-he
 .parent-heading { justify-content: space-between; margin-bottom: 20px; }
 #parent-child-selector { width: min(100%,340px); }
 .parent-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; }
-.parent-summary span { color: var(--ink-soft); display: block; font-size: .9rem; }.parent-summary strong { display: block; font-size: 1.6rem; margin-top: 10px; }
+.parent-summary span { color: var(--ink-soft); display: block; font-size: var(--fs-md); }.parent-summary strong { display: block; font-size: calc(var(--fs-base) + 12px); margin-top: 10px; }
 .parent-charts { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; }
 .parent-chart-scroll,.parent-table-scroll { min-width: 0; max-width: 100%; overflow-x: auto; }
 .parent-chart-scroll svg { height: 220px; min-width: 100%; display: block; }
-.parent-chart-scroll text { fill: var(--ink-soft); font-size: 10px; }
+.parent-chart-scroll text { fill: var(--ink-soft); font-size: var(--fs-2xs); }
 .parent-chart-scroll .attendance,.parent-chart-scroll .payment { fill: var(--blue-mid); }.parent-chart-scroll .refund { fill: var(--warn); }
-.payment-key { color: var(--blue-mid); }.refund-key { color: var(--warn); }.parent-legend { font-size: .9rem; }
+.payment-key { color: var(--blue-mid); }.refund-key { color: var(--warn); }.parent-legend { font-size: var(--fs-md); }
 .parent-page table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 .parent-page th,.parent-page td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--line); }
 .parent-page th:first-child,.parent-page td:first-child { text-align: left; }.parent-page th { background: var(--sky-2); }

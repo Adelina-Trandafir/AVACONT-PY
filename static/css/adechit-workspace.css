@@ -23,7 +23,7 @@
 .ade-loading { position: relative; pointer-events: none; }
 .ade-loading > * { visibility: hidden; }
 .ade-loading::before { content: ""; position: absolute; z-index: 1; left: 50%; top: 50%; width: 20px; height: 20px; margin: -22px 0 0 -10px; border: 3px solid var(--line); border-top-color: var(--blue); border-radius: 50%; animation: ade-spin .8s linear infinite; }
-.ade-loading::after { content: "Se încarcă…"; position: absolute; z-index: 1; left: 0; right: 0; top: 50%; margin-top: 6px; text-align: center; color: var(--ink-soft); font-size: calc(.72rem + 1px); }
+.ade-loading::after { content: "Se încarcă…"; position: absolute; z-index: 1; left: 0; right: 0; top: 50%; margin-top: 6px; text-align: center; color: var(--ink-soft); font-size: var(--fs-ms); }
 .ade-pickers.ade-loading { min-height: 40px; }
 .ade-pickers.ade-loading::before { margin-top: -14px; width: 14px; height: 14px; margin-left: -60px; }
 .ade-pickers.ade-loading::after { top: 0; bottom: 0; margin: 0; display: flex; align-items: center; justify-content: center; padding-left: 20px; }

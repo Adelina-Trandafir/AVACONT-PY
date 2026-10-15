@@ -1,8 +1,8 @@
 /* Bank matching uses the payer panels and the same month tree as the main ADE page. */
 .ade-bank-window { position: fixed; inset: 0; box-sizing: border-box; width: 100vw; max-width: 100vw; height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; margin: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden; }
 .ade-bank-window .ade-catalog-header { box-sizing: border-box; height: 46px; min-height: 46px; flex: 0 0 46px; flex-direction: row; align-items: center; gap: 8px; padding: 4px 12px; }
-.ade-bank-window .ade-catalog-header h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; }
-.ade-bank-window .ade-catalog-header .btn, .ade-bank-window footer .btn { min-width: 0; min-height: 28px; padding: 4px 10px; font-size: calc(.74rem + 1px); line-height: 1.2; }
+.ade-bank-window .ade-catalog-header h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-lg); }
+.ade-bank-window .ade-catalog-header .btn, .ade-bank-window footer .btn { min-width: 0; min-height: 28px; padding: 4px 10px; font-size: var(--fs-ms); line-height: 1.2; }
 .ade-bank-window .ade-catalog-header .btn { flex-shrink: 0; }
 .ade-bank-window [hidden] { display: none !important; }
 .ade-bank-workspace { display: grid; grid-template-rows: minmax(210px, 1.2fr) minmax(180px, 1fr); gap: 8px; flex: 1; min-height: 0; padding: 8px 12px; overflow: auto; }
@@ -13,7 +13,7 @@
 .ade-bank-filters label, .ade-bank-association label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ade-bank-filters label { flex: 1; }
 .ade-bank-window input:not([type="checkbox"]), .ade-bank-window select, .ade-bank-window textarea { box-sizing: border-box; min-height: 32px; padding: 4px 8px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; }
-.ade-bank-window h3 { flex: 0 0 auto; margin: 0; padding: 6px 8px; background: var(--sky-2); border-bottom: 1px solid var(--line); font-size: 1rem; }
+.ade-bank-window h3 { flex: 0 0 auto; margin: 0; padding: 6px 8px; background: var(--sky-2); border-bottom: 1px solid var(--line); font-size: var(--fs-lg); }
 .ade-bank-periods h3 { text-align: center; }
 .ade-bank-extracts { display: flex; flex-direction: column; min-height: 0; flex: 1; border: 1px solid var(--line); }
 .ade-bank-extracts > .btn { align-self: flex-start; margin: 4px 8px; }

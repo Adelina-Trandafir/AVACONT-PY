@@ -1,0 +1,97 @@
+/* MENU control (js/components/menu): the bar and the popup of every web application, one look. Text sizes come from css/typography.css.
+   Tune ONE menu by setting these on its container (all optional):
+   bar    --mn-font-family --mn-font-size --mn-icon-size --mn-item-padding --mn-active-color --mn-active-back --mn-gap
+   shared --hover-backcolor (bar/popup hover and the popup icon column)
+   popup  --mn-popup-font-size --mn-icon-size --reduce-by (inset on EACH side) --mn-reveal-duration
+   --mn-icon-size is the size of the emoji alone (default: the text size + 2px, see --fs-nav-icon / --fs-menu-icon in typography.css) */
+
+:root { --hover-backcolor: var(--sky-2, #e3f1ff); --reduce-by: 2px; --mn-reveal-duration: 420ms; }
+
+/* ---- bar ---- */
+.kmenu-bar { display: flex; flex-wrap: wrap; gap: var(--mn-gap, 4px); }
+.kmenu-bar[hidden] { display: none; }
+.kmenu-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
+.kmenu-item {
+  position: relative;
+  font-family: var(--mn-font-family, var(--font-ui)); font-size: var(--mn-font-size, var(--fs-nav));
+  padding: var(--mn-item-padding, 10px 18px); color: inherit; background: transparent;
+  border: 0; border-bottom: 3px solid transparent; border-radius: 0; cursor: pointer;
+}
+.kmenu-item__icon { display: inline-block; margin-right: .45em; font-size: var(--mn-icon-size, var(--fs-nav-icon)); line-height: 1; vertical-align: middle; }
+.kmenu-item__text { vertical-align: middle; }
+.kmenu-item:hover:enabled { background: var(--hover-backcolor); }
+.kmenu-item[disabled] { opacity: .5; cursor: not-allowed; }
+.kmenu-item[aria-current="true"] { font-weight: 700; color: var(--mn-active-color, var(--primary-color)); background: var(--mn-active-back, rgba(48, 158, 255, .1)); border-bottom-color: var(--mn-active-color, var(--primary-color)); }
+.kmenu-item[aria-expanded="true"] { background: var(--hover-backcolor); border-bottom-color: transparent; }
+.kmenu-item[aria-haspopup="menu"][aria-expanded="true"]::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  border: 1px solid var(--line); border-bottom: 0; border-radius: 3px 3px 0 0;
+}
+
+/* ---- popup (compact 30px coloured band with centred icons, independent of the bar icon;
+   on the left, or on the right with iconRight) ---- */
+.kmenu-popup {
+  --_menu-icon-column: 30px;
+  box-sizing: border-box;
+  position: fixed; display: block; min-width: min(var(--_menu-min-width, 220px), calc(100vw - 16px)); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; padding: 0;
+  color: var(--ink); background: linear-gradient(to right, var(--hover-backcolor) 0 var(--_menu-icon-column), var(--card) var(--_menu-icon-column));
+  border: 1px solid var(--line); border-radius: 3px; box-shadow: 4px 4px 10px rgb(0 0 0 / .25);
+  clip-path: inset(0 -20px -20px 0); /* Keep the shadow only below and to the right. */
+  font-family: var(--mn-font-family, var(--font-ui)); font-size: var(--mn-popup-font-size, var(--fs-menu));
+}
+.kmenu-popup--anchored { width: max(0px, calc(var(--_menu-anchor-width) - max(0px, var(--reduce-by)) - max(0px, var(--reduce-by)))); min-width: min(var(--_menu-min-width, 0px), 100vw); max-width: 100vw; }
+.kmenu-popup--anchored > button > span:not(.kmenu-popup__icon) { min-width: 0; overflow-wrap: anywhere; }
+.kmenu-popup > button { display: flex; align-items: center; gap: 0; width: 100%; min-height: 30px; padding: 0; color: inherit; background: transparent; border: 0; border-radius: 0; font: inherit; text-align: left; cursor: pointer; }
+.kmenu-popup__icon { display: grid; place-items: center; width: var(--_menu-icon-column); flex: 0 0 var(--_menu-icon-column); align-self: stretch; font-size: var(--mn-icon-size, var(--fs-menu-icon)); line-height: 1; }
+.kmenu-popup > button > span:not(.kmenu-popup__icon) { flex: 1; align-self: stretch; display: flex; align-items: center; padding: 0 12px; }
+.kmenu-popup > button:hover:enabled > span:not(.kmenu-popup__icon), .kmenu-popup > button:focus-visible > span:not(.kmenu-popup__icon) { background: var(--hover-backcolor); }
+.kmenu-popup > button:focus-visible { outline: none; }
+.kmenu-popup > button:disabled { opacity: .5; cursor: default; }
+.kmenu-popup > button[aria-checked="true"] .kmenu-popup__icon { font-weight: 700; }
+.kmenu-popup__rule { height: 1px; margin: 0 0 0 var(--_menu-icon-column); background: var(--line); }
+.kmenu-popup--icon-right { background: linear-gradient(to left, var(--hover-backcolor) 0 var(--_menu-icon-column), var(--card) var(--_menu-icon-column)); }
+.kmenu-popup--icon-right > button { flex-direction: row-reverse; }
+.kmenu-popup--icon-right > button > span:not(.kmenu-popup__icon) { justify-content: flex-end; text-align: right; }
+.kmenu-popup--icon-right .kmenu-popup__rule { margin: 0 var(--_menu-icon-column) 0 0; }
+.kmenu-popup--icon-right { --_menu-band-direction: to left; }
+/* The open bar button and its popup share a border, with a gap at their junction. */
+.kmenu-popup--joined {
+  border-top-color: transparent; border-top-left-radius: 0; border-top-right-radius: 0;
+  background-image:
+    linear-gradient(to right, var(--line) 0 var(--_menu-join-start), var(--hover-backcolor) var(--_menu-join-start) var(--_menu-join-end), var(--line) var(--_menu-join-end) 100%),
+    linear-gradient(var(--_menu-band-direction, to right), var(--hover-backcolor) 0 var(--_menu-icon-column), var(--card) var(--_menu-icon-column));
+  background-size: 100% 1px, 100% 100%; background-position: left top; background-repeat: no-repeat; background-origin: border-box;
+}
+
+/* Animate the actual visible height; rows are uncovered without scaling their text. */
+.kmenu-popup.is-opening {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: none;
+}
+.kmenu-popup--up.is-opening { transform: translateY(var(--_menu-open-height)); }
+.kmenu-popup.is-opening.is-revealed {
+  max-height: var(--_menu-open-height);
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height var(--mn-reveal-duration) cubic-bezier(.2, .6, .3, 1), transform var(--mn-reveal-duration) cubic-bezier(.2, .6, .3, 1), opacity 160ms ease-out;
+}
+/* This menu's reveal is explicitly requested even when the OS reduces motion. */
+
+/* Switching buttons carries the panel from its current box to the new one. */
+.kmenu-popup.is-moving {
+  min-width: 0;
+  width: var(--_menu-from-width);
+  height: var(--_menu-from-height);
+  overflow: hidden;
+  transform: translate(var(--_menu-from-x), var(--_menu-from-y));
+  transition: none;
+}
+.kmenu-popup.is-moving.is-positioned {
+  width: var(--_menu-to-width);
+  height: var(--_menu-to-height);
+  transform: translate(0, 0);
+  transition: transform 280ms ease-in-out, width 280ms ease-in-out, height 280ms ease-in-out;
+}

@@ -17,10 +17,11 @@
 
 import { testMode } from '../utils/debug-tools.js';
 import {
-  ValueType, Operator, allowedOperators, operatorCaption, operandCount,
-  formatValue, aggregate, aggregatesFor, buildItems, groupCaption, filterIsActive, createFilter, isBlank,
+  ValueType, Operator,
+  formatValue, aggregate, aggregatesFor, buildItems, groupCaption, filterIsActive,
 } from './engine.js';
 import { editing } from './editing.js';
+import { filtering, filterIcon } from './filtering.js';
 import { selectRows } from './selection.js';
 import ListenerTracker from '../listener-tracker/listener-tracker-mixin.js';
 import { registerInstance, unregisterInstance } from '../instances-registry.js';
@@ -28,7 +29,7 @@ let gridSequence = 0;
 
 const OVERSCAN = 6;
 const SAMPLE_ROWS = 200;
-const FILTER_LIST_LIMIT = 500;
+
 
 const DEFAULTS = {
   rowHeight: 28,
@@ -45,6 +46,7 @@ const DEFAULTS = {
   layout: null, // an explicit layout; wins over the provider
   proportionalWidths: false, // treat column widths as weights of the available viewport width
   newRowAlwaysVisible: false, // editable grid always ends with one empty new row; needs onNewRow() (creates it) and isBlankRow(row); optional onCancelNewRow(row)
+  singleNewRow: false, // keep only the draft being edited instead of appending another blank slot
 };
 
 const COLUMN_DEFAULTS = {
@@ -132,9 +134,14 @@ export class DataGrid {
   get shownRowCount() { return this._shownRows; }
   get rowCount() { return this._rows.length; }
   getSelectedRows() { return this._opts.multiSelect ? [...this._selection] : (this._selected ? [this._selected] : []); }
-  selectRow(rowId, { notify = false } = {}) {
+  selectRow(rowId, { notify = false, reveal = false } = {}) {
     const row = this._rows.find((item) => item[this._opts.rowKey] === rowId);
     if (!row) return false;
+    if (reveal && !this._items.some((item) => item.row === row)) {
+      this._revealedRow = row;
+      this._refresh();
+    }
+    if (reveal) this._ensureVisible(this._items.findIndex((item) => item.row === row));
     if (notify) this._select(row);
     else {
       this._selected = row;
@@ -189,6 +196,7 @@ export class DataGrid {
     if (this.hasEdit) throw new Error('Confirmați sau anulați editarea înainte de reîncărcare.');
     if (!Array.isArray(rows)) throw new Error('setRows needs an array');
     this._rows = rows;
+    this._editedRow = null; this._revealedRow = null;
     this._pendingRow = null; this._newSlot = null;
     this.ensureNewRow();
     this._selection.clear();
@@ -208,6 +216,7 @@ export class DataGrid {
 
   setFilter(key, filter) {
     if (!this._col(key)) throw new Error(`Unknown column: ${key}`);
+    this._revealedRow = null;
     if (!filter || !filterIsActive(filter)) this._filters.delete(key);
     else this._filters.set(key, filter);
     this._refresh({ rebuildHeader: true });
@@ -215,6 +224,7 @@ export class DataGrid {
   }
 
   clearFilters() {
+    this._revealedRow = null;
     this._filters = new Map();
     this._refresh({ rebuildHeader: true });
     this._emit('onFilter', { key: null, filter: null });
@@ -257,6 +267,12 @@ export class DataGrid {
   }
 
   setBusy(on) { this._root.inert = !!on; this._root.setAttribute('aria-busy', String(!!on)); }
+
+  /** Repaint locally staged row values without replacing rows, their pending edit state or filters. */
+  refreshRows() {
+    if (this.hasEdit) throw new Error('Confirmați editarea celulei înainte de reafișare.');
+    this._refresh({ rebuildHeader: true });
+  }
 
   /** Sizes the columns that have no explicit width from the first rows. */
   autoSizeColumns() {
@@ -384,17 +400,24 @@ export class DataGrid {
   _refresh({ rebuildHeader = false } = {}) {
     const engineColumns = this._columns.map((c) => ({
       key: c.key, valueType: c.valueType, format: c.format, formatString: c.formatString, decimals: c.decimals,
+      formatter: c.formatter, filterValue: c.filterValue,
     }));
+    const drafts = this._opts.newRowAlwaysVisible ? this._rows.filter((row) =>
+      row === this._pendingRow?.row || this._opts.isBlankRow?.(row)) : [];
+    const bypass = new Set(drafts);
+    if (this._revealedRow) bypass.add(this._revealedRow);
     const { items, shownRows } = buildItems({
-      rows: this._rows,
+      rows: this._rows.filter((row) => !bypass.has(row)),
       columns: engineColumns,
       filters: this._filters,
       sort: this._sort,
       groups: this._groups,
       collapsed: this._collapsed,
     });
+    if (this._revealedRow && this._rows.includes(this._revealedRow)) items.push({ kind: 'row', row: this._revealedRow });
+    items.push(...drafts.filter((row) => row !== this._revealedRow).map((row) => ({ kind: 'row', row })));
     this._items = items;
-    this._shownRows = shownRows;
+    this._shownRows = shownRows + (this._revealedRow ? 1 : 0);
     if (!this._sized) this._autoSize(false);
     if (rebuildHeader) {
       this._buildHeader();
@@ -425,6 +448,7 @@ export class DataGrid {
     // Re-run the grouping with everything expanded to learn every id of one level.
     const engineColumns = this._columns.map((c) => ({
       key: c.key, valueType: c.valueType, format: c.format, formatString: c.formatString, decimals: c.decimals,
+      formatter: c.formatter, filterValue: c.filterValue,
     }));
     const open = this._groups.map((g) => ({ ...g, collapsedByDefault: false }));
     const { items } = buildItems({
@@ -544,7 +568,11 @@ export class DataGrid {
         btn.type = 'button';
         btn.title = 'Filtrează coloana';
         btn.setAttribute('aria-label', `Filtrează ${col.title}`);
-        if (filterIsActive(this._filters.get(col.key))) btn.classList.add('is-active');
+        if (filterIsActive(this._filters.get(col.key))) {
+          btn.classList.add('is-active');
+          btn.replaceChildren(filterIcon());
+          btn.setAttribute('aria-label', `Filtru activ: ${col.title}`);
+        }
         btn.addEventListener('click', (ev) => { ev.stopPropagation(); this._openFilter(col, btn); }, { signal });
         cell.appendChild(btn);
       }
@@ -679,6 +707,17 @@ export class DataGrid {
           });
           cell.replaceChildren(button); cell.classList.add('is-action');
         }
+        if (col.cellAction) {
+          const action = col.cellAction, button = el('button', 'dgv__cell-inline-action', action.text || '...');
+          button.type = 'button'; button.setAttribute('aria-label', action.label || col.title);
+          button.disabled = typeof action.disabled === 'function' ? action.disabled(item.row) : !!action.disabled;
+          button.addEventListener('click', (event) => {
+            event.stopPropagation(); this._emit('onCellAction', { row: item.row, key: col.key });
+          });
+          cell.replaceChildren(el('span', 'dgv__cell-caption', text), button);
+          if (action.selectedOnly !== false) cell.classList.add('dgv__cell--action-on-select');
+        }
+        cell.classList.toggle('is-current-cell', this._selected === item.row && this._activeKey === col.key);
         if (this.canEdit(item.row, col)) {
           cell.classList.add('is-editable');
           if (col.required && this._requiredShown(item.row, col.key) && (item.row[col.key] == null || String(item.row[col.key]).trim() === '')) { cell.classList.add('is-required-empty'); cell.title = 'Campul este obligatoriu.'; }
@@ -766,7 +805,7 @@ export class DataGrid {
     this._foot.textContent = '';
     if (!show) return;
     this._foot.style.height = `${this._opts.rowHeight}px`;
-    const rows = this._items.filter((i) => i.kind === 'row').map((i) => i.row);
+    const rows = this._items.filter((i) => i.kind === 'row' && !this._opts.isBlankRow?.(i.row)).map((i) => i.row);
     cols.forEach((col, ci) => {
       let text = '';
       const actionSpan = Math.max(1, Math.min(cols.length, this._opts.footerAction?.span || 1));
@@ -840,6 +879,7 @@ export class DataGrid {
       const item = this._items[Number(node.dataset.i)];
       const selected = this._opts.multiSelect ? this._selection.has(item?.row) : item?.row === row;
       node.classList.toggle('is-selected', selected);
+      node.querySelectorAll('.dgv__cell').forEach((cell) => cell.classList.toggle('is-current-cell', selected && cell.dataset.key === this._activeKey));
       if (this._opts.multiSelect && item?.kind === 'row') {
         node.setAttribute('aria-selected', String(selected));
         node.querySelectorAll('.dgv__cell').forEach((cell) => {
@@ -955,141 +995,9 @@ export class DataGrid {
     if (first) first.focus();
   }
 
-  _distinctDisplayValues(col) {
-    const set = new Set();
-    this._rows.forEach((row) => set.add(formatValue(row[col.key], col)));
-    return [...set].sort((a, b) => {
-      if (a === '') return -1;
-      if (b === '') return 1;
-      return a.localeCompare(b, 'ro', { numeric: true, sensitivity: 'base' });
-    });
-  }
 
-  _openFilter(col, anchor) {
-    this._closePopup();
-    const existing = this._filters.get(col.key) || createFilter();
-    const values = this._distinctDisplayValues(col);
-    const checked = new Set(existing.selected ? existing.selected : values);
-
-    const pop = el('div', 'dgv__popup dgv__filter');
-    pop.appendChild(el('div', 'dgv__ptitle', `Filtru: ${col.title}`));
-
-    const search = el('input', 'dgv__search');
-    search.type = 'search';
-    search.placeholder = 'Caută în valori...';
-    pop.appendChild(search);
-
-    const all = el('label', 'dgv__chk');
-    const allBox = el('input');
-    allBox.type = 'checkbox';
-    all.append(allBox, el('span', '', '(Selectează tot)'));
-    pop.appendChild(all);
-
-    const list = el('div', 'dgv__list');
-    pop.appendChild(list);
-    const note = el('div', 'dgv__note');
-    pop.appendChild(note);
-
-    const visibleValues = () => {
-      const q = search.value.trim().toLowerCase();
-      return values.filter((v) => !q || v.toLowerCase().includes(q));
-    };
-    const paintList = () => {
-      const shown = visibleValues();
-      list.textContent = '';
-      shown.slice(0, FILTER_LIST_LIMIT).forEach((v) => {
-        const row = el('label', 'dgv__chk');
-        const box = el('input');
-        box.type = 'checkbox';
-        box.checked = checked.has(v);
-        box.addEventListener('change', () => {
-          if (box.checked) checked.add(v); else checked.delete(v);
-          syncAll();
-        });
-        row.append(box, el('span', '', v === '' ? '(goale)' : v));
-        list.appendChild(row);
-      });
-      note.textContent = shown.length > FILTER_LIST_LIMIT ? `Se arată primele ${FILTER_LIST_LIMIT} din ${shown.length}. Folosiți căutarea.` : '';
-      syncAll();
-    };
-    const syncAll = () => {
-      const shown = visibleValues();
-      const n = shown.filter((v) => checked.has(v)).length;
-      allBox.checked = shown.length > 0 && n === shown.length;
-      allBox.indeterminate = n > 0 && n < shown.length;
-    };
-    allBox.addEventListener('change', () => {
-      visibleValues().forEach((v) => { if (allBox.checked) checked.add(v); else checked.delete(v); });
-      paintList();
-    });
-    search.addEventListener('input', paintList);
-
-    // condition
-    pop.appendChild(el('div', 'dgv__ptitle dgv__ptitle--sub', 'Condiție'));
-    const opSel = el('select', 'dgv__op');
-    const none = el('option', '', '(fără condiție)');
-    none.value = '';
-    opSel.appendChild(none);
-    allowedOperators(col.valueType).forEach((op) => {
-      const o = el('option', '', operatorCaption(op));
-      o.value = op;
-      opSel.appendChild(o);
-    });
-    opSel.value = existing.condition ? existing.condition.op : '';
-    pop.appendChild(opSel);
-
-    const operandType = col.valueType === ValueType.DateTime
-      ? ((col.format || '').match(/generalDate|longTime|shortTime/) || (col.formatString || '').includes('HH') ? 'datetime-local' : 'date')
-      : 'text';
-    const mkOperand = (value) => {
-      const input = el('input', 'dgv__operand');
-      input.type = operandType;
-      if (operandType === 'text' && col.valueType === ValueType.Number) input.inputMode = 'decimal';
-      input.value = value === undefined || value === null ? '' : String(value);
-      return input;
-    };
-    const op1 = mkOperand(existing.condition && existing.condition.v1);
-    const op2 = mkOperand(existing.condition && existing.condition.v2);
-    const operandBox = el('div', 'dgv__operands');
-    operandBox.append(op1, op2);
-    pop.appendChild(operandBox);
-    const syncOperands = () => {
-      const n = opSel.value ? operandCount(opSel.value) : 0;
-      op1.hidden = n < 1;
-      op2.hidden = n < 2;
-    };
-    opSel.addEventListener('change', syncOperands);
-    syncOperands();
-
-    // buttons
-    const bar = el('div', 'dgv__pbar');
-    const mkBtn = (label, cls, fn) => {
-      const b = el('button', `dgv__btn ${cls}`, label);
-      b.type = 'button';
-      b.addEventListener('click', fn);
-      bar.appendChild(b);
-    };
-    mkBtn('Șterge filtrul', '', () => { this._closePopup(); this.setFilter(col.key, null); });
-    mkBtn('Anulează', '', () => { this._closePopup(); this._root.focus(); });
-    mkBtn('Aplică', 'is-primary', () => {
-      const filter = createFilter();
-      if (checked.size !== values.length) filter.selected = new Set(checked);
-      if (opSel.value) {
-        const cnt = operandCount(opSel.value);
-        const cond = { op: opSel.value, v1: cnt >= 1 ? op1.value : undefined, v2: cnt >= 2 ? op2.value : undefined };
-        if (cnt === 0 || !isBlank(cond.v1)) filter.condition = cond;
-      }
-      this._closePopup();
-      this.setFilter(col.key, filter);
-    });
-    pop.appendChild(bar);
-
-    const rect = anchor ? anchor.getBoundingClientRect() : { left: 20, bottom: 40 };
-    this._placePopup(pop, rect.left, rect.bottom + 4);
-    paintList();
-    search.focus();
-  }
 }
 
 Object.defineProperties(DataGrid.prototype, Object.getOwnPropertyDescriptors(editing));
+Object.defineProperties(DataGrid.prototype, Object.getOwnPropertyDescriptors(filtering));
 export { ValueType, Operator };

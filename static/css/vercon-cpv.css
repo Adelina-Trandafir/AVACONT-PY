@@ -1,0 +1,29 @@
+.vc-page .vc-main .vc-work > .vc-cpv-page {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  max-width: 1000px;
+  max-height: 600px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.vc-cpv-page__summary { min-width: 0; }
+.vc-cpv-page__description { margin: 4px 0 0; line-height: 1.35; overflow-wrap: anywhere; max-height: 4.05em; overflow: auto; }
+.vc-cpv-page__product { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-cpv-page__search { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.vc-cpv-page__search .vc-field { display: flex; flex-direction: column; min-width: 0; gap: 4px; }
+.vc-cpv-page__tree { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.vc-cpv-page__tree > h4 { display: none; }
+.vc-cpv-page__tree > .vc-tree-body { flex: 1 1 0; min-width: 0; min-height: 0; overflow: hidden; }
+.vc-cpv-page .treeview-righticon { opacity: 0; pointer-events: none; }
+.vc-cpv-page .treeview-item:hover > .treeview-righticon,
+.vc-cpv-page .treeview-item:focus-within > .treeview-righticon { opacity: 1; pointer-events: auto; }
+.vc-cpv-page .treeview-item[data-selectable="false"] { cursor: default; }
+.vc-cpv-page .treeview-item[data-value="passive:more"] .treeview-label { white-space: normal; line-height: 1.4; }
+.vc-cpv-page > .vc-save-status { margin: 0; }
+.vc-cpv-page > .vc-save-status:empty { display: none; }

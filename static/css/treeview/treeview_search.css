@@ -111,13 +111,13 @@
   padding: 12px;
   color: #d32f2f;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 
 .treeview-no-results {
   padding: 12px;
   color: #666;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-style: italic;
 }

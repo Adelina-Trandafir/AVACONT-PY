@@ -351,7 +351,9 @@ export function buildItems({ rows, columns, filters, sort, groups, collapsed }) 
     for (const [key, filter] of filters) {
       const col = colByKey.get(key);
       if (!col) throw new Error(`Filter on unknown column ${key}`);
-      if (!matchesFilter(filter, row[key], displayOf(row, key), col.valueType || ValueType.Text)) return;
+      // References can filter by their label while keeping the stored id and editor value.
+      const raw = typeof col.filterValue === 'function' ? col.filterValue(row[key], row) : row[key];
+      if (!matchesFilter(filter, raw, displayOf(row, key), col.valueType || ValueType.Text)) return;
     }
     passing.push({ index, row });
   });
