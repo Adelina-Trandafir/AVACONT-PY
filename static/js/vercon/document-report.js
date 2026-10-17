@@ -4,6 +4,17 @@ import { snapshotPdf } from './snapshot-pdf.js';
 
 const names = { nir: 'NIR', storno: 'NIR_Storno', bc: 'Bon_Consum', br: 'BonRetur', lista: 'ListaAlimente2015' };
 
+function stornoDisplay(row) {
+  const displayed = { ...row };
+  for (const key of ['Cant', 'Valoare', 'ValoareCUTVA', 'TVA']) {
+    const value = row[key];
+    if (value == null || value === '') continue;
+    const magnitude = String(value).trim().replace(/^[+-]/, '');
+    displayed[key] = /^0+(?:\.0+)?$/.test(magnitude) ? magnitude : `-${magnitude}`;
+  }
+  return displayed;
+}
+
 export async function documentReport({ api, selection, family, document, title, sections, owner, isCurrent = () => true }) {
   if (document && !document.annulled && ['ALIMENTE', 'MATERIALE'].includes(selection.type) && names[family]) {
     const year = Number(selection.year);
@@ -20,7 +31,8 @@ export async function documentReport({ api, selection, family, document, title, 
       if (!isCurrent()) return;
     }
   }
-  const frozenSections = sections.map(section => ({ ...section, rows: section.rows.map(row => ({ ...row })) }));
+  const frozenSections = sections.map(section => ({ ...section,
+    rows: section.rows.map(row => family === 'storno' ? stornoDisplay(row) : { ...row }) }));
   const data = await snapshotPdf(title, frozenSections);
   if (isCurrent()) return pdfPreview(title, data, owner, isCurrent);
 }

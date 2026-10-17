@@ -4,7 +4,8 @@
 .vc-brand__name { font-weight: 700; letter-spacing: .04em; }
 .vc-header__right { display: flex; align-items: center; gap: 10px; }
 .vc-header__context { opacity: .9; }
-.vc-session-timer { padding: 2px 9px; background: rgba(255, 255, 255, .18); border-radius: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vc-session-timer { flex: 0 0 auto; margin-inline: auto; padding: 2px 12px; background: rgba(255, 255, 255, .18); border-radius: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vc-page .vc-header.is-session-ending { background: #c65b00; color: #fff; }
 .vc-session-timer[hidden] { display: none; }
 .vc-session-timer.is-urgent { background: #c0392b; }
 .vc-main { box-sizing: border-box; max-width: 1100px; margin: 0 auto; padding: 16px; }

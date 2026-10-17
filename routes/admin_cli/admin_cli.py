@@ -33,6 +33,7 @@ Commands (all read-only unless marked WRITE):
     audit [--db D] [--un U] [--actions A,B] [--hours H] [--limit N]
     logs-meta                          the log files that exist
     logs [--file F] [--db D] [--gens G] [--since ISO] [--limit N]
+    logs-clear --keep all|day|week [--file F]    WRITE  empty the log files (all of them, or one), keeping nothing / the last day / the last week
     requests [--state S]               registration requests (InAsteptare, Esuata, Aprobata, Respinsa, toate)
     request --id N                     one request with the plan of its approval
     request-plan --id N [--db D] [--codes JSON]          the plan again, with the operator's edits
@@ -65,7 +66,7 @@ from datetime import datetime
 
 import mysql.connector
 
-from routes.admin_cli import admin_logs
+from routes.admin_cli import admin_logs, admin_logs_clear
 from routes.schema_sync.schema_common import (COMMON_DB, FORBIDDEN_TARGETS, SOURCE_DB, SchemaSyncError, connect,
                                               list_unit_databases)
 
@@ -491,9 +492,10 @@ def cmd_diff(args):
 # ---------------------------------------------------------------------------
 # The whitelisted commands
 # ---------------------------------------------------------------------------
-def _block(db, title, columns, rows, note=""):
+def _block(db, title, columns, rows, note="", raw=False):
+    """raw=True: the program prints each row as one untruncated line (cells joined by « | »), not as an aligned column table."""
     return {"db": db, "title": title, "columns": columns, "rows": [[_cell(v) for v in row] for row in rows],
-            "note": note}
+            "note": note, "raw": bool(raw)}
 
 
 def _cell(value):
@@ -577,7 +579,31 @@ def _c_analyze(conn, db):
     return _block(db, "ANALYZE TABLE", ["tabela", "tip", "mesaj"], out, "Se actualizeaza doar statisticile.")
 
 
-# name -> (title, description, writes, handler, server_wide)
+_RX_COD_ANGAJAMENT = re.compile(r"^[A-Za-z0-9_./-]{1,60}$")
+
+
+def _c_fisa_angajament(conn, db, param):
+    """KE01-02: everything the database knows about one angajament, from the procedure AVACONT_COMUN.FX_FisaAngajament
+    (sql/KE_01_02_fisa_angajament.sql, created by hand). One block, one row per line, printed untruncated."""
+    cod = (param or "").strip()
+    if not _RX_COD_ANGAJAMENT.match(cod):
+        raise AdminError("Codul angajamentului nu este valid (litere, cifre, _ . / - , pana la 60 de caractere).")
+    cur = conn.cursor()
+    try:
+        cur.callproc("%s.FX_FisaAngajament" % COMMON_DB, (db, cod))
+        rows, columns = [], []
+        for result in cur.stored_results():
+            columns = list(result.column_names)
+            rows = result.fetchall()
+    finally:
+        cur.close()
+    if columns == ["Eroare"]:
+        raise AdminError(rows[0][0] if rows else "Procedura a refuzat baza de date.")
+    return _block(db, "Fisa angajament %s" % cod, columns, rows,
+                  "%d randuri. DIAG = verificarile calculate; restul = randurile brute ale tabelelor." % len(rows), raw=True)
+
+
+# name -> (title, description, writes, handler)
 COMMANDS = {
     "ping": ("Conexiune", "Versiune, cont, charset si timpul de raspuns al bazei.", False, _c_ping),
     "tables": ("Tabele", "Tabelele dupa marime, cu motor si collation.", False, _c_tables),
@@ -587,11 +613,18 @@ COMMANDS = {
     "activity": ("Activitate conturi", "Ultima actiune si numarul de actiuni pe cont.", False, _c_activity),
     "charset": ("Verificare collation", "Coloanele care nu sunt utf8mb3_general_ci.", False, _c_charset),
     "analyze": ("ANALYZE TABLE", "Actualizeaza statisticile tabelelor (scrie, dar nu schimba date).", True, _c_analyze),
+    "fisa_angajament": ("Fisa angajament", "Tot ce stie baza despre un angajament, intr-un singur tabel (verificarile KE intai, apoi randurile "
+                        "din toate tabelele). Cere o baza anume si codul angajamentului.", False, _c_fisa_angajament),
+}
+
+# Commands that need one typed value besides the database: name -> label of that value. They run on ONE database only.
+COMMAND_PARAMS = {
+    "fisa_angajament": "Cod angajament",
 }
 
 
 def cmd_commands(args):
-    return {"commands": [{"name": k, "title": v[0], "description": v[1], "writes": v[2]}
+    return {"commands": [{"name": k, "title": v[0], "description": v[1], "writes": v[2], "param": COMMAND_PARAMS.get(k, "")}
                          for k, v in COMMANDS.items()]}
 
 
@@ -599,13 +632,21 @@ def cmd_command(args):
     if args.name not in COMMANDS:
         raise AdminError("Comanda «%s» nu este in lista permisa." % args.name)
     handler = COMMANDS[args.name][3]
+    label = COMMAND_PARAMS.get(args.name)
+    param = (getattr(args, "param", "") or "").strip()
+    if label:
+        if (args.db or "").upper() == "ALL":
+            raise AdminError("Comanda «%s» se ruleaza pe o singura baza: alege o baza in arbore, nu <TOATE BAZELE>."
+                             % COMMANDS[args.name][0])
+        if not param:
+            raise AdminError("Scrie %s." % label.lower())
     conn = connect()
     try:
         blocks = []
         for db in _resolve_db(conn, args.db):
             try:
                 conn.database = db
-                blocks.append(handler(conn, db))
+                blocks.append(handler(conn, db, param) if label else handler(conn, db))
             except mysql.connector.Error as err:
                 blocks.append(_block(db, COMMANDS[args.name][0], ["eroare"], [[str(err)]]))
         return {"name": args.name, "blocks": blocks}
@@ -750,6 +791,15 @@ def cmd_logs(args):
     limit = max(1, min(args.limit, 5000))
     return {"rows": entries[-limit:], "total": total, "truncated": total > limit, "unreadable": unreadable,
             "server_time": _iso(datetime.now())}
+
+
+def cmd_logs_clear(args):
+    try:
+        return admin_logs_clear.clear(args.keep, args.file or "")
+    except admin_logs_clear.ClearError as err:
+        raise AdminError(str(err))
+    except OSError as err:
+        raise AdminError("Jurnalele nu au putut fi golite: %s" % err)
 
 
 BACKUP_PLAN_DIR = "schema_diff"
@@ -972,6 +1022,7 @@ def _parser():
     p = sub.add_parser("command")
     p.add_argument("--name", required=True)
     p.add_argument("--db", required=True)
+    p.add_argument("--param", default="")
     p.set_defaults(fn=cmd_command)
 
     sub.add_parser("status").set_defaults(fn=cmd_status)
@@ -993,6 +1044,11 @@ def _parser():
     p.add_argument("--since", default="")
     p.add_argument("--limit", type=int, default=1500)
     p.set_defaults(fn=cmd_logs)
+
+    p = sub.add_parser("logs-clear")
+    p.add_argument("--keep", required=True, choices=("all", "day", "week"))
+    p.add_argument("--file", default="")
+    p.set_defaults(fn=cmd_logs_clear)
 
     sub.add_parser("once-history").set_defaults(fn=cmd_once_history)
 

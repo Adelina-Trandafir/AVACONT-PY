@@ -4,6 +4,7 @@
 // (type + rights + occupation); retired navigation entries are hidden locally. Cleanup: one AbortController tied to `pagehide`.
 import { openMenu, Menu } from '../components/menu/menu.js';
 import { startSessionTimer } from '../adechit/session.js';
+import { beginSessionExit } from '../utils/session-exit.js';
 import { Combobox } from '../components/combobox/combobox.js';
 import { confirmBox } from '../utils/confirm-box.js';
 import { showMessage, messageHistory } from '../portal/messages.js';
@@ -35,7 +36,7 @@ lock = createLock({ api, signal: lifetime.signal, getUnit: () => state.unit,
   onLost: (k_message) => { showMessage($('vc-message'), `${k_message} Datele dvs. au rămas în formular, dar nu mai pot fi salvate fără o nouă ocupare.`, 'error'); } });
 const combos = {};
 const pageUi = scope();
-let formSequence = 0, formLoading = false;
+let formSequence = 0, formLoading = false, contextChanging = false;
 installLayouts();
 
 const paint = (k_kind, k_text) => {
@@ -50,9 +51,10 @@ const report = (k_error) => {
 };
 const query = (k_sel) => new URLSearchParams(Object.entries(k_sel).filter(([, k_v]) => k_v != null && k_v !== '').map(([k_k, k_v]) => [k_k, String(k_v)]));
 
-async function logoutNow() {
-  try { await fetch('/api/portal/logout', { method: 'POST', headers: { 'X-Portal-Token': portalToken() } }); }
-  catch (k_error) { console.error('[vercon] logout call failed', k_error); }
+function logoutNow() {
+  beginSessionExit();
+  void fetch('/api/portal/logout', { method: 'POST', keepalive: true, headers: { 'X-Portal-Token': portalToken() } })
+    .catch(k_error => console.error('[vercon] logout call failed', k_error));
   toPortal(true);
 }
 
@@ -152,6 +154,7 @@ function paintMenu(k_ctx) {
 // Purchase invoice menu: "Adaugare" opens the page straight on a new document, "Editare" just opens the page.
 let startReceiptInAdd = false;   // read by openForm at the moment it mounts the page, so no consultation screen flashes first
 async function openReceipt(k_add) {
+  if (contextChanging) return;
   if (state.form === 'nir') { if (k_add) await state.editor?.startAdd?.(); return; }   // already open and loaded
   startReceiptInAdd = k_add;
   try { await openForm('nir'); } finally { startReceiptInAdd = false; }
@@ -159,6 +162,7 @@ async function openReceipt(k_add) {
 
 // A change of context with unsaved work asks first: keep it (stay where you are) or discard it (and move).
 async function allowLeave() {
+  if (state.editor?.canChangeContext?.() === false) return false;
   if (!state.draft?.dirty && !state.editor?.isDirty?.()) return true;
   return confirmBox('Aveți modificări nesalvate. Dacă schimbați contextul, ele se pierd.', { title: 'Modificări nesalvate', yes: 'Renunț la modificări', no: 'Rămân aici', warning: true });
 }
@@ -171,33 +175,53 @@ function closeForm() {
 }
 
 async function change(k_wanted) {
+  if (formLoading || contextChanging) { applyContext(state.ctx); return; }
   if (!(await allowLeave())) { applyContext(state.ctx); return; }   // paint the accepted context back
-  closeForm();
-  await lock.release();                                              // the old gestiune is free for others
-  await loadContext(k_wanted);
+  if (formLoading || contextChanging) { applyContext(state.ctx); return; }
+  const previousForm = state.form;
+  contextChanging = true; $('vc-work').inert = true; mainMenu?.setBusy(true);
+  state.editor?.pauseContext?.();
+  try {
+    await lock.release();
+    if (!await loadContext(k_wanted)) return;
+    if (!state.ctx.ready || !previousForm) { closeForm(); return; }
+    const available = key => state.ctx.menu.some(item => item.key === key && item.enabled !== false);
+    const next = available(previousForm) ? previousForm : available('nir') ? 'nir' : null;
+    if (next) await openForm(next, { reload: true });
+    else closeForm();
+  } catch (error) { closeForm(); throw error; }
+  finally { contextChanging = false; $('vc-work').inert = false; mainMenu?.setBusy(false); }
 }
 
 // ---- forms ------------------------------------------------------------------------------------------------------
-async function openForm(k_key) {
+async function openForm(k_key, { reload = false } = {}) {
+  if (contextChanging && !reload) return;
   if (formLoading) return;
-  if (state.form === k_key) return;
-  if (!(await allowLeave())) return;
+  if (state.form === k_key && !reload) return;
+  if (!reload && !(await allowLeave())) return;
   if (formLoading) return;
   formLoading = true; mainMenu?.setBusy(true);
   try {
   const opening = ++formSequence;
   const k_version = state.ctx.version; const k_sel = state.ctx.selection;
   const k_open = await api(`/api/vercon/forms/${encodeURIComponent(k_key)}/open?${query(k_sel)}`);
-  if (opening !== formSequence || k_open.version !== state.ctx.version || k_version !== state.ctx.version) return;
+  if (opening !== formSequence || k_open.version !== state.ctx.version || k_version !== state.ctx.version) { if (reload) closeForm(); return; }
   if (k_open.write && !lock.holds(k_sel)) {
     try { await lock.acquire(k_sel); }
     catch (k_error) {
       if (k_error.reason !== 'GESTIUNE_OCCUPIED') throw k_error;
       // another tab of the same user may be the holder: the server allows a takeover only for the same user
-      if (!(await confirmBox(`${k_error.message} Dacă este o altă filă a dvs., o puteți prelua (cealaltă filă pierde accesul).`, { title: 'Gestiune ocupată', yes: 'Preiau', no: 'Renunț' }))) return;
+      if (!(await confirmBox(`${k_error.message} Dacă este o altă filă a dvs., o puteți prelua (cealaltă filă pierde accesul).`, { title: 'Gestiune ocupată', yes: 'Preiau', no: 'Renunț' }))) { if (reload) closeForm(); return; }
       await lock.acquire(k_sel, true);
     }
-    if (opening !== formSequence || state.ctx.version !== k_version) { await lock.release(); return; }
+    if (opening !== formSequence || state.ctx.version !== k_version) { await lock.release(); if (reload) closeForm(); return; }
+  }
+  if (reload && state.form === k_key && state.editor?.reloadContext) {
+    state.columns = k_open.columns; state.revision = 1;
+    writePreference(`form.${k_sel.type}`, k_key);
+    paintMenu(state.ctx);
+    await state.editor.reloadContext();
+    return;
   }
   closeForm();
   state.form = k_key; state.columns = k_open.columns; state.revision = 1;
@@ -306,8 +330,8 @@ function bind() {
     ], { label: 'Aplicații', below: $('vc-apps').closest('header') });
   }, { signal: lifetime.signal });
   const stopTimer = portalToken() ? startSessionTimer({ token: portalToken, host: $('vc-session-timer'), onExpired: logoutNow }) : null;
-  // leaving the page with unsaved work: the browser asks; then every request and listener stops
-  addEventListener('beforeunload', (k_event) => { if (state.draft?.dirty || state.editor?.isDirty?.()) { k_event.preventDefault(); k_event.returnValue = ''; } }, { signal: lifetime.signal });
+  // Native tab-exit prompts are intentionally absent; in-app navigation uses confirmBox.
+  addEventListener('app:session-expired', () => { lifetime.abort(); lock.release(true); }, { once: true });
   addEventListener('pagehide', () => { stopTimer?.(); pageUi.clear(); lock.release(true); state.editor?.destroy(); Object.values(combos).forEach((k_c) => k_c.destroy?.()); lifetime.abort(); }, { once: true });
 }
 

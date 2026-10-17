@@ -1,0 +1,66 @@
+/* Integrated actions stay inside their field; they do not lift like standalone buttons. */
+.vc-page :is(.combobox-container, .treeview-container, .kdp) {
+  --vc-control-action-width: 28px;
+  --vc-control-radius: 3px;
+}
+.portal.vc-page .vc-selectors .combobox-container { --vc-control-radius: 7.5px; }
+
+.portal.vc-page :is(.combobox-input, .kdp__field),
+.portal.vc-page .combotree .treeview-input {
+  border-radius: var(--vc-control-radius);
+}
+.portal.vc-page .combobox-container:has(.combobox-arrow) .combobox-input,
+.portal.vc-page .combotree .treeview-input {
+  padding-right: calc(var(--vc-control-action-width) + 4px);
+}
+.portal.vc-page .kdp__field { padding-inline: calc(var(--vc-control-action-width) + 4px); }
+
+.portal.vc-page :is(.combobox-arrow, .treeview-arrow, .kdp__button) {
+  box-sizing: border-box;
+  position: absolute;
+  inset: 1px 1px 1px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--vc-control-action-width);
+  padding: 0;
+  border: 0;
+  border-radius: 0 calc(var(--vc-control-radius) - 1px) calc(var(--vc-control-radius) - 1px) 0;
+  background: transparent;
+  color: var(--primary-color, var(--blue));
+  font-size: 1em;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: none;
+  translate: none;
+  box-shadow: none;
+  transition: background-color 140ms ease;
+}
+.portal.vc-page .treeview-container--inline > .treeview-arrow { display: none; }
+
+/* All list modes, including the simple Comisie list, use the same feedback. */
+@media (hover: hover) {
+  .portal.vc-page .combobox-container:not(.disabled):not(:has(input:disabled)) .combobox-arrow:hover,
+  .portal.vc-page .treeview-container:not(.disabled):not(:has(input:disabled)) .treeview-arrow:not([aria-disabled="true"]):hover,
+  .portal.vc-page .kdp__button:not(:disabled):hover {
+    background: var(--sky-2);
+  }
+}
+.portal.vc-page .combobox-container.readonly:not(.simple) .combobox-input:hover,
+.portal.vc-page .combotree .treeview-input:hover:not(:disabled) { background: var(--card); }
+.portal.vc-page .kdp__button:not(:disabled):focus-visible,
+.portal.vc-page .combobox-arrow:not(:disabled):focus-visible {
+  background: var(--sky-2);
+  outline: 1px solid var(--blue);
+  outline-offset: -2px;
+}
+.portal.vc-page :is(.combobox-container, .treeview-container):has(input:disabled) :is(.combobox-arrow, .treeview-arrow),
+.portal.vc-page .kdp__button:disabled {
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal.vc-page :is(.combobox-arrow, .treeview-arrow, .kdp__button) { transition: none; }
+}

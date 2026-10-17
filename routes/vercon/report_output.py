@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 from threading import Lock
 from reporting.excel_widths import ColumnWidths
+from .nomenclatoare import NomError
 
 FONT = Path(__file__).resolve().parents[2] / 'static' / 'fonts' / 'DejaVuSans.ttf'
 FONT_LOCK = Lock()
@@ -16,6 +17,9 @@ def tokens(text, values):
 
 
 def pdf(model):
+    if model['layout'].get('form') == 'nir-classic':
+        from . import report_reception
+        return report_reception.pdf(model)
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib import colors
@@ -27,6 +31,11 @@ def pdf(model):
     from reportlab.pdfgen.canvas import Canvas
     with FONT_LOCK:
         if 'VerconReport' not in pdfmetrics.getRegisteredFontNames():
+            if not FONT.is_file():
+                raise NomError('REPORT_RESOURCE_MISSING',
+                               'Resursele raportului nu sunt instalate complet. '
+                               'Lipsește static/fonts/DejaVuSans.ttf. '
+                               'Contactați administratorul pentru republicarea resurselor.', 503)
             pdfmetrics.registerFont(TTFont('VerconReport', str(FONT)))
     layout, identity = model['layout'], model['identity']
     page = landscape(A4) if layout['landscape'] else A4

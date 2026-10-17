@@ -63,6 +63,21 @@ def accepted(row, params, *, day='date', document=True):
     return all(selected(row.get(key), params, key) for key in checks)
 
 
+def storno_display(row):
+    """Signed FCS report values; never mutate the source or the stored quantity.
+
+    copy_abs/copy_negate preserve every decimal digit independently of the
+    active Decimal context and keep an already-negative amount negative.
+    """
+    displayed = dict(row)
+    for key in ('quantity', 'value', 'vat', 'header_value'):
+        value = row.get(key)
+        if value is not None and value != '':
+            amount = Decimal(str(value)).copy_abs()
+            displayed[key] = format(amount.copy_negate() if amount else amount, 'f')
+    return displayed
+
+
 def documents(source, family=None):
     metadata, ctx = source.metadata(), source.ctx
     kind = 'receipts' if family in ('nir', 'storno') or family is None else 'consumption'
@@ -92,7 +107,9 @@ def documents(source, family=None):
             if key in row:
                 row[key] = exact(row[key], ctx['scale'])
         row['value'] = exact(value, ctx['scale'])
-        out.append(row)
+        # Normalize only the FCS document report. Centralizers and stock paths
+        # retain their existing sign handling; do not subtract storno twice.
+        out.append(storno_display(row) if family == 'storno' else row)
     return out
 
 

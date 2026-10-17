@@ -36,9 +36,10 @@ def documents(cursor, ctx, party, month):
     rows = _all(cursor, 'SELECT n.IdIntrare, n.Numar, n.Data, n.DataFc, n.NrFact, n.Valoare, n.IdPartener, n.IdStorno, n.TipDoc, n.Anulat, n.Version, ' +
                 _PARTY + ' AS party ' + _FROM + ' AND ' + _PARTY + '=%s AND n.Data>=%s AND n.Data<%s ORDER BY n.Data DESC, n.Numar DESC',
                 _scope(ctx) + (party, first, after))
-    return [{'id': r['IdIntrare'], 'number': abs(r['Numar'] or 0), 'date': _iso(r['Data']), 'invoice_date': _iso(r['DataFc']), 'invoice': r['NrFact'],
+    from .receipt_invoice_view import summary_totals
+    return summary_totals(cursor, ctx, [{'id': r['IdIntrare'], 'number': abs(r['Numar'] or 0), 'date': _iso(r['Data']), 'invoice_date': _iso(r['DataFc']), 'invoice': r['NrFact'],
              'total': _money(r['Valoare'], scale), 'party_id': r['IdPartener'], 'party': r['party'], 'doc_type': r['TipDoc'],
-             'source': r['IdStorno'], 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows]
+             'source': r['IdStorno'], 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows])
 
 
 def _month_bounds(month):

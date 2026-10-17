@@ -1,11 +1,32 @@
 // The application's one confirmation box (replaces window.confirm everywhere): the page behind it is blurred and
 // the question sits in the middle. «No» / «Renunta» is on the left, «Yes» / «OK» on the right.
 // `warning: true` paints the box as a serious warning (red header). Escape and the backdrop answer No. Usage: if (!await confirmBox('Intrebare?', { title, yes, no })) return;
-let styled = false;
-function ensureStyle() {
-  if (styled) return; styled = true;
-  const k_link = document.createElement('link'); k_link.rel = 'stylesheet'; k_link.href = '/static/css/confirm-box.css';
-  document.head.append(k_link);
+const styledDocuments = new WeakSet();
+function ensureStyle(doc = document) {
+  if (styledDocuments.has(doc)) return; styledDocuments.add(doc);
+  const k_link = doc.createElement('link'); k_link.rel = 'stylesheet'; k_link.href = '/static/css/confirm-box.css';
+  doc.head.append(k_link);
+}
+
+// One-button notice, using the same custom dialog as confirmations.
+export function messageBox(text, { title = 'Mesaj', button = 'Am înțeles', warning = false, ownerDocument = document } = {}) {
+  ensureStyle(ownerDocument);
+  const dialog = ownerDocument.createElement('dialog');
+  dialog.className = `confirm-box confirm-box--message${warning ? ' confirm-box--warning' : ''}`;
+  dialog.setAttribute('aria-label', title);
+  const header = ownerDocument.createElement('header'), heading = ownerDocument.createElement('h2');
+  heading.textContent = title; header.append(heading);
+  const body = ownerDocument.createElement('p'); body.className = 'confirm-box__text'; body.textContent = text;
+  const footer = ownerDocument.createElement('footer'), acknowledge = ownerDocument.createElement('button');
+  acknowledge.type = 'button'; acknowledge.textContent = button; footer.append(acknowledge);
+  let finish, done = false;
+  const closed = new Promise(resolve => { finish = resolve; });
+  const close = () => { if (done) return; done = true; if (dialog.open) dialog.close(); dialog.remove(); finish(); };
+  acknowledge.addEventListener('click', close);
+  dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+  dialog.addEventListener('close', close);
+  dialog.append(header, body, footer); ownerDocument.body.append(dialog); dialog.showModal(); acknowledge.focus();
+  return { closed, close, setText: value => { body.textContent = value; } };
 }
 
 export function confirmBox(k_text, { title = 'Confirmare', yes = 'Da', no = 'Nu', warning = false } = {}) {

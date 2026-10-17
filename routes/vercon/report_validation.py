@@ -74,6 +74,8 @@ def definition(part, value):
         string(value.get('title'), 'Titlu', 1000)
         number(value.get('font_size', 8), 5, 24, 'Font raport')
         number(value.get('title_size', 15), 8, 40, 'Font titlu')
+        if value.get('form', 'generic') not in ('generic', 'nir-classic'):
+            fail('Formular de raport necunoscut.')
         table(value)
         sections = value.get('sections', {})
         if not isinstance(sections, dict) or len(sections) > 20:

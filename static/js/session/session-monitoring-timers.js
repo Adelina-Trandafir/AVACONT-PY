@@ -24,7 +24,7 @@ export const sessionMonitoringTimersMixin = {
     const timeRemaining = this.sessionDuration - timeElapsed;
 
     if (timeRemaining <= 0) {
-      this.handleSessionExpired('Sesiunea a expirat');
+      void this.verifySessionAtExpiry();
       return;
     }
 
@@ -43,7 +43,7 @@ export const sessionMonitoringTimersMixin = {
     // Programează expirarea
     this.expiryTimeout = setTimeout(() => {
       this.inGracePeriod = false;
-      this.handleSessionExpired('Timpul a expirat');
+      void this.verifySessionAtExpiry();
     }, timeRemaining);
 
     this.log(

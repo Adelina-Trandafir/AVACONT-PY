@@ -1,6 +1,8 @@
 // SLICE-ADE9-01: the Rapoarte panel. Every button asks the server for one report (print page or PDF); the server reads,
 // the page never calculates. The panel works on what is chosen on the screen: month, group, child, and the two dates.
 import { DatePicker } from '../components/datepicker/datepicker.js';
+import { messageBox } from '../utils/confirm-box.js';
+import { trackSessionWindow } from '../utils/session-exit.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,7 +20,7 @@ async function downloadOutput(k_response, k_fallback) {
 
 // Print: the window is opened first, from the click, so the browser accepts it; the report is written into it afterwards.
 export async function outputReport({ fetchOutput, path, pdf, title }) {
-  const k_window = pdf ? null : window.open('', '_blank');
+  const k_window = pdf ? null : trackSessionWindow(window.open('', '_blank'));
   try {
     if (!pdf && !k_window) throw new Error('Browserul a blocat fereastra de listare. Permiteți ferestrele popup pentru această pagină.');
     if (k_window) { k_window.document.title = title; k_window.document.body.textContent = 'Se pregătește raportul…'; }
@@ -31,7 +33,7 @@ export async function outputReport({ fetchOutput, path, pdf, title }) {
       if (document.documentElement.dataset.theme === 'dark') k_window.document.documentElement.dataset.theme = 'dark';
       // the page keeps its opener: the PDF button asks it to download (it holds the sign-in the request needs)
       k_window.adePdf = () => outputReport({ fetchOutput, path: path.replace('/print?', '/pdf?'), pdf: true, title })
-        .catch((k_error) => k_window.alert(k_error.message));
+        .catch((k_error) => { if (!k_window.closed) messageBox(k_error.message, { title: 'Raport', warning: true, ownerDocument: k_window.document }); });
       k_window.adeExcel = async (k_columns) => {
         const k_url = new URL(path, window.location.origin);
         k_url.pathname = k_url.pathname.replace(/\/print$/, '/xlsx');

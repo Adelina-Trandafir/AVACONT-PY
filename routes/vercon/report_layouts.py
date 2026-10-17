@@ -62,6 +62,9 @@ def food_sections():
 
 
 def default(spec):
+    if spec['kind'] == 'documents' and spec.get('family') == 'storno':
+        # FCS uses the NIR form, including the title; only its source document differs.
+        return default({**spec, 'id': 'NIR', 'family': 'nir'})
     kind, name = spec['kind'], spec['id']
     columns, groups, totals, headers = FINAL, ['account'], ['closing_value'], []
     signs = []
@@ -86,8 +89,11 @@ def default(spec):
         columns, groups, totals = DOCUMENT, ['document'], ['value']
         if spec['family'] in ('nir', 'storno'):
             if spec['family'] == 'nir':
-                columns = DOCUMENT + [money('vat', 'din care\nT.V.A.', .9)]
-                totals = ['value', 'vat']
+                columns = [col('ordinal', 'Nr.\ncrt.', .36), col('code', 'COD ARTICOL', .90),
+                           col('name', 'DENUMIRE ARTICOL', 2.30), col('um', 'UM', .38),
+                           money('quantity', 'Cant. cnf.\nDocum.', .64), money('quantity', 'Cantitate', .83),
+                           money('price', 'Preț unitar', .98), money('value', 'Valoare', 1.67)]
+                totals = ['value']
             headers = [[{'label': 'RECEPȚIONAT', 'start': 5, 'span': 3}]]
             signs = ['CERTIFICARE COMISIA DE RECEPȚIE', 'Gestionar\nData primirii / Semnătura']
         else:
@@ -125,7 +131,10 @@ def default(spec):
         columns, groups, totals = [], [], []
     return deepcopy({'schema': 1, 'title': TITLES.get(name, 'BON DE RETUR' if spec.get('family') == 'br'
                        else 'BON DE CONSUM (COLECTIV)' if spec.get('family') == 'bc' else spec['label']),
-        'font_size': 8, 'title_size': 15, 'landscape': kind in ('balance', 'inventory', 'product'),
+        'font_size': 8,
+        'title_size': 16 if kind == 'documents' and spec.get('family') == 'nir' else 15,
+        'form': 'nir-classic' if kind == 'documents' and spec.get('family') == 'nir' else 'generic',
+        'landscape': kind in ('balance', 'inventory', 'product'),
         'table_width': 1, 'columns': columns, 'groups': groups, 'totals': totals, 'headers': headers,
         'signatures': signs, 'elements': [], 'sections': food_sections() if kind == 'food' else {},
         'reference': 'CAPTURI_RAPOARTE/Magazie-Alimente',

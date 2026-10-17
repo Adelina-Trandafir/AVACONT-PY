@@ -21,3 +21,8 @@
 @import url("vercon-receipt-context.css");
 @import url("vercon-products.css");
 @import url("vercon-cpv.css");
+@import url("combotree/combotree.css");
+@import url("vercon-receipt-destinations.css");
+@import url("vercon-button-effects.css");
+@import url("vercon-control-actions.css");
+@import url("vercon-storno.css");

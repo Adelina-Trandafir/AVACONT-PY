@@ -10,7 +10,7 @@ presents that token; an old or taken-over token is refused, so a slow request of
   release   deletes the row only if the token matches.
 
 The store does the atomic part (conditional INSERT / UPDATE); the service holds the policy. MemoryLockStore serves the
-local preview and the contract tests; SqlLockStore runs on the DC database (VC_ContextLock from VC_AVACONT_SURSA.sql).
+local preview and the contract tests; SqlLockStore runs on the DC database (VC_ContextLock, synchronised from AVACONT_SURSA).
 """
 import secrets
 import time

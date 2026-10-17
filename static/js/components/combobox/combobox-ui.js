@@ -100,6 +100,7 @@ export const comboboxUIMixin = {
    * Închide dropdown-ul
    */
   hide() {
+    this.cancelSearch();
     this.overlay.classList.add('hidden');
     this.overlay.classList.remove('visible');
 

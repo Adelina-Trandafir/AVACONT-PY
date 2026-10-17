@@ -252,7 +252,8 @@ function mountCrud(host, opts) {
         formatter: (value) => text(value, spec),
         filterValue: opts.filterByLabel && spec.type === 'ref' ? (value) => text(value, spec) : undefined,
         cellAction: spec.key === opts.pickerColumn ? { text: '...', label: 'Alege codul CPV', selectedOnly: true, disabled: !state.canWrite } : undefined,
-        ...opts.columnOptions?.(spec) })),
+        ...opts.columnOptions?.(spec),
+        ...(opts.kind === 'produse' && spec.key === 'IdMasina' ? { editable: row => editable && !row.account_locked } : {}) })),
       ...(opts.hideState ? [] : [{ key: 'active', title: 'Stare', width: 70, minWidth: 0, fixedWidth: true, editable: false, formatter: (value) => value ? 'Activ' : 'Inactiv' }]),
       { key: 'actions', title: '⋮', width: 36, minWidth: 36, fixedWidth: true, editable: false, filter: false, sortable: false, display: 'button', actionText: '⋮' }],
       onCellSave: saveCell, onCellSaved: ({ row }) => {

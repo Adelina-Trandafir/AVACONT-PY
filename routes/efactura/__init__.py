@@ -22,6 +22,8 @@ the bottom, so `efactura_bp` must exist BEFORE that import (same pattern as rout
     primite_ubl.py   reads the UBL XML of a received invoice (pure)                       (slice 00EF-17)
     primite.py       sync from ANAF, list, detail, files, link to a DDF                    (slice 00EF-17)
     primite_routes.py /api/efactura/primite/...                                            (slice 00EF-17)
+    primite_ke.py    links received invoice <-> reception, amounts with VAT, role checks       (slices KE01..KE07)
+    primite_ke_routes.py /api/efactura/primite/<id>/ke..., /api/efactura/ke/...                (slices KE01..KE07)
 
 SECRETS: the client secret, the encryption key and both tokens exist on this server only. No route
 returns them and no log line prints them.
@@ -34,3 +36,4 @@ from . import token_routes  # noqa: E402,F401  registers the token routes on efa
 from . import factura_routes  # noqa: E402,F401  registers the invoice routes on efactura_bp (slice 00EF-06)
 from . import trimitere_routes  # noqa: E402,F401  registers the send / state / download routes (slice 00EF-07)
 from . import primite_routes  # noqa: E402,F401  registers the received-invoice routes (slice 00EF-17)
+from . import primite_ke_routes  # noqa: E402,F401  registers the invoice <-> reception links (slices KE01..KE07)

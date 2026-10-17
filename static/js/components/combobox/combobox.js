@@ -157,10 +157,7 @@ export class Combobox {
    * Distruge combobox-ul
    */
   destroy() {
-    // Clear timeout
-    if (this.searchTimeout) {
-      clearTimeout(this.searchTimeout);
-    }
+    this.cancelSearch();
 
     // Cleanup TOȚI listenerii folosind ListenerTracker
     this.cleanupAllListeners();

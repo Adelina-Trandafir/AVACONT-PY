@@ -9,7 +9,14 @@ MOVEMENT_TABLES = ('VC_Intrari', 'VC_IntrariStorno', 'VC_Iesiri', 'VC_IesiriRetu
 
 
 def blocked_ids(cursor, subunit, gestiune, kind):
-    if kind == 'categorii':
+    if kind == 'produse':
+        parts = [
+            'SELECT DISTINCT v.ID AS id FROM VC_ProduseP v JOIN {table} m '
+            'ON m.SubunitId=v.SubunitId AND m.GestiuneId=v.GestiuneId AND m.IdProdus=v.IdProdus '
+            'WHERE v.SubunitId=%s AND v.GestiuneId=%s'.format(table=table)
+            for table in MOVEMENT_TABLES]
+        cursor.execute(' UNION '.join(parts), (subunit, gestiune) * len(parts))
+    elif kind == 'categorii':
         # Do not restrict to the visible year, active products or uncancelled documents:
         # the existence of any movement protects the category's history.
         parts = [
@@ -35,6 +42,8 @@ def blocked_ids(cursor, subunit, gestiune, kind):
 
 def annotate(cursor, subunit, gestiune, kind, rows):
     blocked = blocked_ids(cursor, subunit, gestiune, kind)
+    if kind == 'produse':
+        return [{**row, 'account_locked': row['id'] in blocked} for row in rows]
     message = {'categorii': 'Categoria are mișcări și nu poate fi dezactivată.',
                'tva': 'Cota TVA este folosită de produse și nu poate fi dezactivată.'}.get(kind)
     return [{**row, 'deactivate_reason': message if row['id'] in blocked else None} for row in rows]

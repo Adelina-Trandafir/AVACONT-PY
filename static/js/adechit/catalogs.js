@@ -198,10 +198,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
     } catch (failure) { error(failure); }
     finally { busy = false; content.inert = false; save.disabled = false; save.textContent = 'Salvează și închide'; }
   });
-  addEventListener('beforeunload', (event) => {
-    if (dialog.open && (drafts.size || grids.some((instance) => instance.hasEdit))) { event.preventDefault(); event.returnValue = ''; }
-  });
   const payers = bindPayers({ api, context, refresh, moveToSubunit });
   document.getElementById('ade-taxes').addEventListener('click', () => open('taxes'));
-  return payers;
+  return { ...payers, isDirty: () => dialog.open && (drafts.size > 0 || grids.some(instance => instance.hasEdit)) || payers.isDirty() };
 }

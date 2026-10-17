@@ -47,6 +47,7 @@ const DEFAULTS = {
   proportionalWidths: false, // treat column widths as weights of the available viewport width
   newRowAlwaysVisible: false, // editable grid always ends with one empty new row; needs onNewRow() (creates it) and isBlankRow(row); optional onCancelNewRow(row)
   singleNewRow: false, // keep only the draft being edited instead of appending another blank slot
+  rowClassName: null, // optional (row) => CSS class names, applied when each data row is rendered
 };
 
 const COLUMN_DEFAULTS = {
@@ -655,6 +656,9 @@ export class DataGrid {
 
     if (item.kind === 'row') {
       row.classList.add('is-data');
+      // Optional application styling follows the data, including recycled rows.
+      const rowClass = this._opts.rowClassName?.(item.row);
+      if (rowClass) row.classList.add(...String(rowClass).split(/\s+/).filter(Boolean));
       if (this._opts.alternatingRows && index % 2 === 1) row.classList.add('is-alt');
       if (this._opts.multiSelect ? this._selection.has(item.row) : item.row === this._selected) row.classList.add('is-selected');
       if (this._opts.dragRows) {

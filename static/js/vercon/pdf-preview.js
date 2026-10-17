@@ -28,7 +28,7 @@ export async function openPdfReport(title, data, owner) {
     const node = el('button', { type: 'button', textContent: text, 'aria-label': accessible, disabled: true });
     node.addEventListener('click', run); controls.push(node); return node;
   };
-  const pdf = createPdfView(host, { onState: state => {
+  const pdf = createPdfView(host, { initialScale: 'page-actual', onState: state => {
     if (view.closed) return;
     currentPage = state.page; pageLabel.textContent = `Pagina ${state.page} / ${state.pages}`;
     zoomLabel.textContent = `${Math.round(state.scale * 100)} %`;

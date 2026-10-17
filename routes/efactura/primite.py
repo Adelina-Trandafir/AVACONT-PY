@@ -26,7 +26,7 @@ from .tokens import EfEroare
 logger = logging.getLogger(__name__)
 
 SQL_FILES = ("sql/00EF_02_efactura_unitate.sql si sql/00EF_17_primite_asocieri.sql si sql/00EF_17_primite_tva.sql "
-             "si sql/00EF_23_mesaje_zip.sql si sql/00EF_27_primite_linii_cpv.sql")
+             "si sql/00EF_23_mesaje_zip.sql si sql/00EF_27_primite_linii_cpv.sql si sql/KE_01_primite_receptii.sql")
 DEFAULT_BATCH = 20
 MAX_BATCH = 50
 MAX_LIST = 2000
@@ -68,10 +68,10 @@ def _store_message(cursor, message, cui, zip_bytes, parsed):
     new_id = cursor.lastrowid
     if parsed["linii"]:
         cursor.executemany(
-            "INSERT INTO EF_PrimiteLinii (IdPrimita, NrLinie, Denumire, Explicatie, Cpv, Unit, Cant, Pret, Valoare) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            [(new_id, ln["NrLinie"], ln["Denumire"], ln["Explicatie"], ln["Cpv"], ln["Unit"], ln["Cant"], ln["Pret"], ln["Valoare"])
-             for ln in parsed["linii"]])
+            "INSERT INTO EF_PrimiteLinii (IdPrimita, NrLinie, Denumire, Explicatie, Cpv, Unit, Cant, Pret, Valoare, CotaTVA) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            [(new_id, ln["NrLinie"], ln["Denumire"], ln["Explicatie"], ln["Cpv"], ln["Unit"], ln["Cant"], ln["Pret"], ln["Valoare"],
+              ln.get("CotaTVA")) for ln in parsed["linii"]])
     if parsed["cote"]:
         cursor.executemany("INSERT INTO EF_PrimiteTVA (IdPrimita, Categorie, CotaTVA, Baza, TVA) VALUES (%s, %s, %s, %s, %s)",
                            [(new_id, r["Categorie"], r["CotaTVA"], r["Baza"], r["TVA"]) for r in parsed["cote"]])

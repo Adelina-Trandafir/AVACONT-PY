@@ -865,12 +865,4 @@ $('stepper').addEventListener('click', (e) => {
   if (s < state.step) showStep(s);
 });
 
-// Everything lives in memory: leaving mid-way loses the registration.
-window.addEventListener('beforeunload', (e) => {
-  if (state.token && !state.finished) {
-    e.preventDefault();
-    e.returnValue = '';
-  }
-});
-
 showStep(1);

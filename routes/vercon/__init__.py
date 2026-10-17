@@ -123,7 +123,7 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
         held = locks.store.holder(sub, gest['id'])
         return bool(held and not held['expired'] and held['email'] != g.portal['email'])
 
-    def scoped(operation, source=None):
+    def scoped(operation, source=None, lock_token=None, version=None):
         """The one door of every business call: the context is re-resolved on the server (the ids the client sent
         authorise nothing alone), the TYPE must allow the operation, the context revision must be the client's, and a
         write needs the CURRENT lock token. Returns the verified context."""
@@ -133,11 +133,11 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
             raise SelectionInvalid('Alegeți subunitatea și gestiunea.')
         if not operations.type_allows(operation, gest['type']):
             raise FormUnavailable('OPERATION_NOT_FOR_TYPE', 'Operația nu este disponibilă pentru acest tip de gestiune.', 403)
-        version = request.headers.get('X-Vercon-Version')
+        version = version if version is not None else request.headers.get('X-Vercon-Version')
         if version and version != ctx['version']:
             raise FormUnavailable('CONTEXT_CHANGED', 'Contextul s-a schimbat. Reîncărcați pagina.', 409)
         if operations.is_write(operation):
-            _locks().validate(ctx['selection']['subunit'], gest['id'], request.headers.get('X-Vercon-Lock'), g.portal['email'])
+            _locks().validate(ctx['selection']['subunit'], gest['id'], lock_token if lock_token is not None else request.headers.get('X-Vercon-Lock'), g.portal['email'])
         return ctx
 
     @bp.get('/api/vercon/context')

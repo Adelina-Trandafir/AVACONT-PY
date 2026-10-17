@@ -504,10 +504,10 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
   $('ade-child-edit').addEventListener('click', () => { if (selectedChild) editChild(selectedChild); });
   $('ade-payer-add').addEventListener('click', () => editPayer());
   $('ade-payer-edit').addEventListener('click', () => { if (selectedPayer) editPayer(selectedPayer); });
-  addEventListener('beforeunload', (event) => { if (editor.open && dirty) { event.preventDefault(); event.returnValue = ''; } });
   addEventListener('pagehide', () => { cleanEditor(); grids.forEach((instance) => instance.destroy()); }, { once: true });
   // The grid's "+": one form with the child and the first parent (no groups, no lists).
-  return { openForChild: (groupId, childId) => goTo({ group_id: groupId, child_id: childId }, 2, false),
+  return { isDirty: () => editor.open && (dirty || grids.some(instance => instance.hasEdit)),
+    openForChild: (groupId, childId) => goTo({ group_id: groupId, child_id: childId }, 2, false),
     addChildWithPayer: async (groupId) => {
     if (groupId == null) throw new Error('Selectați grupa copilului.');
     if (page.open || editor.open || busy) return;

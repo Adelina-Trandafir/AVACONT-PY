@@ -30,7 +30,10 @@ export const comboboxEventsMixin = {
     } else {
       if (this.arrow) {
         this.addDOMListener(this.arrow, 'mousedown', (event) => event.preventDefault());
-        this.addDOMListener(this.arrow, 'click', () => this.handleReadonlyClick());
+        this.addDOMListener(this.arrow, 'click', (event) => {
+          event.preventDefault();
+          this.handleReadonlyClick();
+        });
       }
       this.addDOMListener(this.input, 'input', (e) => this.handleInput(e));
       this.addDOMListener(this.input, 'keydown', (e) => this.handleKeydown(e));
@@ -58,9 +61,7 @@ export const comboboxEventsMixin = {
     const query = e.target.value;
     this.currentQuery = query;
 
-    if (this.searchTimeout) {
-      clearTimeout(this.searchTimeout);
-    }
+    this.cancelSearch();
 
     this.searchTimeout = this.addTimeout(() => {
       this.performSearch(query);
@@ -181,6 +182,9 @@ export const comboboxEventsMixin = {
     const option = e.target.closest('.combobox-option');
     if (!option || option.classList.contains('is-disabled')) return; // an item marked `disabled` is shown but cannot be chosen
 
+    // A list nested in a label must not activate its input again after selection.
+    e.preventDefault();
+
     const value = option.dataset.value;
     const text = option.dataset.text;
 
@@ -198,6 +202,7 @@ export const comboboxEventsMixin = {
     this.input.value = text;
     this.selectedValue = value;
     this.selectedText = text;
+    this.currentQuery = text;
     this.hide();
 
     if (this.options.onSelect) {

@@ -1,16 +1,26 @@
 // SLICE-ADE2-01/02: opt-in cell editing, independent of recycled row elements.
 import { Combobox } from '../components/combobox/combobox.js';
+import { ComboTree } from '../components/combotree/combotree.js';
 import { DatePicker } from '../components/datepicker/datepicker.js';
 import eventBus from '../event-bus/event-bus.js';
+import { formatValue } from './engine.js';
 
 export function parseCell(raw, column) {
   if (column.parse) return column.parse(raw);
   if (raw === '' && column.nullable) return null;
   if (column.editor === 'number') {
-    if (!/^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(raw.trim())) {
-      throw new Error('Introduceți un număr fără separatori de mii.');
+    let text = raw.trim();
+    if (column.format === 'currency') text = text.replace(/\s*lei$/, '').trim();
+    if (column.format === 'euro') text = text.replace(/\s*€$/, '').trim();
+    if (column.format === 'percent') text = text.replace(/\s*%$/, '').trim();
+    if (['standard', 'currency', 'euro'].includes(column.format)) {
+      text = text.replace(/[\u00a0\u202f]/g, '');
+      if (/^[+-]?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(text)) text = text.replace(/\./g, '');
     }
-    const value = Number(raw.replace(',', '.'));
+    if (!/^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(text)) {
+      throw new Error('Introduceți un număr valid.');
+    }
+    const value = Number(text.replace(',', '.')) / (column.format === 'percent' ? 100 : 1);
     if (!Number.isFinite(value)) throw new Error('Număr în afara limitelor.');
     return value;
   }
@@ -22,7 +32,17 @@ export function parseCell(raw, column) {
 
 export const editing = {
   get hasEdit() { return !!this._edit; },
-  focusEdit() { this._edit?.input.focus(); },
+  focusEdit({ select = false } = {}) {
+    const state = this._edit;
+    if (!state) return;
+    let input = state.input;
+    if (state.column.editor === 'tree') {
+      state.combo.show();
+      input = state.combo.searchInput || input;
+    }
+    input.focus({ preventScroll: true });
+    if (select) input.select?.();
+  },
   canEdit(row, column) {
     return !!this._opts.editable && !!column?.editable
       && (typeof column.editable !== 'function' || column.editable(row));
@@ -81,9 +101,10 @@ export const editing = {
   },
   // The focus left the grid: no editor stays open (the cell is saved, or dropped when it cannot be saved), then the row is judged.
   _onFocusOut(ev) {
-    if (this._destroyed || this._leaving || (ev.relatedTarget && this._root.contains(ev.relatedTarget))) return;
+    const owns = target => target && (this._root.contains(target) || this._edit?.combo?.dropdown?.contains(target));
+    if (this._destroyed || this._leaving || owns(ev.relatedTarget)) return;
     setTimeout(async () => {
-      if (this._destroyed || this._leaving || this._edit?.pending || !document.hasFocus() || this._root.contains(document.activeElement)) return;
+      if (this._destroyed || this._leaving || this._edit?.pending || !document.hasFocus() || owns(document.activeElement)) return;
       if (this._edit) { if (!await this.commitEdit() && this._edit && !this._edit.pending) this.cancelEdit(true); }
       if (!this._destroyed && !this._edit) await this._leaveRow(null);
     }, 0);
@@ -136,10 +157,33 @@ export const editing = {
     this._edit = state;
     this._activeKey = key;
     const markRequired = () => {
-      const value = column.editor === 'list' ? state.value : state.input?.value;
+      const value = ['list', 'tree'].includes(column.editor) ? state.value : state.input?.value;
       state.host.closest('.dgv__cell')?.classList.toggle('is-required-empty', !!column.required && this._requiredShown(state.row, key) && (value == null || String(value).trim() === ''));
     };
-    if (column.editor === 'list') {
+    if (column.editor === 'tree') {
+      const nodes = typeof column.nodes === 'function' ? column.nodes(row) : column.nodes || [];
+      state.combo = new ComboTree(host, { nodes, expanded: nodes.map(node => String(node.id)),
+        selectParents: column.selectParents ?? false, minWidth: column.dropDownMinWidth,
+        onSelect: async choice => {
+          state.value = choice.id; state.raw = choice.id; markRequired();
+          const saved = await this.commitEdit();
+          if (saved && column.focusAfterSelect && !this._edit && !this._destroyed) {
+            this.beginEdit(state.row, column.focusAfterSelect);
+          }
+        } });
+      state.combo.setValue(row[key], column.formatter?.(row[key], row) || '');
+      state.input = state.combo.input;
+      state.combo.dropdown.addEventListener('focusout', event => this._onFocusOut(event), { signal: state.abort.signal });
+      for (const input of [state.input, state.combo.searchInput].filter(Boolean)) {
+        input.addEventListener('input', () => { state.value = null; markRequired(); }, { signal: state.abort.signal });
+      }
+      state.combo.dropdown.addEventListener('keydown', event => {
+        if (!['Escape', 'Tab'].includes(event.key)) return;
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (event.key === 'Escape') this.cancelEdit();
+        else void this.commitEdit(event.shiftKey ? -1 : 1);
+      }, { capture: true, signal: state.abort.signal });
+    } else if (column.editor === 'list') {
       const items = typeof column.options === 'function' ? column.options(row) : (column.options || []);
       state.combo = new Combobox(host, { staticData: items, readonly: !column.searchable, showArrow: column.showArrow, dropDownOnEnter: column.dropDownOnEnter, maxResults: column.maxResults, dropDownMinWidth: column.dropDownMinWidth,
         onSearch: column.onSearch ? (query) => column.onSearch(query, row) : async (query) => items.filter((item) => String(item.label || item.text || '').toLocaleLowerCase('ro').includes(query.toLocaleLowerCase('ro'))),
@@ -153,6 +197,11 @@ export const editing = {
       state.input.type = column.editor === 'checkbox' ? 'checkbox' : column.editor === 'date' ? 'date' : 'text';
       if (column.editor === 'number') state.input.inputMode = 'decimal';
       state.input.value = state.raw;
+      if (!['checkbox', 'date', 'monthYear'].includes(column.editor)) {
+        // Use exactly the cell's display text, while retaining its canonical value.
+        state.initialText = String(formatValue(row[key], column) ?? '');
+        state.input.value = state.initialText;
+      }
       if (column.editor === 'monthYear') {
         state.input.value = column.formatter?.(state.raw) || state.raw;
         state.input.placeholder = 'll.aaaa'; state.input.inputMode = 'numeric'; state.input.maxLength = 7;
@@ -180,7 +229,7 @@ export const editing = {
       event.stopPropagation();
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault(); this.commitEdit(event.shiftKey ? -1 : 1);
-      } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && column.editor !== 'list' && column.editor !== 'date') {
+      } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !['list', 'tree', 'date'].includes(column.editor)) {
         // Up/Down save (only when changed) and move the editor to the same column of the next/previous row.
         event.preventDefault(); this.commitEdit(event.key === 'ArrowDown' ? 'down' : 'up');
       }
@@ -188,8 +237,8 @@ export const editing = {
     this._selected = row;
     this._ensureVisible(this._items.findIndex((item) => item.row === row));
     this._renderWindow(true);
-    state.input.focus();
-    state.input.select?.();
+    state.combo?.setInputAppearance?.(window.getComputedStyle(state.input));
+    this.focusEdit({ select: true });
     this._emit('onEditState', { state: 'editing', key });
     return true;
   },
@@ -230,6 +279,15 @@ export const editing = {
   },
   async commitEdit(direction = 0) {
     const state = this._edit;
+    if (!state) return false;
+    // Blur and a form's Save may confirm the same cell concurrently. Both await
+    // the same operation instead of treating an in-flight confirmation as a failure.
+    const task = state.commitPromise ||= Promise.resolve().then(() => this._commitEdit(state, direction));
+    try { return await task; }
+    finally { if (state.commitPromise === task) state.commitPromise = null; }
+  },
+  async _commitEdit(state, direction) {
+    if (this._destroyed || this._edit !== state) return false;
     if (!state || state.pending) return false;
     try {
       if (state.picker) {
@@ -242,7 +300,9 @@ export const editing = {
       let value;
       try {
         value = state.column.editor === 'checkbox' ? state.input.checked
-          : state.column.editor === 'list' ? state.value : parseCell(String(state.raw), state.column);
+          : ['list', 'tree'].includes(state.column.editor) ? state.value
+          : state.initialText !== undefined && state.input.value === state.initialText ? state.value
+          : parseCell(String(state.raw), state.column);
       } catch (error) {
         // Document drafts preserve unfinished input; document Save performs strict validation.
         if (!this._opts.allowIncompleteEdits) throw error;
@@ -308,7 +368,7 @@ export const editing = {
       state.host.title = error.message;
       this._emit('onEditError', { error, key: state.key, row: state.row });
       console.error('[DataGrid] Cell save failed', error);
-      state.input.focus();
+      this.focusEdit();
       return false;
     }
   },

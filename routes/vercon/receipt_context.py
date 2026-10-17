@@ -84,22 +84,42 @@ def product_statement(cursor, ctx, product, net_price, vat, on, preferred=None):
 
 
 def register(bp, guard, scoped, session, build, need):
-    @bp.get('/api/vercon/doc/nir/supplier-statement')
+    def statement_family(family):
+        if family not in ('nir', 'storno'):
+            raise NomError('FAMILY_UNKNOWN', 'Fișa nu este disponibilă pentru acest document.', 404)
+        need(family)
+
+    @bp.get('/api/vercon/doc/<family>/supplier-statement')
     @guard('read')
-    def receipt_supplier_statement():
-        need('nir')
+    def receipt_supplier_statement(family):
+        statement_family(family)
         vctx = scoped('read')
         supplier = _id('supplier')
         on = protocol.to_date(request.args.get('date'), 'Data fișei')
         with session(False) as cursor:
-            ctx, _ = build(cursor, vctx, 'nir', False)
+            ctx, _ = build(cursor, vctx, family, False)
             return supplier_statement(cursor, ctx, supplier, on)
 
-    @bp.get('/api/vercon/doc/nir/product-statement')
+    @bp.get('/api/vercon/doc/<family>/product-statement')
     @guard('read')
-    def receipt_product_statement():
-        need('nir')
+    def receipt_product_statement(family):
+        statement_family(family)
         vctx = scoped('read')
+        if family == 'storno':
+            preferred = _id('variant')
+            on = protocol.to_date(request.args.get('date'), 'Data fișei')
+            with session(False) as cursor:
+                ctx, _ = build(cursor, vctx, family, False)
+                from .stock_source import variants
+                item = variants(cursor, ctx).get(preferred)
+                if not item:
+                    raise NomError('INVALID', 'Produsul nu aparține gestiunii curente.', 422)
+                data = stock.read(cursor, ctx, date(min(int(ctx['year'] or on.year), on.year), 1, 1), on, variant=preferred)
+                movements = data['statement']
+                return {'product': item['product'], 'name': item['name'], 'um': item['um'], 'price': format(item['price'] or 0, 'f'),
+                        'variant': preferred, 'date': on.isoformat(), 'count': len(movements), 'zec': ctx['zec'],
+                        'rows': [{**row, 'key': '%s:%s:%s' % (row['kind'], row['document_id'], row['line_id'])} for row in reversed(movements[-20:])],
+                        'closing': data['rows'][0]['quantities']['closing'] if data['rows'] else '0'}
         product, vat, preferred = _id('product'), _id('vat'), _id('variant', False)
         on = protocol.to_date(request.args.get('date'), 'Data fișei')
         try:

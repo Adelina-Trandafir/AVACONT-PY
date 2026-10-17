@@ -2,6 +2,7 @@
 // contents on the left, formatted text on the right), the print window, and the server's PDF (routes/adechit/help_pdf.py).
 // Text markup: **bold** and [text](#id); blocks: p, h (sub-title, optional id), ul, ol, note, table {head, rows}.
 import { outputReport } from './reports.js';
+import { trackSessionWindow } from '../utils/session-exit.js';
 
 const CONTENT_URL = '/static/help/adechit.json';
 const TOKEN = /(\*\*[^*]+\*\*|\[[^\]]+\]\(#[a-z0-9-]+\))/;
@@ -73,7 +74,7 @@ function renderSections(k_doc, k_content) {
 
 // Print: a window with the whole help (title, summary, every section); the browser's print dialog does the rest.
 function printHelp(k_content) {
-  const k_win = window.open('', '_blank');
+  const k_win = trackSessionWindow(window.open('', '_blank'));
   if (!k_win) throw new Error('Browserul a blocat fereastra de listare. Permiteți ferestrele popup pentru această pagină.');
   const k_doc = k_win.document;
   k_doc.title = k_content.title;

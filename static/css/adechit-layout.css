@@ -11,6 +11,7 @@
 .ade-session-timer { flex: 0 0 auto; padding: 2px 9px; color: #fff; background: rgba(255, 255, 255, .18); border-radius: 12px; font-size: var(--fs-ms); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ade-session-timer[hidden] { display: none; }
 .ade-session-timer.is-urgent { background: #c0392b; }
+.portal.ade-page .ade-header.is-session-ending { --ade-header-back: #c65b00; }
 .ade-page.is-reports-collapsed .ade-header__context { display: none; }
 .ade-header .brand { justify-self: start; font-size: var(--fs-mp); }
 button.ade-brand { padding: 0; background: none; border: 0; cursor: pointer; font: inherit; }

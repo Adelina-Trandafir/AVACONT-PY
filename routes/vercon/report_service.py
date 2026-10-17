@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import tempfile
 import time
-from . import report_body, report_catalog, report_data, report_food, report_store, report_output
+from . import report_body, report_catalog, report_data, report_food, report_store, report_output, report_reception
 from .nomenclatoare import NomError
 
 
@@ -43,6 +43,7 @@ def build(cursor, unit, ctx, name, params, gestiune_name):
     report_store.validate('unit', identity['value'])
     source = report_data.Source(cursor, unit, ctx, params)
     notes = []
+    receptions = []
     if spec['kind'] == 'food':
         blocks = report_food.build(source, spec, layout['value'])
     else:
@@ -50,6 +51,8 @@ def build(cursor, unit, ctx, name, params, gestiune_name):
         if (params.get('document') is not None or params.get('document_ids') is not None) and not rows:
             raise NomError('NOT_FOUND', 'Documentul nu este disponibil în selecția raportului.', 404)
         committees = {row['IdComisie']: row for row in source.rows('committee')} if spec.get('family') in ('nir', 'storno') else {}
+        if layout['value'].get('form') == 'nir-classic' and spec.get('family') in ('nir', 'storno'):
+            receptions = report_reception.documents(rows, committees)
         blocks = report_body.build(spec, layout['value'], rows, ctx, identity['value'], committees)
         if spec['kind'] in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
             notes.append('Stoc evaluat la prețul curent al variantei; documentele păstrează valorile proprii.')
@@ -72,6 +75,8 @@ def build(cursor, unit, ctx, name, params, gestiune_name):
              'notes': notes, 'context': {key: ctx[key] for key in ('subunit', 'gestiune', 'exercitiu', 'type', 'scale', 'zec')},
              'versions': {'layout': layout['version'], 'unit': identity['version'], 'queries': source.versions},
              'generated_at': datetime.now().isoformat(timespec='seconds')}
+    if receptions:
+        model['receptions'] = receptions
     model = primitive(model)
     model['data_hash'] = hashlib.sha256(json.dumps(model, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
     return model

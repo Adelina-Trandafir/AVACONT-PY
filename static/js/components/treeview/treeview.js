@@ -211,9 +211,9 @@ export class TreeView {
 
     this.container.classList.add('treeview-container');
 
-    this.input = document.getElementById(`${this.instanceId}-input`);
-    this.arrow = document.getElementById(`${this.instanceId}-arrow`);
-    this.loader = document.getElementById(`${this.instanceId}-loader`);
+    this.input = this.container.querySelector(`#${this.instanceId}-input`);
+    this.arrow = this.container.querySelector(`#${this.instanceId}-arrow`);
+    this.loader = this.container.querySelector(`#${this.instanceId}-loader`);
 
     this.bindContainerEvents();
     if (this.options.showTwoRowsInInput) this.createMiniHeader();

@@ -5,7 +5,7 @@ import { decimalText } from './decimal-text.js';
 
 const kinds = { nir: 'NIR', storno: 'Storno', bc: 'BC', br: 'Retur', bp: 'Predare' };
 
-export function receiptContext(host, { root, main, headerHost, linesHost, treeHost, api, selection, context, validLine, blankLine }) {
+export function receiptContext(host, { root, main, headerHost, linesHost, treeHost, api, selection, lineSelection, context, validLine, blankLine, family = 'nir' }) {
   const supplier = el('section', { className: 'vc-receipt-card', 'aria-label': 'Fișa furnizorului' });
   const product = el('section', { className: 'vc-receipt-card', 'aria-label': 'Fișa de magazie' });
   const panels = el('div', { className: 'vc-receipt-context', hidden: true }, supplier, product);
@@ -30,7 +30,7 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
     message(panel, title, 'Se încarcă…');
     request.timer = setTimeout(async () => {
       try {
-        const data = await api(`/api/vercon/doc/nir/${name}-statement?${params}`);
+        const data = await api(`/api/vercon/doc/${family}/${name}-statement?${params}`, { headers: { 'X-Vercon-Version': '' } });
         if (destroyed || !visible || sequence !== request.sequence) return;
         render(data);
       } catch (error) {
@@ -45,7 +45,7 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
     panel.append(el('div', { className: 'vc-receipt-card__body' }, el('table', {}, el('thead', {}, head), body)));
   }
   function renderSupplier(data) {
-    supplier.replaceChildren(el('h4', { textContent: 'Fișă furnizor' }), el('p', { className: 'vc-receipt-card__identity', textContent: data.name, title: data.fiscal_code }));
+    supplier.replaceChildren(el('h4', { textContent: 'Fișă furnizor' }));
     if (data.rows.length) table(supplier, [
       ['Data', (row) => day(row.date)], ['Factură', (row) => `${row.kind === 'Storno' ? 'Storno ' : ''}${row.invoice}`],
       ['Valoare', (row) => money(row.value), true],
@@ -60,7 +60,7 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
       ['Data', (row) => day(row.date)], ['Document', (row) => `${kinds[row.kind] || row.kind} ${row.number ?? ''}`],
       ['Cant.', (row) => money(row.quantity), true], ['Sold', (row) => money(row.balance), true],
     ], data.rows);
-    else product.append(el('p', { className: 'vc-receipt-card__message', textContent: 'Fără mișcări salvate pentru acest produs și preț până la data aleasă.' }));
+    else product.append(el('p', { className: 'vc-receipt-card__message', textContent: 'PRODUS NOU' }));
     product.append(el('footer', { className: 'vc-receipt-card__total', textContent: `Stoc: ${money(data.closing)} ${data.um}` }));
   }
   function refresh(row) {
@@ -80,20 +80,21 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
       // A snapshot survives temporary invalid edits, including clearing the current price.
       remembered = { ...line };
     } else line = remembered;
-    const date = parse(draft.header.DataFc || draft.header.Data || '', { type: 'date', required: true });
+    const date = parse((family === 'storno' ? draft.header.Data : draft.header.DataFc || draft.header.Data) || '', { type: 'date', required: true });
     const base = new URLSearchParams(Object.entries(selection()).filter(([, value]) => value != null && value !== ''));
     if (date.ok) base.set('date', date.value);
     if (draft.tip === 'STOC_INITIAL' || !draft.header.IdPartener || !date.ok) {
-      stop('supplier'); message(supplier, 'Fișă furnizor', draft.tip === 'STOC_INITIAL' ? 'Stoc inițial • fără furnizor.' : !date.ok ? 'Completați data facturii.' : 'Alegeți furnizorul.');
+      stop('supplier'); message(supplier, 'Fișă furnizor', draft.tip === 'STOC_INITIAL' ? 'Stoc inițial • fără furnizor.' : !date.ok ? `Completați data ${family === 'storno' ? 'FCS' : 'facturii'}.` : family === 'storno' ? 'Alegeți recepția stornată.' : 'Alegeți furnizorul.');
     } else {
       const params = new URLSearchParams(base); params.set('supplier', draft.header.IdPartener);
       load('supplier', supplier, 'Fișă furnizor', params, renderSupplier);
     }
     if (!line || !validLine(line) || !date.ok) {
-      stop('product'); message(product, 'Fișă de magazie', !date.ok ? 'Completați data facturii.' : 'Selectați un rând validat, cu produs, cantitate, preț și TVA.');
+      stop('product'); message(product, 'Fișă de magazie', !date.ok ? `Completați data ${family === 'storno' ? 'FCS' : 'facturii'}.` : family === 'storno' ? 'Selectați un produs din recepția stornată.' : 'Selectați un rând validat, cu produs, cantitate, preț și TVA.');
     } else {
-      const params = new URLSearchParams(base);
-      params.set('product', line.product); params.set('price', line.Pret); params.set('vat', line.IDTVA);
+      const params = new URLSearchParams(lineSelection ? Object.entries(lineSelection(line)).filter(([, value]) => value != null && value !== '') : base);
+      if (date.ok) params.set('date', date.value);
+      if (family === 'nir') { params.set('product', line.product); params.set('price', line.Pret); params.set('vat', line.IDTVA); }
       if (line.variant) params.set('variant', line.variant);
       load('product', product, 'Fișă de magazie', params, renderProduct);
     }

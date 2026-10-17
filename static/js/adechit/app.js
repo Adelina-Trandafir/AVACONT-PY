@@ -5,6 +5,7 @@ import { DatePicker } from '../components/datepicker/datepicker.js';
 import { showMessage as paintMessage } from '../portal/messages.js';
 import { openMenu } from './menu.js';
 import { startSessionTimer } from './session.js';
+import { beginSessionExit, trackSessionWindow } from '../utils/session-exit.js';
 import { bindCatalogs } from './catalogs.js';
 import { bindAnnual } from './annual.js';
 import { bindReports, outputReport } from './reports.js';
@@ -34,6 +35,7 @@ function portalToken() {
 // session and no unit opened yet, to pick the unit.
 function toPortal(dropToken) {
   if (dropToken) {
+    beginSessionExit();
     try { window.sessionStorage.removeItem(PORTAL_TOKEN_KEY); } catch (err) { console.error('[ade] sessionStorage is blocked', err); }
   }
   window.location.replace('/portal?next=' + encodeURIComponent('/adechit'));
@@ -632,7 +634,7 @@ const fetchReceiptOutput = (id, kind) => fetchOutput(`/api/adechit/receipts/${id
 
 async function outputReceipt(id, kind) {
   // Open synchronously from the menu click so the browser accepts the print window.
-  const printWindow = kind === 'print' ? window.open('', '_blank') : null;
+  const printWindow = kind === 'print' ? trackSessionWindow(window.open('', '_blank')) : null;
   try {
     if (kind === 'print' && !printWindow) throw new Error('Browserul a blocat fereastra de listare. Permiteți ferestrele popup pentru această pagină.');
     if (printWindow) { printWindow.document.title = 'Chitanță'; printWindow.document.body.textContent = 'Se pregătește chitanța…'; }
@@ -857,10 +859,17 @@ Dacă luna ${k_open} are deja plăți sau restituiri, redeschiderea poate fi blo
 }
 
 // The hour is over: the server session is closed and the sign-in page opens (unsaved work is lost by design).
-async function logoutNow() {
-  try { await fetch('/api/portal/logout', { method: 'POST', headers: { 'X-Portal-Token': portalToken() } }); }
-  catch (k_error) { console.error('[ade] logout call failed', k_error); }
+function logoutNow() {
+  beginSessionExit();
+  void fetch('/api/portal/logout', { method: 'POST', keepalive: true, headers: { 'X-Portal-Token': portalToken() } })
+    .catch(k_error => console.error('[ade] logout call failed', k_error));
   toPortal(true);
+}
+
+async function leaveApplication(url) {
+  if ((state.grid?.hasEdit || state.payers?.isDirty?.()) && !await confirmBox('Renunțați la modificările nesalvate și schimbați aplicația?',
+    { title: 'Modificări nesalvate', yes: 'Renunț la modificări', no: 'Rămân aici', warning: true })) return;
+  window.location.href = url;
 }
 
 function bind() {
@@ -911,8 +920,8 @@ function bind() {
   $('ade-apps').addEventListener('click', () => {
     openMenu($('ade-apps'), [
       { icon: '🏢', label: $('ade-context').textContent || 'Contul curent', disabled: true },
-      { icon: '🤖', label: 'K-BOT', rule: true, run: () => { window.location.href = '/portal'; } },
-      { icon: '🏗️', label: 'VERCON', run: () => { window.location.href = '/vercon'; } },
+      { icon: '🤖', label: 'K-BOT', rule: true, run: () => leaveApplication('/portal') },
+      { icon: '🏗️', label: 'VERCON', run: () => leaveApplication('/vercon') },
       { icon: '📒', label: 'Avacont · în curând', disabled: true },
     ], { label: 'Aplicații', below: $('ade-apps').closest('header') });
   });

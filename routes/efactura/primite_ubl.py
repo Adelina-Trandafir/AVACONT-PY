@@ -12,7 +12,8 @@ What comes out (`parse(xml_bytes)` -> dict):
   header   NrFact, DataFact, DataScad, Tip («FC» / «NC»), Semn, CUI (as written, «RO» kept), CuiNormalizat, DenumireP, Adresa,
            Valoare (taxable amount), TVA, CotaTVA (the rate of the biggest taxable amount), Total (payable), Atasament
            (file name of the first embedded document), Ref («number / date» of the invoice a credit note refers to)
-  linii    NrLinie, Denumire, Explicatie, Cpv («» when the line has no STI code), Unit, Cant, Pret, Valoare
+  linii    NrLinie, Denumire, Explicatie, Cpv («» when the line has no STI code), Unit, Cant, Pret, Valoare,
+           CotaTVA (the rate of the line, None when the XML gives none; KE01)
   note     the document-level notes (text)
   atasamente  [{nume, mime, octeti}] the embedded documents (the bytes are decoded by `atasament_bytes`)
   cumparator  {nume, cui, adresa} the buyer;  plati  [{cod, cont}] the accounts the supplier asks to be paid into (not stored: read when shown)
@@ -187,6 +188,12 @@ def _cpv(line):
     return ""
 
 
+def _line_rate(line):
+    """The VAT rate of a line (`Item/ClassifiedTaxCategory/Percent`), or None when the line does not carry one (KE01)."""
+    text = _text(line, "Item/ClassifiedTaxCategory/Percent")
+    return _number(text) if text else None
+
+
 def _lines(root, credit):
     lines = []
     for index, line in enumerate(_findall(root, "CreditNoteLine" if credit else "InvoiceLine"), 1):
@@ -203,6 +210,7 @@ def _lines(root, credit):
             "Cant": _number(quantity.text if quantity is not None else ""),
             "Pret": _money(line, "Price/PriceAmount"),
             "Valoare": _money(line, "LineExtensionAmount"),
+            "CotaTVA": _line_rate(line),
         })
     return lines
 

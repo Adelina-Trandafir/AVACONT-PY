@@ -48,6 +48,8 @@ const CASINGS = ['none', 'upper', 'lower'];
 const CURSORS = ['ibeam', 'arrow'];
 const NUMERIC = ['int', 'decimal', 'money'];
 
+// Opt-in money display: numberLocale: 'en-US' uses 1,234.56 and parses it
+// back to canonical decimal text. Other TextBoxes keep their existing format.
 export class TextBox {
   constructor(container, options = {}) {
     if (!container) throw new Error('TextBox: container is required');
@@ -115,6 +117,13 @@ export class TextBox {
   /** { ok: true, value } | { ok: false, message }; does not touch the error state (validate() does). */
   result() {
     if (this.options.type === 'money' && this._shown !== null && this.input.value === this._shown) return { ok: true, value: this._exact };
+    if (this.options.type === 'money' && this.options.numberLocale === 'en-US') {
+      const text = this.input.value.trim();
+      if (text && !/^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(text)) {
+        return { ok: false, message: 'Introduceți valoarea în formatul 1,234.56.' };
+      }
+      return parse(text.replace(/,/g, ''), this._spec());
+    }
     return parse(this.input.value, this._spec());
   }
 
@@ -136,7 +145,9 @@ export class TextBox {
   }
 
   _showMoney(k_canonical) {
-    this.input.value = formatMoney(k_canonical);
+    const text = formatMoney(k_canonical);
+    this.input.value = this.options.numberLocale === 'en-US'
+      ? text.replace(/[.,]/g, separator => separator === '.' ? ',' : '.') : text;
     this._exact = k_canonical;
     this._shown = this.input.value;
   }
@@ -225,12 +236,12 @@ export class TextBox {
     // allowCopyPaste off: nothing goes into the field from outside and nothing is taken out of it (checked at the event, so the switch can change)
     for (const k_name of ['copy', 'cut', 'paste', 'drop']) this.input.addEventListener(k_name, (k_event) => { if (!this.options.allowCopyPaste) k_event.preventDefault(); }, k_signal);
     this.input.addEventListener('focus', () => {
-      if (k_o.type === 'money' && this._shown !== null && this.input.value === this._shown) this.input.value = format(this._exact, { type: 'decimal' });
+      if (k_o.type === 'money' && k_o.numberLocale !== 'en-US' && this._shown !== null && this.input.value === this._shown) this.input.value = format(this._exact, { type: 'decimal' });
       if (k_o.selectOnFocus) this.input.select();
     }, k_signal);
     this.input.addEventListener('blur', (k_event) => {
       if (k_o.type === 'money') {
-        const k_result = parse(this.input.value, this._spec());
+        const k_result = this.result();
         if (k_result.ok && k_result.value !== null) this._showMoney(k_result.value);
         else { this._exact = null; this._shown = null; }
       }

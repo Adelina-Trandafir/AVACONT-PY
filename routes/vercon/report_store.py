@@ -30,13 +30,22 @@ def _path(unit, part, key):
         raise NomError('REPORT_CONFIG', 'Machetă necunoscută.', 422)
     if part not in ('query', 'layout', 'unit'):
         raise NomError('REPORT_CONFIG', 'Tip de configurare invalid.', 422)
-    slug = re.sub(r'[^a-z0-9_-]', '_', str(key).casefold()) if part != 'unit' else 'identity'
+    # One editable layout for NIR and FCS. Legacy layout-nir_storno.json is left untouched.
+    canonical = 'nir' if part == 'layout' and str(key).casefold() == 'nir_storno' else str(key).casefold()
+    slug = re.sub(r'[^a-z0-9_-]', '_', canonical) if part != 'unit' else 'identity'
     return ROOT / unit / f'{part}-{slug}.json'
 
 
 def _default(unit, part, key):
     if part == 'query':
-        return (QUERIES / (key + '.sql')).read_text(encoding='utf-8')
+        path = QUERIES / (key + '.sql')
+        try:
+            return path.read_text(encoding='utf-8')
+        except FileNotFoundError:
+            raise NomError('REPORT_RESOURCE_MISSING',
+                           'Resursele raportului nu sunt instalate complet. '
+                           f'Lipsește reports/vercon/queries/{path.name}. '
+                           'Contactați administratorul pentru republicarea resurselor.', 503) from None
     if part == 'unit':
         return report_layouts.unit_default(unit)
     return report_layouts.default(report_catalog.CATALOG[str(key).casefold()])

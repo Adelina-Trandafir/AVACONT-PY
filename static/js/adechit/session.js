@@ -1,38 +1,94 @@
-// SLICE-AD10 (UI): the portal session lasts ONE hour from the mailed code, whatever the operator is doing
-// (unsaved work included). The server holds the real limit; this only shows the last minutes and leaves on time.
-const LAST_MINUTES = 5 * 60;   // the countdown is shown for the last five minutes
-const RESYNC_MS = 60 * 1000;   // the server is asked again every minute (also when the tab wakes up)
+// The server owns the deadline. Page load renews it; polling and local activity only read it.
+import { messageBox } from '../utils/confirm-box.js';
+import { beginSessionExit } from '../utils/session-exit.js';
 
-export function startSessionTimer({ token, onExpired, host }) {
-  let k_deadline = 0;
-  let k_left = false;
-  const k_show = (k_seconds) => {
-    host.hidden = k_seconds > LAST_MINUTES;
-    if (host.hidden) return;
-    const k_text = `${String(Math.floor(k_seconds / 60)).padStart(2, '0')}:${String(k_seconds % 60).padStart(2, '0')}`;
-    host.querySelector('b').textContent = k_text;
-    host.classList.toggle('is-urgent', k_seconds <= 60);
-    host.title = 'Sesiunea durează o oră de la introducerea codului și se închide automat.';
+const RESYNC_MS = 60 * 1000;
+const clock = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
+async function readSession(token, signal, renew = false) {
+  const response = await fetch(`/api/portal/session/${renew ? 'renew' : 'check'}`, {
+    method: renew ? 'POST' : 'GET', headers: { 'X-Portal-Token': token() }, cache: 'no-store', signal,
+  });
+  if (response.status === 401) return { expires_in: 0 };
+  if (!response.ok) throw new Error(`Eroare HTTP ${response.status}`);
+  return response.json();
+}
+
+// Injectable thresholds/checkSession are used only by the isolated local demo.
+export function startSessionTimer({ token, onExpired, host, warningSeconds = 15 * 60, criticalSeconds = 5 * 60,
+  showFromSeconds = warningSeconds, checkSession, renewSession }) {
+  const check = checkSession || (signal => readSession(token, signal));
+  // A demo supplying its own clock stays isolated from authenticated session routes.
+  const renew = renewSession || checkSession || (signal => readSession(token, signal, true));
+  let deadline = 0, stopped = false, left = false, syncing = false, warned = 0, notice = null, noticeLevel = 0;
+  const abort = new AbortController(), header = host?.closest('header');
+  let tick, sync;
+  const closeNotice = () => { notice?.close(); notice = null; };
+  const stop = () => {
+    if (stopped) return;
+    stopped = true; abort.abort(); clearInterval(tick); clearInterval(sync);
+    document.removeEventListener('visibilitychange', wake);
+    window.removeEventListener('pagehide', stop);
+    window.removeEventListener('app:session-expired', stop);
+    closeNotice(); header?.classList.remove('is-session-ending');
   };
-  const k_leave = () => { if (k_left) return; k_left = true; onExpired(); };
-  const k_sync = async () => {
+  const leave = () => {
+    if (left || stopped) return;
+    left = true; stop(); beginSessionExit(); onExpired();
+  };
+  const noticeText = seconds => noticeLevel === 2
+    ? `Deconectare automată în ${clock(seconds)}.\nSalvați acum și încheiați lucrul. La expirare toate ferestrele și formularele se închid fără confirmare. Modificările nesalvate se pierd.`
+    : `Mai sunt ${Math.ceil(seconds / 60)} minute până la deconectare (${clock(seconds)}).\nApropiați-vă de încheierea lucrării și salvați modificările. Sesiunea se va închide automat la expirarea timpului.`;
+  const show = seconds => {
+    if (host) {
+      host.hidden = seconds > showFromSeconds;
+      const value = host.querySelector('b'); if (value) value.textContent = clock(seconds);
+      host.classList.toggle('is-urgent', seconds <= criticalSeconds);
+      host.title = 'Timp rămas până la deconectarea automată. Refreshul paginii reînnoiește sesiunea; activitatea curentă nu o prelungește.';
+    }
+    header?.classList.toggle('is-session-ending', seconds <= criticalSeconds);
+    const level = seconds <= criticalSeconds ? 2 : seconds <= warningSeconds ? 1 : 0;
+    if (level < warned) { warned = level; closeNotice(); }
+    if (level > warned) {
+      warned = level; closeNotice(); noticeLevel = level;
+      const box = messageBox(noticeText(seconds), {
+        title: level === 2 ? 'Deconectare iminentă — salvați acum' : 'Sesiunea se apropie de încheiere', warning: level === 2,
+      });
+      notice = box;
+      box.closed.then(() => { if (notice === box) notice = null; });
+    }
+    notice?.setText(noticeText(seconds));
+  };
+  const runTick = () => {
+    if (!deadline || stopped) return;
+    const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    // Another page sharing the token may have renewed it since the last poll.
+    if (seconds === 0) { void resync(); return; }
+    show(seconds);
+  };
+  const resync = async (initial = false) => {
+    if (stopped || syncing) return;
+    syncing = true;
+    const started = Date.now();
     try {
-      const k_response = await fetch('/api/portal/session/check', { headers: { 'X-Portal-Token': token() }, cache: 'no-store' });
-      if (k_response.status === 401) { k_leave(); return; }
-      const k_data = await k_response.json().catch(() => ({}));
-      if (Number.isFinite(k_data.expires_in)) k_deadline = Date.now() + k_data.expires_in * 1000;
-    } catch (k_error) { console.error('[ade] the session time could not be read', k_error); }
+      const data = await (initial ? renew : check)(abort.signal);
+      if (stopped) return;
+      if (data.authenticated === false || Number.isFinite(data.expires_in) && data.expires_in <= 0) { leave(); return; }
+      if (Number.isFinite(data.expires_in)) deadline = started + Math.max(0, data.expires_in) * 1000;
+      runTick();
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('[session] Timpul sesiunii nu a putut fi citit', error);
+        if (deadline && deadline <= Date.now()) leave();
+      }
+    }
+    finally { syncing = false; }
   };
-  const k_tick = () => {
-    if (!k_deadline) return;
-    const k_seconds = Math.max(0, Math.ceil((k_deadline - Date.now()) / 1000));
-    k_show(k_seconds);
-    if (k_seconds <= 0) k_leave();
-  };
-  k_sync().then(k_tick);
-  const tick = setInterval(k_tick, 1000);
-  const sync = setInterval(k_sync, RESYNC_MS);
-  const wake = () => { if (!document.hidden) k_sync().then(k_tick); };
+  function wake() { if (!document.hidden) { runTick(); if (!stopped) void resync(); } }
+  tick = setInterval(runTick, 1000); sync = setInterval(resync, RESYNC_MS);
   document.addEventListener('visibilitychange', wake);
-  return () => { clearInterval(tick); clearInterval(sync); document.removeEventListener('visibilitychange', wake); };
+  window.addEventListener('pagehide', stop, { once: true });
+  window.addEventListener('app:session-expired', stop, { once: true });
+  void resync(true);
+  return stop;
 }

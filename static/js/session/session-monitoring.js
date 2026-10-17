@@ -11,6 +11,7 @@
  */
 
 import { testMode } from '../utils/debug-tools.js';
+import { beginSessionExit } from '../utils/session-exit.js';
 import eventBus, { EVENTS } from '../event-bus/event-bus.js';
 import { registerInstance } from '../instances-registry.js';
 import ListenerTracker from '../listener-tracker/listener-tracker-mixin.js';
@@ -106,7 +107,8 @@ class SessionMonitoring {
       // Încarcă CSS-ul
       await this.loadMonitoringCSS();
 
-      const response = await this.api('GET', '/api/portal/session/info');
+      // Initialization follows login / page load. Background checks never renew the deadline.
+      const response = await this.api('POST', '/api/portal/session/renew');
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.authenticated) {
@@ -159,15 +161,14 @@ class SessionMonitoring {
       timestamp: Date.now(),
     });
 
-    this.showNotification(`${reason}. Veți fi redirecționat la autentificare.`, 'error');
-
-    setTimeout(() => this.leave(), 3000);
+    this.leave();
   }
 
   /**
    * 🚪 Forget the session on the page and go to the sign-in page
    */
   leave() {
+    beginSessionExit();
     if (this.onExpired) {
       try {
         this.onExpired();

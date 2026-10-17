@@ -82,15 +82,16 @@ export function field(column, value, editable, onChange, owner) {
     source._picker = picker; tipTarget = picker.field;
     picker.field.addEventListener('blur', () => setTimeout(touch, 200));
   } else {
-    box = owner.own(new TextBox(label, { type: ['int', 'decimal', 'money', 'search'].includes(column.type) ? column.type : 'text', value, required, readOnly: !editable,
-      textAlign: 'left', maxLength: column.type === 'text' || !column.type ? column.max : undefined, min: column.min, ariaLabel: column.label, onLeave: column.onLeave, allowCopyPaste: column.allowCopyPaste }));
+    box = owner.own(new TextBox(label, { type: column.displayFormat === 'standard' && column.type === 'decimal' ? 'money' : ['int', 'decimal', 'money', 'search'].includes(column.type) ? column.type : 'text', value, required, readOnly: !editable,
+      textAlign: column.textAlign || 'left', numberLocale: column.numberLocale, maxLength: column.type === 'text' || !column.type ? column.max : undefined, min: column.min, ariaLabel: column.label, onLeave: column.onLeave, allowCopyPaste: column.allowCopyPaste }));
     source = box.input; source._box = box;
   }
   if (!box) owner.own({ validate: () => { touch(); return { ok: !(editable && required && blank()) && !remote }; }, destroy() {} });
   source._clearValue = () => { if (box) box.setValue(''); else if (source._combo) { source.value = ''; source._combo.setValue('', ''); error.textContent = ''; } };
   source._setRequired = (on) => { required = on; label.firstElementChild.textContent = column.label + (required && editable ? ' *' : ''); if (box) box.setRequired(on); else markRequired(); };
-  source.addEventListener('change', () => { if (!box) error.textContent = ''; markRequired(); if (editable) onChange?.(source.value, source); });
-  if (column.type !== 'date' && column.type !== 'ref' && column.type !== 'select') source.addEventListener('input', () => { if (editable) onChange?.(source.value, source); });
+  const changeValue = () => column.numberLocale && box ? box.getValue() : source.value;
+  source.addEventListener('change', () => { if (!box) error.textContent = ''; markRequired(); if (editable) onChange?.(changeValue(), source); });
+  if (column.type !== 'date' && column.type !== 'ref' && column.type !== 'select') source.addEventListener('input', () => { if (editable) onChange?.(changeValue(), source); });
   markRequired();
   return { node: label, input: source, error };
 }

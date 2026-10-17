@@ -333,12 +333,22 @@ def _version(raw):
 
 def update(repo, cursor, ctx, kind, gestiune_type, scale, row_id, values, base_version, request_id=None):
     _allow_nom_write(kind)
+    if kind == 'produse':
+        # Serialize account changes with document writes in this gestiune, including the first movement.
+        cursor.execute('SELECT GestiuneId FROM VC_Gestiuni WHERE SubunitId=%s AND GestiuneId=%s FOR UPDATE',
+                       (ctx['subunit'], ctx['gestiune']))
+        cursor.fetchone()
     spec = spec_of(kind)
     version = _version(base_version)
     before = _fetch(repo, spec, row_id)
     if before['Version'] != version:
         _conflict(repo, spec, row_id)
     cleaned = clean(spec, gestiune_type, values, scale, repo)
+    if kind == 'produse' and cleaned.get('IdMasina') != before.get('IdMasina'):
+        from .nomenclator_usage import blocked_ids
+        if row_id in blocked_ids(cursor, ctx['subunit'], ctx['gestiune'], 'produse'):
+            raise NomError('PRODUCT_ACCOUNT_LOCKED', 'Contul unui produs cu mișcări nu poate fi modificat.', 409,
+                           {'IdMasina': 'Produsul are mișcări; contul rămâne cel original.'})
     if kind == 'produse' and cleaned.get('CPV') and cleaned['CPV'] != before.get('CPV'):
         from .cpv_catalog import validate
         validate(cursor, cleaned['CPV'])

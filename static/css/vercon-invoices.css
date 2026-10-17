@@ -1,0 +1,14 @@
+.vc-invoices.vc-modal { width: min(1500px, 96vw); max-width: 96vw; }
+.vc-invoices .vc-modal__body { max-height: 80vh; overflow: auto; }
+.vc-invoices__layout { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(480px, 2fr); gap: 12px; }
+.vc-invoices__layout > * { min-width: 0; }
+.vc-invoices__header { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
+.vc-invoices__list { min-height: 440px; }
+.vc-invoices__lines { height: 280px; }
+.vc-invoices__receipts { height: 190px; }
+.vc-invoices .vc-actions { margin-bottom: 12px; flex-wrap: wrap; }
+.vc-invoice-link { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+@media (max-width: 900px) {
+  .vc-invoices__layout { grid-template-columns: minmax(0, 1fr); }
+  .vc-invoices__list { min-height: 220px; height: 220px; }
+}

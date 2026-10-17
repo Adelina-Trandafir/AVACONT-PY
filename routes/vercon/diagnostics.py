@@ -33,7 +33,10 @@ def line(operation, outcome, context, rid, reason=None):
 
 
 def info(operation, outcome, context, rid):
-    logger.info(line(operation, outcome, context, rid))
+    # A successful read changes nothing and one screen makes many of them: DEBUG keeps api_server.log readable.
+    # Refusals, busy, rollback, commit and failures keep their own levels below.
+    level = logging.DEBUG if operation == 'read' and outcome == 'success' else logging.INFO
+    logger.log(level, line(operation, outcome, context, rid))
 
 
 def refusal(operation, context, rid, reason):

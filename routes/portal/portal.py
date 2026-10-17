@@ -11,6 +11,7 @@ already on the MariaDB server. Nothing here writes business data.
     GET  /api/portal/session/info                -> idle window, extensions (for the page's timer)
     GET  /api/portal/session/check               -> is the session alive?
     POST /api/portal/session/extend              -> slides the window, counts the extension
+    POST /api/portal/session/renew               -> restarts a live session's duration on page load
 
 WHO GETS IN. Two factors, as for the password change (slice 0072) and the operator page
 (slice 0075-05): the K-BOT password, proven by a MariaDB login AS the user (auth.verify_operator,
@@ -29,11 +30,10 @@ WHICH UNIT. The session note holds the unit the user opened. /api/portal/unit ac
 unit the user really has (read again from Unitati_Utilizatori, never from the client), so a
 portal data route that reads `g.portal["db_name"]` can never be pointed at another unit.
 
-SESSION TIME. Idle window PORTAL_IDLE (sliding; every portal call slides it), absolute cap
-PORTAL_MAX from the code. The page's timer (static/js/session, adapted from
-JS_COMPONENTS/session) warns a minute before the end and asks /session/extend, which is
-refused after PORTAL_MAX_EXTENSIONS or past the cap. The state is in memory/Redis of the STORE;
-the rate limiter is in-process (one gunicorn worker, see gunicorn.conf.py).
+SESSION TIME. PORTAL_SESSION_MINUTES in config.py defines the duration (default 30 minutes).
+Loading a page renews a live session; background checks and normal activity do not restart
+its deadline. Expired sessions require authentication again. The authentication-code trust
+window stays separate. State is in memory/Redis of STORE; the rate limiter is in-process.
 """
 import hashlib
 import hmac
@@ -52,6 +52,7 @@ from routes.auth.auth import log_action, verify_operator
 from routes.auth.ratelimit import LIMITER
 from routes.auth.session_store import STORE
 from routes.portal import drepturi
+from routes.portal.session_settings import SESSION_SECONDS
 from utils.database import get_kbot_comun_connection
 
 logger = logging.getLogger(__name__)
@@ -66,10 +67,10 @@ _NOTE_TRUST = "portal_trust"            # the code was typed in this browser: pa
 
 CODE_TTL = 10 * 60
 CODE_MAX_ATTEMPTS = 5
-# One hour from the code, no more: the session never slides past it and cannot be extended (operator, 10.10.2026).
-PORTAL_MAX = 60 * 60                    # absolute cap, from the code
-PORTAL_IDLE = PORTAL_MAX                # so the cap is the only limit
+PORTAL_MAX = SESSION_SECONDS            # from login / the latest page-load renewal
+PORTAL_IDLE = PORTAL_MAX
 PORTAL_MAX_EXTENSIONS = 0
+PORTAL_TRUST = 60 * 60                  # code reuse after password login is independent of session renewal
 
 _PAGE_FILE = "portal.html"
 
@@ -295,7 +296,7 @@ def portal_verifica():
     LIMITER.record_success(ip, email)
     now = time.time()
     trust = secrets.token_urlsafe(32)
-    STORE.put_note(trust, _NOTE_TRUST, {"email": email, "issued_at": now}, PORTAL_MAX)
+    STORE.put_note(trust, _NOTE_TRUST, {"email": email, "issued_at": now}, PORTAL_TRUST)
     return open_session(email, units, ip, issued_at=now, trust=trust)
 
 
@@ -306,20 +307,21 @@ def _trusted_since(email, trust):
     if note is None or note.get("email") != email:
         return None
     issued = float(note.get("issued_at", 0))
-    return issued if time.time() < issued + PORTAL_MAX else None
+    return issued if time.time() < issued + PORTAL_TRUST else None
 
 
 def open_session(email, units, ip, how=None, issued_at=None, trust=None):
     """Both factors passed (password + code, or an enrolled certificate): the portal session.
-    `how` is only the journal's remark. `issued_at` is when the code was typed (the hour counts from it).
+    `how` is only the journal's remark. `issued_at` retains when the code was typed.
     A user with one unit gets it opened at once."""
     token = secrets.token_urlsafe(32)
     issued_at = time.time() if issued_at is None else issued_at
-    note = {"email": email, "issued_at": issued_at, "extensions": 0, "db_name": None, "role": None}
+    started = time.time()
+    note = {"email": email, "issued_at": issued_at, "renewed_at": started, "extensions": 0, "db_name": None, "role": None}
     if len(units) == 1:
         note["db_name"], note["role"] = units[0]["DC"], units[0]["Rol"]
-    ttl = max(1, int(min(PORTAL_IDLE, issued_at + PORTAL_MAX - time.time())))
-    note["idle_until"] = time.time() + ttl
+    ttl = PORTAL_MAX
+    note["idle_until"] = started + ttl
     STORE.put_note(token, _NOTE_SESSION, note, ttl)
     log_action(email, note["db_name"], "PORTAL_LOGIN", detalii=how, ip=ip)
     payload = {"token": token, "expires_in": ttl}
@@ -331,6 +333,10 @@ def open_session(email, units, ip, how=None, issued_at=None, trust=None):
 # ---------------------------------------------------------------------------
 # Session: guard, logout, who am I, timer routes
 # ---------------------------------------------------------------------------
+def _session_deadline(note):
+    return float(note.get("renewed_at", note.get("issued_at", 0))) + PORTAL_MAX
+
+
 def _live_session():
     """`(token, note, None)` for a live portal session, else `(None, None, <401 response>)`.
     Does NOT slide the window: the callers decide (everything but /session/check does)."""
@@ -338,7 +344,7 @@ def _live_session():
     note = STORE.get_note(token, _NOTE_SESSION) if token else None
     if note is None:
         return None, None, _fail("SESIUNE_EXPIRATA", _MSG_SESSION, 401)
-    if time.time() >= float(note.get("issued_at", 0)) + PORTAL_MAX:
+    if time.time() >= _session_deadline(note):
         STORE.delete_note(token, _NOTE_SESSION)
         return None, None, _fail("SESIUNE_EXPIRATA", _MSG_SESSION, 401)
     return token, note, None
@@ -346,7 +352,11 @@ def _live_session():
 
 def _slide(token, note):
     """Renews the idle window, never past the absolute cap."""
-    left_to_cap = float(note.get("issued_at", 0)) + PORTAL_MAX - time.time()
+    # Preserve a renewal completed while a data request was using an older Redis snapshot.
+    current = STORE.get_note(token, _NOTE_SESSION)
+    if current and _session_deadline(current) > _session_deadline(note):
+        note["renewed_at"] = current.get("renewed_at", current.get("issued_at", 0))
+    left_to_cap = _session_deadline(note) - time.time()
     ttl = max(1, int(min(PORTAL_IDLE, left_to_cap)))
     note["idle_until"] = time.time() + ttl
     STORE.put_note(token, _NOTE_SESSION, note, ttl)
@@ -446,7 +456,21 @@ def portal_unit():
 
 def _remaining_idle(note):
     """Seconds left on the idle window, from the moment written at the last slide. Read-only."""
-    return max(0, int(float(note.get("idle_until", 0)) - time.time()))
+    return max(0, int(min(float(note.get("idle_until", 0)), _session_deadline(note)) - time.time()))
+
+
+@portal_bp.route("/api/portal/session/renew", methods=["POST"])
+def portal_session_renew():
+    token, note, refusal = _live_session()
+    if refusal is not None:
+        return refusal
+    now = time.time()
+    note["renewed_at"] = now
+    note["idle_until"] = now + PORTAL_MAX
+    note["extensions"] = 0
+    STORE.put_note(token, _NOTE_SESSION, note, PORTAL_MAX)
+    return _json({"authenticated": True, "expires_in": PORTAL_MAX,
+                  "max_extensions": PORTAL_MAX_EXTENSIONS, "extensions": 0})
 
 
 @portal_bp.route("/api/portal/session/info", methods=["GET"])

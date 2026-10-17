@@ -12,6 +12,34 @@
 import { SESSION_CONFIG } from './session-monitoring.js';
 
 export const sessionMonitoringExtensionMixin = {
+  adoptSessionDeadline(seconds) {
+    const modal = document.getElementById('session-warning-modal');
+    if (modal) {
+      clearInterval(modal.dataset.countdownInterval);
+      modal.remove();
+    }
+    this.hideHeaderWarning();
+    this.warningShown = this.finalWarningShown = this.inGracePeriod = false;
+    this.sessionStartTime = Date.now();
+    this.sessionDuration = seconds * 1000;
+    this.scheduleWarningAndExpiry();
+  },
+
+  async verifySessionAtExpiry() {
+    try {
+      const response = await this.api('GET', '/api/portal/session/check');
+      const data = await response.json();
+      if (response.ok && data.authenticated && Number.isFinite(data.expires_in) && data.expires_in > 0) {
+        // A refresh in another page sharing this session may have moved the deadline.
+        this.adoptSessionDeadline(data.expires_in);
+        return;
+      }
+    } catch (error) {
+      this.log.error('Eroare la confirmarea expirării:', error);
+    }
+    this.handleSessionExpired('Timpul a expirat');
+  },
+
   /**
    * 🔍 Verifică cu serverul DOAR înainte de warning
    */
@@ -23,6 +51,11 @@ export const sessionMonitoringExtensionMixin = {
 
       if (!response.ok || !data.authenticated) {
         this.handleSessionExpired('Sesiunea a fost invalidată');
+        return;
+      }
+
+      if (Number.isFinite(data.expires_in) && data.expires_in * 1000 > SESSION_CONFIG.WARNING_TIME + 1000) {
+        this.adoptSessionDeadline(data.expires_in);
         return;
       }
 
