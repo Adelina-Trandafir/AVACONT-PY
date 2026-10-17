@@ -26,7 +26,7 @@ def primitive(value):
     return value
 
 
-def build(cursor, unit, ctx, name, params, gestiune_name):
+def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None):
     spec = report_catalog.spec_of(name, ctx['type'])
     unsupported = [key for key in ('document', 'variant', 'category', 'supplier', 'receiver')
                    if (params.get(key) is not None or params.get(key + '_ids') is not None) and key not in spec['filters']]
@@ -35,13 +35,13 @@ def build(cursor, unit, ctx, name, params, gestiune_name):
     for field in ('document', 'variant', 'supplier'):
         if spec.get(field + '_required') and params.get(field) is None:
             raise NomError('REPORT_SELECTION', 'Raportul necesită o singură selecție: ' + field + '.', 422)
-    if params['start'] > params['end'] or params['start'].year != ctx['an'] or params['end'].year != ctx['an']:
+    if params['start'] > params['end'] or ctx['type'] not in ('OI', 'MF') and (params['start'].year != ctx['an'] or params['end'].year != ctx['an']):
         raise NomError('REPORT_PERIOD', 'Alegeți un interval în exercițiul curent.', 422)
     layout = report_store.read(unit, 'layout', spec['id'])
     identity = report_store.read(unit, 'unit')
     report_store.validate('layout', layout['value'])
     report_store.validate('unit', identity['value'])
-    source = report_data.Source(cursor, unit, ctx, params)
+    source = source if source is not None else report_data.Source(cursor, unit, ctx, params)
     notes = []
     receptions = []
     if spec['kind'] == 'food':
@@ -54,7 +54,7 @@ def build(cursor, unit, ctx, name, params, gestiune_name):
         if layout['value'].get('form') == 'nir-classic' and spec.get('family') in ('nir', 'storno'):
             receptions = report_reception.documents(rows, committees)
         blocks = report_body.build(spec, layout['value'], rows, ctx, identity['value'], committees)
-        if spec['kind'] in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
+        if spec.get('ledger') == 'custody' or spec['kind'] in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
             notes.append('Stoc evaluat la prețul curent al variantei; documentele păstrează valorile proprii.')
         if (params.get('supplier') is not None or params.get('supplier_ids') is not None) and spec['kind'] == 'statement':
             notes.append('Furnizorul selectează variantele recepționate de la acesta. Fișa păstrează toate mișcările variantelor; consumurile nu au o alocare istorică pe furnizori.')
@@ -68,10 +68,13 @@ def build(cursor, unit, ctx, name, params, gestiune_name):
         elements = [{**e, 'text': report_output.tokens(report_output.tokens(e['text'], values), values)}
                     for e in layout['value'].get('elements', []) if e['band'] == name]
         return [{'t': 'positioned', 'elements': elements}] if elements else []
+    heading = [{'t': 'title', 'text': title}]
+    if spec['id'] != 'ListaAlimente2015':
+        heading.append({'t': 'text', 'text': period})
     model = {'title': title, 'report_name': spec['id'], 'layout': layout['value'], 'identity': identity['value'],
              'gestiune_name': gestiune_name, 'period_text': period,
              'filename': spec['id'].replace(' ', '_') + '_' + params['end'].isoformat(),
-             'blocks': [{'t': 'title', 'text': title}, {'t': 'text', 'text': period}] + band('before') + blocks + band('after'),
+             'blocks': heading + band('before') + blocks + band('after'),
              'notes': notes, 'context': {key: ctx[key] for key in ('subunit', 'gestiune', 'exercitiu', 'type', 'scale', 'zec')},
              'versions': {'layout': layout['version'], 'unit': identity['version'], 'queries': source.versions},
              'generated_at': datetime.now().isoformat(timespec='seconds')}

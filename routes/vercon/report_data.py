@@ -5,6 +5,10 @@ from . import numeric, report_query, report_store, stock
 from .nomenclatoare import NomError
 
 REQUIRED_FIELDS = {
+    'oi_documents': 'document number date receiver party giver giver_name category account warehouse_category warehouse_account explanation annulled line_id variant quantity price value family',
+    'custody_ledger': 'p d q kind document_id line_id number holder category',
+    'oi_accounts': 'category account',
+    'oi_holders': 'receiver party',
     'metadata': 'variant product code price name um cpv category account',
     'ledger': 'p d q kind document_id line_id number supplier',
     'receipts': 'document number invoice date movement_date supplier party fiscal_code address committee annulled line_id variant quantity price value vat family',
@@ -130,12 +134,12 @@ def aggregate(rows, keys, amounts=('quantity', 'value')):
 
 def balances(source, final=False):
     ctx, params, metadata = source.ctx, source.params, source.metadata()
-    selected = {key: row for key, row in metadata.items() if all(
+    chosen = {key: row for key, row in metadata.items() if all(
         selected(row.get(field), params, field) for field in ('variant', 'category'))}
     ledger = source.rows('ledger')
-    if any(m['q'] is None for m in ledger if m['p'] in selected):
+    if any(m['q'] is None for m in ledger if m['p'] in chosen):
         raise NomError('REPORT_SOURCE', 'O mișcare selectată nu are cantitate.', 409)
-    movements = [{**m, 'q': Decimal(m['q'])} for m in ledger if m['p'] in selected]
+    movements = [{**m, 'q': Decimal(m['q'])} for m in ledger if m['p'] in chosen]
     if params.get('supplier') is not None or params.get('supplier_ids') is not None:
         eligible = {m['p'] for m in movements if selected(m['supplier'], params, 'supplier') and stock.day_of(m['d']) <= params['end']}
         movements = [m for m in movements if m['p'] in eligible]
@@ -144,7 +148,7 @@ def balances(source, final=False):
     grouped, statements = stock.balance(movements, params['start'], params['end'])
     rows = []
     for (variant,), quantities in grouped.items():
-        info = selected[variant]
+        info = chosen[variant]
         if info['price'] is None or info['price'] < 0:
             raise NomError('STOCK_PRICE_INVALID', 'Prețul variantei nu permite evaluarea stocului.', 409)
         if final and quantities['closing'] == 0:
@@ -156,7 +160,7 @@ def balances(source, final=False):
                      **{k + '_value': stock.value_text(v, info['price'], ctx['scale']) for k, v in amounts.items()}})
     sheets = []
     for m in statements:
-        info = selected[m['p']]
+        info = chosen[m['p']]
         sheets.append({**info, **m, 'variant': m['p'], 'date': m['d'],
                        'number': (m['kind'].upper() + ' ' + str(m['number'] or '')),
                        'incoming': exact(m['q'], ctx['scale']) if m['kind'] in ('nir', 'br') else '',
@@ -166,6 +170,9 @@ def balances(source, final=False):
 
 
 def dataset(source, spec):
+    if spec.get('ledger') == 'custody' or spec.get('family') in ('bp', 'bt', 'bs'):
+        from . import report_oi
+        return report_oi.dataset(source, spec)
     kind = spec['kind']
     if kind in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
         rows, statements = balances(source, kind in ('final', 'inventory'))

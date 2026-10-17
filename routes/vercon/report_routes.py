@@ -1,5 +1,6 @@
-"""Report catalog, filters, snapshots and exact exports for Materiale/Alimente."""
+"""Report catalog, filters, snapshots and exact exports for Materiale/Alimente/OI."""
 from decimal import Decimal
+from datetime import date
 from flask import Response, current_app, g, request
 from . import report_catalog, report_data, report_output, report_service, report_excel, protocol, stock
 from .nomenclatoare import NomError
@@ -50,7 +51,19 @@ def register(bp, guard, scoped, session, build):
     @guard('raport')
     def catalog():
         vctx = scoped('raport')
-        return {'reports': report_catalog.catalog(vctx['gestiune']['type'])}
+        years = []
+        if vctx['gestiune']['type'] == 'OI':
+            with session(False) as cursor:
+                ctx, _ = build(cursor, vctx, None, False)
+                cursor.execute('SELECT MIN(y) AS first_year,MAX(y) AS last_year FROM ('
+                               'SELECT YEAR(COALESCE(Data,DataFc)) AS y FROM VC_NIR WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s '
+                               'UNION ALL SELECT YEAR(DATABP) FROM VC_OI_Predare WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s) history',
+                               (ctx['subunit'], ctx['gestiune'], ctx['exercitiu']) * 2)
+                limits = cursor.fetchone()
+                last = max(date.today().year, ctx['year'], (limits or {}).get('last_year') or 0)
+                first = (limits or {}).get('first_year') or last
+                years = list(range(first, last + 1))
+        return {'reports': report_catalog.catalog(vctx['gestiune']['type']), 'years': years}
 
     @bp.get('/api/vercon/reports/<name>/selection')
     @guard('raport')
@@ -69,7 +82,12 @@ def register(bp, guard, scoped, session, build):
                     if params['start'] <= stock.day_of(row['date']) <= params['end']:
                         documents[row['IdLista']] = f"{row['NumarLA']} / {row['date']}"
             else:
-                query = 'consumption' if spec.get('family') in ('bc', 'br') or spec['kind'].startswith('consumption') else 'receipts'
+                custody = spec.get('ledger') == 'custody'
+                oi_document = spec.get('family') in ('bp', 'bt', 'bs')
+                query = 'oi_documents' if custody or oi_document else 'consumption' if spec.get('family') in ('bc', 'br') or spec['kind'].startswith('consumption') else 'receipts'
+                if custody or oi_document:
+                    categories = {r['category']: r['account'] for r in source.rows('oi_accounts')}
+                    receivers = {r['receiver']: r['party'] for r in source.rows('oi_holders')}
                 for row in source.rows(query):
                     if row['annulled'] or spec.get('family') and row['family'] != spec['family']:
                         continue
@@ -87,7 +105,8 @@ def register(bp, guard, scoped, session, build):
                              'label': (r['name'] or '') + ' · ' + str(r['code'] or r['variant']),
                              'variant_label': str(r['code'] or r['variant']) + ' / ' + (stock.quantity_text(Decimal(r['price']), ctx['scale']) if r['price'] is not None else '—') + ' lei'} for r in variants],
                 'categories': options(categories), 'suppliers': options(suppliers), 'receivers': options(receivers),
-                'documents': options(documents), 'spec': spec}
+                'documents': options(documents), 'spec': spec,
+                'account_filter': bool(spec.get('ledger') == 'custody' or spec.get('family') in ('bp', 'bt', 'bs'))}
 
     @bp.get('/api/vercon/reports/<name>/generate')
     @guard('raport')

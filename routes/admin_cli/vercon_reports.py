@@ -19,7 +19,8 @@ def unit(args):
 
 def list_definitions(args):
     name = unit(args)
-    reports = report_catalog.catalog('ALIMENTE')
+    reports = list({spec['id']: spec for kind in ('ALIMENTE', 'OI')
+                    for spec in report_catalog.catalog(kind)}.values())
     return {'unit': name, 'reports': reports, 'queries': list(report_store.QUERY_KEYS)}
 
 

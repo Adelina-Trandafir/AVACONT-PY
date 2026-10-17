@@ -4,6 +4,9 @@ const FILTERS = [['supplier', 'Furnizori', 'suppliers'], ['receiver', 'Primitori
 
 export function selectionNodes(response) {
   const nodes = [];
+  if (response.account_filter && response.spec.filters.includes('category')) {
+    nodes.push({ id: 'selection:use-accounts', label: 'Conturi în folosință', children: response.categories.map(item => ({ id: `category-filter:${item.id}`, label: item.label })) });
+  }
   if (response.spec.filters.includes('variant')) {
     const categories = new Map();
     for (const item of response.variants) {
@@ -21,7 +24,8 @@ export function selectionNodes(response) {
   }
   for (const [key, label, collection] of FILTERS) {
     if (!response.spec.filters.includes(key) || !response[collection]?.length) continue;
-    nodes.push({ id: `selection:${key}`, label, children: response[collection].map(item => ({ id: `${key}:${item.id}`, label: item.label })) });
+    const title = key !== 'receiver' ? label : response.spec.family === 'bs' ? 'Predători' : response.spec.ledger === 'custody' ? 'Deținători' : label;
+    nodes.push({ id: `selection:${key}`, label: title, children: response[collection].map(item => ({ id: `${key}:${item.id}`, label: item.label })) });
   }
   return nodes;
 }
@@ -41,8 +45,9 @@ export function mountSelection(host, response, checked, onChange, owner) {
 export function selectionFilters(ids) {
   const collected = {};
   for (const id of ids) {
-    const [key, value] = id.split(':');
-    if (!['variant', 'supplier', 'receiver', 'document'].includes(key)) continue;
+    const [rawKey, value] = id.split(':');
+    const key = rawKey === 'category-filter' ? 'category' : rawKey;
+    if (!['variant', 'category', 'supplier', 'receiver', 'document'].includes(key)) continue;
     (collected[key] ||= []).push(value);
   }
   const filters = {};

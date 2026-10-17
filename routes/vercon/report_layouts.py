@@ -43,6 +43,19 @@ TITLES = {'Balanta_produse': 'Balanță stocuri produse', 'Fisa_Magazie': 'FIȘ�
           'Nota_Comanda': 'NOTĂ DE COMANDĂ', 'Referat_periodic_produs': 'REFERAT DE ACHIZIȚIE',
           'Referat_periodic_Intrari': 'REFERAT DE ACHIZIȚIE', 'Plan_Achizitii': 'Situație intrări produse în perioada',
           'Situatie_Intrari': 'Situație intrări produse în perioada', 'ListaAlimente2015': 'LISTĂ ZILNICĂ DE ALIMENTE'}
+TITLES.update({'OI_Balanta': 'BALANȚĂ OBIECTE DE INVENTAR ÎN FOLOSINȚĂ',
+               'OI_LISTA_INVENTAR': 'LISTĂ DE INVENTARIERE PE DEȚINĂTOR',
+               'OI_LISTA_INVENTAR_TOTAL': 'LISTĂ DE INVENTARIERE OBIECTE DE INVENTAR',
+               'OI_Fisa_Evidenta_Primitori_STOC': 'STOC FINAL PE DEȚINĂTOR',
+               'OI_Fisa_Evidenta_Produse_STOC': 'STOC FINAL OBIECTE DE INVENTAR',
+               'OI_Fisa_Evidenta': 'FIȘĂ DE EVIDENȚĂ A OBIECTELOR DE INVENTAR ÎN FOLOSINȚĂ',
+               'OI_Fisa_Evidenta_Primitori': 'SITUAȚIE OBIECTE DE INVENTAR PE DEȚINĂTOR',
+               'OI_Fisa_Evidenta_Produse': 'SITUAȚIE OBIECTE DE INVENTAR PE PRODUS'})
+for suffix, title in (('BP', 'PREDARE'), ('BT', 'TRANSFER'), ('BS', 'CASARE')):
+    TITLES['OI_Bon_' + suffix] = 'BON DE ' + title
+    TITLES['Centralizator_OI_Bon_' + suffix] = 'CENTRALIZATOR BONURI DE ' + title
+for name, suffix in (('OI_Predare', 'BP'), ('OI_Transfer', 'BT'), ('OI_Casare', 'BS')):
+    TITLES[name] = TITLES['OI_Bon_' + suffix]
 
 
 def food_sections():
@@ -52,8 +65,8 @@ def food_sections():
                 money('allocation', 'Alocație\nLEI', .9), money('value', 'Efectiv\nLEI')], ('value',)),
             'recapitulatie': section([col('period', 'Recapitulația cheltuielilor pentru hrană', 2.8),
                 money('economy', 'Economii'), money('overrun', 'Depășiri')]),
-            'portii': section([col('meal', 'Mese servite', 1.5), col('portions', 'Porții preparate', .9, 'int'),
-                col('distributed', 'Distribuite', .9, 'int')]),
+            'portii': section([col('meal', 'Mese\nservite', 1.9), col('md', 'Mic\ndejun'),
+                col('d', 'Dejun'), col('c', 'Cină')]),
             'feluri': section([col('Explicatie', 'Feluri de mâncare', 4)]),
             'alimente': section([NAME, col('um', 'U/M', .6), money('quantity', 'Cant.\nsolic.', .9),
                 money('quantity', 'Cant.\nelib.', .9), PRICE, VALUE]),
@@ -66,6 +79,7 @@ def default(spec):
         # FCS uses the NIR form, including the title; only its source document differs.
         return default({**spec, 'id': 'NIR', 'family': 'nir'})
     kind, name = spec['kind'], spec['id']
+    kind = {'inventory_total': 'inventory', 'final_total': 'final', 'custody_statement': 'statement'}.get(kind, kind)
     columns, groups, totals, headers = FINAL, ['account'], ['closing_value'], []
     signs = []
     if kind in ('balance', 'product'):
@@ -129,6 +143,36 @@ def default(spec):
             signs = ['ÎNTOCMIT,\nResponsabil achiziții', 'VIZĂ CFP']
     elif kind == 'food':
         columns, groups, totals = [], [], []
+    if spec.get('ledger') == 'custody':
+        groups = ['account', 'party', 'variant'] if kind == 'statement' else ['account', 'party']
+        if name == 'OI_Fisa_Evidenta_Produse':
+            groups = ['account', 'variant', 'party']
+        if spec['kind'] in ('inventory_total', 'final_total'):
+            groups = ['account']
+        if kind == 'balance':
+            columns = [NAME, UM, PRICE, money('opening', 'Cant. inițială'), money('opening_value', 'Val. inițială'),
+                       money('entries', 'Cant. predată'), money('entries_value', 'Val. predată'),
+                       money('transfers_in', 'Cant. transfer primit'), money('transfers_in_value', 'Val. transfer primit'),
+                       money('transfers_out', 'Cant. transfer predat'), money('transfers_out_value', 'Val. transfer predat'),
+                       money('scrapping', 'Cant. casată'), money('scrapping_value', 'Val. casată'),
+                       money('closing', 'Cant. finală'), money('closing_value', 'Val. finală')]
+            totals = ['opening_value', 'entries_value', 'transfers_in_value', 'transfers_out_value', 'scrapping_value', 'closing_value']
+        if kind == 'statement':
+            columns = STATEMENT + [money('closing_value', 'Valoare sold')]
+    if spec.get('family') in ('bp', 'bt', 'bs'):
+        family = spec['family']
+        if kind == 'documents':
+            columns = [col('ordinal', 'Nr. crt.', .45), NAME, UM, col('account', 'Cont în folosință', 1.5), QUANTITY, PRICE, VALUE]
+            if family == 'bp':
+                columns.insert(3, col('warehouse_account', 'Cont magazie', 1.5))
+            groups, totals, headers = ['document'], ['value'], []
+            signs = ['Întocmit', 'Predător', 'Primitor'] if family != 'bs' else ['Întocmit', 'Comisia de casare', 'Predător']
+        else:
+            columns = [col('number', 'Număr bon'), col('date', 'Data', 1, 'date'),
+                       col('giver_name', 'Predător', 2), col('party', 'Deținător' if family == 'bs' else 'Primitor', 2), VALUE]
+            if family == 'bs':
+                columns = [c for c in columns if c['key'] != 'giver_name']
+            groups, totals = ['account'], ['value']
     return deepcopy({'schema': 1, 'title': TITLES.get(name, 'BON DE RETUR' if spec.get('family') == 'br'
                        else 'BON DE CONSUM (COLECTIV)' if spec.get('family') == 'bc' else spec['label']),
         'font_size': 8,
@@ -137,12 +181,14 @@ def default(spec):
         'landscape': kind in ('balance', 'inventory', 'product'),
         'table_width': 1, 'columns': columns, 'groups': groups, 'totals': totals, 'headers': headers,
         'signatures': signs, 'elements': [], 'sections': food_sections() if kind == 'food' else {},
-        'reference': 'CAPTURI_RAPOARTE/Magazie-Alimente',
+        'reference': 'VERCON/FLUXURI_UI.md — Predare, transfer și casare OI/MF' if spec.get('ledger') == 'custody' or spec.get('family') in ('bp', 'bt', 'bs') else 'CAPTURI_RAPOARTE/Magazie-Alimente',
         'fields': ['ordinal', 'document', 'number', 'date', 'invoice', 'name', 'um', 'code', 'variant',
                    'cpv', 'account', 'party', 'fiscal_code', 'address', 'quantity', 'price', 'value', 'vat',
                    'opening', 'incoming', 'outgoing', 'closing', 'opening_value', 'incoming_value', 'outgoing_value', 'closing_value',
                    'inventory', 'actual', 'plus', 'minus', 'value_plus', 'value_minus', 'inventory_value', 'loss_value', 'loss_quantity',
-                   'control', 'signature', 'meal', 'portions', 'allocation', 'distributed', 'period', 'economy', 'overrun', 'Explicatie', 'receiver']})
+                   'control', 'signature', 'meal', 'portions', 'allocation', 'distributed', 'period', 'economy', 'overrun', 'Explicatie', 'receiver', 'md', 'd', 'c',
+                   'warehouse_account', 'giver_name', 'entries', 'transfers_in', 'transfers_out', 'scrapping',
+                   'entries_value', 'transfers_in_value', 'transfers_out_value', 'scrapping_value']})
 
 
 def unit_default(unit):

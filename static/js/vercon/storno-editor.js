@@ -2,6 +2,7 @@ import { ComboTree } from '../components/combotree/combotree.js';
 import { el } from './ui.js';
 import { numberText } from './receipt-number.js';
 import { format } from './fields.js';
+import { decimalText } from './decimal-text.js';
 
 export function sourceLabel(doc) {
   return `NIR ${numberText(doc)} • ${doc.invoice || ''} • ${format(doc.date, { type: 'date' })}`;
@@ -39,7 +40,13 @@ export function stornoSourceField(owner, sources, value, fallback, editable, onC
   return { node, input, error };
 }
 
-export function stornoProductNodes(lines, categories) {
+export function stornoProductKey(line) {
+  return JSON.stringify([String(line.product ?? `variant:${line.variant}`), decimalText(line.PUTVA ?? '0', 4)]);
+}
+
+export function stornoProductNodes(eligible, categories, selected = []) {
+  const used = new Set(selected.filter(line => line.variant != null).map(stornoProductKey));
+  const lines = eligible.filter(line => !used.has(stornoProductKey(line)));
   return categories.map(category => ({ id: `category:${category.id}`, label: category.label,
     children: lines.filter(line => String(line.category) === String(category.id)).map(productNode) }))
     .filter(node => node.children.length)

@@ -27,7 +27,7 @@ def exercise_of(cursor, sub, gest, gest_type, year):
     row = cursor.fetchone()
     if not row:
         raise NomError('NO_EXERCISE', 'Exercițiul ales nu există pentru această gestiune.', 409)
-    return {'id': row['ExercitiuId'], 'an': int(row['An']), 'closed': bool(row['Closed'])}
+    return {'id': row['ExercitiuId'], 'an': int(row['An']), 'closed': bool(row['Closed']) if gest_type not in HISTORY_TYPES else False}
 
 
 def ensure_open(exercise):

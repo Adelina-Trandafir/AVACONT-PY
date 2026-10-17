@@ -12,7 +12,7 @@ Pentru configurări personalizate salvate anterior, aliasurile se corectează
 
 La publicarea arborelui `PYTHON` către `/root/AVACONT` se păstrează:
 
-- `reports/vercon/queries/*.sql` — toate cele 11 interogări, inclusiv `metadata.sql`;
+- `reports/vercon/queries/*.sql` — toate interogările, inclusiv `metadata.sql` și sursele OI;
 - `static/fonts/DejaVuSans.ttf` și `static/fonts/LICENSE-DejaVu.txt` — fontul PDF și licența;
 - `static/fonts/DejaVuSansMono.ttf`, `DejaVuSansMono-Bold.ttf` și
   `DejaVuSansMono-Oblique.ttf` — fonturile machetei NIR;
@@ -34,6 +34,30 @@ Un răspuns `503 / REPORT_RESOURCE_MISSING` indică fișierul care lipsește din
 instalare. `401 / SESIUNE_EXPIRATA` este separat: portalul nu mai acceptă
 sesiunea transmisă și este necesară autentificarea. Nu se ocolește verificarea
 sesiunii pentru generarea sau descărcarea rapoartelor.
+
+## Obiecte de inventar
+
+Sursele OI suplimentare sunt `oi_documents.sql`, `custody_ledger.sql`,
+`oi_accounts.sql` și `oi_holders.sql`. Sunt SELECT-uri contextualizate,
+editabile în KBotAdmin, cu aceeași versionare ca sursele Magazie/Alimente.
+Nu sunt scripturi de instalare și nu se execută manual.
+
+Contul din nomenclatorul produsului reprezintă proveniența din magazie.
+Contul în folosință provine din fiecare linie BP/BT/BS; nu se deduce din
+contul produsului și nu există un singur cont implicit pentru gestiune.
+Rapoartele în folosință se filtrează separat după conturi și deținători.
+Listele totale însumează deținătorii numai în aceeași pereche cont–variantă.
+Transferurile apar cu minus la predător și plus la primitor, pe același cont.
+
+Balanța, soldurile și fișele evaluează la prețul curent al variantei, conform
+contractului comun. Bonurile și centralizatoarele păstrează prețurile și
+valorile liniilor documentelor. Intervalele OI pot traversa anii; soldul
+inițial include mișcările anterioare începutului intervalului.
+
+Ecranul, PDF-ul și Excel-ul folosesc același snapshot. Lățimile Excel
+continuă să fie citite de modulul comun din configurarea existentă.
+Machetele implicite OI sunt funcționale în surse, dar fidelitatea lor
+vizuală și integrarea pe date reale nu sunt încă validate.
 
 ## Macheta NIR
 

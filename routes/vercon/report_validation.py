@@ -35,11 +35,17 @@ def table(value):
         string(col.get('label'), 'Etichetă coloană', 500)
         number(col.get('width', 1), .1, 20, 'Lățime coloană')
         number(col.get('size', 8), 5, 36, 'Font coloană')
+        if 'header_size' in col:
+            number(col['header_size'], 5, 36, 'Font antet coloană')
+        if 'decimals' in col and (type(col['decimals']) is not int or not 0 <= col['decimals'] <= 12):
+            fail('Număr de zecimale invalid.')
         if col.get('type') not in ('text', 'decimal', 'int', 'date'):
             fail('Tip de coloană necunoscut.')
         if col.get('align', 'l') not in ('l', 'c', 'r') or not isinstance(col.get('bold', False), bool):
             fail('Formatare coloană invalidă.')
     number(value.get('table_width', 1), .25, 1, 'Lățime tabel')
+    if not isinstance(value.get('show_column_header', True), bool):
+        fail('Vizibilitate antet invalidă.')
     for key in ('groups', 'totals'):
         fields = value.get(key, [])
         if not isinstance(fields, list) or any(not isinstance(f, str) or not FIELD.fullmatch(f) for f in fields):

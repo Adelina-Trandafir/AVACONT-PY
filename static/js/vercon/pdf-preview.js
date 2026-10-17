@@ -1,6 +1,7 @@
 // Report toolbar follows ADECHIT; the page display uses the shared PDF.js viewer.
 import { createPdfView } from '../portal/pdfview.js';
 import { el, modal, showMessage } from './ui.js';
+import { reportHeading } from './report-header.js';
 
 export function downloadFile(data, type, filename) {
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -10,8 +11,8 @@ export function downloadFile(data, type, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-export async function openPdfReport(title, data, owner) {
-  const view = modal(title, owner);
+export async function openPdfReport(title, data, owner, details = {}) {
+  const view = modal(reportHeading(title, details), owner, { report: true });
   view.dialog.classList.add('vc-modal--report');
   const toolbar = el('nav', { className: 'vc-report-toolbar', 'aria-label': 'Acțiuni raport' });
   const status = el('span', { role: 'status', className: 'vc-report-status', textContent: 'Se încarcă raportul…' });

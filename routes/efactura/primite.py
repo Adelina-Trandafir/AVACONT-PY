@@ -170,7 +170,47 @@ def lista(dc, year=None, month=None, q=None, iddf=None, cui=None):
         has_ops = bool(cursor.fetchone()["n"])
         ops = ("(SELECT COUNT(*) FROM EF_PrimiteOperatii o WHERE o.IdPrimita = p.IdPrimita)" if has_ops else "0")
         cursor.execute(sql.replace("FROM EF_Primite p", f", {ops} AS NrOperatii FROM EF_Primite p", 1), tuple(params))
-        return {"facturi": [_plain(row) for row in cursor.fetchall()]}
+        rows = cursor.fetchall()
+        receptii = _receptii_pe_factura(cursor, [row["IdPrimita"] for row in rows])
+        facturi = []
+        for row in rows:
+            item = _plain(row)
+            item["Receptii"] = receptii.get(row["IdPrimita"], [])
+            facturi.append(item)
+        return {"facturi": facturi}
+
+
+# The K-BOT marker the site keeps in the description of a reception K-BOT wrote: «(IDRH: 12; IDR: 34)». It means nothing to the reader.
+_MARCAJ_RECEPTIE = re.compile(r"\s*\(IDRH:\s*\d+;\s*IDR:\s*\d+\)")
+
+
+def _receptii_pe_factura(cursor, ids):
+    """{IdPrimita: [{DataR, Descriere, Suma, AsteaptaDescarcarea}]}: the receptions each invoice is linked to (EF_PrimiteReceptii, slice KE01), one item
+    per reception, Suma = what the links of that invoice allocate on it (all classifications added). A link whose reception is not in K-BOT yet (the
+    download that brings it has not run) has no date and no description and AsteaptaDescarcarea. Empty when the tables of the links or of the receptions
+    do not exist yet: the list still works."""
+    if not ids:
+        return {}
+    cursor.execute("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                   "AND TABLE_NAME IN ('EF_PrimiteReceptii', 'FX_Receptii_R', 'FX_Receptii_H')")
+    if cursor.fetchone()["n"] < 3:
+        return {}
+    out = {}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start:start + 500]
+        cursor.execute(
+            "SELECT x.IdPrimita, x.IDRR, x.Suma, r.DataR, r.Descriere FROM ("
+            "SELECT l.IdPrimita, COALESCE(l.IDRR, (SELECT H.IDRR FROM FX_Receptii_H H WHERE H.IDRH = l.IDRH LIMIT 1)) AS IDRR, "
+            "SUM(l.Suma) AS Suma FROM EF_PrimiteReceptii l WHERE l.IdPrimita IN (" + ", ".join(["%s"] * len(chunk)) + ") "
+            "GROUP BY l.IdPrimita, IDRR) x LEFT JOIN FX_Receptii_R r ON r.IDRR = x.IDRR ORDER BY x.IdPrimita, r.DataR, x.IDRR",
+            tuple(chunk))
+        for row in cursor.fetchall():
+            out.setdefault(row["IdPrimita"], []).append({
+                "DataR": row["DataR"].isoformat() if row["DataR"] else None,
+                "Descriere": _MARCAJ_RECEPTIE.sub("", row["Descriere"] or "").strip(),
+                "Suma": float(row["Suma"] or 0),
+                "AsteaptaDescarcarea": row["DataR"] is None and row["Descriere"] is None})
+    return out
 
 
 def _row(cursor, id_primita):

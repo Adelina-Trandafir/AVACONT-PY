@@ -42,6 +42,12 @@ export const editing = {
     }
     input.focus({ preventScroll: true });
     if (select) input.select?.();
+    if (state.column.editor === 'list' && state.combo.options.readonly && state.combo.options.dropDownOnEnter) {
+      // Wait until the click that selected/rebuilt this row has finished bubbling.
+      requestAnimationFrame(() => {
+        if (!this._destroyed && this._edit === state && document.activeElement === input && !state.combo.isVisible) state.combo.showAllOptions();
+      });
+    }
   },
   canEdit(row, column) {
     return !!this._opts.editable && !!column?.editable
@@ -185,13 +191,18 @@ export const editing = {
       }, { capture: true, signal: state.abort.signal });
     } else if (column.editor === 'list') {
       const items = typeof column.options === 'function' ? column.options(row) : (column.options || []);
-      state.combo = new Combobox(host, { staticData: items, readonly: !column.searchable, showArrow: column.showArrow, dropDownOnEnter: column.dropDownOnEnter, maxResults: column.maxResults, dropDownMinWidth: column.dropDownMinWidth,
+      // allowCustom keeps typed text as the value; other list editors still require a selection.
+      state.combo = new Combobox(host, { staticData: items, readonly: !(column.searchable || column.allowCustom), autoHighlightMatch: !column.allowCustom, showArrow: column.showArrow, dropDownOnEnter: typeof column.dropDownOnEnter === 'function' ? column.dropDownOnEnter(row) : column.dropDownOnEnter, maxResults: column.maxResults, dropDownMinWidth: column.dropDownMinWidth,
         onSearch: column.onSearch ? (query) => column.onSearch(query, row) : async (query) => items.filter((item) => String(item.label || item.text || '').toLocaleLowerCase('ro').includes(query.toLocaleLowerCase('ro'))),
         onSelect: (value) => { state.raw = value; state.value = value; markRequired(); } });
       const selected = items.find((item) => String(item.value) === String(row[key]));
       state.combo.setValue(row[key], selected?.label ?? selected?.text ?? String(row[key] ?? ''));
       state.input = state.combo.input;
-      if (column.searchable) state.input.addEventListener('input', () => { state.value = null; markRequired(); }, { signal: state.abort.signal });
+      if (column.searchable || column.allowCustom) state.input.addEventListener('input', () => {
+        state.raw = state.input.value;
+        state.value = column.allowCustom ? state.raw : null;
+        markRequired();
+      }, { signal: state.abort.signal });
     } else {
       state.input = document.createElement('input');
       state.input.type = column.editor === 'checkbox' ? 'checkbox' : column.editor === 'date' ? 'date' : 'text';
@@ -300,6 +311,7 @@ export const editing = {
       let value;
       try {
         value = state.column.editor === 'checkbox' ? state.input.checked
+          : state.column.editor === 'list' && state.column.allowCustom ? parseCell(String(state.value ?? ''), state.column)
           : ['list', 'tree'].includes(state.column.editor) ? state.value
           : state.initialText !== undefined && state.input.value === state.initialText ? state.value
           : parseCell(String(state.raw), state.column);

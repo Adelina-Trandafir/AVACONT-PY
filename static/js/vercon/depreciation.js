@@ -39,8 +39,9 @@ export function openDepreciation(asset, opts, owner) {
   pdf.addEventListener('click', () => {
     if (!state.data) return;
     const diagnostics = diagnosticRows();
-    preview(`Amortizare • ${state.data.date}`, [{ title: 'Calcul pe activ • ' + asset.code, columns, rows: state.data.assets },
-      { title: 'Parametri și observații', columns: [{ key: 'label', title: 'Parametru', width: 230 }, { key: 'value', title: 'Valoare / observație', width: 650 }], rows: diagnostics }], view.scope);
+    preview('Amortizare', [{ title: 'Calcul pe activ • ' + asset.code, columns, rows: state.data.assets },
+      { title: 'Parametri și observații', columns: [{ key: 'label', title: 'Parametru', width: 230 }, { key: 'value', title: 'Valoare / observație', width: 650 }], rows: diagnostics }], view.scope,
+    { documentLabel: asset.code || asset.name, date: state.data.date });
   });
   view.footer.append(close, pdf);
 

@@ -27,7 +27,7 @@ def pdf(model):
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, PageBreak, Flowable
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, PageBreak, Flowable, TopPadder
     from reportlab.pdfgen.canvas import Canvas
     with FONT_LOCK:
         if 'VerconReport' not in pdfmetrics.getRegisteredFontNames():
@@ -81,15 +81,36 @@ def pdf(model):
                 item = Table([[para(block['text'], TA_CENTER, size + .5, True)]], colWidths=[available])
                 item.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), .4, colors.black), ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f7f8f2'))]))
                 return item
-            return para(block['text'], TA_CENTER if kind == 'title' else TA_LEFT,
+            return para(block['text'], TA_CENTER if kind == 'title' else
+                        {'c': TA_CENTER, 'r': TA_RIGHT}.get(block.get('align'), TA_LEFT),
                         layout['title_size'] if kind == 'title' else size, kind == 'title')
         if kind == 'box':
             data = [[para(label), para(value)] for label, value in block['rows']]
             item = Table(data, colWidths=[available * .34, available * .66])
         elif kind == 'sign':
             count = len(block['heads'])
-            item = Table([[para(head, TA_CENTER) for head in block['heads']], [''] * count],
-                         colWidths=[available / count] * count, rowHeights=[None, 14 * mm])
+            separated = count > 1 and block.get('box_width_ratio', 1) < 1
+            if separated:
+                box_width = available / count * block['box_width_ratio']
+                gap_width = (available - box_width * count) / (count - 1)
+                cells, widths = [], []
+                for index, head in enumerate(block['heads']):
+                    if index:
+                        cells.append('')
+                        widths.append(gap_width)
+                    cells.append(para(head, TA_CENTER))
+                    widths.append(box_width)
+                item = Table([cells, [''] * len(cells)], colWidths=widths,
+                             rowHeights=[None, 14 * mm], splitByRow=0)
+                commands = []
+                for index in range(0, len(cells), 2):
+                    commands.extend([('BOX', (index, 0), (index, -1), .35, colors.black),
+                                     ('LINEBELOW', (index, 0), (index, 0), .35, colors.black)])
+                item.setStyle(TableStyle(commands))
+            else:
+                item = Table([[para(head, TA_CENTER) for head in block['heads']], [''] * count],
+                             colWidths=[available / count] * count, rowHeights=[None, 14 * mm],
+                             splitByRow=0 if block.get('anchor') == 'bottom' else 1)
         elif kind == 'columns':
             count = len(block['children'])
             # Flatten parallel tables into one splittable table. Nesting complete
@@ -109,6 +130,11 @@ def pdf(model):
                     cells.extend(child['rows'][index]['cells'] if index < len(child['rows']) else [''] * len(child['cols']))
                 rows.append({'cells': cells})
             return render({'t': 'table', 'cols': columns, 'rows': rows,
+                           'show_column_header': any(child.get('show_column_header', True) for child in children),
+                           'footer': block.get('footer'),
+                           'section_boundaries': [group['start'] for group in groups[1:]],
+                           'section_separator_width': block.get('section_separator_width'),
+                           'grid_width': block.get('grid_width', .35),
                            'headers': [groups] if any(group['label'] for group in groups) else []}, available)
         elif kind == 'table':
             cols, commands, data = block['cols'], [], []
@@ -121,7 +147,8 @@ def pdf(model):
                     if span > 1:
                         commands.append(('SPAN', (start, len(data)), (start + span - 1, len(data))))
                 data.append(cells)
-            data.append([para(c['label'], TA_CENTER, c.get('size'), True) for c in cols])
+            if block.get('show_column_header', True):
+                data.append([para(c['label'], TA_CENTER, c.get('header_size', c.get('size')), True) for c in cols])
             head_count = len(data)
             for row in block['rows']:
                 cells, index = [], 0
@@ -129,7 +156,11 @@ def pdf(model):
                     value, span = (cell['t'], cell.get('span', 1)) if isinstance(cell, dict) else (cell, 1)
                     col = cols[index]
                     cells.append(para(value, {'r': TA_RIGHT, 'c': TA_CENTER}.get(col.get('align'), TA_LEFT),
-                                      col.get('size'), col.get('bold', False) or row.get('cls') == 'total'))
+                                      col.get('size'), col.get('bold', False) or row.get('cls') == 'total'
+                                      or isinstance(cell, dict) and cell.get('bold', False)))
+                    if isinstance(cell, dict) and cell.get('background'):
+                        commands.append(('BACKGROUND', (index, len(data)), (index + span - 1, len(data)),
+                                         colors.HexColor(cell['background'])))
                     if span > 1:
                         commands.append(('SPAN', (index, len(data)), (index + span - 1, len(data))))
                         cells.extend([''] * (span - 1))
@@ -137,17 +168,37 @@ def pdf(model):
                 data.append(cells)
                 if row.get('cls') == 'total':
                     commands.append(('BACKGROUND', (0, len(data) - 1), (-1, len(data) - 1), colors.HexColor('#ececec')))
+            footer = block.get('footer')
+            if footer:
+                data.append([para(footer['label'], TA_LEFT, footer.get('size'), True)] + [''] * (len(cols) - 2)
+                            + [para(footer['value'], TA_RIGHT, footer.get('size'), True)])
+                commands.extend([('SPAN', (0, len(data) - 1), (len(cols) - 2, len(data) - 1)),
+                                 ('BACKGROUND', (0, len(data) - 1), (-1, len(data) - 1), colors.HexColor('#ececec')),
+                                 ('NOSPLIT', (0, max(0, len(data) - 2)), (-1, len(data) - 1))])
+            if not data:
+                # A headerless subreport may have no dishes at all.
+                return Spacer(1, 0)
             denominator = sum(c['w'] for c in cols)
             actual_width = available * block.get('width', 1)
             item = Table(data, colWidths=[actual_width * c['w'] / denominator for c in cols], repeatRows=head_count, hAlign='CENTER')
-            commands.append(('BACKGROUND', (0, 0), (-1, head_count - 1), colors.HexColor('#ececec')))
+            if head_count:
+                commands.append(('BACKGROUND', (0, 0), (-1, head_count - 1), colors.HexColor('#ececec')))
+                for index, column in enumerate(cols):
+                    if column.get('header_background'):
+                        commands.append(('BACKGROUND', (index, 0), (index, head_count - 1),
+                                         colors.HexColor(column['header_background'])))
+            if block.get('section_separator_width'):
+                commands.extend(('LINEBEFORE', (index, 0), (index, -1),
+                                 block['section_separator_width'], colors.black)
+                                for index in block.get('section_boundaries', []))
             item.setStyle(TableStyle(commands))
         else:
             raise ValueError('Unknown report band: ' + kind)
-        item.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), .35, colors.black), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        grid = [] if kind == 'sign' and separated else [('GRID', (0, 0), (-1, -1), block.get('grid_width', .35), colors.black)]
+        item.setStyle(TableStyle(grid + [('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 2),
             ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
-        return item
+        return TopPadder(item) if block.get('anchor') == 'bottom' else item
     elements = identity['elements'] + layout.get('elements', [])
     values = {'UNITATE': identity['name'], 'CUI': identity['fiscal_code'], 'ADRESA': identity['address'],
               'ANTET': identity['header'], 'SUBSOL': identity['footer'], 'GESTIUNE': model['gestiune_name'],
@@ -186,7 +237,11 @@ def pdf(model):
             Canvas.save(self)
     story = []
     for block in model['blocks']:
-        story += [render(block, width), Spacer(1, 2 * mm)]
+        item = render(block, width)
+        item.keepWithNext = block.get('keep_with_next', False)
+        story.append(item)
+        if block.get('anchor') != 'bottom' and block.get('space_after', 2):
+            story.append(Spacer(1, block.get('space_after', 2) * mm))
     stream = BytesIO()
     SimpleDocTemplate(stream, pagesize=page, leftMargin=margin, rightMargin=margin,
         topMargin=margin + header_height + 6, bottomMargin=margin + footer_height + 6,
@@ -203,6 +258,7 @@ def xlsx(model, column_widths=None):
     sheet = workbook.active
     sheet.title = 'Raport'
     row_index = 1
+    centered_rows = []
     widths = ColumnWidths(column_widths)
     edge = Side(style='thin', color='AAAAAA')
     def write(row, column, value, bold=False, point=10):
@@ -213,6 +269,18 @@ def xlsx(model, column_widths=None):
         cell.font = Font(name='Arial', size=point, bold=bold)
         cell.alignment = Alignment(vertical='top', wrap_text=True)
         return cell
+    def table_footer(footer, count):
+        nonlocal row_index
+        write(row_index, 1, footer['label'], True, footer.get('size', 10))
+        write(row_index, count, footer['value'], True, footer.get('size', 10))
+        if count > 2:
+            sheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=count - 1)
+        for column in range(1, count + 1):
+            cell = sheet.cell(row_index, column)
+            cell.fill = PatternFill('solid', fgColor='ECECEC')
+            cell.border = Border(left=edge, right=edge, top=edge, bottom=edge)
+            cell.alignment = Alignment(horizontal='right' if column == count else 'left', vertical='top')
+        row_index += 1
     def blocks(items):
         nonlocal row_index
         for block in items:
@@ -224,9 +292,17 @@ def xlsx(model, column_widths=None):
             elif kind == 'columns':
                 for child in block['children']:
                     blocks(child)
+                if block.get('footer'):
+                    # Child tables leave two blank rows; the footer touches the last table.
+                    row_index -= 2
+                    count = max(len(part['cols']) for child in block['children'] for part in child if part['t'] == 'table')
+                    table_footer(block['footer'], count)
+                    row_index += 2
             elif kind in ('title', 'text', 'group'):
                 write(row_index, 1, block['text'], kind != 'text')
-                row_index += 2
+                if block.get('align') == 'c':
+                    centered_rows.append(row_index)
+                row_index += 1 if block.get('space_after') == 0 else 2
             elif kind in ('box', 'sign'):
                 for cells in block.get('rows', [block.get('heads', [])]):
                     for i, value in enumerate(cells, 1):
@@ -235,19 +311,35 @@ def xlsx(model, column_widths=None):
                 row_index += 1
             elif kind == 'table':
                 for i, col in enumerate(block['cols'], 1):
-                    write(row_index, i, col['label'], True, col.get('size', 10))
+                    if block.get('show_column_header', True):
+                        cell = write(row_index, i, col['label'], True, col.get('header_size', col.get('size', 10)))
+                        if 'header_size' in col:
+                            cell.fill = PatternFill('solid', fgColor='ECECEC')
+                        if col.get('header_background'):
+                            cell.fill = PatternFill('solid', fgColor=col['header_background'].lstrip('#'))
                     dimension = sheet.column_dimensions[get_column_letter(i)]
                     dimension.width = widths.observe(i, report_excel.key(col, i - 1, block['cols']), col['w'], dimension.width)
-                row_index += 1
+                if block.get('show_column_header', True):
+                    row_index += 1
                 for record in block['rows']:
-                    for i, value in enumerate(record['cells'], 1):
+                    i = 1
+                    for value in record['cells']:
                         col = block['cols'][i - 1]
+                        span = value.get('span', 1) if isinstance(value, dict) else 1
                         cell = write(row_index, i, value['t'] if isinstance(value, dict) else value,
                                      record.get('cls') == 'total' or col.get('bold', False), col.get('size', 10))
                         cell.border = Border(left=edge, right=edge, top=edge, bottom=edge)
+                        cell.alignment = Alignment(horizontal={'r': 'right', 'c': 'center'}.get(col.get('align'), 'left'),
+                                                   vertical='top', wrap_text=True)
                         if record.get('cls') == 'total':
                             cell.fill = PatternFill('solid', fgColor='ECECEC')
+                        if span > 1:
+                            sheet.merge_cells(start_row=row_index, start_column=i,
+                                              end_row=row_index, end_column=i + span - 1)
+                        i += span
                     row_index += 1
+                if block.get('footer'):
+                    table_footer(block['footer'], len(block['cols']))
                 row_index += 2
     identity = model['identity']
     values = {'UNITATE': identity['name'], 'CUI': identity['fiscal_code'], 'ADRESA': identity['address'],
@@ -269,6 +361,9 @@ def xlsx(model, column_widths=None):
     page_band('header')
     blocks(model['blocks'])
     page_band('footer')
+    for row in centered_rows:
+        sheet.merge_cells(start_row=row, start_column=1, end_row=row, end_column=sheet.max_column)
+        sheet.cell(row, 1).alignment = Alignment(horizontal='center', vertical='top', wrap_text=True)
     for dimension in sheet.column_dimensions.values():
         index = column_index_from_string(dimension.index)
         dimension.width = widths.final(index, dimension.width)

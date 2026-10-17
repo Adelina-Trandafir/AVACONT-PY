@@ -65,16 +65,36 @@ add('ListaAlimente2015|BC subreport 2013|MicDejun subreport|Dejun subreport|Cina
     'food', ('ALIMENTE',), 'Alimente', family='lista', document_required=True)
 EXCLUDED = ('Balanta_produse_AFB', 'Balanta_Produse_BF', 'Balanta_produse_furnizor')
 
+for name, label in {
+    'OI_Balanta': 'Balanță obiecte de inventar',
+    'OI_LISTA_INVENTAR': 'Listă de inventariere pe deținător',
+    'OI_LISTA_INVENTAR_TOTAL': 'Listă de inventariere — total produse',
+    'OI_Fisa_Evidenta_Primitori_STOC': 'Stoc final pe deținător',
+    'OI_Fisa_Evidenta_Produse_STOC': 'Stoc final pe produs',
+    'OI_Fisa_Evidenta': 'Fișă de evidență în folosință',
+    'OI_Fisa_Evidenta_Primitori': 'Situație pe deținător',
+    'OI_Fisa_Evidenta_Produse': 'Situație pe produs',
+    'OI_Bon_BP': 'Bonuri de predare', 'OI_Bon_BT': 'Bonuri de transfer', 'OI_Bon_BS': 'Bonuri de casare',
+    'Centralizator_OI_Bon_BP': 'Centralizator predări',
+    'Centralizator_OI_Bon_BT': 'Centralizator transferuri',
+    'Centralizator_OI_Bon_BS': 'Centralizator casări',
+}.items():
+    CATALOG[name.casefold()]['label'] = label
+
 
 def spec_of(name, gest_type):
-    if gest_type not in G:
-        raise NomError('FORM_NOT_AVAILABLE', 'Rapoartele OI/MF sunt amânate.', 403)
+    if gest_type not in (*G, 'OI'):
+        raise NomError('FORM_NOT_AVAILABLE', 'Rapoartele MF sunt amânate.', 403)
     spec = CATALOG.get(str(name).casefold())
     if not spec:
         raise NomError('REPORT_UNKNOWN', 'Raportul nu există sau este exclus din portare.', 404)
     if gest_type not in spec['types']:
         raise NomError('FORM_NOT_AVAILABLE', 'Raportul nu este disponibil pentru acest tip de gestiune.', 403)
-    if spec['kind'] == 'food':
+    if spec.get('ledger') == 'custody':
+        filters = ['category', 'variant', 'receiver']
+    elif spec.get('family') in ('bp', 'bt', 'bs'):
+        filters = ['category', 'variant', 'receiver', 'document']
+    elif spec['kind'] == 'food':
         filters = ['document']
     elif spec['kind'] in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
         filters = ['category', 'variant', 'supplier']
@@ -86,4 +106,4 @@ def spec_of(name, gest_type):
 
 
 def catalog(gest_type):
-    return [spec for spec in CATALOG.values() if gest_type in G and gest_type in spec['types']]
+    return [spec for spec in CATALOG.values() if gest_type in (*G, 'OI') and gest_type in spec['types']]

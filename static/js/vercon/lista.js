@@ -1,10 +1,17 @@
 // Lista de alimente: one draft, three meals and a set of existing BC links.
 import { confirmBox, reasonBox } from '../utils/confirm-box.js';
-import { format, parse } from './fields.js';
-import { el, scope, field, column, grid, paintTree, groupedNodes, modal, rowMenu, openMenu, showMessage } from './ui.js';
+import { format, formatMoney, parse } from './fields.js';
+import { el, scope, field, column, grid, paintTree, groupedNodes, docNode, modal, rowMenu, openMenu, showMessage } from './ui.js';
 import { documentReport } from './document-report.js';
+import { ActionAddButton } from '../components/action-add-button/action-add-button.js';
+import { receiptTotal } from './receipt-reconciliation.js';
 
 const MEALS = [['md', 'Mic dejun'], ['d', 'Dejun'], ['c', 'Cină / Gustare']];
+const MONTHS = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
+const TOTALS = [['prior', 'Sold anterior'], ['Valoare', 'Valoare listă'], ['bons_total', 'Total bon\nconsum'], ['diff', 'Diferență'], ['closing', 'Sold']];
+const blankDish = () => ({ key: key(), IdFel: null, Tip: '', Explicatie: '' });
+const isBlankDish = (row) => !row.IdFel && !String(row.Tip || '').trim() && !String(row.Explicatie || '').trim();
+const dishKey = (row) => row.IdFel != null ? 'id:' + row.IdFel : 'text:' + String(row.Tip || '').trim().toLocaleLowerCase('ro');
 const key = () => crypto.randomUUID();
 const number = (value) => Number(String(value ?? '').replace(/\s/g, '').replace(',', '.')) || 0;
 const dateText = (value) => format(value, { type: 'date' });
@@ -12,11 +19,12 @@ const amount = (value) => format(value, { type: 'decimal' });
 export function mountLista(host, opts) {
   const state = { docs: [], lookups: { dishes: [] }, doc: null, draft: null, mode: 'view', dirty: false, canWrite: false, closed: false, zec: 4, request: null };
   const headUi = scope(), mealUi = scope(), bonsUi = scope(), treeUi = scope(), dialogs = scope();
-  const inputs = new Map(); let disposed = false, generation = 0, bonsGrid;
+  const inputs = new Map(); let disposed = false, generation = 0, balanceSequence = 0, openingBalance = null, bonsGrid;
   const status = el('span', { className: 'vc-save-status', role: 'status' });
   const title = el('h3'), pill = el('span', { className: 'vc-pill' });
   const head = el('div', { className: 'vc-grid vc-doc__header' }), meals = el('div', { className: 'vc-lista__meals' });
   const bons = el('div', { className: 'vc-lista__bons' }), bar = el('div', { className: 'vc-actions vc-doc__bar' }), treeHost = el('aside', { className: 'vc-doc__tree' });
+  const totalsWrap = el('div', { className: 'vc-lista__totals-wrap' });
   const overview = el('div', { className: 'vc-lista__overview' }, head, bons);
   const root = el('section', { className: 'vc-doc vc-doc--lista' }, el('div', { className: 'vc-doc__main' }, el('div', { className: 'vc-doc__titlebar' }, title, pill), overview, meals, bar), treeHost);
   host.replaceChildren(root);
@@ -37,7 +45,7 @@ export function mountLista(host, opts) {
   async function openDoc(id) {
     if (!await allowDiscard()) return; const token = ++generation;
     const doc = await opts.api(url('/' + id)); if (disposed || token !== generation) return;
-    state.doc = doc; state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(); paint();
+    state.doc = doc; rememberExplanations(doc); state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(); paint();
   }
   async function startAdd() {
     if (!await allowDiscard()) return; ++generation; state.mode = 'add'; state.dirty = false; state.request = null;
@@ -49,48 +57,120 @@ export function mountLista(host, opts) {
     const v = value(); title.textContent = editing() ? 'Listă de alimente • ' + (state.mode === 'add' ? 'listă nouă' : 'modificare') : state.doc ? 'Listă de alimente • nr. ' + state.doc.number : 'Liste de alimente';
     pill.textContent = editing() ? 'Ciornă' : state.doc ? state.doc.annulled ? 'Anulată' : 'Salvată' : ''; pill.hidden = !pill.textContent;
     pill.dataset.state = editing() ? 'draft' : state.doc?.annulled ? 'annulled' : 'saved';
-    headUi.clear(); inputs.clear(); head.replaceChildren();
-    if (v) for (const spec of [{ key: 'Numar', label: 'Număr listă (gol = automat)', type: 'int', min: 1 }, { key: 'Data', label: 'Data', type: 'date', required: true }, { key: 'Comentarii', label: 'Comentarii', type: 'text' }]) {
-      const f = field(spec, v.header[spec.key], editing(), (raw) => { state.draft.header[spec.key] = raw; state.dirty = true; }, headUi);
+    headUi.clear(); inputs.clear(); head.replaceChildren(); totalsWrap.replaceChildren(); totalsWrap.hidden = !v; openingBalance = null;
+    if (v) for (const spec of [{ key: 'Numar', label: 'Număr listă', type: 'int', min: 1 }, { key: 'Data', label: 'Data', type: 'date', required: true }, { key: 'Comentarii', label: 'Comentarii', type: 'text' }]) {
+      const f = field(spec, v.header[spec.key], editing(), (raw) => {
+        state.draft.header[spec.key] = raw; state.dirty = true;
+        if (spec.key === 'Data') void refreshPriorTotals();
+      }, headUi);
+      if (spec.key === 'Numar') { f.input.placeholder = 'Automat'; f.input.title = 'Lăsați gol pentru numerotare automată.'; }
       inputs.set(spec.key, f); head.append(f.node);
     } else head.append(el('p', { className: 'vc-nom__empty', textContent: 'Alegeți o listă salvată sau adăugați una nouă.' }));
+    if (v) {
+      const totalsHost = el('div', { className: 'vc-lista__totals' });
+      for (const [name, label] of TOTALS) {
+        const f = field({ key: name, label, type: 'text', textAlign: 'center' }, '', false, null, headUi);
+        inputs.set(name, f); totalsHost.append(f.node);
+      }
+      totalsWrap.append(totalsHost);
+      head.append(totalsWrap);
+    }
     paintMeals(); paintBons(); paintBar(); paintSaved(); freezePending();
+    void refreshPriorTotals();
+  }
+  function paintBalance(name, raw, previous = false) {
+    const f = inputs.get(name); if (!f) return;
+    let label = previous ? 'Sold anterior' : 'Sold';
+    if (raw != null) label = (number(raw) < 0 ? 'Economii' : 'Depășiri') + (previous ? '\nAnterioare' : '');
+    f.node.firstElementChild.textContent = label;
+    f.input.setAttribute('aria-label', label.replace('\n', ' '));
+    f.input._box.setValue(raw == null ? '' : formatMoney(String(raw).replace(/^-/, '')));
+  }
+  function paintPriorTotals(values, hint) {
+    openingBalance = null;
+    if (values?.economy !== '' && values?.economy != null) openingBalance = '-' + values.economy;
+    else if (values?.overrun !== '' && values?.overrun != null) openingBalance = values.overrun;
+    paintBalance('prior', openingBalance, true);
+    const f = inputs.get('prior');
+    if (f) f.input.title = f.node.title = hint;
+    totals();
+  }
+  async function refreshPriorTotals() {
+    const sequence = ++balanceSequence, token = generation, v = value();
+    if (!v) return;
+    const parsed = parse(v.header.Data, { type: 'date', required: true });
+    if (!parsed.ok) { paintPriorTotals(null, 'Alegeți data listei pentru calcul.'); return; }
+    const date = parsed.value;
+    const isCurrent = () => !disposed && sequence === balanceSequence && token === generation && value()?.header.Data === date;
+    paintPriorTotals(null, 'Se calculează soldul anterior datei listei…');
+    const exclude = state.mode !== 'add' && state.doc ? '&exclude=' + state.doc.id : '';
+    try {
+      const values = await opts.api(url('/balance', '&date=' + encodeURIComponent(date) + exclude));
+      if (isCurrent()) paintPriorTotals(values, 'Cumulat înainte de ' + dateText(date) + ', conform raportului.');
+    } catch (error) {
+      if (!isCurrent()) return;
+      paintPriorTotals(null, 'Soldul anterior nu a putut fi calculat.'); report(error);
+    }
   }
   function mealValue(meal) { return (number(meal.P) * number(meal.VMD)).toFixed(state.zec); }
+  function rememberExplanations(doc) {
+    const suggestions = state.lookups.explanations ||= [];
+    for (const [id] of MEALS) for (const row of doc.meals[id].items) {
+      if (row.Explicatie && !suggestions.some(item => dishKey(item) === dishKey(row) && item.Explicatie === row.Explicatie)) {
+        suggestions.push({ IdFel: row.IdFel, Tip: row.Tip, Explicatie: row.Explicatie });
+      }
+    }
+  }
+  function explanationOptions(row) {
+    const current = value();
+    const items = [...(state.lookups.explanations || []), ...MEALS.flatMap(([id]) => current?.meals[id].items || [])];
+    const texts = items.filter(item => dishKey(item) === dishKey(row)).map(item => String(item.Explicatie || '').trim()).filter(Boolean);
+    return [...new Set(texts)].sort((a, b) => a.localeCompare(b, 'ro')).map(text => ({ value: text, label: text }));
+  }
   function paintMeals() {
     mealUi.clear(); meals.replaceChildren(); const v = value(); if (!v) return;
     for (const [id, label] of MEALS) {
       const meal = v.meals[id], panel = el('section', { className: 'vc-lista__meal' }), summaryHost = el('div', { className: 'vc-lista__summary' }), dishesHost = el('div', { className: 'vc-lista__dishes' });
       panel.append(el('h4', { textContent: label }), summaryHost, dishesHost); meals.append(panel);
-      const summaryRow = { key: id, P: meal.P, VMD: meal.VMD, V: editing() ? mealValue(meal) : meal.V, D: meal.D };
+      const summaryRow = { key: id, P: meal.P, VMD: meal.VMD, V: editing() ? mealValue(meal) : meal.V };
       let dishGrid;
-      const summary = grid(summaryHost, { layoutId: 'vercon.lista.' + id + '.summary.compact-v1', proportionalWidths: true, rowKey: 'key', rows: [summaryRow], editable: editing(), footer: false,
+      const summary = grid(summaryHost, { layoutId: 'vercon.lista.' + id + '.summary.v2', proportionalWidths: true, rowKey: 'key', rows: [summaryRow], editable: editing(), footer: false,
         columns: [
-          column({ key: 'P', label: 'P · Porții', type: 'int', min: 0 }, { width: 85, filter: false, sortable: false }),
-          column({ key: 'VMD', label: 'VMD · Lei/porție', type: 'decimal', min: 0 }, { width: 125, filter: false, sortable: false }),
-          column({ key: 'V', label: 'V · Lei/masă', type: 'decimal' }, { width: 125, editable: false, filter: false, sortable: false }),
-          column({ key: 'D', label: 'D · Distribuit', type: 'int', min: 0 }, { width: 105, filter: false, sortable: false })],
+          column({ key: 'P', label: 'Porții', type: 'int', min: 0 }, { width: 85, filter: false, sortable: false }),
+          column({ key: 'VMD', label: 'Preț', type: 'decimal', min: 0 }, { width: 100, filter: false, sortable: false }),
+          column({ key: 'V', label: 'Valoare', type: 'decimal' }, { width: 115, editable: false, filter: false, sortable: false })],
         onCellSave: ({ key: cell, value: raw }) => { meal[cell] = raw ?? ''; state.dirty = true; return { [cell]: raw, V: mealValue(meal) }; },
-        onCellSaved: () => { if (!dishGrid.hasEdit) dishGrid.setRows(meal.items.map((row, index) => ({ ...row, ordinal: index + 1, portions: meal.P }))); totals(); },
+        onCellSaved: () => totals(),
       }, mealUi);
-      dishGrid = grid(dishesHost, { layoutId: 'vercon.lista.' + id + '.dishes.compact-v1', proportionalWidths: true, rowKey: 'key', rows: meal.items.map((row, index) => ({ ...row, ordinal: index + 1, portions: meal.P })), editable: editing(),
+      const dropDish = (row) => {
+        meal.items = meal.items.filter(item => item.key !== row.key);
+        dishGrid.setRows(meal.items, { keepWidths: true });
+      };
+      dishGrid = grid(dishesHost, { layoutId: 'vercon.lista.' + id + '.dishes.v2', layout: { fill: 'Explicatie' }, rowKey: 'key', rows: meal.items, editable: editing(), singleClickEdit: true,
+        newRowAlwaysVisible: editing(), isBlankRow: isBlankDish, onNewRow: () => { const row = blankDish(); meal.items.push(row); return row; }, onCancelNewRow: dropDish,
         columns: [
-          { key: 'ordinal', title: '#', width: 36, editable: false, filter: false, sortable: false },
-          column({ key: 'portions', label: 'Porții', type: 'int' }, { width: 60, editable: false, filter: false, sortable: false }),
-          column({ key: 'Tip', label: 'Fel de mâncare', type: 'text' }, { width: 130, editor: 'list',
-            options: state.lookups.dishes.map((dish) => ({ value: dish.label, label: dish.label })), filter: false, sortable: false }),
-          column({ key: 'Explicatie', label: 'Explicații', type: 'text' }, { width: 200, filter: false, sortable: false }),
-          { key: 'actions', title: '⋮', width: 36, editable: false, filter: false, sortable: false, display: 'button', actionText: '⋮' }],
-        footer: true, footerCaption: '', footerAction: { label: '+ Adaugă rând', span: 2, disabled: !editing() }, onFooterAction: async () => {
-          if (!await commit()) return; const row = { key: key(), IdFel: null, Tip: '', Explicatie: '' }; meal.items.push(row); state.dirty = true; paintMeals();
-        },
+          column({ key: 'Tip', label: 'FELUL', type: 'text', max: 50 }, { width: 57, minWidth: 57, fixedWidth: true, editor: 'list', dropDownMinWidth: 120,
+            dropDownOnEnter: row => !row.Tip && row.IdFel == null,
+            options: row => state.lookups.dishes.filter(dish => !meal.items.some(item => item.key !== row.key && (
+              item.IdFel != null && String(item.IdFel) === String(dish.id)
+              || String(item.Tip || '').trim().toLocaleLowerCase('ro') === dish.label.trim().toLocaleLowerCase('ro')
+            ))).map(dish => ({ value: dish.label, label: dish.label })), filter: false, sortable: false }),
+          column({ key: 'Explicatie', label: 'Explicații', type: 'text', max: 255 }, { width: 100, editor: 'list', searchable: true, allowCustom: true, showArrow: true, dropDownMinWidth: 300, options: explanationOptions, filter: false, sortable: false }),
+          { key: 'actions', title: '⋮', width: 30, minWidth: 30, editable: false, filter: false, sortable: false, display: 'button', actionText: '⋮' }],
+        footer: false,
         onCellSave: ({ row, key: cell, value: raw }) => {
-          const item = meal.items.find((it) => it.key === row.key); const patch = { [cell]: cell === 'IdFel' && raw ? Number(raw) : raw };
-          if (cell === 'Tip') patch.IdFel = state.lookups.dishes.find((dish) => dish.label === raw)?.id ?? null;
-          Object.assign(item, patch); state.dirty = true; return patch;
+          const item = meal.items.find((it) => it.key === row.key); const patch = { [cell]: raw };
+          if (cell === 'Tip') {
+            patch.IdFel = state.lookups.dishes.find((dish) => dish.label === raw)?.id ?? null;
+            if (raw && meal.items.some(other => other.key !== row.key && dishKey(other) === dishKey({ ...patch, Tip: raw }))) {
+              throw new Error('Felul ales este deja folosit la această masă.');
+            }
+          }
+          Object.assign(item, patch); dishGrid.ensureNewRow(); state.dirty = true; return patch;
         },
+        onEditError: ({ error }) => report(error),
         onCellAction: ({ row }) => rowMenu(dishGrid, row, [{ label: 'Elimină rândul', disabled: !editing(), run: async () => {
-          if (!await commit()) return; meal.items = meal.items.filter((it) => it.key !== row.key); state.dirty = true; paintMeals();
+          if (!await commit()) return; dropDish(row); state.dirty = true;
         } }]),
       }, mealUi);
       void summary;
@@ -98,8 +178,8 @@ export function mountLista(host, opts) {
   }
   function paintBons() {
     bonsUi.clear(); bons.replaceChildren(); bonsGrid = null; const v = value(); if (!v) return;
-    const gridHost = el('div'), sumsHost = el('div', { className: 'vc-lista__summary' });
-    bons.append(el('h4', { textContent: 'Bonuri de consum asociate' }), gridHost, sumsHost);
+    const gridHost = el('div');
+    bons.append(el('h4', { textContent: 'Bonuri de consum asociate' }), gridHost);
     bonsGrid = grid(gridHost, { layoutId: 'vercon.lista.bons.compact-v1', proportionalWidths: true, rowKey: 'id', rows: v.bons.map((row, index) => ({ ...row, ordinal: index + 1 })), editable: false,
       columns: [
         { key: 'ordinal', title: '#', width: 40 },
@@ -113,18 +193,19 @@ export function mountLista(host, opts) {
         if (!await commit()) return; state.draft.bons = state.draft.bons.filter((item) => item.id !== row.id); state.dirty = true; paintBons();
       } }]),
     }, bonsUi);
-    const sums = grid(sumsHost, { rows: [], proportionalWidths: true, rowKey: 'key', editable: false, footer: false, columns: [
-      column({ key: 'list', label: 'Valoare listă', type: 'decimal' }, { width: 180 }),
-      column({ key: 'bons', label: 'Total BC', type: 'decimal' }, { width: 180 }),
-      column({ key: 'diff', label: 'Diferență', type: 'decimal' }, { width: 180 })] }, bonsUi);
-    bonsGrid._sums = sums; totals();
+    totals();
   }
   function totals() {
     const v = value(); if (!v || !bonsGrid) return;
     const listTotal = editing() ? MEALS.reduce((sum, [id]) => sum + number(mealValue(v.meals[id])), 0).toFixed(state.zec) : state.doc.header.Valoare;
     const bcTotal = editing() ? v.bons.filter((row) => !row.annulled).reduce((sum, row) => sum + number(row.total), 0).toFixed(state.zec) : state.doc.header.bons_total;
     const diff = editing() ? (number(listTotal) - number(bcTotal)).toFixed(state.zec) : state.doc.header.diff;
-    bonsGrid.setFooter({ values: { receiver: 'TOTAL BC', total: amount(bcTotal) } }); bonsGrid._sums.setRows([{ key: 'total', list: listTotal, bons: bcTotal, diff }]);
+    bonsGrid.setFooter({ values: { receiver: 'TOTAL BC', total: amount(bcTotal) } });
+    for (const [name, raw] of [['Valoare', listTotal], ['bons_total', bcTotal], ['diff', diff]]) inputs.get(name)?.input._box.setValue(formatMoney(raw));
+    // Report sign: closing balance = previous balance - (list value - BC total).
+    const opposite = diff == null ? null : String(diff).startsWith('-') ? String(diff).slice(1) : '-' + diff;
+    const closing = openingBalance == null || opposite == null ? null : receiptTotal([{ balance: openingBalance }, { balance: opposite }], 'balance', 4);
+    paintBalance('closing', closing);
   }
   async function chooseBon() {
     if (!editing() || !await commit()) return; const token = generation, draft = state.draft;
@@ -144,31 +225,46 @@ export function mountLista(host, opts) {
   }
   function paintSaved() {
     treeUi.clear(); treeHost.hidden = editing(); if (editing()) { treeHost.replaceChildren(); return; }
-    const nodes = groupedNodes(state.docs, [(row) => row.date?.slice(0, 4), (row) => row.date?.slice(0, 7), (row) => dateText(row.date)], (row) => 'Lista ' + row.number + ' • ' + amount(row.total) + ' lei' + (row.annulled ? ' • anulată' : ''));
+    const months = new Map();
+    for (const row of state.docs) {
+      const month = row.date?.slice(0, 7) || '';
+      if (!months.has(month)) months.set(month, []);
+      months.get(month).push(row);
+    }
+    const nodes = [...months].sort(([a], [b]) => b.localeCompare(a)).map(([month, rows]) => ({
+      id: 'month:' + month,
+      label: month ? MONTHS[Number(month.slice(5)) - 1] + '/' + month.slice(0, 4) : 'Fără dată',
+      children: rows.map(row => docNode(row, 'Lista ' + row.number + ' • ' + dateText(row.date) + (row.annulled ? ' • anulată' : ''), formatMoney(row.total))),
+    }));
     paintTree(treeHost, nodes, { title: 'Liste salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onSelect: (id) => openDoc(id).catch(report), onAction: (id, anchor) => openMenu(anchor, [
       { label: 'Deschide', run: () => openDoc(id) },
       { label: 'Modifică', disabled: !state.canWrite || state.docs.find((row) => String(row.id) === id)?.annulled, run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) startEdit(); } },
       { label: 'Previzualizare', run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await showPreview(); } },
       { label: 'Anulează lista', disabled: !state.canWrite || state.docs.find((row) => String(row.id) === id)?.annulled, run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await cancelList(); } },
     ]) }, treeUi);
+    treeUi.own(new ActionAddButton(treeHost.querySelector(':scope > h4'), {
+      className: 'vc-lista__tree-add', title: 'Adaugă listă de alimente', disabled: !state.canWrite,
+      onClick: () => startAdd().catch(report),
+    }));
   }
   async function showPreview() {
     if (!await commit()) return; const v = value(); if (!v) return;
     const sections = [{ title: 'Lista nr. ' + (v.header.Numar || 'automat') + ' • ' + dateText(v.header.Data), columns: [column({ key: 'Comentarii', label: 'Comentarii' }, { width: 600 })], rows: [v.header] }];
     for (const [id, label] of MEALS) {
-      const m = v.meals[id]; sections.push({ title: label, columns: ['P', 'VMD', 'V', 'D'].map((name) => column({ key: name, label: name, type: 'decimal' })), rows: [{ ...m, V: editing() ? mealValue(m) : m.V }] },
-        { title: 'Feluri • ' + label, columns: [column({ key: 'Tip', label: 'Fel de mâncare' }), column({ key: 'Explicatie', label: 'Explicații' }, { width: 480 })], rows: m.items });
+      const m = v.meals[id]; sections.push({ title: label, columns: [column({ key: 'P', label: 'Porții', type: 'int' }), column({ key: 'VMD', label: 'Preț', type: 'decimal' }), column({ key: 'V', label: 'Valoare', type: 'decimal' })], rows: [{ ...m, V: editing() ? mealValue(m) : m.V }] },
+        { title: 'Feluri • ' + label, columns: [column({ key: 'Tip', label: 'FELUL' }), column({ key: 'Explicatie', label: 'Explicații' }, { width: 480 })], rows: m.items.filter(row => !isBlankDish(row)) });
     }
     sections.push({ title: 'Bonuri asociate', columns: [column({ key: 'number', label: 'BC', type: 'int' }), column({ key: 'date', label: 'Data', type: 'date' }), column({ key: 'receiver', label: 'Primitor' }, { width: 260 }), column({ key: 'total', label: 'Valoare', type: 'decimal' })], rows: v.bons });
     const token = generation, draft = state.draft, doc = editing() ? null : state.doc;
     await documentReport({ api: opts.api, selection: opts.sel(), family: 'lista', document: doc,
-      title: editing() ? 'Listă de alimente • Ciornă nesalvată' : 'Listă de alimente nr. ' + state.doc.number,
+      title: editing() ? 'Listă de alimente • Ciornă nesalvată' + (v.header.Numar ? ' nr. ' + v.header.Numar : '') : 'Listă de alimente nr. ' + state.doc.number,
+      date: v.header.Data,
       sections, owner: dialogs, isCurrent: () => !disposed && token === generation && draft === state.draft });
   }
   function paintBar() {
     bar.replaceChildren(); const button = (label, run, disabled = false) => { const b = el('button', { type: 'button', textContent: label, disabled }); b.addEventListener('click', () => Promise.resolve(run()).catch(report)); return b; };
-    if (editing()) bar.append(button('Renunță', discard), button('Previzualizare', showPreview), button('Salvează lista', save));
-    else { if (state.canWrite) bar.append(button('+ Adaugă', startAdd)); if (state.doc) bar.append(button('Modifică', startEdit, !state.canWrite || state.doc.annulled), button('Previzualizare', showPreview)); }
+    if (editing()) bar.append(button('Renunță', discard), button('Salvează lista', save));
+    else if (state.doc) bar.append(button('Modifică', startEdit, !state.canWrite || state.doc.annulled), button('Previzualizare', showPreview));
     bar.append(status); if (state.closed) bar.append(el('span', { className: 'vc-hint', textContent: 'Perioada este închisă.' }));
   }
   function collect() {
@@ -179,7 +275,7 @@ export function mountLista(host, opts) {
     }
     header.Comentarii = (draft.header.Comentarii || '').trim() || null;
     for (const [id, label] of MEALS) {
-      const m = draft.meals[id], out = { items: m.items.map((row) => ({ IdFel: row.IdFel, Tip: (row.Tip || '').trim() || null, Explicatie: (row.Explicatie || '').trim() })) };
+      const m = draft.meals[id], out = { items: m.items.filter(row => !isBlankDish(row)).map((row) => ({ IdFel: row.IdFel, Tip: (row.Tip || '').trim() || null, Explicatie: (row.Explicatie || '').trim() })) };
       for (const name of ['P', 'VMD', 'D']) { const result = parse(m[name], { type: name === 'VMD' ? 'decimal' : 'int', min: 0 }); if (!result.ok) errors.push(label + ': ' + result.message); out[name] = result.value ?? 0; } outputMeals[id] = out;
     }
     return { errors, body: { header, meals: outputMeals, bons: draft.bons.map((row) => row.id) } };
@@ -193,7 +289,7 @@ export function mountLista(host, opts) {
     if (adding) state.request = request; root.inert = true; say('Se salvează…');
     try {
       const result = adding ? await write('POST', '', { ...request.body, request_key: request.key }) : await write('PUT', '/' + state.doc.id, { ...collected.body, version: state.doc.version });
-      if (disposed) return; ++generation; state.doc = result.document; state.draft = null; state.mode = 'view'; state.dirty = false; state.request = null;
+      if (disposed) return; ++generation; state.doc = result.document; rememberExplanations(state.doc); state.draft = null; state.mode = 'view'; state.dirty = false; state.request = null;
       paint(); say('Salvat.'); try { await refresh(); if (!disposed) paintSaved(); } catch (error) { report(error); }
     } catch (error) {
       if (error.status && error.status < 500) state.request = null;

@@ -13,7 +13,8 @@ def text(value):
 
 
 def table(layout, rows, zec, totals=None):
-    columns = [(c['key'], c['label'], c['type'], int(c['width'] * 1000)) for c in layout['columns']]
+    columns = [(c['key'], c['label'], c['type'], int(c['width'] * 1000), c.get('decimals'))
+               for c in layout['columns']]
     normalized = [{**row, **{c['key']: row.get(c['key'], '') for c in layout['columns']}} for row in rows]
     normalized = [{**row, **{c['key']: date(row.get(c['key'])) for c in layout['columns'] if c['type'] == 'date' or c['key'] == 'date'}} for row in normalized]
     amounts = list(layout.get('totals', [])) if totals is None else list(totals)
@@ -21,15 +22,28 @@ def table(layout, rows, zec, totals=None):
         amounts = [key for key in amounts if key not in ('quantity', 'opening', 'incoming', 'outgoing', 'closing')]
     block = report_model.table(columns, normalized, zec, amounts)
     for target, configured in zip(block['cols'], layout['columns']):
-        for key in ('size', 'bold', 'align'):
+        for key in ('size', 'header_size', 'header_background', 'bold', 'align'):
             if key in configured:
                 target[key] = configured[key]
     block['headers'] = layout.get('headers', [])
     block['width'] = layout.get('table_width', 1)
+    if 'show_column_header' in layout:
+        block['show_column_header'] = layout['show_column_header']
     return block
 
 
 def doc_heading(spec, row, unit, committees):
+    if spec['family'] in ('bp', 'bt', 'bs'):
+        fields = [('Număr document / Dată', str(row['number']) + ' / ' + date(row['date']))]
+        if spec['family'] == 'bp':
+            fields += [('Cont magazie', row.get('warehouse_account') or ''), ('Cont în folosință', row.get('account') or ''),
+                       ('Predător', unit.get('manager') or ''), ('Primitor', row.get('party') or '')]
+        else:
+            fields.append(('Predător', row.get('giver_name') or ''))
+            if spec['family'] == 'bt':
+                fields.append(('Primitor', row.get('party') or ''))
+        fields.append(('Explicații', row.get('explanation') or ''))
+        return [{'t': 'box', 'rows': fields}]
     if spec['family'] in ('nir', 'storno'):
         committee = committees.get(row.get('committee'), {})
         header = report_model.table([('fiscal_code', 'Cod furnizor', 'text', 1000), ('invoice', 'Nr. factură /\nAviz expediere', 'text', 1700),
@@ -75,13 +89,13 @@ def statement_table(layout, rows, zec):
         source = [row for row, _ in items]
         totals = {key: report_model.total(source, key) for key in ('incoming', 'outgoing')}
         summary = {'number': 'Total luna ' + month, 'incoming': totals['incoming'], 'outgoing': totals['outgoing'],
-                   'closing': source[-1]['closing']}
+                   'closing': source[-1]['closing'], 'closing_value': source[-1].get('closing_value', '')}
         record = table(layout, [summary], zec, ())['rows'][0]
         record['cls'] = 'total'
         printed.append(record)
     movements = [row for row in rows if row.get('number') != 'SOLD INIȚIAL']
     summary = {'number': 'TOTAL GENERAL', **{key: report_model.total(movements, key) for key in ('incoming', 'outgoing')},
-               'closing': rows[-1]['closing'] if rows else ''}
+               'closing': rows[-1]['closing'] if rows else '', 'closing_value': rows[-1].get('closing_value', '') if rows else ''}
     record = table(layout, [summary], zec, ())['rows'][0]
     record['cls'] = 'total'
     block['rows'] = printed + [record]
@@ -92,12 +106,12 @@ def build(spec, layout, rows, ctx, unit, committees=None):
     zec, blocks = ctx['zec'], []
     rows = [{**row, 'ordinal': index + 1} for index, row in enumerate(rows)]
     groups = layout.get('groups', [])
-    if spec['kind'] == 'statement':
+    if spec['kind'] in ('statement', 'custody_statement'):
         # Opening first, then chronological movements; subtotal at every month.
         rows.sort(key=lambda row: (row['variant'], row.get('date', ''), 0 if row.get('number') == 'SOLD INIȚIAL' else 1))
     def walk(items, level):
         if level == len(groups):
-            blocks.append(statement_table(layout, items, zec) if spec['kind'] == 'statement' else table(layout, items, zec))
+            blocks.append(statement_table(layout, items, zec) if spec['kind'] in ('statement', 'custody_statement') else table(layout, items, zec))
             return
         key = groups[level]
         buckets = OrderedDict()
@@ -132,7 +146,7 @@ def build(spec, layout, rows, ctx, unit, committees=None):
                 signature = reception_signatures(row, committees or {}) if standard_reception else {'t': 'sign', 'heads': layout['signatures']}
                 blocks.extend([{'t': 'spacer'}, signature])
     walk(rows, 0)
-    if rows and groups and spec['kind'] not in ('statement', 'documents') and layout.get('totals'):
+    if rows and groups and spec['kind'] not in ('statement', 'custody_statement', 'documents') and layout.get('totals'):
         overall = table(layout, rows, zec)
         overall['rows'] = overall['rows'][-1:]
         blocks.extend([{'t': 'group', 'text': 'TOTAL GENERAL'}, overall])

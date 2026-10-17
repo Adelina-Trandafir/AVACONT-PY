@@ -64,8 +64,20 @@ def get_document(cursor, repo, ctx, family, doc_id):
 
 def lookups(cursor, ctx, family):
     s, g = ctx['subunit'], ctx['gestiune']
+    # Suggestions are saved list texts, scoped to the current context. New text is
+    # stored with the list through the existing write path, without a new table.
+    explanation_queries = [
+        'SELECT DISTINCT x.IdFel, x.Tip, x.Explicatie FROM {table} x '
+        'JOIN VC_LABC h ON h.SubunitId=x.SubunitId AND h.GestiuneId=x.GestiuneId '
+        'AND h.ExercitiuId=x.ExercitiuId AND h.IdLista=x.IdLista '
+        'WHERE x.SubunitId=%s AND x.GestiuneId=%s AND x.ExercitiuId=%s '
+        "AND h.Anulat=0 AND x.Explicatie IS NOT NULL AND TRIM(x.Explicatie)<>''".format(table=meal[0])
+        for meal in MEALS.values()
+    ]
+    explanations = _all(cursor, ' UNION '.join(explanation_queries) + ' ORDER BY Tip, Explicatie', _scope(ctx) * len(MEALS))
     return {'dishes': [{'id': r['IDFel'], 'label': r['DenFel'] or ''} for r in _all(
         cursor, 'SELECT IDFel, DenFel FROM VC_FeluriMancare WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1 ORDER BY DenFel', (s, g))],
+        'explanations': explanations,
         'today': datetime.now().strftime('%Y-%m-%d')}
 
 

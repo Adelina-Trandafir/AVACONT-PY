@@ -75,7 +75,7 @@ export function mountEditor(host, opts) {
     try { await snapshotPreview('Document • ciornă', [
       { title: 'Antet', columns: [{ key: 'label', title: 'Câmp', width: 240 }, { key: 'value', title: 'Valoare', width: 440 }], rows: columns.header.map((spec) => ({ label: spec.label, value: format(draft.header()[spec.key], spec) })) },
       { title: 'Produse', columns: columns.lines.map((spec) => column(spec, { editable: false })), rows: draft.rows().map((row) => ({ ...row.cells })) },
-    ], dialogs, () => !disposed); } catch (error) { report(error); }
+    ], dialogs, () => !disposed, { documentLabel: draft.header().Numar ? 'nr. ' + draft.header().Numar : '', date: draft.header().Data }); } catch (error) { report(error); }
   });
   paintHeader(); paintLines();
   return { isDirty: dirty, destroy: () => { disposed = true; headerUi.clear(); linesUi.clear(); dialogs.clear(); host.replaceChildren(); } };

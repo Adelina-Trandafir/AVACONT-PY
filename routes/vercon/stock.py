@@ -102,7 +102,7 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
     selected = {key: info for key, info in metadata.items()
                 if (variant is None or key == variant)
                 and (product is None or info['product'] == product)
-                and (category is None or info['category'] == (None if category == 0 else category))}
+                and (ledger == 'custody' or category is None or info['category'] == (None if category == 0 else category))}
     movements = (stock_source.warehouse(cursor, ctx, selected) if ledger == 'warehouse'
                  else stock_source.custody(cursor, ctx))
     # Supplier filter selects eligible VARIANTS, then keeps all their stock movements.
@@ -110,21 +110,28 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
     if supplier is not None:
         eligible = {m['p'] for m in movements if m['supplier'] == supplier and day_of(m['d']) <= end}
         selected = {key: info for key, info in selected.items() if key in eligible}
-    movements = [m for m in movements if m['p'] in selected and (holder is None or m['holder'] == holder)]
+    movements = [m for m in movements if m['p'] in selected and (holder is None or m['holder'] == holder)
+                 and (ledger != 'custody' or category is None or m['category'] == (None if category == 0 else category))]
     if any(selected[m['p']]['price'] is None or selected[m['p']]['price'] < 0 for m in movements):
         raise NomError('STOCK_PRICE_INVALID', 'O variantă nu are un preț de evaluare valid.', 409)
-    dimensions = ('holder', 'p') if ledger == 'custody' else ('supplier', 'p') if group == 'supplier' else ('p',)
+    dimensions = ('holder', 'category', 'p') if ledger == 'custody' else ('supplier', 'p') if group == 'supplier' else ('p',)
     grouped, statements = balance(movements, start, end, dimensions)
     scale = ctx['scale']
     holders = {}
+    accounts = {}
     if ledger == 'custody':
         cursor.execute('SELECT IDC,Denumire FROM VC_Clienti WHERE SubunitId=%s AND GestiuneId=%s',
                        (ctx['subunit'], ctx['gestiune']))
         holders = {row['IDC']: row['Denumire'] or str(row['IDC']) for row in cursor.fetchall()}
+        cursor.execute('SELECT IdMasina,Masina FROM VC_Masini WHERE SubunitId=%s AND GestiuneId=%s',
+                       (ctx['subunit'], ctx['gestiune']))
+        accounts = {row['IdMasina']: row['Masina'] for row in cursor.fetchall()}
 
     def identity(key):
         info = selected[key[-1]]
         return {**info, 'price': quantity_text(info['price'] or 0, scale),
+                'category': key[1] if ledger == 'custody' else info['category'],
+                'category_name': accounts.get(key[1]) if ledger == 'custody' else info['category_name'],
                 'holder': key[0] if ledger == 'custody' else None,
                 'holder_name': holders.get(key[0], str(key[0])) if ledger == 'custody' else '',
                 'supplier': key[0] if group == 'supplier' else None}
@@ -157,5 +164,5 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
                                if group == 'supplier' else None,
             'rows': rows, 'statement': sheet,
             'categories': [{'id': key, 'label': label or 'Fără categorie'} for key, label in
-                           dict((info['category'], info['category_name']) for info in metadata.values()).items()],
+                           (accounts if ledger == 'custody' else dict((info['category'], info['category_name']) for info in metadata.values())).items()],
             'value_totals': {k: quantity_text(v, scale) for k, v in totals.items()}}

@@ -188,5 +188,5 @@
 
 /* a cell that is being edited gives its whole area to the editor (no padding around it) */
 .dgv__cell:has(> .dgv__editor) { padding: 0; }
-.dgv__editor .combobox-container { display: block; width: 100%; height: 100%; max-width: none; font: inherit; text-align: inherit; }
+.dgv__editor.combobox-container, .dgv__editor .combobox-container { display: block; width: 100%; height: 100%; max-width: none; font: inherit; text-align: inherit; }
 .dgv__editor .combobox-input { height: 100%; }

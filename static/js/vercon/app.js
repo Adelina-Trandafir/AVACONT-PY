@@ -22,6 +22,7 @@ import { createLock } from './lock.js';
 import { createSaver } from './save.js';
 import { writePreference } from './documents.js';
 import { el, preview, scope } from './ui.js';
+import { bindApplicationMenu } from './application-menu.js';
 
 const $ = (k_id) => document.getElementById(k_id);
 const lifetime = new AbortController();   // everything below is bound to this signal
@@ -123,11 +124,6 @@ function paintMenu(k_ctx) {
         return [{ ...k_spec, icon: MENU_ICONS[k_item.key], enabled: k_item.enabled, reason: k_item.reason || '',
           run: () => openForm(k_item.key).catch(report) }];
       });
-      if (k_incoming && !IS_PREVIEW) {
-        const k_nir = k_children.find((k_child) => k_child.key === 'nir');
-        if (k_nir) k_children.push({ key: 'nir:list', icon: '🖨', label: 'Listare', rule: true,
-          enabled: k_nir.enabled, reason: k_nir.reason, run: () => {} });
-      }
       if (k_children.length) k_items.push({ key: k_incoming ? '_intrari' : '_iesiri',
         label: k_incoming ? 'INTRARI' : 'IESIRI', icon: k_incoming ? '📥' : '📤', group: k_group,
         dropdownMinWidth: k_incoming ? 260 : 224, enabled: k_children.some((k_child) => k_child.enabled !== false),
@@ -136,12 +132,11 @@ function paintMenu(k_ctx) {
     }
     for (const k_item of k_list) {
       const k_entry = { key: k_item.key, label: k_item.label, icon: MENU_ICONS[k_item.key], group: k_group, enabled: k_item.enabled, reason: k_item.reason || '', run: () => openForm(k_item.key).catch(report) };
-      if (k_item.key === 'nir' && !IS_PREVIEW) {   // purchase invoice: Add / Edit / List
+      if (k_item.key === 'nir' && !IS_PREVIEW) {   // purchase invoice: Add / Edit
         delete k_entry.run;
         k_entry.children = [
           { key: 'nir:add', icon: '➕', label: 'Adăugare', run: () => openReceipt(true).catch(report) },
           { key: 'nir:edit', icon: '✎', label: 'Editare / Modificare', run: () => openReceipt(false).catch(report) },
-          { key: 'nir:list', icon: '🖨', label: 'Listare', rule: true, run: () => {} },
         ];
       }
       k_items.push(k_entry);
@@ -321,14 +316,11 @@ function bind() {
       { key: 'at', title: 'Data', width: 210 }, { key: 'level', title: 'Tip', width: 90 }, { key: 'message', title: 'Mesaj', width: 600 },
     ], rows: messageHistory() }], pageUi) },
   ]), { signal: lifetime.signal });
-  $('vc-apps').addEventListener('click', () => {
-    openMenu($('vc-apps'), [
-      { icon: '🏢', label: $('vc-context').textContent || 'Contul curent', disabled: true },
-      { icon: '🤖', label: 'K-BOT', rule: true, run: async () => { if (await allowLeave()) { await lock.release(); window.location.href = '/portal'; } } },
-      { icon: '📋', label: 'ADECHIT', run: async () => { if (await allowLeave()) { await lock.release(); window.location.href = '/adechit'; } } },
-      { icon: '📒', label: 'Avacont · în curând', disabled: true },
-    ], { label: 'Aplicații', below: $('vc-apps').closest('header') });
-  }, { signal: lifetime.signal });
+  bindApplicationMenu($('vc-apps'), {
+    context: () => $('vc-context').textContent,
+    navigate: path => (async () => { if (await allowLeave()) { await lock.release(); window.location.href = path; } })().catch(report),
+    signal: lifetime.signal,
+  });
   const stopTimer = portalToken() ? startSessionTimer({ token: portalToken, host: $('vc-session-timer'), onExpired: logoutNow }) : null;
   // Native tab-exit prompts are intentionally absent; in-app navigation uses confirmBox.
   addEventListener('app:session-expired', () => { lifetime.abort(); lock.release(true); }, { once: true });

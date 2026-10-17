@@ -34,7 +34,7 @@ export function mountMf(host, opts) {
         { label: 'Amortizare la dată', disabled: !state.canReport || !!state.draft || !row.id,
           run: () => openDepreciation(row, opts, dialogs) },
         { label: 'Modifică datele de amortizare', disabled: !state.canWrite || !!state.draft, run: () => { state.draft = { ...state.assets.find((asset) => asset.id === row.id) }; state.dirty = false; say(); paint(); dataGrid.beginEdit(dataGrid._rows.find((asset) => asset.id === row.id), 'entry_date'); } },
-        { label: 'Previzualizare', run: () => preview('Mijloc fix • ' + row.code, [{ title: row.name, columns: columns().map((col) => ({ ...col, editable: false })), rows: [row] }], dialogs) },
+        { label: 'Previzualizare', run: () => preview('Mijloc fix • ' + row.code, [{ title: row.name, columns: columns().map((col) => ({ ...col, editable: false })), rows: [row] }], dialogs, { date: row.entry_date }) },
       ]),
     }, ui);
     bar.replaceChildren(); const button = (label, run) => { const b = el('button', { type: 'button', textContent: label }); b.addEventListener('click', () => Promise.resolve(run()).catch(report)); return b; };

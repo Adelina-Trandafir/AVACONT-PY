@@ -640,12 +640,15 @@ export class DataGrid {
     this._firstRendered = first;
     this._lastRendered = last;
 
+    const focusedEditor = this._edit?.host.contains(document.activeElement) ? document.activeElement : null;
     const cols = this._visibleColumns();
     const frag = document.createDocumentFragment();
     for (let i = first; i < last; i += 1) frag.appendChild(this._renderItem(this._items[i], i, cols));
     this._window.textContent = '';
     this._window.appendChild(frag);
     this._window.style.top = `${first * h}px`;
+    // Recycling moves the live editor between row elements; keep its input focused.
+    if (focusedEditor?.isConnected && document.activeElement !== focusedEditor) focusedEditor.focus({ preventScroll: true });
   }
 
   _renderItem(item, index, cols) {

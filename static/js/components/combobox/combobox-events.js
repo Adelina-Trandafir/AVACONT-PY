@@ -9,6 +9,13 @@ export const comboboxEventsMixin = {
    */
   bindEvents() {
     if (this.options.readonly) {
+      // The arrow is not a focusable input. Keep focus in the field so a blur
+      // from changing rows cannot close the list just opened by this click.
+      this.addDOMListener(this.container, 'mousedown', (event) => {
+        if (this.disabled || this.dropdown.contains(event.target)) return;
+        event.preventDefault();
+        this.input.focus({ preventScroll: true });
+      });
       this.addDOMListener(this.container, 'click', (event) => {
         // A choice already closes the dropdown; its bubbling click must not reopen it.
         // inside a <label> the browser repeats every click on the input, which would reopen the list right after a choice
@@ -168,8 +175,9 @@ export const comboboxEventsMixin = {
    * Gestionează blur
    */
   handleBlur(e) {
+    const shownAt = this.lastShownAt;
     this.addTimeout(() => {
-      if (!this.container.contains(document.activeElement)) {
+      if (this.lastShownAt === shownAt && !this.container.contains(document.activeElement) && !this.dropdown.contains(document.activeElement)) {
         this.hide();
       }
     }, 150);

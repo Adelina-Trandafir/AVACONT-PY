@@ -3,6 +3,7 @@ import { el, scope, field, paintTree, pdfPreview, showMessage, CheckBox } from '
 import { mountSelection, selectionFilters, selectionError } from './report-selection.js';
 import { paintReportBlock, reportNodes } from './report-result.js';
 import { downloadFile } from './pdf-preview.js';
+import { format as formatField } from './fields.js';
 
 const months = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
 const endOfMonth = (year, month) => new Date(Date.UTC(year, month + 1, 0)).toISOString().slice(0, 10);
@@ -11,12 +12,13 @@ export function mountReports(host, { api, sel }) {
   const owner = scope(), selectionOwner = scope(), tablesOwner = scope();
   owner.own(() => selectionOwner.clear()); owner.own(() => tablesOwner.clear());
   const year = Number(sel().year);
+  const history = sel().type === 'OI';
   const state = { start: `${year}-01-01`, end: `${year}-12-31`, name: null, label: '', spec: null,
-    checked: [], model: null, seq: 0, lookupSeq: 0, destroyed: false, loading: false, busy: false };
+    checked: [], documents: [], model: null, seq: 0, lookupSeq: 0, destroyed: false, loading: false, busy: false };
   let selectionTree;
   const root = el('section', { className: 'vc-reports' });
   const left = el('aside', { className: 'vc-reports__period' }, el('h4', { textContent: 'Selectează perioada' }));
-  const periods = field({ key: 'period', label: 'Perioada', type: 'select', options: [
+  const periods = history ? { node: el('div', { className: 'vc-reports__history' }) } : field({ key: 'period', label: 'Perioada', type: 'select', options: [
     { id: 'all', label: `Anul ${year}` }, ...months.map((label, index) => ({ id: String(index), label }))
   ] }, 'all', true, value => {
     const month = value === 'all' ? null : Number(value);
@@ -64,13 +66,14 @@ export function mountReports(host, { api, sel }) {
   async function lookups() {
     if (!state.name || state.destroyed) return;
     const name = state.name, seq = ++state.lookupSeq;
-    state.loading = true; state.spec = null; available(); status.textContent = 'Se încarcă datele de selecție…';
+    state.loading = true; state.spec = null; state.documents = []; available(); status.textContent = 'Se încarcă datele de selecție…';
     // A failed lookup must not leave the previous report's selectable data on screen.
     selectionOwner.clear(); right.replaceChildren(el('h4', { textContent: 'Selectare date' })); selectionTree = null;
     try {
       const response = await api(`/api/vercon/reports/${encodeURIComponent(name)}/selection?${query(false)}`);
       if (state.destroyed || seq !== state.lookupSeq || name !== state.name) return;
       state.spec = response.spec;
+      state.documents = response.documents || [];
       selectionTree = mountSelection(right, response, state.checked, ids => {
         state.checked = ids; invalidate();
       }, selectionOwner);
@@ -90,6 +93,14 @@ export function mountReports(host, { api, sel }) {
     notes.replaceChildren(...model.notes.map(note => el('p', { className: 'vc-hint', textContent: note })));
     return model;
   }
+  function previewDetails() {
+    const period = { start: state.start, end: state.end };
+    if (!state.spec.filters.includes('document')) return { period };
+    const selected = state.checked.filter(id => id.startsWith('document:')).map(id => id.slice('document:'.length));
+    const documents = state.documents.filter(item => selected.includes(String(item.id)));
+    if (documents.length === 1) return { documentLabel: documents[0].label.replace(/\b\d{4}-\d{2}-\d{2}\b/g, date => formatField(date, { type: 'date' })) };
+    return { documentLabel: selected.length ? `${selected.length} documente` : '', period };
+  }
   async function exportReport(format) {
     if (state.busy || state.loading || !state.name || selectionError(state.spec, state.checked) || !await owner.commit()) return;
     if (state.destroyed || state.busy || state.loading || selectionError(state.spec, state.checked)) return;
@@ -107,7 +118,7 @@ export function mountReports(host, { api, sel }) {
         data = await api(`/api/vercon/reports/export/${model.snapshot}/${format}?${new URLSearchParams(sel())}`, { responseType: 'arrayBuffer' });
       }
       if (state.destroyed || seq !== state.seq) return;
-      if (format === 'pdf') await pdfPreview(model.title, data, owner, () => !state.destroyed && seq === state.seq);
+      if (format === 'pdf') await pdfPreview(model.title, data, owner, () => !state.destroyed && seq === state.seq, previewDetails());
       else downloadFile(data, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', model.filename + '.xlsx');
       if (!state.destroyed && seq === state.seq) status.textContent = `${state.label}: raport pregătit.`;
     } catch (error) {
@@ -120,6 +131,25 @@ export function mountReports(host, { api, sel }) {
     try {
       const data = await api(`/api/vercon/reports/catalog?${new URLSearchParams(sel())}`);
       if (state.destroyed) return;
+      if (history) {
+        const years = data.years?.length ? data.years : [year];
+        const latest = Math.max(...years);
+        periods.node._vcExpanded = new Set([`history:${latest}`]);
+        paintTree(periods.node, years.map(value => ({ id: `history:${value}`, label: String(value),
+          children: [{ id: `doc:${value}:all`, label: 'Tot anul' },
+            ...months.map((label, month) => ({ id: `doc:${value}:${month}`, label }))] })), {
+          title: 'Ani / luni', collapsed: true, showSearchBox: false,
+          onSelect: value => {
+            const [selectedYear, selectedMonth] = value.split(':');
+            const month = selectedMonth === 'all' ? null : Number(selectedMonth);
+            state.start = `${selectedYear}-${month == null ? '01' : String(month + 1).padStart(2, '0')}-01`;
+            state.end = month == null ? `${selectedYear}-12-31` : endOfMonth(Number(selectedYear), month);
+            begin.input._picker.setValue(new Date(state.start + 'T12:00:00'), false);
+            end.input._picker.setValue(new Date(state.end + 'T12:00:00'), false);
+            invalidate(); void lookups();
+          },
+        }, owner);
+      }
       paintTree(center, reportNodes(data.reports), { title: 'Tipul raportului', onSelect: name => {
         ++state.lookupSeq; state.name = name; state.label = data.reports.find(item => item.id === name)?.label || name;
         state.checked = []; state.spec = null; invalidate(); void lookups();

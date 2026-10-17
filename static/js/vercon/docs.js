@@ -11,7 +11,10 @@ import { ActionAddButton } from '../components/action-add-button/action-add-butt
 import { receiptAllocation } from './receipt-allocation.js';
 import { receiptDifference, receiptTotal } from './receipt-reconciliation.js';
 import { sharedReceipt, invoiceRows, invoiceValue, receiptLineClass, linkedReceipt } from './receipt-invoice-view.js';
-import { stornoSourceField, stornoProductNodes, calculateStorno } from './storno-editor.js';
+import { stornoSourceField, stornoProductNodes, stornoProductKey, calculateStorno } from './storno-editor.js';
+import { consumptionNodes, consumptionCategory, consumptionBranch } from './consumption-ui.js';
+import { oiAccount, oiProductNodes, oiDocumentNodes } from './oi-ui.js';
+import { oiLineValue } from './oi-values.js';
 
 // Keep the modal implementation available; receipt editing temporarily stays inline.
 const RECEIPT_MODAL_ENABLED = false;
@@ -29,10 +32,13 @@ const key = () => crypto.randomUUID();
 const number = (value) => value == null || value === '' ? null : Number(String(value).replace(',', '.'));
 const fixed = (value, decimals) => value == null || !Number.isFinite(value) ? '' : value.toFixed(decimals);
 const dateText = (value) => format(value, { type: 'date' });
+const treeAlphabet = new Intl.Collator('ro', { sensitivity: 'base' });
 
 export function mountDocuments(host, opts) {
   const family = opts.family, config = families[family], abort = new AbortController();
   const receipt = ['nir', 'storno'].includes(family);
+  const custody = ['bp', 'bt', 'bs'].includes(family);
+  const inline = receipt || family === 'bc' || custody;
   const sourceOptions = opts;
   let currentContext = { ...opts.sel() }, contextAbort = new AbortController(), loadGeneration = 0;
   opts = { ...opts, sel: () => currentContext,
@@ -41,7 +47,7 @@ export function mountDocuments(host, opts) {
   const headerUi = scope(), linesUi = scope(), treeUi = scope(), dialogs = scope();
   const stornoPending = new Set();
   function trackStorno(promise) {
-    if (family !== 'storno') return promise;
+    if (family !== 'storno' && !custody) return promise;
     stornoPending.add(promise);
     promise.finally(() => stornoPending.delete(promise)).catch(() => {});
     return promise;
@@ -76,19 +82,19 @@ export function mountDocuments(host, opts) {
   const main = el('div', { className: 'vc-doc__main' }, el('div', { className: 'vc-doc__titlebar' }, title, stockHost, pill), headerHost, linesHost, bar);
   const savedHost = el('aside', { className: 'vc-doc__tree' });
   const root = el('section', { className: `vc-doc vc-doc--${family}` }, main, savedHost); host.replaceChildren(root);
-  const treeHost = receipt ? el('div', { className: 'vc-receipt-tree' }) : savedHost;
+  const treeHost = inline ? el('div', { className: 'vc-receipt-tree' }) : savedHost;
   if (treeHost !== savedHost) savedHost.append(treeHost);
-  const side = receipt ? receiptContext(savedHost, { root, main, headerHost, linesHost, treeHost, family,
+  const side = inline && !custody ? receiptContext(savedHost, { root, main, headerHost, linesHost, treeHost, family,
     api: opts.api, selection: opts.sel, lineSelection: line => allocation ? allocation.selectionForProduct(line.product) : opts.sel(), context: () => ({ draft: state.draft }),
-    validLine: (line) => !isBlankLine(line) && (family === 'storno' ? !!line.variant : !lineProblems(line).length),
+    validLine: (line) => !isBlankLine(line) && (['storno', 'bc'].includes(family) ? !!line.variant : !lineProblems(line).length),
     blankLine: (line) => isBlankLine(line) }) : null;
 
   function headerSpecs() {
-    const lookup = state.lookups || {}, specs = [], ref = (name, label, items, required = true) => ({ key: name, label, type: 'ref', required, showArrow: receipt, options: options(items) });
+    const lookup = state.lookups || {}, specs = [], ref = (name, label, items, required = true) => ({ key: name, label, type: 'ref', required, showArrow: inline, options: options(items), ...(custody && state.mode !== 'add' ? { fallback: state.doc?.header.labels?.[name] || '' } : {}) });
     if (family === 'nir') specs.push({ ...{ ...ref('IdPartener', 'Furnizor', lookup.partners, state.draft?.tip !== 'STOC_INITIAL'), dropDownOnEnter: true }, fallback: state.mode === 'add' ? '' : state.doc?.header.party || '' }, { key: 'Accounts', label: 'Categorie / cont', type: 'tree', required: true }, { ...ref('IdComisie', 'Comisie', lookup.commissions, (lookup.commissions || []).length > 0), dropDownStyle: 'simple' }, { key: 'NrFact', label: 'Număr factură', type: 'text', required: state.draft?.tip !== 'STOC_INITIAL' }, { key: 'DataFc', label: 'Data facturii', type: 'date', required: true }, { key: 'Valoare', label: state.draft?.invoice && !state.draft.invoice.local ? 'Valoare aferentă acestui NIR (lei)' : 'ValoareFC (lei)', type: 'decimal', min: 0, hint: 'Necompletat: suma produselor. Valoarea declarată trebuie egalată exact.' });
     if (family === 'storno') specs.push({ key: 'NrFact', label: 'Număr factură storno', type: 'text', required: true }, { key: 'DataFc', label: 'Data facturii', type: 'date', required: true }, ref('IdComisie', 'Comisie', lookup.commissions, false));
-    if (family === 'bc') specs.push(ref('IDC', 'Primitor / gestionar', lookup.receivers), ref('IdMasina', 'Categorie / cont', lookup.categories));
-    if (family === 'bp') specs.push(ref('IdMasinaP', 'Cont de intrare', lookup.categories), ref('IDC_BP', 'Primitor', lookup.holders), ref('IdMasina', 'Cont primitor', lookup.categories));
+    if (family === 'bc') specs.push({ ...ref('IDC', 'Primitor / gestionar', lookup.receivers), dropDownOnEnter: true, fallback: state.doc?.header.receiver || '' }, ref('IdMasina', 'Categorie / cont', lookup.categories));
+    if (family === 'bp') specs.push(ref('IdMasinaP', 'Cont OI în magazie', lookup.warehouse_accounts), ref('IDC_BP', 'Primitor', lookup.holders), ref('IdMasina', 'Cont OI în folosință', lookup.use_accounts));
     if (family === 'bt') specs.push(ref('IDC_OLD', 'Predător', lookup.holders), ref('IDC_BT', 'Primitor', lookup.holders));
     if (family === 'bs') specs.push(ref('IDC_BC', 'Predător', lookup.holders));
     specs.push({ key: 'Numar', label: config.number, type: 'int', min: 1 }, { key: 'Data', label: family === 'nir' ? 'Data NIR' : 'Data', type: 'date', required: true });
@@ -104,15 +110,18 @@ export function mountDocuments(host, opts) {
     ];
     if (config.source || config.holder) return [
       { key: config.holder && editing() ? '_choice' : 'name', label: 'Produs', type: 'ref', product: true, editable: !!config.holder }, { key: 'um', label: 'UM' },
+      ...(config.holder ? [{ key: 'account', label: 'Cont în folosință' }, { key: 'batch', label: 'Lot proveniență' }] : []),
       ...(editing() ? [{ key: 'qty', label: config.holder ? 'Disponibil la predător' : 'Cantitate sursă', type: 'decimal' }, ...(!config.holder ? [{ key: 'done', label: 'Deja', type: 'decimal' }, { key: 'left', label: 'Rămas', type: 'decimal' }] : [])] : []),
       { key: 'Cant', label: 'Cantitate', type: 'decimal', editable: true, min: 0 }, { key: 'PUTVA', label: 'Preț cu TVA (lei)', type: 'decimal' }, { key: 'ValoareCUTVA', label: 'Valoare (lei)', type: 'decimal' },
     ];
-    const specs = [{ key: family === 'nir' ? 'product' : 'variant', label: 'Produs', type: 'ref', product: true, editable: true, required: true }, { key: 'um', label: 'UM' }, { key: 'Cant', label: 'Cantitate', type: 'decimal', editable: true, required: true, min: 0 }];
+    const specs = [{ key: family === 'nir' ? 'product' : 'variant', label: 'Produs', type: 'ref', product: true, editable: true, required: true }, { key: 'um', label: 'UM' },
+      ...(['bc', 'bp'].includes(family) ? [{ key: 'avail', label: 'Disponibil', type: 'decimal' }] : []),
+      { key: 'Cant', label: 'Cantitate', type: 'decimal', editable: true, required: true, min: 0 }];
     if (family === 'nir') {
       specs.push({ key: 'Pret', label: 'Preț', type: 'decimal', editable: true, required: true, min: 0 }, { key: 'IDTVA', label: 'TVA %', type: 'ref', editable: true, required: true }, { key: 'Valoare', label: 'Valoare', type: 'decimal' }, { key: 'TVA', label: 'TVA', type: 'decimal' }, { key: 'ValoareCUTVA', label: 'TOTAL', type: 'decimal' });
 
       if (mf()) specs.push(...[{ key: 'code', label: 'Nr. inventar', editable: true, required: true }, { key: 'data_intrarii', label: 'Data intrării', type: 'date', editable: true, required: true }, { key: 'DNF', label: 'Durată normală (luni)', type: 'int', editable: true, required: true, min: 1 }, { key: 'DF', label: 'Durată folosită (luni)', type: 'int', editable: true, min: 0 }, { key: 'ValoareLuna', label: 'Valoare lunară', type: 'decimal' }].map(spec => ({ ...spec, mfOnly: true })));
-    } else specs.push({ key: 'PUTVA', label: 'Preț cu TVA (lei)', type: 'decimal' }, { key: 'ValoareCUTVA', label: 'Valoare (lei)', type: 'decimal' }, { key: 'avail', label: 'Disponibil la data bonului', type: 'decimal' }); return specs;
+    } else specs.push({ key: 'PUTVA', label: 'Preț cu TVA (lei)', type: 'decimal' }, { key: 'ValoareCUTVA', label: 'Valoare (lei)', type: 'decimal' }); return specs;
   }
   const docLabel = (doc) => `${receipt ? `${family.toUpperCase()} ${numberText(doc)} • ${doc.invoice || ''}` : `${family.toUpperCase()} ${doc.number}`} • ${format(doc.total, { type: 'decimal' })} lei${doc.annulled ? ' • anulat' : ''}`;
   const sourceLabel = (doc) => `${doc.invoice || doc.number} • ${dateText(doc.date)} • ${doc.party || doc.receiver || ''} • ${format(doc.total, { type: 'decimal' })} lei`;
@@ -124,13 +133,22 @@ export function mountDocuments(host, opts) {
       console.error('[VERCON] Receipt product catalog missing from response', { path: url('/lookups'), fields: Object.keys(lookups || {}) });
       throw new Error('Serverul nu a trimis lista produselor pentru recepție. Documentul nu poate fi încărcat.');
     }
-    treeDirty = true; Object.assign(state, { docs: list.documents || [], canWrite: list.can_write && !list.closed, closed: list.closed, zec: list.zec, lookups }); if (config.source) state.sources = (await opts.api(url('/sources'))).documents;
+    treeDirty = true; Object.assign(state, { docs: list.documents || [], canWrite: list.can_write && !list.closed, closed: list.closed, zec: list.zec, lookups });
+    side?.configureCache(lookups.warehouse_statement_cache);
+    if (config.source) state.sources = (await opts.api(url('/sources'))).documents;
   }
   // The open nodes of the saved tree: of the live tree, or kept for the next one while it is hidden.
   const openNodes = () => savedTree ? savedTree.expandedNodes : (treeHost._vcExpanded ||= new Set());
   async function refresh() {
     if (lazy) { const shown = await receipts.refresh(state.doc ? { party: state.doc.header.party || '', month: String(state.doc.header.Data || '').slice(0, 7) } : null); if (!abort.signal.aborted && shown.length) { const open = openNodes(), root = shown[0]; for (const id of [...open]) if (id.startsWith('party:') ? id !== root : id.startsWith('month:') && !id.startsWith(`month:${root.slice(6)}|`)) open.delete(id); shown.forEach((id) => open.add(id)); } treeDirty = true; return; }
-    const answer = await opts.api(url('/list')); if (!abort.signal.aborted) { state.docs = answer.documents; treeDirty = true; }
+    const answer = await opts.api(url('/list')); if (!abort.signal.aborted) {
+      state.docs = answer.documents; treeDirty = true;
+      if (family === 'bc' && state.doc) {
+        const expanded = openNodes(), branches = consumptionBranch(state.doc.header.receiver, state.doc.header.Data);
+        for (const id of [...expanded]) if (id.startsWith('receiver:') || id.startsWith('receiver-month:')) expanded.delete(id);
+        branches.forEach(id => expanded.add(id));
+      }
+    }
   }
   // A branch of the NIR tree was opened: its placeholder child stays until the server answers, then the real children replace it.
   async function opened(id, isOpen) {
@@ -138,7 +156,7 @@ export function mountDocuments(host, opts) {
     const source = receipts;
     try { await source.expand(id); } catch (error) { if (source === receipts) { openNodes().delete(id); report(error); } }
     if (source !== receipts) return;
-    if (!abort.signal.aborted && savedTree?.treeContainer?.isConnected) refreshTree(savedTree, receipts.nodes(), state.doc?.id);
+    if (!abort.signal.aborted && savedTree?.treeContainer?.isConnected) refreshTree(savedTree, treeNodes(), state.doc?.id);
   }
   async function allowDiscard() { if (state.pendingBody || pendingCancel) { say('Rezultatul operației nu este confirmat. Reluați aceeași operație înainte de a schimba documentul.', true); return false; } return !state.dirty && !headerUi.dirty() && !linesUi.dirty() || await confirmBox('Renunțați la modificările nesalvate?', { title: 'Modificări nesalvate', yes: 'Renunț', no: 'Rămân aici', warning: true }); }
   async function open(id) {
@@ -168,19 +186,28 @@ export function mountDocuments(host, opts) {
   async function eligible() {
     const draft = state.draft, sequence = ++eligibleSequence, day = draft.header.Data, source = config.holder ? Number(draft.header[config.holder]) : draft.source;
     if (!source) { state.eligible = []; draft.lines = []; return; }
-    const answer = await trackStorno(opts.api(url('/eligible', `&${config.holder ? 'holder' : 'source'}=${source}${state.mode === 'edit' ? `&exclude=${state.doc.id}` : ''}${family === 'storno' ? `&date=${encodeURIComponent(day || '')}` : ''}`)));
-    if (abort.signal.aborted || draft !== state.draft || sequence !== eligibleSequence || family === 'storno' && (draft.source !== source || draft.header.Data !== day)) return; state.eligible = answer.lines;
+    if (config.holder) { state.eligible = []; draft.lines.forEach(line => { line._choice = -1; line.qty = line.left = '0'; }); }
+    const answer = await trackStorno(opts.api(url('/eligible', `&${config.holder ? 'holder' : 'source'}=${source}${state.mode === 'edit' ? `&exclude=${state.doc.id}` : ''}${family === 'storno' || custody ? `&date=${encodeURIComponent(day || '')}` : ''}`)));
+    if (abort.signal.aborted || draft !== state.draft || sequence !== eligibleSequence || draft.header.Data !== day || config.holder && Number(draft.header[config.holder]) !== source) return; state.eligible = answer.lines;
     if (family === 'storno') {
       draft.lines.forEach(line => { const item = answer.lines.find(item => item.variant === line.variant); if (item) Object.assign(line, item); else if (line.variant) line.left = '0'; });
       if (!draft.lines.length) draft.lines.push(newLine());
     } else if (!config.holder) draft.lines = answer.lines.map((item) => { const old = draft.lines.find((line) => line.variant === item.variant && (line.origin ?? line.batch) === item.origin); return newLine({ ...item, id: old?.id ?? null, Cant: old?.Cant ?? '' }); });
-    else draft.lines.forEach((line) => { line._choice = answer.lines.findIndex((item) => item.variant === line.variant && item.origin === (line.origin ?? line.batch)); const item = answer.lines[line._choice]; if (item) { line.qty = item.qty; line.left = item.left; } });
+    else draft.lines.forEach((line) => { line._choice = answer.lines.findIndex((item) => item.variant === line.variant && item.origin === (line.origin ?? line.batch) && item.IdMasina === line.IdMasina && item.PUTVA === line.PUTVA); const item = answer.lines[line._choice]; line.qty = item?.qty ?? '0'; line.left = item?.left ?? '0'; });
   }
   function calculate(line) {
     if (!editing()) return line;
     if (family === 'storno') return calculateStorno(line, state.zec);
     if (family === 'nir' && (line.calc_mode === 'GROSS' || originalLine(line))) return line;
     const originalPrice = state.mode === 'edit' ? state.doc.lines.find((item) => String(item.variant) === String(line.variant))?.PUTVA : null;
+    if (custody) {
+      if (family === 'bp') {
+        const original = state.mode === 'edit' ? state.doc.lines.find(item => item.id === line.id && String(item.variant) === String(line.variant)) : null;
+        line.PUTVA = original?.PUTVA ?? variant(line.variant)?.putva ?? '';
+      }
+      line.ValoareCUTVA = oiLineValue(line.Cant, line.PUTVA, state.zec);
+      return line;
+    }
     const qty = number(line.Cant), price = family === 'nir' ? number(line.Pret) : bon() ? number(originalPrice ?? variant(line.variant)?.putva) : number(line.PUTVA), vat = state.lookups.vat?.find((item) => String(item.id) === String(line.IDTVA));
     if (family === 'nir') {
       const zec = allocation.precision(line) ?? state.zec;
@@ -268,12 +295,13 @@ export function mountDocuments(host, opts) {
   // The modal route is retained, but disabled for NIR while its context cards are in use.
   let frame = null;
   function syncModal() {
-    const modal = editing() && (!receipt || RECEIPT_MODAL_ENABLED);
+    const modal = editing() && (!inline || RECEIPT_MODAL_ENABLED);
     if (modal && !frame) { frame = new ModalFrame(main, { width: 1240, height: 800, caption: title.parentElement, onRequestClose: () => discard().catch(report) }); frame.open(); root.classList.add('is-modal'); }
     else if (!modal && frame) { frame.close(); frame = null; root.classList.remove('is-modal'); }
   }
   function paint() {
     if (abort.signal.aborted) return; inputs.clear(); errors.clear(); syncModal();
+    root.classList.toggle('is-editing', editing());
     title.textContent = `${config.title}${editing() ? state.mode === 'add' ? ' • document nou' : ' • modificare' : state.doc ? ` nr. ${numberText(state.doc)}` : ''}`;
     pill.textContent = editing() ? 'Ciornă' : state.doc ? state.doc.annulled ? 'Anulat' : 'Salvat' : ''; pill.hidden = !pill.textContent; pill.dataset.state = editing() ? 'draft' : state.doc?.annulled ? 'annulled' : 'saved';
     if (family === 'nir' && (editing() || !state.doc?.annulled)) pill.hidden = true;
@@ -343,18 +371,24 @@ export function mountDocuments(host, opts) {
         ...(family === 'nir' && spec.key === 'Valoare' ? { label: 'ValoareFC (lei)', textAlign: 'right', displayFormat: 'standard', numberLocale: 'en-US' } : {}) };
       const invoiceAmount = family === 'nir' && spec.key === 'Valoare';
       const value = invoiceAmount ? invoiceValue(invoiceDoc(), header) : header[spec.key];
-      const item = field(fieldSpec, automatic ? 'auto' : value, editing() && !only && !sharedIdentity && !automatic && !(invoiceAmount && sharedReceipt(invoiceDoc())), async (value) => {
+      const makeField = custody && ['IdMasina', 'IdMasinaP'].includes(spec.key)
+        ? (spec, value, enabled, callback, owner) => oiAccount(owner, spec, value, enabled, callback, onHeaderKey)
+        : family === 'bc' && spec.key === 'IdMasina'
+        ? (spec, value, enabled, callback, owner) => consumptionCategory(owner, spec, value, enabled, callback, onHeaderKey) : field;
+      const item = makeField(fieldSpec, automatic ? 'auto' : value, editing() && !only && !sharedIdentity && !automatic && !(invoiceAmount && sharedReceipt(invoiceDoc())), async (value) => {
         const previous = state.draft.header[spec.key]; state.draft.header[spec.key] = value; state.dirty = true;
         if (family === 'storno' && spec.key === 'Numar') state.draft.autoNumber = false;
         if (family === 'nir' && spec.key === 'Valoare') syncInvoiceValue();
         if (status.textContent.startsWith('Completați mai întâi antetul') && !headerLock()) say('');
         if (spec.key === config.holder && String(previous) !== String(value)) {
+          if (!await linesUi.commit()) { state.draft.header[spec.key] = previous; paintHeader(); return; }
           if (state.draft.lines.length && !await confirmBox('Schimbarea predătorului elimină produsele selectate din ciornă.', { yes: 'Schimbă predătorul', no: 'Păstrează' })) { state.draft.header[spec.key] = previous; paintHeader(); return; }
           state.draft.lines = []; try { await eligible(); paintLines(); } catch (error) { report(error); }
         }
         if (spec.key === accountKey()) { const incompatible = state.draft.lines.filter((line) => (line.variant || line.product) && !inAccount(family === 'nir' ? product(line.product) : variant(line.variant))); if (incompatible.length) { state.draft.header[spec.key] = previous; paintHeader(); say('Contul nu se poate schimba: există produse care nu îi aparțin.', true); return; } paintLines(); }
         if (spec.key === 'Data') {
           availability();
+          if (config.holder && previous !== value) { try { await eligible(); paintLines(); } catch (error) { report(error); throw error; } }
           if (family === 'storno' && previous !== value) {
             const draft = state.draft;
             try {
@@ -502,13 +536,17 @@ export function mountDocuments(host, opts) {
     const specs = lineSpecs(), columns = [{ key: '_index', title: '#', width: 46, fixedWidth: true, filter: false, sortable: false, align: 'center' }];
     for (const spec of specs) {
       const choices = row => spec.product ? config.holder ? state.eligible.map((item, index) => ({ value: index, label: `${item.name} • ${item.um} • disponibil ${format(item.left ?? item.qty, { type: 'decimal' })}` })) : productOptions() : (family === 'nir' ? allocation.taxOptions(row) : state.lookups.vat || []).map((item) => ({ value: item.id, label: `${item.percent}%` }));
-      columns.push(column({ ...spec, type: spec.type || 'text' }, { width: spec.product || spec.key === 'name' ? 234 : receipt && spec.key === 'Cant' ? 90 : spec.key === 'um' ? 64 : receipt && ['Pret', 'IDTVA', 'Valoare', 'TVA', 'ValoareCUTVA'].includes(spec.key) ? 100 : 128, showArrow: receipt, editable: editing() && !!spec.editable, filter: !editing(), sortable: !editing(),
+      columns.push(column({ ...spec, type: spec.type || 'text' }, { width: spec.product || spec.key === 'name' ? 234 : inline && spec.key === 'Cant' ? 90 : spec.key === 'um' ? 64 : inline && ['Pret', 'IDTVA', 'Valoare', 'TVA', 'ValoareCUTVA'].includes(spec.key) ? 100 : 128, showArrow: inline, editable: editing() && !!spec.editable, filter: !editing(), sortable: !editing(),
         ...(spec.key === 'um' ? { align: 'center' } : receipt && ['Pret', 'IDTVA', 'Valoare', 'TVA', 'ValoareCUTVA'].includes(spec.key) ? { align: 'right' } : {}),
         ...(family === 'nir' && spec.editable ? { editable: row => editing() && !row.external && row.calc_mode !== 'GROSS' && (!spec.mfOnly || allocation.isMF(row)) } : {}),
         ...(spec.type === 'ref' ? { editor: 'list', searchable: true, options: choices, formatter: (value) => family === 'nir' && spec.key === 'IDTVA' ? allocation.tax(value)?.percent || '' : spec.product && (!editing() || spec.key === 'name') ? rows.find((row) => row[spec.key] === value)?.name || String(value ?? '') : choices().find((item) => String(item.value) === String(value))?.label || '', validate: (value) => value == null || value === '' ? 'Alegeți o valoare din listă.' : null } : {}),
         ...(family === 'nir' && spec.key === 'IDTVA' ? { formatter: value => allocation.tax(value)?.percent ?? rows.find(row => String(row.IDTVA) === String(value))?.vat_percent ?? '' } : {}),
         ...(family === 'nir' && spec.product ? { editor: 'tree', nodes: allocation.nodes, selectParents: false, dropDownMinWidth: 300, focusAfterSelect: state.mode === 'add' ? 'Cant' : null, formatter: value => rows.find(row => String(row.product) === String(value))?.name || product(value)?.name || '' } : {}),
-        ...(family === 'storno' && spec.product ? { editor: 'tree', nodes: () => stornoProductNodes(state.eligible, state.lookups.categories || []), selectParents: false, dropDownMinWidth: 360,
+        ...(family === 'bc' && spec.product ? { editor: 'list', searchable: true, focusAfterSelect: 'Cant', dropDownMinWidth: 300 } : {}),
+        ...(custody && spec.product ? { editor: 'tree', nodes: () => oiProductNodes(config.holder ? state.eligible : variants().filter(inAccount), state.lookups.categories || [], !!config.holder),
+          selectParents: false, focusAfterSelect: 'Cant', dropDownMinWidth: 430,
+          formatter: value => !editing() && config.holder ? String(value ?? '') : config.holder ? state.eligible[Number(value)]?.name || rows.find(row => row._choice === value)?.name || '' : variant(value)?.name || rows.find(row => String(row.variant) === String(value))?.name || '' } : {}),
+        ...(family === 'storno' && spec.product ? { editor: 'tree', nodes: () => stornoProductNodes(state.eligible, state.lookups.categories || [], state.draft?.lines || []), selectParents: false, dropDownMinWidth: 360,
           focusAfterSelect: 'Cant', formatter: value => rows.find(row => String(row.variant) === String(value))?.name || state.eligible.find(row => String(row.variant) === String(value))?.name || '' } : {}),
         ...(family === 'storno' && spec.key === 'IDTVA' ? { formatter: value => state.lookups.vat.find(item => String(item.id) === String(value))?.percent ?? rows.find(row => String(row.IDTVA) === String(value))?.vat_percent ?? '' } : {}),
         ...(spec.mfOnly ? { required: false } : {}) }));
@@ -516,11 +554,11 @@ export function mountDocuments(host, opts) {
     columns.push({ key: '_action', title: '⋮', width: 46, fixedWidth: true, filter: false, sortable: false, display: 'button', actionText: '⋮', actionLabel: 'Opțiuni linie' });
     const body = el('div', { className: 'vc-doc__grid' }); errors.set('lines', tooltipSink(body)); linesHost.append(el('h4', { textContent: config.lines }), body);
     linesGrid = grid(body, { columns, rows, rowKey: 'key',
-      ...(receipt ? { suspendRowLeave: () => state.busy } : {}),
+      ...(inline ? { suspendRowLeave: () => state.busy } : {}),
       rowClassName: row => family === 'nir' ? receiptLineClass(row, opts.sel(), allocation.product) : '',
-      rowIssue, confirmRowIssue, newRowAlwaysVisible: receipt && editing(), isBlankRow: isBlankLine, onCancelNewRow: dropLine,
-      onNewRow: () => { const line = newLine({ IDTVA: state.draft.vat }); state.draft.lines.push(line); line._index = displayRows(state.draft.lines).length; return line; }, proportionalWidths: true, editable: editing(), allowIncompleteEdits: receipt, singleClickEdit: true, editGuard: headerLock, onEditBlocked: lockedLines, footer: true, footerCaption: '', layoutId: `vercon.${opts.sel().type}.${family}.lines.${receipt ? 'receipt-v6' : 'compact-v1'}`,
-      ...(!receipt ? { footerAction: { label: '➕ Adaugă rând', span: 2, disabled: !editing() || !!config.source }, onFooterAction: () => addLine().catch(report) } : {}),
+      rowIssue, confirmRowIssue, newRowAlwaysVisible: inline && !custody && editing(), isBlankRow: isBlankLine, onCancelNewRow: dropLine,
+      onNewRow: () => { const line = newLine({ IDTVA: state.draft.vat }); state.draft.lines.push(line); line._index = displayRows(state.draft.lines).length; return line; }, proportionalWidths: true, editable: editing(), allowIncompleteEdits: inline, singleClickEdit: true, editGuard: headerLock, onEditBlocked: lockedLines, footer: true, footerCaption: '', layoutId: `vercon.${opts.sel().type}.${family}.lines.${family === 'bc' ? 'consumption-v2' : receipt ? 'receipt-v6' : 'compact-v1'}`,
+      ...(!inline || custody ? { footerAction: { label: '➕ Adaugă rând', span: 2, disabled: !editing() || !!config.source }, onFooterAction: () => addLine().catch(report) } : {}),
       onCellSave: async ({ row, key: name, value }) => {
         const line = state.draft.lines.find((item) => item.key === row.key); if (!line) throw new Error('Linia nu mai este în document.');
         const before = structuredClone(line);
@@ -528,9 +566,9 @@ export function mountDocuments(host, opts) {
         if (family === 'storno' && name === 'variant') {
           const item = state.eligible.find(item => String(item.variant) === String(value));
           if (!item) throw new Error('Alegeți un produs din recepție cu stoc la data FCS.');
-          if (state.draft.lines.some(other => other !== line && other.variant === item.variant)) throw new Error('Produsul este deja în document.');
+          if (state.draft.lines.some(other => other !== line && other.variant != null && stornoProductKey(other) === stornoProductKey(item))) throw new Error('Produsul cu acest preț este deja în document. Modificați cantitatea pe rândul existent.');
           Object.assign(line, item, { id: line.variant === item.variant ? line.id : null });
-        } else if (name === '_choice') { const item = state.eligible[Number(value)]; if (!item) throw new Error('Alegeți un produs al predătorului.'); if (state.draft.lines.some((other) => other !== line && other.variant === item.variant && (other.origin ?? other.batch) === item.origin)) throw new Error('Produsul din acest lot este deja în document.'); const id = line.variant === item.variant && (line.origin ?? line.batch) === item.origin ? line.id : null; Object.assign(line, { ...item, _choice: Number(value), id }); }
+        } else if (name === '_choice') { const item = state.eligible[Number(value)]; if (!item) throw new Error('Alegeți un produs al predătorului.'); if (state.draft.lines.some((other) => other !== line && other.variant === item.variant && (other.origin ?? other.batch) === item.origin && other.IdMasina === item.IdMasina && other.PUTVA === item.PUTVA)) throw new Error('Produsul din acest lot, cont și preț este deja în document.'); const id = line.variant === item.variant && (line.origin ?? line.batch) === item.origin && line.IdMasina === item.IdMasina && line.PUTVA === item.PUTVA ? line.id : null; Object.assign(line, { ...item, _choice: Number(value), id }); }
         else { line[name] = ['variant', 'product', 'IDTVA', 'invoice_line'].includes(name) ? value == null || value === '' ? null : Number(value) : value; if (['variant', 'product'].includes(name)) { const item = family === 'nir' ? product(value) : variant(value); line.name = item?.name || ''; line.um = item?.um || ''; if (name === 'product') line.variant = null; } }
         if (family === 'nir' && name === 'product') {
           const item = product(line.product), percent = allocation.tax(before.IDTVA)?.percent ?? allocation.tax(state.draft.vat)?.percent;
@@ -539,6 +577,9 @@ export function mountDocuments(host, opts) {
           if (item?.type === 'MF') Object.assign(line, { Cant: line.Cant || '1', DNF: line.DNF || item.dnf || '', data_intrarii: line.data_intrarii || state.draft.header.DataFc });
         }
         try {
+          if (family === 'bp' && name === 'variant' && state.draft.lines.some(other => other !== line && other.variant === line.variant)) throw new Error('Produsul este deja pe bon. Modificați cantitatea rândului existent.');
+          if (custody && !(number(line.Cant) > 0) && name === 'Cant') throw new Error('Cantitatea trebuie să fie pozitivă.');
+          if (config.holder && name === 'Cant' && number(line.Cant) > number(line.left ?? 0)) throw new Error('Cantitatea depășește disponibilul lotului la data bonului.');
           if (family === 'storno' && name === 'Cant' && number(line.Cant) > number(state.eligible.find(item => item.variant === line.variant)?.left ?? 0)) throw new Error('Cantitatea depășește stocul disponibil pentru stornare la data FCS.');
           calculate(line); if (family === 'nir') await validateDraft();
         }
@@ -553,7 +594,7 @@ export function mountDocuments(host, opts) {
           if (!await confirmBox('Ștergeți corecția și returnați cantitatea în grupul de origine?', { yes: 'Revino în grup', no: 'Renunță' })) return;
           try { await validateDraft('undo_adjustment', row.key); state.dirty = true; paintLines(); } catch (error) { report(error); } return;
         }
-        if (row.id && !await confirmBox(`Scoateți rândul din ciorna ${family === 'storno' ? 'FCS-ului' : 'NIR-ului'}?`, { yes: 'Scoate', no: 'Renunță' })) return;
+        if (row.id && !await confirmBox(`Scoateți rândul din ciorna ${family === 'bc' ? 'bonului' : family === 'storno' ? 'FCS-ului' : 'NIR-ului'}?`, { yes: 'Scoate', no: 'Renunță' })) return;
         const before = state.draft.lines; state.draft.lines = before.filter(item => item.key !== row.key);
         try { if (family === 'nir') await validateDraft(); state.dirty = true; paintLines(); }
         catch (error) { state.draft.lines = before; report(error); }
@@ -595,11 +636,13 @@ export function mountDocuments(host, opts) {
     if (!linesGrid) return;
     const rows = displayRows(editing() ? state.draft.lines : state.doc.lines);
     const zec = family === 'nir' ? Math.max(state.zec, ...rows.map(row => row.zec ?? allocation.precision(row) ?? state.zec)) : state.zec;
-    const sum = (name) => family === 'nir' ? receiptTotal(rows, name, zec) : fixed(rows.reduce((total, row) => total + (number(row[name]) || 0), 0), zec);
+    const sum = (name) => family === 'nir' || custody ? receiptTotal(rows, name, Math.max(zec, custody ? 4 : 0)) : fixed(rows.reduce((total, row) => total + (number(row[name]) || 0), 0), zec);
     const lineTotal = sum('ValoareCUTVA');
     const values = { PUTVA: 'TOTAL', ValoareCUTVA: format(lineTotal, { type: 'decimal' }) };
     if (receipt) { values.Valoare = format(sum('Valoare'), { type: 'decimal' }); values.TVA = format(sum('TVA'), { type: 'decimal' }); if (family === 'storno') values.Pret = 'TOTAL'; }
     linesGrid.setFooter({ values });
+    // FCS has no reconciliation between the saved header amount and the line total.
+    if (family === 'storno') return;
     let note = linesHost.querySelector('.vc-doc__reconciliation');
     if (!note) { note = el('p', { className: 'vc-hint vc-doc__reconciliation' }); linesHost.append(note); }
     const declared = state.doc ? number(invoiceValue(invoiceDoc(), state.doc.header)) : null, difference = declared == null ? 0 : Number(fixed(declared - number(lineTotal), state.zec));
@@ -607,15 +650,43 @@ export function mountDocuments(host, opts) {
     note.textContent = note.hidden ? '' : `Valoare în antet: ${format(invoiceValue(invoiceDoc(), state.doc.header), { type: 'decimal' })} lei. Diferență față de liniile documentului: ${format(fixed(difference, state.zec), { type: 'decimal' })} lei.`;
   }
   function availability() {
-    clearTimeout(availabilityTimer); const sequence = ++availabilitySequence; if (!bon() || !editing()) return; const draft = state.draft; state.available = {};
+    clearTimeout(availabilityTimer); const sequence = ++availabilitySequence;
+    if (!bon() || !editing() && (family !== 'bc' || !state.doc)) return;
+    const document = editing() ? state.draft : state.doc, inEdit = editing(), savedId = state.doc?.id;
+    state.available = {};
     availabilityTimer = setTimeout(async () => {
-      const date = parse(inputs.get('Data')?.value, { type: 'date', required: true }), ids = [...new Set([...draft.lines.map((line) => line.variant)].filter(Boolean))]; if (!date.ok || !ids.length) return;
-      try { const exclude = state.mode === 'edit' && (family === 'bc' || state.doc.header.IdBonConsum) ? `&exclude_kind=bc&exclude_id=${family === 'bc' ? state.doc.id : state.doc.header.IdBonConsum}` : ''; const result = await opts.api(`/api/vercon/stock/available?${query()}&date=${date.value}&products=${ids.join(',')}${exclude}`); if (abort.signal.aborted || sequence !== availabilitySequence || state.draft !== draft) return; state.available = result.available; draft.lines.forEach((line) => { line.avail = result.available[String(line.variant)] ?? ''; }); if (linesGrid && !linesGrid.hasEdit) linesGrid.setRows(draft.lines, { keepWidths: true }); } catch (error) { report(error); }
+      const date = parse(inputs.get('Data')?.value ?? document.header.Data, { type: 'date', required: true });
+      const ids = [...new Set(document.lines.map(line => line.variant).filter(Boolean))];
+      if (!date.ok || !ids.length) return;
+      try {
+        // Consult and edit show the same stock available to this BC: its own
+        // saved consumption is excluded in both modes. A new BC has no saved id.
+        const excludedId = family === 'bc' ? state.mode !== 'add' ? savedId : null
+          : state.mode === 'edit' ? state.doc.header.IdBonConsum : null;
+        const exclude = excludedId ? `&exclude_kind=bc&exclude_id=${excludedId}` : '';
+        const result = await opts.api(`/api/vercon/stock/available?${query()}&date=${date.value}&products=${ids.join(',')}${exclude}`);
+        if (abort.signal.aborted || sequence !== availabilitySequence || inEdit !== editing() || document !== (inEdit ? state.draft : state.doc)) return;
+        state.available = result.available;
+        document.lines.forEach(line => {
+          const base = result.available[String(line.variant)];
+          line.avail = family === 'bp' && base != null
+            ? receiptTotal([{ quantity: base }, ...document.lines.filter(other => other !== line && other.variant === line.variant && number(other.Cant) > 0).map(other => ({ quantity: '-' + other.Cant }))], 'quantity', 4)
+            : base ?? '';
+        });
+        if (linesGrid && !linesGrid.hasEdit) {
+          const rows = inEdit ? draftRows() : document.lines.map((line, index) => ({ ...line, key: `saved:${line.id}`, _index: index + 1 }));
+          linesGrid.setRows(rows, { keepWidths: true });
+        }
+      } catch (error) { report(error); }
     }, 300);
   }
-  const treeNodes = () => lazy ? receipts.nodes() : groupedNodes(state.docs, config.groups.map((name) => (doc) => name === 'date' ? dateText(doc.date) : doc[name]), docLabel);
+  const treeNodes = () => {
+    const nodes = lazy ? receipts.nodes() : custody ? oiDocumentNodes(state.docs, family) : family === 'bc' ? consumptionNodes(state.docs) : groupedNodes(state.docs, config.groups.map((name) => (doc) => name === 'date' ? dateText(doc.date) : doc[name]), docLabel);
+    nodes.sort((a, b) => treeAlphabet.compare(a.label, b.label));
+    return nodes;
+  };
   function paintSaved() {
-    savedHost.hidden = false;
+    savedHost.hidden = custody && editing();
     side?.setVisible(editing() && !RECEIPT_MODAL_ENABLED);
     if (side && editing() && !RECEIPT_MODAL_ENABLED) return;
     if (savedTree?.treeContainer?.isConnected) {   // the tree is kept alive: opening a document only moves the mark; new data is drawn in place
@@ -625,35 +696,35 @@ export function mountDocuments(host, opts) {
       treeDirty = false; return;
     }
     treeUi.clear(); savedTree = null; if (savedHost.hidden) return; treeDirty = false;
-    savedTree = paintTree(treeHost, treeNodes(), { title: family === 'bc' ? 'Bonuri salvate' : family === 'storno' ? 'FCS salvate' : 'Documente salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onToggle: lazy ? opened : undefined, exclusiveRoots: lazy, onSelect: (id) => open(Number(id)).catch(report), onAction: (id, anchor) => {
+    savedTree = paintTree(treeHost, treeNodes(), { title: family === 'bc' ? 'Bonuri salvate' : family === 'storno' ? 'FCS salvate' : 'Documente salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onToggle: lazy ? opened : undefined, exclusiveRoots: lazy || family === 'bc', onSelect: (id) => open(Number(id)).catch(report), onAction: (id, anchor) => {
       const doc = lazy ? receipts.find(id) : state.docs.find((item) => String(item.id) === id); if (!doc) return; const run = async (action) => { if (state.doc?.id !== doc.id) await open(doc.id); if (state.doc?.id === doc.id) await action(); };
       openMenu(anchor, [{ icon: '✎', label: 'Modifică', disabled: !state.canWrite || doc.annulled, run: () => run(edit).catch(report) }, { icon: '◉', label: 'Previzualizează', run: () => run(preview).catch(report) }, { icon: '◷', label: 'Istoric', run: () => run(history).catch(report) }, { icon: '×', label: 'Anulează', rule: true, disabled: !state.canWrite || doc.annulled, run: () => run(cancel).catch(report) }], { align: 'right' });
     } }, treeUi);
     paintTreeAdd();
   }
   function paintTreeAdd() {
-    if (!receipt) return;
+    if (!inline) return;
     const heading = treeHost.querySelector(':scope > h4');
     if (!heading) return;
     if (!treeAddButton || treeAddButton.element.parentElement !== heading) {
       treeAddButton?.destroy();
       treeAddButton = new ActionAddButton(heading, { className: 'vc-receipt-tree__add',
-        title: `Adaugă ${family === 'storno' ? 'FCS' : 'NIR'}`, onClick: () => add().catch(report) });
+        title: `Adaugă ${custody ? config.title.toLocaleLowerCase('ro') : family === 'bc' ? 'bon de consum' : family === 'storno' ? 'FCS' : 'NIR'}`, onClick: () => add().catch(report) });
       treeUi.own(treeAddButton);
     }
     treeAddButton.setEnabled(state.canWrite);
   }
   function paintBar() {
     bar.replaceChildren(); const button = (text, action, attrs = {}) => { const node = el('button', { type: 'button', textContent: text, ...attrs }); node.addEventListener('click', () => Promise.resolve(action()).catch(report), { signal: abort.signal }); return node; };
-    bar.classList.toggle('vc-doc__bar--nir-editing', receipt && editing());
+    bar.classList.toggle('vc-doc__bar--nir-editing', inline && !custody && editing());
     if (pendingCancel) { bar.append(button('Reia aceeași anulare', cancel), status); return; }
-    if (receipt && editing()) {
+    if (inline && !custody && editing()) {
       const messages = el('div', { className: 'vc-doc__messages' }, status);
       bar.append(button('Renunță', discard, { className: 'vc-doc__cancel' }), messages,
-        button(`Salvează ${family === 'storno' ? 'FCS' : 'NIR'}`, save, { className: 'is-primary vc-doc__save', 'data-retry-save': 'true' }));
+        button(`Salvează ${family === 'bc' ? 'bonul' : family === 'storno' ? 'FCS' : 'NIR'}`, save, { className: 'is-primary vc-doc__save', 'data-retry-save': 'true' }));
       return;
     }
-    if (editing()) bar.append(button('Renunță', discard), button('Previzualizează', preview), button(`Salvează ${family === 'nir' ? 'NIR' : 'bonul'}`, save, { className: 'is-primary', 'data-retry-save': 'true' })); else { if (!receipt) bar.append(button('+ Adaugă', add, { disabled: !state.canWrite })); if (state.doc) bar.append(button('Modifică', edit, { disabled: !state.canWrite || state.doc.annulled }), button('Previzualizează', preview)); }
+    if (editing()) bar.append(button('Renunță', discard), button('Previzualizează', preview), button(`Salvează ${family === 'nir' ? 'NIR' : 'bonul'}`, save, { className: 'is-primary', 'data-retry-save': 'true' })); else { if (!inline) bar.append(button('+ Adaugă', add, { disabled: !state.canWrite })); if (state.doc) bar.append(button('Modifică', edit, { disabled: !state.canWrite || state.doc.annulled }), button('Previzualizează', preview)); }
     bar.append(status); if (state.closed) bar.append(el('span', { className: 'vc-hint', textContent: 'Perioadă închisă: numai consultare.' }));
   }
   function collect() {
@@ -671,14 +742,14 @@ export function mountDocuments(host, opts) {
     if (family === 'nir') { out.header.TipDoc = state.draft.tip; out.header.NumarSub = allocation.multi() ? 0 : Number(state.draft.header.NumarSub) || 0; out.header.FacturaId = state.draft.header.FacturaId ?? null; out.undo_tokens = state.draft.undo_tokens || []; out.accounts = [...state.draft.accounts]; }
     if (family === 'storno') out.header.NumarSub = Number(state.draft.header.NumarSub) || 0;
     for (const line of state.draft.lines) {
-      if (receipt && isBlankLine(line)) continue;   // the always-visible new row
+      if (inline && isBlankLine(line)) continue;   // the always-visible new row
       if (family === 'nir' && originalLine(line)) { out.lines.push({ ...line }); continue; }
       if (family === 'storno') {
         const entry = state.eligible.find(item => item.variant === line.variant);
         if (!entry) invalid[`l|${line.key}|variant`] = 'Alegeți un produs disponibil din recepția selectată.';
         if (!(number(line.Cant) > 0) || number(line.Cant) > number(entry?.left ?? 0)) invalid[`l|${line.key}|Cant`] = 'Introduceți o cantitate pozitivă în limita stocului de stornat la data FCS.';
       }
-      if (config.source || config.holder) { if (line.Cant == null || line.Cant === '') continue; const result = parse(String(line.Cant), { type: 'decimal', required: true, min: 0 }); if (!result.ok || !line.variant) invalid[`l|${line.key}|Cant`] = result.message || 'Alegeți un produs.'; else out.lines.push({ key: line.key, id: line.id, variant: line.variant, batch: line.origin ?? line.batch ?? null, Cant: result.value }); continue; }
+      if (config.source || config.holder) { if (!config.holder && (line.Cant == null || line.Cant === '')) continue; const result = parse(String(line.Cant ?? ''), { type: 'decimal', required: true, min: 0 }); if (!result.ok || !line.variant || !(number(line.Cant) > 0) || config.holder && line._choice < 0) invalid[`l|${line.key}|Cant`] = result.message || 'Alegeți un lot disponibil și o cantitate pozitivă.'; else out.lines.push({ key: line.key, id: line.id, variant: line.variant, batch: line.origin ?? line.batch ?? null, IdMasina: line.IdMasina, PUTVA: line.PUTVA, Cant: result.value }); continue; }
       const result = { key: line.key, id: line.id, invoice_line: line.invoice_line }; for (const spec of lineSpecs().filter((item) => item.editable && (!item.mfOnly || allocation.isMF(line)))) { if (spec.type === 'ref') { result[spec.key] = line[spec.key] ?? null; if (result[spec.key] == null) invalid[`l|${line.key}|${spec.key}`] = 'Alegeți o valoare.'; } else { const parsed = parse(String(line[spec.key] ?? ''), { ...spec, type: spec.type || 'text' }); if (!parsed.ok) invalid[`l|${line.key}|${spec.key}`] = parsed.message; else result[spec.key] = parsed.value; } }
       if (line.calc_mode === 'GROSS') Object.assign(result, { calc_mode: 'GROSS', gross_total: line.gross_total, input_price: line.input_price, auto_origin: line.auto_origin, auto_token: line.auto_token }); out.lines.push(result);
     }
@@ -776,7 +847,7 @@ export function mountDocuments(host, opts) {
       { title: config.lines, columns: lineSpecs().map((spec) => ({ key: spec.product ? 'name' : spec.key, title: spec.label, width: spec.product ? 250 : 120, formatter: (value) => spec.key === 'IDTVA' ? `${state.lookups.vat.find(item => String(item.id) === String(value))?.percent ?? ''}%` : format(value, { type: spec.type === 'ref' ? 'text' : spec.type || 'text' }) })), rows: editing() ? state.draft.lines.filter((line) => family !== 'nir' || !isBlankLine(line)) : state.doc.lines },
     ];
     await documentReport({ api: opts.api, selection: opts.sel(), family, document: doc,
-      title: `${config.title}${editing() ? ' • Ciornă nesalvată' : ` nr. ${state.doc.number}`}`, sections, owner: dialogs,
+      title: `${config.title}${editing() ? ` • Ciornă nesalvată${header.Numar ? ` nr. ${header.Numar}` : ''}` : ` nr. ${state.doc.number}`}`, date: header.Data, sections, owner: dialogs,
       isCurrent: () => !abort.signal.aborted && token === openSequence && draft === state.draft && (!doc || doc === state.doc) });
   }
   // opts.startAdd: the page opens straight on a new document (nothing of the consultation screen is drawn meanwhile).

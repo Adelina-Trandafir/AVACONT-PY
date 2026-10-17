@@ -41,7 +41,7 @@ export const comboboxSearchMixin = {
     }
 
     // find-as-you-type: once something was typed and found, the first match is the choice (Tab keeps it, no click needed)
-    if (!this.options.readonly && query && this.results.length > 0 && !this.results[0].disabled) this.selectedIndex = 0;
+    if (this.options.autoHighlightMatch !== false && !this.options.readonly && query && this.results.length > 0 && !this.results[0].disabled) this.selectedIndex = 0;
 
     this.renderResults(query);
 

@@ -1,4 +1,5 @@
 /* The NIR tree and context cards share one fixed layout slot, including while editing. */
+.portal.vc-page { --vc-mini-statement-font-size: calc(var(--fs-sm) - 1pt); }
 .vc-doc--nir .vc-doc__tree { position: relative; }
 .vc-receipt-tree { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; }
 .vc-receipt-tree[hidden], .vc-receipt-context[hidden] { display: none; }
@@ -11,22 +12,27 @@
 }
 .vc-receipt-context { position: absolute; inset: 0; overflow: hidden; visibility: hidden; }
 .vc-receipt-context.is-aligned { visibility: visible; }
-.vc-receipt-card { position: absolute; box-sizing: border-box; left: 0; right: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--card); border-block: 1px solid var(--line); }
+.vc-receipt-card { position: absolute; box-sizing: border-box; left: 0; right: 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--card); border-block: 1px solid var(--line); font-family: var(--font-ui); font-size: var(--vc-mini-statement-font-size); }
 .vc-receipt-card:first-child { top: 0; height: var(--receipt-grid-top, 210px); }
 .vc-receipt-card:last-child { top: var(--receipt-grid-top, 210px); bottom: 0; }
-.vc-doc--nir .vc-receipt-card > h4 { flex: 0 0 auto; padding: 5px 8px; font-size: var(--fs-ms); }
-.vc-receipt-card__identity { flex: 0 0 auto; margin: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-ms); font-weight: 600; }
-.vc-receipt-card__body { flex: 1 1 0; min-height: 0; overflow: auto; }
-.vc-receipt-card table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.portal.vc-page .vc-receipt-card > h4 { flex: 0 0 auto; padding: 5px 8px; font-family: inherit; font-size: var(--vc-mini-statement-font-size); }
+.vc-receipt-card__identity { flex: 0 0 auto; margin: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; font-weight: 600; }
+.vc-receipt-card__body { flex: 1 1 0; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
+.vc-receipt-card table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; font-family: inherit; font-size: inherit; }
+.vc-receipt-card__column--date { width: 6.5em; }
+.vc-receipt-card__column--value { width: 6.5em; }
+.vc-receipt-card__column--quantity, .vc-receipt-card__column--balance { width: 4.7em; }
+/* Document takes only the remaining scrollport width, even with a vertical scrollbar. */
+.vc-receipt-card__column--document { width: auto; }
 .vc-receipt-card th { position: sticky; top: 0; background: var(--sky-2); font-weight: 600; }
-.vc-receipt-card th, .vc-receipt-card td { padding: 3px 5px; border-bottom: 1px solid var(--line); text-align: left; }
+.vc-receipt-card th, .vc-receipt-card td { box-sizing: border-box; padding: 3px 5px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vc-receipt-card .is-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.vc-receipt-card__message { min-height: 0; overflow: auto; margin: 8px; font-size: var(--fs-ms); }
-.vc-receipt-card__total { box-sizing: border-box; display: flex; align-items: center; flex: 0 0 auto; margin: 0; padding: 6px 8px; background: var(--sky-1); color: var(--ink); border-top: 1px solid var(--line); font-size: var(--fs-ms); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vc-receipt-card__message { min-height: 0; overflow: auto; margin: 8px; font-size: inherit; }
+.vc-receipt-card__total { box-sizing: border-box; display: flex; align-items: center; flex: 0 0 auto; margin: 0; padding: 6px 8px; background: var(--sky-1); color: var(--ink); border-top: 1px solid var(--line); font-size: inherit; font-weight: 600; font-variant-numeric: tabular-nums; }
 .vc-receipt-card:first-child > .vc-receipt-card__total { min-height: var(--receipt-supplier-footer-height, 32px); }
 .vc-receipt-card:last-child > .vc-receipt-card__total { min-height: var(--receipt-stock-footer-height, 32px); }
 .vc-receipt-card__message:has(+ .vc-receipt-card__total) { flex: 1 1 0; }
-.vc-receipt-card__note { flex: 0 0 auto; margin: 3px 8px; font-size: var(--fs-xs); color: var(--ink-muted, var(--ink)); }
+.vc-receipt-card__note { flex: 0 0 auto; margin: 3px 8px; font-size: inherit; color: var(--ink-muted, var(--ink)); }
 /* On the existing stacked mobile layout, both cards share the tree's lower slot. */
 @media (max-width: 800px) {
   .vc-receipt-card:first-child { top: 0; height: 45%; }

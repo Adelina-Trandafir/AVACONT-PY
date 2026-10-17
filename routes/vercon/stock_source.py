@@ -67,7 +67,7 @@ def custody(cursor, ctx):
         parts.append(
             "SELECT IdProdus AS p, DATE({day}) AS d, {sign}*Cant AS q, "
             "'{kind}' AS kind, {key} AS document_id, ID AS line_id, "
-            "{number} AS number, NULL AS supplier, {holder} AS holder "
+            "{number} AS number, NULL AS supplier, {holder} AS holder, IdMasina AS category "
             "FROM {table} WHERE SubunitId=%(s)s AND GestiuneId=%(g)s "
             "AND ExercitiuId=%(e)s AND Anulat=0".format(
                 day=day, sign=sign, kind=kind, key=key, number=number,

@@ -1,6 +1,7 @@
 // VC08-01: balances and warehouse statements from the same server stock engine.
 import { el, scope, field, grid, column, paintTree, preview, showMessage, CheckBox } from './ui.js';
 import { decimalText as numberText } from './decimal-text.js';
+import { receiptTotal } from './receipt-reconciliation.js';
 
 const months = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
 const titles = { nir: 'Intrare', bc: 'Consum / Predare', br: 'Retur', storno: 'Storno', bp: 'Predare', bt_in: 'Transfer primit', bt_out: 'Transfer predat', bs: 'Casare' };
@@ -29,7 +30,7 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
   if (['OI', 'MF'].includes(sel().type)) {
     const ledger = field({ key: 'ledger', label: 'Evidență', type: 'select', options: [
       { value: 'warehouse', label: 'Magazie' }, { value: 'custody', label: 'Deținători' },
-    ] }, state.ledger, true, (value) => { state.ledger = value; void load(); }, owner);
+    ] }, state.ledger, true, (value) => { state.ledger = value; state.category = null; void load(); }, owner);
     filters.append(ledger.node);
   }
   const status = el('p', { className: 'vc-stock__status', role: 'status' });
@@ -37,6 +38,7 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
   const numericColumn = (key, label, width = 115) => column({ key, label, type: 'decimal' }, { editable: false, width,
     formatter: (value) => numberText(value, state.data?.zec ?? 4) });
   const columns = [column({ key: 'name', label: 'Produs' }, { editable: false, width: 230 }),
+    column({ key: 'category_name', label: 'Cont' }, { editable: false, width: 160 }),
     column({ key: 'um', label: 'UM' }, { editable: false, width: 65 }),
     column({ key: 'holder_name', label: 'Deținător' }, { editable: false, width: 180, visible: ['OI', 'MF'].includes(sel().type) }),
     numericColumn('opening', 'Stoc inițial'), numericColumn('in', 'Intrări + retur'), numericColumn('out', 'Ieșiri + storno'),
@@ -57,12 +59,12 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
   const sheetButton = el('button', { type: 'button', textContent: 'Fișa de magazie', disabled: true });
   sheetButton.addEventListener('click', () => {
     if (!state.selected || !state.data) return;
-    preview(`Fișă • ${state.selected.name}`, [{ title: `${state.data.start} — ${state.data.end}`, columns: movementColumns, rows: selectedMovements() }], owner);
+    preview(`Fișă • ${state.selected.name}`, [{ title: `${state.data.start} — ${state.data.end}`, columns: movementColumns, rows: selectedMovements() }], owner, { period: state.data });
   });
   const balanceButton = el('button', { type: 'button', textContent: 'Previzualizare balanță', disabled: true });
   balanceButton.addEventListener('click', () => {
     if (!state.data) return;
-    preview('Balanță produse', [{ title: `${state.data.start} — ${state.data.end}`, columns, rows: dataRows() }], owner);
+    preview('Balanță produse', [{ title: `${state.data.start} — ${state.data.end}`, columns, rows: dataRows() }], owner, { period: state.data });
   });
   commands.append(sheetButton, balanceButton);
   for (const [key, label] of [['nir', '+ NIR nou'], ['bc', '+ Bon de consum']]) {
@@ -76,19 +78,16 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
     ++state.seq; state.data = null; state.selected = null; paint(); status.textContent = 'Perioada a fost schimbată. Apăsați Calculează.';
   }
   function dataRows() {
-    return (state.data?.rows || []).map((row) => ({ ...row, key: `${row.holder ?? 'warehouse'}:${row.variant}`,
+    return (state.data?.rows || []).map((row) => ({ ...row, key: `${row.holder ?? 'warehouse'}:${row.category ?? ''}:${row.variant}`,
       opening: row.quantities.opening, in: add(row.quantities.entries, row.quantities.returns, row.quantities.transfers_in),
       out: add(row.quantities.issues, row.quantities.storno, row.quantities.transfers_out, row.quantities.scrapping),
       closing: row.quantities.closing, value: row.values.closing }));
   }
   function add(...values) {
-    const scale = state.data?.scale || 0;
-    const sum = values.reduce((current, value) => current + BigInt(String(value || '0').replace('.', '')), 0n);
-    const digits = (sum < 0n ? -sum : sum).toString().padStart(scale + 1, '0');
-    return (sum < 0n ? '-' : '') + (scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}` : digits);
+    return receiptTotal(values.map(value => ({ quantity: value ?? '0' })), 'quantity', state.data?.scale ?? 4);
   }
   function selectedMovements() {
-    return (state.data?.statement || []).filter((row) => row.variant === state.selected?.variant && row.holder === state.selected?.holder)
+    return (state.data?.statement || []).filter((row) => row.variant === state.selected?.variant && row.holder === state.selected?.holder && row.category === state.selected?.category)
       .map((row) => ({ ...row, key: `${row.kind}:${row.document_id}:${row.line_id}:${row.holder ?? ''}` }));
   }
   function paint() {

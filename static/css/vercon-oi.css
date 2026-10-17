@@ -1,0 +1,31 @@
+/* OI documents share the NIR grid; no context panels are mounted in the editor. */
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs).is-editing {
+  grid-template-columns: minmax(0, 1fr);
+}
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__header--oi {
+  grid-template-columns: repeat(3, minmax(0, 280px));
+  align-content: start;
+}
+.vc-doc--bp .vc-field[data-field="IdMasinaP"] { grid-column: 1; grid-row: 1; }
+.vc-doc--bp .vc-field[data-field="IDC_BP"] { grid-column: 2; grid-row: 1; }
+.vc-doc--bp .vc-field[data-field="IdMasina"] { grid-column: 2; grid-row: 2; }
+.vc-doc--bp .vc-field[data-field="Numar"] { grid-column: 3; grid-row: 1; }
+.vc-doc--bp .vc-field[data-field="Data"] { grid-column: 3; grid-row: 2; }
+.vc-doc--bt .vc-field[data-field="IDC_OLD"] { grid-column: 1; grid-row: 1; }
+.vc-doc--bt .vc-field[data-field="IDC_BT"] { grid-column: 2; grid-row: 1; }
+.vc-doc--bt .vc-field[data-field="Numar"] { grid-column: 3; grid-row: 1; }
+.vc-doc--bt .vc-field[data-field="Data"] { grid-column: 3; grid-row: 2; }
+.vc-doc--bs .vc-field[data-field="IDC_BC"] { grid-column: 1; grid-row: 1; }
+.vc-doc--bs .vc-field[data-field="Numar"] { grid-column: 3; grid-row: 1; }
+.vc-doc--bs .vc-field[data-field="Data"] { grid-column: 3; grid-row: 2; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-field[data-field="Expl"] { grid-row: 3; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-receipt-tree > h4 { display: flex; align-items: center; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-receipt-tree__add { margin-inline-start: auto; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv { --dgv-size: calc(var(--fs-ms) - 1pt); }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv__cell { font-size: var(--dgv-size); }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv__cell:not(.is-action) { padding-inline: 4px; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv__cell:has(> .dgv__editor) { padding-inline: 0; }
+@media (max-width: 800px) {
+  .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__header--oi { grid-template-columns: minmax(0, 1fr); }
+  .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-field[data-field] { grid-column: auto; grid-row: auto; }
+}

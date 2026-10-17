@@ -14,3 +14,12 @@ The files are ES modules; they carry the `.js` extension only so every server se
 MIME type. Used by `static/js/portal/pdfview.js` (slice 0116) so the portal pages can keep
 `script-src 'self'`. To update: download the same four files of the new version over these and
 re-check the viewer on a signed DDF, an ORD and a note (`SLICE-0115` lists what to look at).
+
+Local patch (17.10.2026): `TextLayer.#Ji` invalidates the cached canvas font
+after resetting its measuring canvas dimensions, in both return paths.
+Resizing a canvas resets the real context font to 10px; keeping the previous
+cached size can skip the next font assignment. When the first text run has
+the same scaled size as the ascent probe, its selection rectangle becomes
+too wide (observed for the 15pt ListaAlimente title at Windows scaling 150%).
+The patch changes text-layer measurement only, preserving PDF page rendering.
+Retain or reassess this patch when updating the vendored PDF.js version.

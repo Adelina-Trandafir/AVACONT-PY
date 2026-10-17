@@ -25,16 +25,17 @@ def total(rows, key):
 
 
 def table(columns, rows, zec, totals=()):
-    """columns: (key,label,type[,width]); raw rows remain attached for comparison."""
+    """columns: (key,label,type[,width,decimals]); raw values stay unchanged."""
     cols = [{'key': c[0], 'label': c[1], 'type': c[2], 'w': c[3] if len(c) > 3 else 1350,
+             'decimals': c[4] if len(c) > 4 and c[4] is not None else zec,
              'align': 'r' if c[2] in ('decimal', 'int') else 'l'} for c in columns]
     def cells(row):
-        return [number(row.get(c['key']), zec) if c['type'] == 'decimal'
+        return [number(row.get(c['key']), c['decimals']) if c['type'] == 'decimal'
                 else '—' if row.get(c['key']) is None else str(row[c['key']]) for c in cols]
     printed = [{'cells': cells(row)} for row in rows]
     if totals:
         sums = {key: total(rows, key) for key in totals}
-        printed.append({'cells': [number(sums[c['key']], zec) if c['key'] in sums
+        printed.append({'cells': [number(sums[c['key']], c['decimals']) if c['key'] in sums
                                  else 'TOTAL' if index == 0 else '' for index, c in enumerate(cols)], 'cls': 'total'})
     return {'t': 'table', 'cols': cols, 'rows': printed, 'raw': rows}
 

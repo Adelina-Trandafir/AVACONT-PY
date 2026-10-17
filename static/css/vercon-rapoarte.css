@@ -29,3 +29,8 @@
   .vc-reports, .vc-reports__columns--2, .vc-reports__columns--3 { grid-template-columns: 1fr; }
   .vc-reports__types, .vc-reports__selection { height: 360px; }
 }
+.vc-page .vc-reports__centered { text-align: center; }
+.vc-page .vc-reports__table--no-header .dgv__head { display: none; }
+.vc-page .vc-reports__table-footer { display: flex; justify-content: space-between; gap: 12px; padding: 4px 8px; border: 1px solid var(--line); background: #ececec; color: #17345a; font-weight: 700; }
+.vc-page .vc-reports__signatures--separated { display: flex; justify-content: space-between; padding: 0; border: 0; }
+.vc-page .vc-reports__signatures--separated > span { box-sizing: border-box; flex: 0 0 25%; padding: 15px 6px; border: 1px solid var(--line); }

@@ -420,10 +420,14 @@ def _clean_stornolines(cursor, ctx, source_id, raw_lines, exclude=None, on=None)
         key = _line_key(raw, index)
         variant, cant = _int(raw.get('variant')), _dec(raw.get('Cant'))
         entry = eligible.get(variant)
-        if entry is None or variant in used:
-            errors['l|%s|variant' % key] = 'Produsul nu face parte din recepție sau a fost ales de două ori.'
+        identity = None
+        if entry:
+            product = entry['product'] if entry['product'] is not None else ('variant', variant)
+            identity = (product, Decimal(entry['PUTVA'] or '0'))
+        if entry is None or identity in used:
+            errors['l|%s|variant' % key] = 'Produsul nu este disponibil din recepție sau combinația produs + preț a fost aleasă de două ori.'
             continue
-        used.add(variant)
+        used.add(identity)
         if cant is None or cant <= 0:
             errors['l|%s|Cant' % key] = 'Cantitatea trebuie să fie pozitivă.'
             continue

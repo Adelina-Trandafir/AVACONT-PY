@@ -9,6 +9,7 @@ import { openMenu, closeMenu } from '../adechit/menu.js';
 import { showMessage } from '../portal/messages.js';
 import { snapshotPdf } from './snapshot-pdf.js';
 import { parse, format } from './fields.js';
+import { createReportHeader, reportHeading } from './report-header.js';
 
 export { DataGrid, ValueType, TreeView, Combobox, DatePicker, TextBox, CheckBox, openMenu, closeMenu, showMessage };
 export function el(tag, attrs = {}, ...children) {
@@ -159,18 +160,19 @@ export function rowMenu(gridInstance, row, entries) {
   const anchor = gridInstance._root.querySelector('.dgv__row[data-i="' + index + '"] .dgv__cell-action') || gridInstance._root;
   openMenu(anchor, entries, { label: 'Opțiuni rând', align: 'right' });
 }
-export function modal(title, owner) {
+export function modal(title, owner, { report = false } = {}) {
   const dialog = el('dialog', { className: 'confirm-box vc-modal', 'aria-label': title });
   const body = el('div', { className: 'vc-modal__body' }), footer = el('footer');
   const local = scope(); let closed = false;
   const close = () => { if (closed) return; closed = true; local.clear(); closeMenu(); dialog.close(); dialog.remove(); };
-  dialog.append(el('header', {}, el('h2', { textContent: title })), body, footer);
+  dialog.append(report ? createReportHeader(title) : el('header', {}, el('h2', { textContent: title })), body, footer);
   dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(); });
   owner?.own(close); document.body.append(dialog); dialog.showModal();
   return { dialog, body, footer, close, scope: local, get closed() { return closed; } };
 }
-export function preview(title, sections, owner) {
-  const view = modal(title, owner);
+export function preview(title, sections, owner, details = {}) {
+  const heading = reportHeading(title, details);
+  const view = modal(heading, owner, { report: true });
   for (const section of sections) {
     view.body.append(el('h4', { textContent: section.title }));
     const host = el('div'); view.body.append(host); host.style.height = Math.min(280, Math.max(92, 32 + section.rows.length * 30 + 16)) + 'px'; grid(host, { columns: section.columns, rows: section.rows, footer: false }, view.scope);
@@ -179,7 +181,7 @@ export function preview(title, sections, owner) {
   const pdf = el('button', { type: 'button', textContent: 'Previzualizare PDF' });
   pdf.addEventListener('click', async () => {
     pdf.disabled = true;
-    try { const data = await snapshotPdf(title, sections); if (!view.closed) await pdfPreview(title, data, view.scope); }
+    try { const data = await snapshotPdf(title, sections); if (!view.closed) await pdfPreview(title, data, view.scope, () => !view.closed, details); }
     catch (error) { if (!view.closed) { const message = el('p'); view.body.append(message); showMessage(message, error.message || 'PDF-ul nu a putut fi pregătit.', 'error'); } }
     finally { pdf.disabled = false; }
   });
@@ -187,12 +189,12 @@ export function preview(title, sections, owner) {
   return view;
 }
 // Reports that return PDF use the same PDF.js viewer as Portal; no endpoint is invented by the UI.
-export async function snapshotPreview(title, sections, owner, isCurrent = () => true) {
+export async function snapshotPreview(title, sections, owner, isCurrent = () => true, details = {}) {
   const data = await snapshotPdf(title, sections);
-  if (isCurrent()) return pdfPreview(title, data, owner, isCurrent);
+  if (isCurrent()) return pdfPreview(title, data, owner, isCurrent, details);
 }
 
-export async function pdfPreview(title, data, owner, isCurrent = () => true) {
+export async function pdfPreview(title, data, owner, isCurrent = () => true, details = {}) {
   const { openPdfReport } = await import('./pdf-preview.js');
-  if (isCurrent()) return openPdfReport(title, data, owner);
+  if (isCurrent()) return openPdfReport(title, data, owner, details);
 }

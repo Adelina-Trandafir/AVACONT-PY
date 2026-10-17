@@ -18,7 +18,8 @@ BASE = Path(__file__).resolve().parents[2]
 QUERIES = BASE / 'reports' / 'vercon' / 'queries'
 ROOT = Path(os.environ.get('VERCON_REPORT_CONFIG_DIR', str(BASE / 'instance' / 'vercon-reports')))
 QUERY_KEYS = ('metadata', 'ledger', 'receipts', 'consumption', 'committee', 'food_header',
-              'food_items', 'food_bons', 'food_consumption', 'food_history', 'settings')
+              'food_items', 'food_bons', 'food_consumption', 'food_history', 'settings',
+              'oi_documents', 'custody_ledger', 'oi_accounts', 'oi_holders')
 
 
 def _path(unit, part, key):

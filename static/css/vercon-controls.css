@@ -37,7 +37,8 @@
 .portal.vc-page .dgv__cell.is-required-empty .dgv__editor input {
   background: var(--err-control-backcolor);
 }
-.portal.vc-page .combobox-input, .portal.vc-page .combobox-option { font-size: var(--fs-lg); }
+.portal.vc-page { --vc-combobox-font-size: calc(var(--fs-lg) - 1px); }
+.portal.vc-page .combobox-input, .portal.vc-page .combobox-option { font-size: var(--vc-combobox-font-size); }
 /* A long option wraps: its lines stay close together so they read as one row of the list. */
 .portal.vc-page .combobox-option { line-height: 1.15; max-height: none; }
 /* ...and its vertical padding shrinks by 2px top and bottom (never below 1px). `is-multiline` is set by the Combobox when the text wraps.
@@ -45,5 +46,5 @@
 .portal.vc-page .combobox-option.is-multiline { padding-block: max(1px, calc(8px - 2px)); }
 @media (max-width: 400px) { .portal.vc-page .combobox-option.is-multiline { padding-block: max(1px, calc(6px - 2px)); } }
 @media (min-width: 901px) {
-  .portal.vc-page .combobox-input, .portal.vc-page .combobox-option { font-size: var(--fs-ms); }
+  .portal.vc-page { --vc-combobox-font-size: calc(var(--fs-ms) - 1px); }
 }
