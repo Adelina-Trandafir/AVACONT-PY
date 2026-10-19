@@ -74,6 +74,7 @@ SPECS = {
     },
     'feluri': {
         'label': 'Feluri de mâncare', 'table': 'VC_FeluriMancare', 'pk': 'IDFel', 'title': 'DenFel', 'stamp': False,
+        'types': frozenset({'ALIMENTE'}),
         'fields': [_text('DenFel', 'Denumire fel', 50, True), _text('Explicatie', 'Explicație', 255)],
     },
     'comisie_inventar': {
@@ -91,11 +92,24 @@ FORM_KINDS = {
 }
 
 
-def spec_of(kind):
+def spec_of(kind, gestiune_type=None):
     spec = SPECS.get(kind)
     if spec is None:
         raise NomError('KIND_UNKNOWN', 'Nomenclatorul nu există.', 404)
+    if gestiune_type is not None and spec.get('types') and gestiune_type not in spec['types']:
+        raise NomError('FORM_NOT_AVAILABLE', 'Nomenclatorul nu este disponibil pentru acest tip de gestiune.', 403)
     return spec
+
+
+def form_kinds(form, gestiune_type):
+    return [kind for kind in FORM_KINDS.get(form, ())
+            if not SPECS[kind].get('types') or gestiune_type in SPECS[kind]['types']]
+
+
+def category_types(gestiune_type):
+    return {'MF': [('MFM', 'MAGAZIE'), ('MFF', 'FOLOSINȚĂ')],
+            'OI': [('OIM', 'MAGAZIE'), ('OIF', 'FOLOSINȚĂ')],
+            'ALIMENTE': [('ALIMENTE', 'ALIMENTE')]}.get(gestiune_type, [])
 
 
 def fields_for(spec, gestiune_type):
@@ -105,7 +119,7 @@ def fields_for(spec, gestiune_type):
 def columns_for(kind, gestiune_type):
     """What the page needs to build the list and the form: key, label, the parse type, limits, the referenced kind."""
     out = []
-    for f in fields_for(spec_of(kind), gestiune_type):
+    for f in fields_for(spec_of(kind, gestiune_type), gestiune_type):
         col = {'key': f['key'], 'label': f['label'], 'required': bool(f.get('required')),
                'type': {'percent': 'decimal', 'money': 'decimal'}.get(f['type'], f['type'])}
         if f.get('max'):
@@ -114,6 +128,9 @@ def columns_for(kind, gestiune_type):
             col['min'] = f.get('min', 0)
         if f['type'] == 'ref':
             col['ref'] = f['ref']
+        if kind == 'categorii' and f['key'] == 'TIP':
+            col.update(type='choice', options=[{'value': None, 'label': '—'}] + [
+                {'value': value, 'label': label} for value, label in category_types(gestiune_type)])
         out.append(col)
     return out
 
@@ -181,6 +198,9 @@ def clean(spec, gestiune_type, values, scale, repo):
     out, errors = {}, {}
     for field in fields_for(spec, gestiune_type):
         value, message = _clean_one(field, values.get(field['key']), scale, repo)
+        if spec is SPECS['categorii'] and field['key'] == 'TIP' and value is not None:
+            if value not in {code for code, _ in category_types(gestiune_type)}:
+                message = 'Alegeți un tip permis pentru această gestiune sau lăsați valoarea necompletată.'
         if message:
             errors[field['key']] = message
         else:
@@ -301,6 +321,9 @@ def create(repo, cursor, ctx, kind, gestiune_type, scale, values, parent=None, r
     if kind == 'produse' and cleaned.get('CPV'):
         from .cpv_catalog import validate
         validate(cursor, cleaned['CPV'])
+    if kind == 'produse' and gestiune_type == MF and cleaned.get('CC'):
+        from .mf_classifications import validate
+        validate(cursor, cleaned['CC'])
     if spec.get('parent'):
         column, parent_kind = spec['parent']
         parent_spec = spec_of(parent_kind)
@@ -352,6 +375,9 @@ def update(repo, cursor, ctx, kind, gestiune_type, scale, row_id, values, base_v
     if kind == 'produse' and cleaned.get('CPV') and cleaned['CPV'] != before.get('CPV'):
         from .cpv_catalog import validate
         validate(cursor, cleaned['CPV'])
+    if kind == 'produse' and gestiune_type == MF and cleaned.get('CC') and cleaned['CC'] != before.get('CC'):
+        from .mf_classifications import validate
+        validate(cursor, cleaned['CC'])
     if repo.update(spec['table'], _stamped(spec, cleaned), {spec['pk']: row_id, 'Version': version}, bump_version=True) != 1:
         _conflict(repo, spec, row_id)
     if _has_money(spec):

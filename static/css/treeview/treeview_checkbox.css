@@ -7,13 +7,13 @@
 .treeview-check {
   position: relative;
   flex-shrink: 0;
-  align-self: flex-start;
+  align-self: center;
   box-sizing: border-box;
   width: 15px;
   height: 15px;
-  margin-top: 3px;
+  margin-top: 0;
   margin-right: 6px;
-  border: 1.5px solid #9ca3af;
+  border: 1px solid #9ca3af;
   border-radius: 3px;
   background: #ffffff;
   cursor: pointer;
@@ -33,13 +33,9 @@
 .treeview-check.checked::after {
   content: "";
   position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 4px;
-  height: 8px;
-  border: solid #ffffff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8l3.5 3.5L13 5' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 11px 11px no-repeat;
+  pointer-events: none;
 }
 
 .treeview-check.indeterminate::after {
@@ -47,9 +43,10 @@
   position: absolute;
   left: 2px;
   right: 2px;
-  top: 5px;
+  top: 50%;
   height: 2px;
   background: #ffffff;
+  transform: translateY(-50%);
 }
 
 /* The count sits in the placeholder (see treeview-checkable.js); darker once something is chosen. */

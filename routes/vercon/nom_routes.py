@@ -21,7 +21,7 @@ from .nomenclatoare import NomError
 from .nomenclator_usage import annotate, category_statement
 from .nomenclator_stock import product_statement
 from .nomenclator_products import used_products
-from . import cpv_catalog
+from . import cpv_catalog, mf_classifications
 
 _DEFAULT_ZEC = 4
 _DEFAULT_SCARA = 4
@@ -76,12 +76,31 @@ def register(bp, guard, scoped, open_db):
         with session(False) as cursor:
             return cpv_catalog.detail(cursor, code)
 
+    def mf_context():
+        ctx = scoped('read')
+        if ctx['gestiune']['type'] != 'MF':
+            raise FormUnavailable('FORM_NOT_AVAILABLE', 'Clasificările MF există doar la gestiunile MF.', 403)
+
+    @bp.get('/api/vercon/mf/classifications')
+    @guard('read')
+    def mf_classifications_read():
+        mf_context()
+        with session(False) as cursor:
+            return mf_classifications.read(cursor, request.args.get('parent'), request.args.get('name', ''), request.args.get('code', ''))
+
+    @bp.get('/api/vercon/mf/classifications/<code>')
+    @guard('read')
+    def mf_classifications_detail(code):
+        mf_context()
+        with session(False) as cursor:
+            return mf_classifications.detail(cursor, code)
+
     @bp.get('/api/vercon/nom/<kind>')
     @guard('read')
     def nom_list(kind):
         ctx = scoped('read')
         who, gest_type, scale = facts(ctx)
-        nom.spec_of(kind)
+        nom.spec_of(kind, gest_type)
         with session(False) as cursor:
             repo = repo_of(cursor, ctx)
             rows = nom.list_rows(repo, kind, gest_type, scale, request.args.get('parent'))
@@ -117,7 +136,7 @@ def register(bp, guard, scoped, open_db):
         data = body()
         ctx = scoped('nomenclatoare', data)
         who, gest_type, scale = facts(ctx)
-        nom.spec_of(kind)
+        nom.spec_of(kind, gest_type)
         key = str(data.get('request_key') or '')[:64]
         if not key:
             raise NomError('REQUEST', 'Lipsește cheia cererii.', 400)
@@ -132,7 +151,7 @@ def register(bp, guard, scoped, open_db):
         data = body()
         ctx = scoped('nomenclatoare', data)
         who, gest_type, scale = facts(ctx)
-        nom.spec_of(kind)
+        nom.spec_of(kind, gest_type)
         with session(True) as cursor:
             row = nom.update(repo_of(cursor, ctx), cursor, who, kind, gest_type, scale, row_id, data.get('values'), data.get('version'), request_id())
         return {'row': row}
@@ -145,7 +164,7 @@ def register(bp, guard, scoped, open_db):
             raise NomError('INVALID', 'Cerere invalidă.', 400)
         ctx = scoped('nomenclatoare', data)
         who, gest_type, scale = facts(ctx)
-        nom.spec_of(kind)
+        nom.spec_of(kind, gest_type)
         with session(True) as cursor:
             row = nom.set_active(repo_of(cursor, ctx), cursor, who, kind, gest_type, scale, row_id, data['active'], data.get('version'), request_id())
         return {'row': row}

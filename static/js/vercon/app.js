@@ -3,6 +3,7 @@
 // request (sequence number) and carries the version the server computed for it. The menu comes from the server
 // (type + rights + occupation); retired navigation entries are hidden locally. Cleanup: one AbortController tied to `pagehide`.
 import { openMenu, Menu } from '../components/menu/menu.js';
+import { bindMenuZoom } from '../components/menu/menu-zoom.js';
 import { startSessionTimer } from '../adechit/session.js';
 import { beginSessionExit } from '../utils/session-exit.js';
 import { Combobox } from '../components/combobox/combobox.js';
@@ -23,6 +24,7 @@ import { createSaver } from './save.js';
 import { writePreference } from './documents.js';
 import { el, preview, scope } from './ui.js';
 import { bindApplicationMenu } from './application-menu.js';
+import { bindReportIdentity } from './report-identity.js';
 
 const $ = (k_id) => document.getElementById(k_id);
 const lifetime = new AbortController();   // everything below is bound to this signal
@@ -76,8 +78,6 @@ async function loadContext(k_wanted) {
 
 function applyContext(k_ctx) {
   state.ctx = k_ctx;
-  if (!k_ctx.ready) { paint('empty', 'VERCON este în pregătire pentru această unitate. Nu există încă gestiuni de lucru.'); $('vc-menu').hidden = true; return; }
-  paint('', '');
   const k_sel = k_ctx.selection; const k_opt = k_ctx.options;
   const k_set = (k_name, k_items, k_current) => {
     const k_combo = combos[k_name];
@@ -88,6 +88,14 @@ function applyContext(k_ctx) {
   k_set('subunit', k_opt.subunits.map((k_s) => ({ value: String(k_s.id), label: k_s.name })), k_sel.subunit);
   k_set('gestiune', k_opt.gestiuni.map((k_g) => ({ value: String(k_g.id), label: k_g.name })), k_sel.gestiune);
   k_set('year', k_opt.years.map((k_y) => ({ value: String(k_y), label: String(k_y) })), k_sel.year);
+  const k_showGestiune = k_sel.subunit != null && k_opt.gestiuni.length > 1;
+  const k_showYear = k_sel.gestiune != null && k_opt.years.length > 0;
+  $('vc-gestiune-combo').hidden = !k_showGestiune;
+  $('vc-year-combo').hidden = !k_showYear;
+  combos.gestiune.setEnabled(k_showGestiune);
+  combos.year.setEnabled(k_showYear);
+  if (!k_ctx.ready) { paint('empty', 'VERCON este în pregătire pentru această unitate. Nu există încă gestiuni de lucru.'); mainMenu?.setItems([]); $('vc-menu').hidden = true; return; }
+  paint('', '');
   paintMenu(k_ctx);
 }
 
@@ -99,7 +107,6 @@ const MENU_ICONS = {
 let mainMenu = null;   // the Menu control (js/components/menu) that draws the operations bar
 function paintMenu(k_ctx) {
   mainMenu ||= new Menu($('vc-menu'), { label: 'Operații' });
-  const k_groupDocuments = ['ALIMENTE', 'MATERIALE'].includes(k_ctx.selection.type);
   const k_groups = new Map();
   for (const k_item of k_ctx.menu) {
     if (k_item.key === 'stocuri') continue;
@@ -113,10 +120,14 @@ function paintMenu(k_ctx) {
         children: k_list.map((k_item) => ({ key: k_item.key, label: k_item.label, icon: MENU_ICONS[k_item.key] || '▫️', enabled: k_item.enabled, run: () => openForm(k_item.key).catch(report) })) });
       continue;
     }
-    if (k_groupDocuments && ['Intrari', 'Iesiri'].includes(k_group)) {
+    if (['Intrari', 'Iesiri', 'Fluxuri'].includes(k_group)) {
       const k_incoming = k_group === 'Intrari';
+      const k_movements = k_group === 'Fluxuri';
       const k_specs = k_incoming
         ? [{ key: 'nir', label: 'Factură cumpărare (NIR)' }, { key: 'storno', label: 'Factură Stornare' }]
+        : k_movements
+        ? [{ key: 'bp', label: 'Bon Predare' }, { key: 'bt', label: 'Bon Transfer' }, { key: 'bs', label: 'Bon Casare' },
+          { key: 'mf_registru', label: 'Registru MF', rule: true }]
         : [{ key: 'bc', label: 'Bon Consum' }, { key: 'br', label: 'Bon Retur' }, { key: 'lista_alimente', label: 'Lista Alimente', rule: true }];
       const k_children = k_specs.flatMap((k_spec) => {
         const k_item = k_list.find((k_candidate) => k_candidate.key === k_spec.key);
@@ -124,35 +135,19 @@ function paintMenu(k_ctx) {
         return [{ ...k_spec, icon: MENU_ICONS[k_item.key], enabled: k_item.enabled, reason: k_item.reason || '',
           run: () => openForm(k_item.key).catch(report) }];
       });
-      if (k_children.length) k_items.push({ key: k_incoming ? '_intrari' : '_iesiri',
-        label: k_incoming ? 'INTRARI' : 'IESIRI', icon: k_incoming ? '📥' : '📤', group: k_group,
+      if (k_children.length) k_items.push({ key: k_incoming ? '_intrari' : k_movements ? '_fluxuri' : '_iesiri',
+        label: k_incoming ? 'Intrări' : k_movements ? 'Fluxuri / Mișcări' : 'Ieșiri', icon: k_incoming ? '📥' : k_movements ? '🔀' : '📤', group: k_group,
         dropdownMinWidth: k_incoming ? 260 : 224, enabled: k_children.some((k_child) => k_child.enabled !== false),
         reason: k_children.every((k_child) => k_child.enabled === false) ? k_children[0].reason : '', children: k_children });
       continue;
     }
     for (const k_item of k_list) {
       const k_entry = { key: k_item.key, label: k_item.label, icon: MENU_ICONS[k_item.key], group: k_group, enabled: k_item.enabled, reason: k_item.reason || '', run: () => openForm(k_item.key).catch(report) };
-      if (k_item.key === 'nir' && !IS_PREVIEW) {   // purchase invoice: Add / Edit
-        delete k_entry.run;
-        k_entry.children = [
-          { key: 'nir:add', icon: '➕', label: 'Adăugare', run: () => openReceipt(true).catch(report) },
-          { key: 'nir:edit', icon: '✎', label: 'Editare / Modificare', run: () => openReceipt(false).catch(report) },
-        ];
-      }
       k_items.push(k_entry);
     }
   }
   mainMenu.active = state.form;
   mainMenu.setItems(k_items);
-}
-
-// Purchase invoice menu: "Adaugare" opens the page straight on a new document, "Editare" just opens the page.
-let startReceiptInAdd = false;   // read by openForm at the moment it mounts the page, so no consultation screen flashes first
-async function openReceipt(k_add) {
-  if (contextChanging) return;
-  if (state.form === 'nir') { if (k_add) await state.editor?.startAdd?.(); return; }   // already open and loaded
-  startReceiptInAdd = k_add;
-  try { await openForm('nir'); } finally { startReceiptInAdd = false; }
 }
 
 // A change of context with unsaved work asks first: keep it (stay where you are) or discard it (and move).
@@ -247,7 +242,7 @@ async function openForm(k_key, { reload = false } = {}) {
     return;
   }
   if (!IS_PREVIEW && ['nir', 'storno', 'bc', 'br', 'bp', 'bt', 'bs'].includes(k_key)) {   // documents (VC06-02..05); the preview keeps the stand-in editor
-    state.editor = mountDocuments(k_work, { api, sel: () => state.ctx.selection, family: k_key, signal: lifetime.signal, startAdd: k_key === 'nir' && startReceiptInAdd });
+    state.editor = mountDocuments(k_work, { api, sel: () => state.ctx.selection, family: k_key, signal: lifetime.signal });
     return;
   }
   if (!k_open.columns.lines.length) {
@@ -302,13 +297,17 @@ function bind() {
     try { localStorage.setItem('kbot-portal-theme', theme); } catch (_) { /* The theme still applies to this visit. */ }
     document.querySelectorAll('.vc-dgv > .dgv').forEach((node) => { node.dataset.theme = theme === 'dark' ? 'dark' : 'modern'; });
   }, { signal: lifetime.signal });
+  // <!-- slice: VC06-04 --> Missing-source recovery in the operator help.
   const help = () => preview('Ajutor VERCON', [{ title: 'Lucrul cu documente', columns: [{ key: 'step', title: 'Acțiune', width: 200 }, { key: 'text', title: 'Descriere', width: 580 }], rows: [
-    { step: 'Context', text: 'Alegeți subunitatea, gestiunea și exercițiul înainte de a deschide o operație.' },
+    { step: 'Context', text: 'Alegeți mai întâi subunitatea. Gestiunea se selectează automat dacă este una singură; selectorul apare numai dacă există mai multe. Anul și operațiile apar după alegerea gestiunii.' },
     { step: 'Consultare', text: 'Alegeți documentul din arborele din dreapta. ⋮ deschide opțiunile documentului.' },
     { step: 'Adaugă / Modifică', text: 'Arborele se ascunde. Click sau Enter editează o celulă; Tab confirmă și trece la următoarea.' },
     { step: 'Salvează', text: 'Salvează întregul document. Valorile și disponibilul se validează pe server.' },
     { step: 'Renunță', text: 'Abandonează modificările nesalvate și revine la consultare.' },
     { step: 'Lista de alimente', text: 'Adaugă rând în secțiunea BC asociază un bon existent, fără să repete consumul.' },
+    { step: 'Retur fără bon sursă', text: 'Returul migrat este marcat Fără bon sursă. Alegeți Bonul returnat și apăsați Asociază cu un bon de consum. Asocierea reușește numai dacă toate produsele și cantitățile se încadrează în bon; apoi puteți folosi Modifică. Anularea este disponibilă și înainte de asociere.' },
+    { step: 'Storno fără recepție', text: 'În Factură storno, deschideți Linii de storno fără recepție. Selectați o linie și o factură storno, apoi Leagă de o factură storno. Cantitatea se validează față de recepția stornată și stoc. Puteți anula separat linia cu motiv. Nicio asociere nu se face automat.' },
+    { step: 'Migrare OI/MF', text: 'Pentru prima migrare cu baze OI/MF, nu vă bazați pe loturile OI migrate până când operatorul decide numerotarea unică a identificatorilor BP, BT și BC în migrator. Numere identice din familii diferite se pot confunda.' },
   ] }], pageUi);
   $('vc-help').addEventListener('click', () => openMenu($('vc-help'), [
     { icon: 'ⓘ', label: 'Cum lucrez cu VERCON', run: help },
@@ -327,5 +326,7 @@ function bind() {
   addEventListener('pagehide', () => { stopTimer?.(); pageUi.clear(); lock.release(true); state.editor?.destroy(); Object.values(combos).forEach((k_c) => k_c.destroy?.()); lifetime.abort(); }, { once: true });
 }
 
+bindReportIdentity(api, () => state.ctx?.selection);
+bindMenuZoom($('vc-help'));
 bind();
 start();

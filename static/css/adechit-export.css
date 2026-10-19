@@ -4,7 +4,7 @@
   --sky-2: #e3f1ff; --line: #cfe3f8; --blue: #309eff; --radius-sm: 12px;
   --ade-header-back: #3b5a85; --ade-header-text: #fff;
   --err-ink: #8f1d17; --err-bg: #fdeceb; --err-line: #f1b5b1;
-  box-sizing: border-box; width: min(620px, 96vw); max-height: 92vh; padding: 0;
+  box-sizing: border-box; width: min(620px, calc(96 * var(--application-vw, 1vw))); max-height: calc(92 * var(--application-vh, 1vh)); padding: 0;
   color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm);
   font: 14.33px/1.4 Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
 }
@@ -13,7 +13,7 @@ html[data-theme="dark"] .ade-export {
   --sky-2: #181e28; --line: #2f3a4d; --err-ink: #ffb4ae; --err-bg: #3a1f1f; --err-line: #7a3a36;
 }
 .ade-export::backdrop { background: var(--ink); opacity: .45; }
-.ade-export form { display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
+.ade-export form { display: flex; flex-direction: column; max-height: calc(90 * var(--application-vh, 1vh)); overflow: hidden; }
 .ade-export header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--ade-header-back); color: var(--ade-header-text); }
 .ade-export h2 { margin: 0; font: inherit; font-size: 1.2em; font-weight: 700; }
 .ade-export header button { min-width: 32px; padding: 0; color: inherit; background: transparent; border: 0; font-size: 18px; }

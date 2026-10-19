@@ -1,5 +1,6 @@
 // Shared column filter popup and icons; draft rows never supply checklist values.
 import { ValueType, allowedOperators, operatorCaption, operandCount, formatValue, createFilter, isBlank } from './engine.js';
+import { layoutRect } from '../utils/layout-geometry.js';
 const FILTER_LIST_LIMIT = 500;
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -146,7 +147,7 @@ export const filtering = {
     });
     pop.appendChild(bar);
 
-    const rect = anchor ? anchor.getBoundingClientRect() : { left: 20, bottom: 40 };
+    const rect = anchor ? layoutRect(anchor) : { left: 20, bottom: 40 };
     this._placePopup(pop, rect.left, rect.bottom + 4);
     paintList();
     search.focus();

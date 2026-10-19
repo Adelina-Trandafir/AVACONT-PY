@@ -37,6 +37,7 @@ function mountCrud(host, opts) {
   const dirty = () => busy || unsaved.size > 0 || !!dataGrid?.hasEdit;
   const text = (value, spec) => spec.type === 'ref'
     ? (state.labels[spec.key] || state.lookups[spec.key] || []).find((choice) => String(choice.id) === String(value))?.label || ''
+    : spec.type === 'choice' ? spec.options.find(choice => String(choice.value ?? '') === String(value ?? ''))?.label || String(value ?? '')
     : spec.type === 'decimal' ? decimalText(value, 4) : String(value ?? '');
   const visible = () => state.rows.filter((item) => state.adding ? item.__key === state.adding : item.__new || unsaved.has(item.__key)
     || ((state.visibility === 'all' || (state.visibility === 'used' ? item.active && item.used_in_year : !!item.active === (state.visibility === 'active')))
@@ -251,7 +252,11 @@ function mountCrud(host, opts) {
         options: (state.lookups[spec.key] || []).map((choice) => ({ value: choice.id, label: choice.label })),
         formatter: (value) => text(value, spec),
         filterValue: opts.filterByLabel && spec.type === 'ref' ? (value) => text(value, spec) : undefined,
-        cellAction: spec.key === opts.pickerColumn ? { text: '...', label: 'Alege codul CPV', selectedOnly: true, disabled: !state.canWrite } : undefined,
+        cellAction: (opts.pickerColumns || [opts.pickerColumn]).includes(spec.key)
+          ? { text: '...', label: spec.key === 'CC' ? 'Alege clasificarea MF' : 'Alege codul CPV', selectedOnly: true, disabled: !state.canWrite } : undefined,
+        ...(spec.type === 'choice' ? { editor: 'list', searchable: false, showArrow: true, dropDownOnEnter: true, options: spec.options.map(choice => ({ ...choice, value: choice.value ?? '' })),
+          parse: raw => raw == null || raw === '' ? null : String(raw),
+          validate: value => value == null || value === '' || spec.options.some(choice => choice.value === value) ? null : 'Alegeți o valoare din listă.' } : {}),
         ...opts.columnOptions?.(spec),
         ...(opts.kind === 'produse' && spec.key === 'IdMasina' ? { editable: row => editable && !row.account_locked } : {}) })),
       ...(opts.hideState ? [] : [{ key: 'active', title: 'Stare', width: 70, minWidth: 0, fixedWidth: true, editable: false, formatter: (value) => value ? 'Activ' : 'Inactiv' }]),
@@ -321,7 +326,7 @@ function mountCrud(host, opts) {
     await refreshVisible();
   }
   async function setValue(rowKey, key, value) {
-    if (!state.canWrite || busy || !await ui.commit()) throw new Error('Confirmați editarea curentă înainte de alegerea CPV.');
+    if (!state.canWrite || busy || !await ui.commit()) throw new Error('Confirmați editarea curentă înainte de alegerea codului.');
     const item = state.rows.find((row) => row.__key === rowKey);
     if (!item) throw new Error('Rândul produsului nu mai este disponibil.');
     const pending = requests.get(rowKey);
@@ -341,6 +346,7 @@ function mountCrud(host, opts) {
 }
 
 export function mountNomenclator(host, opts) {
+  opts = { ...opts, kinds: opts.kinds.filter(kind => kind !== 'feluri' || opts.sel().type === 'ALIMENTE') };
   if (opts.kinds[0] === 'produse' && opts.kinds[1] === 'variante') return mountProducts(host, opts, mountCrud);
   const combined = opts.kinds.includes('categorii') && opts.kinds.includes('tva');
   const committees = opts.kinds.includes('comisie_nir') && opts.kinds.includes('comisie_inventar');

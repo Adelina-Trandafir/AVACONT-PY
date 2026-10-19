@@ -1,19 +1,21 @@
 .vc-page .vc-doc__header--nir.vc-doc__header--allocation { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); align-items: start; }
 .vc-doc__header--allocation .vc-field[data-field="IdPartener"] { grid-column: 1; grid-row: 1; }
 .vc-doc__header--allocation .vc-field[data-field="Accounts"] { grid-column: 1; grid-row: 2; }
-.vc-doc__header--allocation .vc-field[data-field="NrFact"] { grid-column: 2; grid-row: 1; }
-.vc-doc__header--allocation .vc-field[data-field="DataFc"] { grid-column: 2; grid-row: 2; }
-.vc-doc__header--allocation .vc-field[data-field="Numar"] { grid-column: 3; grid-row: 1; }
-.vc-doc__header--allocation .vc-field[data-field="Data"] { grid-column: 3; grid-row: 2; }
+.vc-doc__header--allocation .vc-field[data-field="Numar"] { grid-column: 2; grid-row: 1; }
+.vc-doc__header--allocation .vc-field[data-field="Data"] { grid-column: 2; grid-row: 2; }
+.vc-doc__header--allocation .vc-field[data-field="NrFact"] { grid-column: 3; grid-row: 1; }
+.vc-doc__header--allocation .vc-field[data-field="DataFc"] { grid-column: 3; grid-row: 2; }
 .vc-doc__header--allocation .vc-field[data-field="IdComisie"] { grid-column: 1 / 3; grid-row: 3; }
 /* Positioning already uses the input width; lift the shared dropdown's 320px cap. */
 .vc-doc__header--allocation .vc-field[data-field="IdComisie"] .combobox-dropdown { max-width: none; }
-.vc-doc__header--allocation .vc-field[data-field="Valoare"] { grid-column: 4; grid-row: 1; }
+.vc-doc__header--allocation .vc-field[data-field="Valoare"] { grid-column: 3; grid-row: 3; }
 .vc-doc__header--allocation .vc-field[data-field="_vat"] { grid-column: 4; grid-row: 2; }
 .vc-page .vc-receipt-accounts .combotree .treeview-input { box-sizing: border-box; min-height: 32px; padding-right: 28px; text-overflow: ellipsis; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 3px; }
 .vc-page .vc-receipt-accounts .combotree .treeview-input.is-invalid { background: var(--err-control-backcolor); border-color: var(--err-control-bordercolor); }
 .vc-page .vc-receipt-accounts .combotree .treeview-input:disabled { opacity: .7; }
 .vc-receipt-accounts [aria-disabled="true"] { pointer-events: none; opacity: .6; }
+.vc-page .vc-receipt-product-account { box-sizing: border-box; padding: 12px; background: var(--card); color: var(--ink); }
+.vc-receipt-product-account .vc-field { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 @media(max-width:800px) {
   .vc-page .vc-doc__header--nir.vc-doc__header--allocation { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .vc-doc__header--allocation .vc-field[data-field] { grid-column: auto; grid-row: auto; }

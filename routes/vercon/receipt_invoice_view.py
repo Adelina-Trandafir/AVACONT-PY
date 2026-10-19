@@ -45,11 +45,19 @@ def other_lines(cursor, ctx, doc, invoice_id):
         if row['TOTAL_BRUT'] is not None:
             line.update({'calc_mode': 'GROSS', 'gross_total': plain(row['TOTAL_BRUT']), 'input_price': plain(row['PRET_INITIAL'])})
         result.append(line)
+    from .receipt_mf_edit import annotate
+    contexts = {}
+    for line in result:
+        if line['type'] == 'MF':
+            context = line['context']
+            contexts.setdefault((context['subunit'], context['gestiune']), []).append(line)
+    for (subunit, gestiune), lines in contexts.items():
+        annotate(cursor, {'type': 'MF', 'subunit': subunit, 'gestiune': gestiune}, lines)
     return result
 
 
 def summary_totals(cursor, ctx, summaries):
-    """One batched lookup per opened month, without changing local stock totals."""
+    """One batched lookup per opened tree branch, without changing local stock totals."""
     if not summaries:
         return summaries
     from . import invoices

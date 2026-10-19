@@ -2,6 +2,8 @@ import { Combobox } from '../components/combobox/combobox.js';
 import { DatePicker } from '../components/datepicker/datepicker.js';
 import { showMessage } from '../portal/messages.js';
 import { DataGrid, ValueType } from '../dgv/datagrid.js';
+import { openPdfReport } from '../reporting/pdf-preview.js';
+import { chooseColumns } from '../reporting/columns.js';
 
 const $ = (id) => document.getElementById(id);
 const unit = decodeURIComponent(location.pathname.split('/').filter(Boolean).at(-1));
@@ -9,9 +11,13 @@ const base = `/api/adechit/parinti/${encodeURIComponent(unit)}`;
 const money = (value) => Number(value).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const balance = (value) => `${money(Math.abs(value))} lei${value > 0 ? ' · Debit' : value < 0 ? ' · Credit' : ''}`;
 let challenge = null; let childId = null; let combo = null; let revision = 0; let monthGrid = null;
+const reportViews = new Set();
+const reportOwner = { own(close) { reportViews.add(close); } };
+function closeReports() { for (const close of reportViews) close(); reportViews.clear(); }
 const pickers = [new DatePicker($('parent-start')), new DatePicker($('parent-end'))];
 function report(error) { console.error('[ADE parent portal]', error); showMessage($('parent-message'), error.message, 'error'); }
 function reset() {
+  closeReports();
   ++revision; childId = null; combo?.destroy(); combo = null; $('parent-child-selector').hidden = true;
   monthGrid?.destroy(); monthGrid = null;
   $('parent-dashboard').hidden = true; $('parent-login').hidden = false; $('parent-logout').hidden = true;
@@ -82,6 +88,7 @@ function chart(host, rows, financial) {
   host.prepend(svgNode('text', { x: 0, y: 16 }, financial ? `${money(max)} lei` : `${max} zile`));
 }
 async function loadChild(id) {
+  closeReports();
   const own = ++revision; childId = null;
   const data = await api(`/child/${id}`); if (own !== revision) return;
   childId = id; $('parent-child-name').textContent = data.name; $('parent-child-group').textContent = data.group;
@@ -109,21 +116,37 @@ function statementUrl(output) {
   }
   return `${base}/child/${childId}/statement/${output}?${query}`;
 }
+async function statementResponse(url) {
+  const response = await fetch(url, { credentials: 'same-origin' });
+  if (!response.ok) {
+    const error = await response.json();
+    if (error.reason === 'SESSION') reset();
+    throw new Error(error.error || 'Fișa nu a putut fi pregătită.');
+  }
+  return response;
+}
 for (const output of ['print', 'pdf']) $(`parent-${output}`).addEventListener('click', () => {
-  let url; try { url = statementUrl(output); } catch (error) { report(error); return; }
-  // Reserve the window during the user gesture; populate it only after a successful response.
-  const target = output === 'print' ? window.open('', '_blank') : null;
-  if (target) target.opener = null;
-  busy($('parent-date-fields').parentElement, async () => {
-    try {
-      const response = await fetch(url, { credentials: 'same-origin' });
-      if (!response.ok) { const error = await response.json(); if (error.reason === 'SESSION') reset(); throw new Error(error.error); }
-      if (output === 'print') { if (!target) throw new Error('Permiteți deschiderea ferestrei de imprimare.'); target.location.href = url; }
-      else {
-        const object = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href = object; a.download = 'Fisa_cont.pdf'; a.click(); setTimeout(() => URL.revokeObjectURL(object), 30000);
-      }
-    } catch (error) { target?.close(); throw error; }
-  });
+  let url; try { url = statementUrl('pdf'); } catch (error) { report(error); return; }
+  const own = revision;
+  const isCurrent = () => own === revision && childId != null;
+  void openPdfReport('Fișă cont', async view => {
+    const response = await statementResponse(url);
+    if (view.closed || !isCurrent()) return null;
+    return { data: await response.arrayBuffer(), filename: 'Fisa_cont.pdf',
+      exportExcel: async (preview, progress) => {
+        const columnsUrl = new URL(url, location.origin);
+        columnsUrl.pathname = columnsUrl.pathname.replace(/\/pdf$/, '/columns');
+        const options = await (await statementResponse(columnsUrl)).json();
+        if (preview.closed || progress.closed || !isCurrent()) return null;
+        const columns = await chooseColumns(options.columns, progress.scope);
+        if (columns === null || preview.closed || progress.closed || !isCurrent()) return null;
+        columnsUrl.pathname = columnsUrl.pathname.replace(/\/columns$/, '/xlsx');
+        columnsUrl.searchParams.set('columns', columns.join(','));
+        const excel = await statementResponse(columnsUrl);
+        return { data: await excel.arrayBuffer(), filename: 'Fisa_cont.xlsx',
+          mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+      } };
+  }, reportOwner, { downloadOnly: output === 'pdf', isCurrent, onClose: close => reportViews.delete(close) }).catch(report);
 });
 loadChildren().catch((error) => { reset(); if (!error.message.includes('Sesiunea')) report(error); });
 addEventListener('pagehide', () => { combo?.destroy(); monthGrid?.destroy(); pickers.forEach((p) => p.destroy()); }, { once: true });

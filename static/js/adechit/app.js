@@ -2,13 +2,15 @@ import { DataGrid, ValueType } from '../dgv/datagrid.js';
 import { TreeView } from '../components/treeview/treeview.js';
 import { Combobox } from '../components/combobox/combobox.js';
 import { DatePicker } from '../components/datepicker/datepicker.js';
-import { showMessage as paintMessage } from '../portal/messages.js';
+import { showMessage as paintMessage, clearMessageOnAction } from '../portal/messages.js';
 import { openMenu } from './menu.js';
+import { bindMenuZoom } from '../components/menu/menu-zoom.js';
+import { layoutRect, layoutViewport } from '../utils/layout-geometry.js';
 import { startSessionTimer } from './session.js';
-import { beginSessionExit, trackSessionWindow } from '../utils/session-exit.js';
+import { beginSessionExit } from '../utils/session-exit.js';
 import { bindCatalogs } from './catalogs.js';
 import { bindAnnual } from './annual.js';
-import { bindReports, outputReport } from './reports.js';
+import { bindReports, outputReport, closeReportPreviews } from './reports.js';
 import { bindHelp } from './help.js';
 import { bindNoticeConfig } from './payment-notice-config.js';
 import { bindBankAssociations } from './bank-associations.js';
@@ -323,8 +325,8 @@ function showRowDetail(k_row, k_node) {
   k_card.innerHTML = `<strong>${escapeHtml(k_row.Nume ?? '')}</strong>${k_figures
     .map(([k_label, k_value]) => `<span>${k_label}</span><b>${money(k_value)}</b>`).join('')}`;
   k_card.hidden = false;
-  const k_host = k_card.offsetParent.getBoundingClientRect();
-  const k_rowBox = k_node.getBoundingClientRect();
+  const k_host = layoutRect(k_card.offsetParent);
+  const k_rowBox = layoutRect(k_node);
   const k_below = k_rowBox.bottom - k_host.top + 2;
   k_card.style.top = `${k_below + k_card.offsetHeight > k_host.height ? Math.max(0, k_rowBox.top - k_host.top - k_card.offsetHeight - 2) : k_below}px`;
 }
@@ -391,6 +393,7 @@ function createGrid() {
   state.grid = new DataGrid($('ade-grid'), { columns: [actionColumn(canEdit), ...situationColumns(canEditDays)], rows: state.shownRows, headerHeight: 32,
     rowKey: 'IDZ', mobileRowScale: 1.2, editable: canEditDays, layoutId: 'ade.attendance', layout: { order: ['Mutare'], fill: 'Nume', hidden: state.plan.hidden, widths: state.plan.nameWidth ? { Nume: state.plan.nameWidth } : {} }, footer: true,
     footerCaption: '{0} copii', frozen: 2,
+    rowClassName: (row) => Number(row.SFD || 0) > 0 ? 'is-debtor' : '',
     footerAction: { label: '🔍', withCaption: true, menu: true, active: childFilterActive(), title: 'Filtrează lista de copii' },
     onFooterAction: ({ button }) => openChildFilterMenu(button), onSelect: selectChild, onCellSave: saveAttendance,
     onCellSaved: ({ row }) => { state.selected = row; loadLedger().catch(report); },
@@ -630,27 +633,8 @@ async function fetchOutput(path, accept) {
   return response;
 }
 
-const fetchReceiptOutput = (id, kind) => fetchOutput(`/api/adechit/receipts/${id}/${kind}`, kind === 'pdf' ? 'application/pdf' : 'text/html');
-
 async function outputReceipt(id, kind) {
-  // Open synchronously from the menu click so the browser accepts the print window.
-  const printWindow = kind === 'print' ? trackSessionWindow(window.open('', '_blank')) : null;
-  try {
-    if (kind === 'print' && !printWindow) throw new Error('Browserul a blocat fereastra de listare. Permiteți ferestrele popup pentru această pagină.');
-    if (printWindow) { printWindow.document.title = 'Chitanță'; printWindow.document.body.textContent = 'Se pregătește chitanța…'; }
-    const response = await fetchReceiptOutput(id, kind);
-    if (kind === 'print') {
-      const html = await response.text();
-      if (printWindow.closed) return;
-      printWindow.document.open(); printWindow.document.write(html); printWindow.document.close();
-      printWindow.opener = null;
-    } else {
-      const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement('a'); link.href = url; link.download = `Chitanta_${id}.pdf`;
-      document.body.append(link); link.click(); link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    }
-  } catch (error) { printWindow?.close(); throw error; }
+  return outputReport({ fetchOutput, path: `/api/adechit/receipts/${id}/pdf`, pdf: kind === 'pdf', title: 'Chitanță' });
 }
 
 async function openReceiptMenu(button, receipt) {
@@ -683,9 +667,9 @@ async function openReceiptMenu(button, receipt) {
   }
   document.body.append(menu); button.setAttribute('aria-expanded', 'true');
   menu.style.zIndex = String(window.ZIndexManager?.getNext() || 1001);
-  const rect = button.getBoundingClientRect();
-  menu.style.left = `${Math.max(8, Math.min(rect.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
-  menu.style.top = `${Math.max(8, Math.min(rect.bottom + menu.offsetHeight > innerHeight - 8 ? rect.top - menu.offsetHeight : rect.bottom, innerHeight - menu.offsetHeight - 8))}px`;
+  const rect = layoutRect(button), viewport = layoutViewport();
+  menu.style.left = `${Math.max(8, Math.min(rect.right - menu.offsetWidth, viewport.width - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(rect.bottom + menu.offsetHeight > viewport.height - 8 ? rect.top - menu.offsetHeight : rect.bottom, viewport.height - menu.offsetHeight - 8))}px`;
   const items = [...menu.querySelectorAll('button:not(:disabled)')]; items[0]?.focus();
   menu.addEventListener('keydown', (event) => {
     const index = items.indexOf(document.activeElement);
@@ -873,6 +857,8 @@ async function leaveApplication(url) {
 }
 
 function bind() {
+  bindMenuZoom($('ade-help'));
+  const clearNotice = clearMessageOnAction($('ade-message'));
   const catalogs = state.payers = bindCatalogs({ api, context: () => state.context, refresh: () => loadContext(true).catch(report), moveToSubunit });
   const bankAssociations = bindBankAssociations({ api, context: () => state.context, refresh: () => loadContext(true), monthId: () => state.monthId });
   const annual = bindAnnual({ api, refresh: () => loadContext(true), message: (text) => showMessage($('ade-message'), text, 'info') });
@@ -960,7 +946,7 @@ function bind() {
   try { k_savedLeft = localStorage.getItem('ade.left.collapsed') === '1'; } catch (k_error) { console.error('[ade] localStorage is blocked', k_error); }
   setLeftCollapsed(k_savedLeft);
   k_leftToggle.addEventListener('click', () => setLeftCollapsed(!state.leftCollapsed));
-  addEventListener('pagehide', () => { receiptMenuCleanup?.(); state.grid?.destroy(); state.monthTree?.destroy?.(); state.groupTree?.destroy?.(); }, { once: true });
+  addEventListener('pagehide', () => { clearNotice(); receiptMenuCleanup?.(); state.grid?.destroy(); state.monthTree?.destroy?.(); state.groupTree?.destroy?.(); }, { once: true });
 }
 
 // The server resolves the subunit: the stored one when valid, the only one when the unit has a single evidence.
@@ -1002,6 +988,7 @@ function unsavedWork() {
     || [...document.querySelectorAll('#ade-ledger-body tr.is-draft input')].some((input) => input.type !== 'checkbox' && input.value.trim() !== '');
 }
 async function switchSubunit(value) {
+  closeReportPreviews();
   const id = Number(value);
   if (!Number.isInteger(id) || id === state.subunit) return;
   const current = (state.context.subunits || []).find((row) => row.id === state.subunit);
@@ -1034,6 +1021,7 @@ function takePendingOpen() {
 }
 
 async function loadContext(rebuildTrees = false) {
+  closeReportPreviews();
   const context = await readContext(rebuildTrees);
   state.context = { ...context, months: [], groups: [], years: [] }; state.unit = context.unit;
   state.subunit = context.subunit ? context.subunit.id : null;

@@ -3,6 +3,8 @@
  * Gestionează afișarea, ascunderea și poziționarea dropdown-ului
  * ✨ UPDATE: Suport pentru prefix icons (steaguri, avatare, etc.)
  */
+import { layoutRect, layoutViewport } from '../../utils/layout-geometry.js';
+
 export const comboboxUIMixin = {
   /**
    * Creează elementele HTML
@@ -79,7 +81,7 @@ export const comboboxUIMixin = {
     if (this.options.showOnlyIcon) {
       this.dropdown.style.width = '150px';
     } else {
-      this.dropdown.style.width = `${this.input.getBoundingClientRect().width}px`;
+      this.dropdown.style.width = `${layoutRect(this.input).width}px`;
     }
 
     this.updateHighlight();
@@ -123,9 +125,8 @@ export const comboboxUIMixin = {
       return;
     }
 
-    const rect = this.input.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const viewportWidth = document.documentElement.clientWidth;
+    const rect = layoutRect(this.input);
+    const { height: viewportHeight, width: viewportWidth } = layoutViewport();
     const dropdownHeight = 200;
 
     // --combobox-min-width (set in CSS on the dropdown) keeps a narrow field from giving a cramped list

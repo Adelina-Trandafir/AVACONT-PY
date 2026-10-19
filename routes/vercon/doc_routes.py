@@ -21,6 +21,7 @@ from flask import g, request
 from . import depreciation_read, documents, lista, mf, oi, protocol, stock_routes, report_routes, receipt_number, receipt_choices, receipt_tree, receipt_context, receipt_routes, receipt_distribution, invoices
 from .capabilities import FormUnavailable
 from .nomenclatoare import NomError
+from . import migration_links, oi_context
 
 RIGHT = {'nir': 'receptie', 'storno': 'storno', 'bc': 'consum', 'br': 'retur', 'bp': 'oi_predare', 'bt': 'oi_transfer', 'bs': 'oi_casare', 'lista': 'alimente'}
 FORM_OF = {'lista': 'lista_alimente'}   # the menu key of a family whose name differs
@@ -136,6 +137,7 @@ def register(bp, guard, scoped, open_db):
             raise FormUnavailable('FORBIDDEN', 'Nu aveți dreptul necesar pentru această operație VERCON.', 403)
 
     receipt_context.register(bp, guard, scoped, session, build, _need)
+    oi_context.register(bp, guard, scoped, session, build, _need)
     receipt_routes.register(bp, guard, scoped, session, build, repo_of, _need)
     receipt_distribution.register(bp, guard, scoped, session, build, repo_of, _need)
 
@@ -158,11 +160,11 @@ def register(bp, guard, scoped, open_db):
     @bp.get('/api/vercon/doc/nir/tree')
     @guard('read')
     def receipt_tree_level():
-        """One level of the saved-receipts tree: level=parties | months&party= | documents&party=&month=YYYY-MM."""
+        """Lazy roots (parties/months), then documents filtered by party or month."""
         _need('nir')
         vctx = scoped('read')
         level, party = request.args.get('level', 'parties'), request.args.get('party')
-        if level not in ('parties', 'months', 'documents') or (level != 'parties' and party is None):
+        if level not in ('parties', 'months', 'documents') or (level == 'documents' and party is None and request.args.get('month') is None):
             raise NomError('INVALID', 'Cerere invalidă.', 400)
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, 'nir', False)
@@ -178,13 +180,16 @@ def register(bp, guard, scoped, open_db):
     @bp.get('/api/vercon/doc/<family>/number')
     @guard('read')
     def receipt_number_check(family):
-        if family not in ('nir', 'storno'):
+        if family not in ('nir', 'storno', *oi.FAMILIES_OI):
             raise NomError('FAMILY_UNKNOWN', 'Acest document nu folosește seria NIR/FCS.', 404)
         _need(family)
         vctx = scoped('read')
         exclude = documents._int(request.args.get('exclude'))
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, family, False)
+            if family in oi.FAMILIES_OI:
+                from .oi_number import check
+                return check(cursor, ctx, family, request.args.get('number'), exclude)
             return receipt_number.check(cursor, ctx, request.args.get('number'), exclude, documents._int(request.args.get('sub')) or 0, request.args.get('date'), insert=family == 'storno')
 
     @bp.get('/api/vercon/doc/<family>/sources')
@@ -368,6 +373,52 @@ def register(bp, guard, scoped, open_db):
     def _need_write(family):
         if RIGHT[family] not in g.vercon_operations:
             raise FormUnavailable('FORBIDDEN', 'Nu aveți dreptul necesar pentru această operație VERCON.', 403)
+
+    @bp.post('/api/vercon/doc/br/<int:doc_id>/link')
+    @guard('read')
+    def return_link(doc_id):
+        data = body()
+        _need_write('br')
+        vctx = scoped(RIGHT['br'], data)
+        with session(True) as cursor:
+            ctx, _ = build(cursor, vctx, 'br', True)
+            result = recover(cursor, ctx, 'br.link', doc_id, data, migration_links.link_return)
+            doc = read_document(cursor, ctx, 'br', doc_id)
+        return {'result': result, 'document': doc}
+
+    @bp.get('/api/vercon/doc/storno/orphans')
+    @guard('read')
+    def storno_orphans():
+        _need('storno')
+        vctx = scoped('read')
+        with session(False) as cursor:
+            ctx, _ = build(cursor, vctx, 'storno', False)
+            rows = migration_links.orphan_storno(cursor, ctx)
+            targets = [row for row in documents.list_documents(cursor, ctx, 'storno') if not row['annulled']]
+        return {'lines': rows, 'documents': targets, 'can_write': not ctx['closed'] and RIGHT['storno'] in g.vercon_operations}
+
+    def recover(cursor, ctx, operation, row_id, data, action):
+        key = str(data.get('request_key') or '')[:64]
+        fp = protocol.fingerprint(operation, row_id, data.get('version'), data.get('source'), data.get('target_version'), data.get('reason'))
+        replay = protocol.replayed(cursor, ctx, key, fp) if key else None
+        result = replay if replay is not None else action(cursor, repo_of(cursor, ctx), ctx, row_id, data, request_id())
+        if key and replay is None:
+            protocol.remember(cursor, ctx, key, fp, result)
+        return result
+
+    @bp.post('/api/vercon/doc/storno/orphans/<int:line_id>/<action>')
+    @guard('read')
+    def storno_orphan_write(line_id, action):
+        if action not in ('link', 'cancel'):
+            raise NomError('NOT_FOUND', 'Operația nu există.', 404)
+        data = body()
+        _need_write('storno')
+        vctx = scoped(RIGHT['storno'], data)
+        with session(True) as cursor:
+            ctx, _ = build(cursor, vctx, 'storno', True)
+            fn = migration_links.link_storno if action == 'link' else migration_links.cancel_storno
+            result = recover(cursor, ctx, 'storno.orphan.' + action, line_id, data, fn)
+        return {'result': result}
 
     @bp.put('/api/vercon/doc/<family>/<int:doc_id>')
     @guard('read')

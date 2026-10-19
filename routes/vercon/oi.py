@@ -9,6 +9,8 @@ Model (the Access one, kept so the migrated history works unchanged):
     receiving side of a transfer), a negative row takes quantity out of a batch (the giving side of a transfer, a
     write-off). A batch is (entry document, product, use account, document price). What a holder holds = the sum of the
     rows of that holder per batch. The register is derived from the documents and is rewritten together with them;
+    IDBC identifies the current document for all three families, with IDBP / IDBT as handover / transfer markers.
+    IDBO identifies the source BP / BT for transfers and write-offs, including both sides of a transfer;
   * a handover also creates the consumption bon (BC) that takes the goods out of the magazie, so the stock engine of
     VC06 sees it; the register and the stock are never added together (no double count);
   * transfer and write-off take goods only from a batch the holder really holds, at the batch's price, never more than
@@ -46,13 +48,13 @@ def list_documents(cursor, ctx, family):
     old_sql = ', MIN(co.Denumire) AS old_name, MIN(t.IDC_OLD) AS old_id' if 'old' in spec else ', NULL AS old_name, NULL AS old_id'
     old_join = ' LEFT JOIN VC_Clienti co ON co.SubunitId=t.SubunitId AND co.GestiuneId=t.GestiuneId AND co.IDC=t.IDC_OLD' if 'old' in spec else ''
     rows = _all(cursor, ('SELECT t.{k} AS id, MIN(t.{n}) AS number, MIN(t.{d}) AS d, MIN(t.{h}) AS holder_id, MIN(c.Denumire) AS holder, SUM(t.ValoareCUTVA) AS total, '
-                         'MAX(t.Anulat) AS annulled, CONCAT(MAX(t.ID), \'-\', SUM(t.Version)) AS version, COUNT(*) AS lines{old} FROM {tb} t '
+                         'MAX(t.Anulat) AS annulled, MAX(t.ID) AS version_id, SUM(t.Version) AS version_sum, COUNT(*) AS line_count{old} FROM {tb} t '
                          'LEFT JOIN VC_Clienti c ON c.SubunitId=t.SubunitId AND c.GestiuneId=t.GestiuneId AND c.IDC=t.{h}{oj} '
                          'WHERE t.SubunitId=%s AND t.GestiuneId=%s AND t.ExercitiuId=%s AND t.{k} IS NOT NULL AND t.{k}<>0 GROUP BY t.{k} ORDER BY d DESC, t.{k} DESC').format(
         k=spec['key'], n=spec['num'], d=spec['date'], h=spec['holder'], tb=spec['table'], old=old_sql, oj=old_join), (s, g, e))
     return [{'id': r['id'], 'number': r['number'], 'date': _iso(r['d']), 'holder_id': r['holder_id'], 'holder': r['holder'] or '',
              'old_id': r['old_id'], 'old': r['old_name'] or '', 'total': _money(Decimal(r['total'] or 0), ctx['scale']), 'annulled': bool(r['annulled']),
-             'version': r['version'], 'lines': r['lines']} for r in rows]
+             'version': '%d-%d' % (r['version_id'], r['version_sum']), 'lines': r['line_count']} for r in rows]
 
 
 def _rows(cursor, ctx, family, doc_id):
@@ -79,14 +81,18 @@ def get_document(cursor, repo, ctx, family, doc_id):
     for r in rows:
         info = _one(cursor, 'SELECT pr.DenumireP, pr.UM, pp.COD FROM VC_ProduseP pp LEFT JOIN VC_Produse pr ON pr.SubunitId=pp.SubunitId AND pr.GestiuneId=pp.GestiuneId AND pr.ID=pp.ID '
                             'WHERE pp.SubunitId=%s AND pp.GestiuneId=%s AND pp.IdProdus=%s', (s, g, r['IdProdus'])) or {}
-        batch_key = (r['IdProdus'], r.get('IdMasina'), r['PUTVA'])
+        batch_key = (r['IdProdus'], r['PUTVA'], abs(Decimal(r['Cant'] or 0)))
         origins = batch_of.get(batch_key, [])
         position = used.get(batch_key, 0)
         used[batch_key] = position + 1
+        lot = origins[position] if position < len(origins) else None
+        if family != 'bp' and lot is None and not first['Anulat']:
+            raise NomError('OI_ACCOUNT_ORIGIN', 'Linia %s nu are lotul de proveniență în registru.' % r['ID'], 409)
+        account = lot['account'] if lot else r.get('IdMasina')
         lines.append({'id': r['ID'], 'variant': r['IdProdus'], 'name': info.get('DenumireP'), 'um': info.get('UM'), 'code': info.get('COD'),
                       'Cant': _money(r['Cant'], scale), 'PUTVA': _money(r['PUTVA'], scale), 'ValoareCUTVA': _money(r['ValoareCUTVA'], scale),
-                      'batch': origins[position] if position < len(origins) else None, 'IdMasina': r.get('IdMasina'),
-                      'account': accounts.get(r.get('IdMasina'), '')})
+                      'batch': lot['origin'] if lot else None, 'IdMasina': account,
+                      'account': accounts.get(account, '')})
     header = {'Data': _iso(first[spec['date']]), 'Expl': first['Expl'], spec['holder']: first[spec['holder']]}
     if family == 'bp':
         header.update({'IdMasina': first['IdMasina'], 'IdMasinaP': first['IdMasinaP'], 'IdBonConsum': first['IdBonConsum']})
@@ -102,16 +108,17 @@ def get_document(cursor, repo, ctx, family, doc_id):
 
 
 def _batches_of_document(cursor, ctx, family, doc_id):
-    """{(product, use account, price): [origin ids]} of a saved transfer / write-off (best effort: a
-    migrated document whose register rows differ simply shows no batch)."""
+    """Source IDBOs of a saved transfer/write-off, isolated by its current document family."""
     if family == 'bp':
         return {}
-    column, sign = ('IDBT', '>') if family == 'bt' else ('IDBC', '<')
-    rows = _all(cursor, 'SELECT IdProdus, IDBO, IDM, PUTVA FROM VC_OI_Produse WHERE SubunitId=%s AND GestiuneId=%s AND {c}=%s AND Cant {s} 0 ORDER BY IDOI'.format(c=column, s=sign),
-                (ctx['subunit'], ctx['gestiune'], doc_id))
     out = {}
-    for r in rows:
-        out.setdefault((r['IdProdus'], r['IDM'], r['PUTVA']), []).append(r['IDBO'])
+    for r in oi_custody.register_rows(cursor, ctx, document=(family, doc_id)):
+        if (family == 'bt' and r['quantity'] <= 0) or (family == 'bs' and r['quantity'] >= 0):
+            continue
+        key = (r['IdProdus'], r['PUTVA'], abs(r['quantity']))
+        out.setdefault(key, []).append({'origin': r['IDBO'], 'account': r['IDM']})
+    if any(len({lot['account'] for lot in lots}) > 1 for lots in out.values()):
+        raise NomError('OI_ACCOUNT_ORIGIN', 'Liniile bonului au conturi de proveniență diferite și nu pot fi asociate univoc.', 409)
     return out
 
 
@@ -126,8 +133,14 @@ def lookups(cursor, ctx, family):
         'AND n.ExercitiuId=i.ExercitiuId AND n.IdIntrare=i.IdIntrare JOIN VC_ProduseP pp ON pp.SubunitId=i.SubunitId '
         'AND pp.GestiuneId=i.GestiuneId AND pp.IdProdus=i.IdProdus JOIN VC_Produse pr ON pr.SubunitId=pp.SubunitId '
         'AND pr.GestiuneId=pp.GestiuneId AND pr.ID=pp.ID WHERE i.SubunitId=%s AND i.GestiuneId=%s AND i.ExercitiuId=%s AND n.Anulat=0', _scope(ctx))}
-    out['warehouse_accounts'] = [item for item in out['categories'] if item['id'] in source_ids]
-    out['use_accounts'] = out['categories']
+    types = {row['IdMasina']: row['TIP'] for row in _all(cursor,
+        'SELECT IdMasina,TIP FROM VC_Masini WHERE SubunitId=%s AND GestiuneId=%s',
+        (ctx['subunit'], ctx['gestiune']))}
+    warehouse_type, use_type = ('MFM', 'MFF') if ctx['type'] == 'MF' else ('OIM', 'OIF')
+    # NULL remains a valid unclassified legacy account. Explicit roles must match.
+    out['warehouse_accounts'] = [item for item in out['categories'] if item['id'] in source_ids
+                                 and types.get(item['id']) in (None, '', warehouse_type)]
+    out['use_accounts'] = [item for item in out['categories'] if types.get(item['id']) in (None, '', use_type)]
     out['today'] = datetime.now().strftime('%Y-%m-%d')
     return out
 
@@ -153,6 +166,8 @@ def eligible(cursor, ctx, holder, exclude=None, on_date=None, account=None):
     accounts = {row['IdMasina']: row['Masina'] for row in _all(cursor,
                 'SELECT IdMasina,Masina FROM VC_Masini WHERE SubunitId=%s AND GestiuneId=%s', (ctx['subunit'], ctx['gestiune']))}
     for batch in sorted(holder_batches(cursor, ctx, holder, exclude, on_date).values(), key=lambda b: (b['origin'], b['product'], b['idm'] or 0)):
+        if batch['capacity'] <= 0:
+            continue
         if account is not None and batch['idm'] != account:
             continue
         info = _one(cursor, 'SELECT pr.DenumireP, pr.UM FROM VC_ProduseP pp LEFT JOIN VC_Produse pr ON pr.SubunitId=pp.SubunitId AND pr.GestiuneId=pp.GestiuneId AND pr.ID=pp.ID '
@@ -181,22 +196,14 @@ def _next_id(cursor, ctx):
 
 
 def _number(cursor, ctx, family, manual, errors, exclude=None):
+    from .oi_number import check
     spec = SPEC[family]
-
-    def taken(text):
-        sql = 'SELECT 1 FROM {tb} WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND {n}=%s AND Anulat=0'.format(tb=spec['table'], n=spec['num'])
-        params = list(_scope(ctx)) + [text]
-        if exclude:
-            sql += ' AND {k}<>%s'.format(k=spec['key'])
-            params.append(exclude)
-        return bool(_one(cursor, sql + ' LIMIT 1', params))
-    if manual in (None, ''):
-        return str(protocol.next_number(cursor, ctx, spec['kind'], lambda n: taken(str(n))))
-    number = _int(manual)
-    if number is None or number < 1:
+    verdict = check(cursor, ctx, family, manual, exclude)
+    number = verdict['suggested'] if manual in (None, '') else _int(manual)
+    if not verdict['valid']:
         errors['h.Numar'] = 'Numărul trebuie să fie un întreg pozitiv.'
         return None
-    if taken(str(number)):
+    if verdict['duplicate']:
         errors['h.Numar'] = 'Numărul %s este deja folosit.' % number
         return None
     protocol.raise_counter(cursor, ctx, spec['kind'], number)
@@ -207,21 +214,19 @@ def _outputs(cursor, ctx, family, doc_id, products):
     """True when other documents drew goods from the batches of this one (a transfer or a write-off references it)."""
     if family == 'bs' or not products:
         return False
-    marks = ','.join(str(int(p)) for p in products)   # integers read from our own rows
-    column = {'bp': 'IDBP', 'bt': 'IDBT'}[family]
-    row = _one(cursor, 'SELECT 1 FROM VC_OI_Produse WHERE SubunitId=%s AND GestiuneId=%s AND Cant<0 AND IDBO=%s AND IdProdus IN (' + marks + ') AND COALESCE(' + column + ',0)<>%s LIMIT 1',
-               (ctx['subunit'], ctx['gestiune'], doc_id, doc_id))
-    return bool(row)
+    return any(row['family'] in ('bt', 'bs') and row['quantity'] < 0
+               and row['IDBO'] == doc_id and row['IdProdus'] in products
+               for row in oi_custody.events(cursor, ctx, exclude=(family, doc_id)))
 
 
 def _insert_register(repo, family, doc_id, rows):
     for row in rows:
-        repo.insert('VC_OI_Produse', {'IDBP': doc_id if family == 'bp' else 0, 'IDBT': doc_id if family == 'bt' else 0, 'IDBC': doc_id if family == 'bs' else 0, **row})
+        repo.insert('VC_OI_Produse', oi_custody.register_values(family, doc_id, row))
 
 
 def _forget(repo, family, doc_id):
-    column = {'bp': 'IDBP', 'bt': 'IDBT', 'bs': 'IDBC'}[family]
-    repo.delete('VC_OI_Produse', {column: doc_id})
+    repo.cursor.execute('DELETE FROM VC_OI_Produse WHERE SubunitId=%s AND GestiuneId=%s AND ' +
+                        oi_custody.document_where(family), (repo.subunit, repo.gestiune, doc_id))
 
 
 def _cleaned_header(cursor, repo, ctx, family, header, errors):
@@ -369,7 +374,7 @@ def edit_bp(cursor, repo, ctx, exercise, doc_id, body, request_id):
 
 
 # ---- BT (transfer) and BS (write-off) --------------------------------------------------------------------------------
-def _taken_lines(cursor, ctx, family, holder, exclude_id, raw_lines, document_date, errors, account=None):
+def _taken_lines(cursor, ctx, family, holder, exclude_id, raw_lines, document_date, errors):
     """Validate the picked batches against what the holder holds (without this document's own rows)."""
     available = holder_batches(cursor, ctx, holder, (family, exclude_id) if exclude_id else None, document_date) if holder else {}
     raw_lines = raw_lines if isinstance(raw_lines, list) else []
@@ -382,10 +387,9 @@ def _taken_lines(cursor, ctx, family, holder, exclude_id, raw_lines, document_da
         raw = raw if isinstance(raw, dict) else {}
         key = _line_key(raw, index)
         origin, variant, cant = _int(raw.get('batch')), _int(raw.get('variant')), _dec(raw.get('Cant'))
-        use_account = _int(raw.get('IdMasina'))
         batch_price = _dec(raw.get('PUTVA'))
+        # TC account fields are historical hints only. The selected origin determines the account.
         matches = [b for (o, p, a, price), b in available.items() if o == origin and p == variant
-                   and (use_account is None or a == use_account) and (account is None or a == account)
                    and (batch_price is None or price == batch_price)]
         batch = matches[0] if len(matches) == 1 else None
         if batch is None:
@@ -444,7 +448,7 @@ def create_out(family, cursor, repo, ctx, exercise, body, request_key, request_i
     errors = {}
     header = _cleaned_header(cursor, repo, ctx, family, body.get('header'), errors)
     _fail(errors)
-    lines = _taken_lines(cursor, ctx, family, _giver(family, header), None, body.get('lines'), header['_date'], errors, header.get('IdMasina'))
+    lines = _taken_lines(cursor, ctx, family, _giver(family, header), None, body.get('lines'), header['_date'], errors)
     _fail(errors)
     number = _number(cursor, ctx, family, (body.get('header') or {}).get('Numar'), errors)
     _fail(errors)
@@ -468,7 +472,7 @@ def edit_out(family, cursor, repo, ctx, exercise, doc_id, body, request_id):
     if manual not in (None, '') and str(_int(manual)) != str(number):
         number = _number(cursor, ctx, family, manual, errors, exclude=doc_id)
     _fail(errors)
-    lines = _taken_lines(cursor, ctx, family, _giver(family, header), doc_id, body.get('lines'), header['_date'], errors, header.get('IdMasina'))
+    lines = _taken_lines(cursor, ctx, family, _giver(family, header), doc_id, body.get('lines'), header['_date'], errors)
     _fail(errors)
     _forget(repo, family, doc_id)
     repo.delete(spec['table'], {spec['key']: doc_id})

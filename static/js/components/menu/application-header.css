@@ -1,0 +1,75 @@
+/* ADECHIT is the visual reference for the application menu bar. */
+:root {
+  --application-header-height: 46px;
+  --application-header-inset: 28px;
+  --application-header-max-width: 2048px;
+}
+
+@media (min-width: 901px) {
+  :root { --application-header-height: 53px; }
+}
+@media (max-width: 980px) {
+  :root { --application-header-inset: 8px; }
+}
+
+.portal :is(.ade-header, .vc-header) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--application-header-max-width);
+  height: var(--application-header-height);
+  min-height: var(--application-header-height);
+  margin-inline: auto;
+  padding: 4px var(--application-header-inset);
+}
+
+/* Keep the workspace below the actual shared bar, including desktop height. */
+.portal .ade-main {
+  height: calc(100 * var(--application-vh, 1vh) - var(--application-header-height));
+}
+
+.portal.vc-page { --vc-head-h: var(--application-header-height); --vc-header-back: #3b5a85; }
+.vc-header.is-session-ending { --vc-header-back: #c65b00; }
+.portal.vc-page .vc-header,
+html[data-theme="dark"] .portal.vc-page .vc-header {
+  background: var(--vc-header-back);
+  border: 1px solid var(--vc-header-back);
+  border-top: 0;
+  backdrop-filter: none;
+  color: #fff;
+}
+.portal .vc-header .vc-brand { padding: 0; font-size: var(--fs-mp); }
+.portal .vc-header .vc-brand__icon { flex: 0 0 30px; }
+.portal .vc-header .vc-brand__name { font-weight: 800; }
+.portal .vc-header__right { gap: 8px; }
+.portal .vc-header__context { color: rgb(255 255 255 / .8); opacity: 1; font-size: var(--fs-ms); }
+.portal .vc-header__right > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: #fff;
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-ms);
+  font-weight: var(--fw-normal);
+  line-height: 1;
+  box-shadow: none;
+  transform: none;
+  cursor: pointer;
+}
+.portal .vc-header__right > .vc-menu-btn:not(.application-zoom-button) {
+  min-width: 34px;
+  padding: 0;
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+.portal .vc-header__right > button:hover { background: rgb(255 255 255 / .16); }
+
+@media (max-width: 800px) {
+  /* The context selectors retain their second row on narrow VERCON screens. */
+  .portal.vc-page .vc-header { height: auto; }
+}

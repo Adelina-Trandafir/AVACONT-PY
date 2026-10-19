@@ -52,5 +52,8 @@ def product_statement(cursor, vctx, product):
                           'document_id': row['document_id'], 'line_id': row['line_id'],
                           'quantity': format(Decimal(row['q']), 'f'), 'balance': format(Decimal(row['balance']), 'f')}
                           for row in reversed(rows[-20:])]})
+    if gest['type'] == 'OI':
+        from .product_movements import attach
+        attach(cursor, ctx, cards, ledger, gest.get('name', str(gestiune)))
     return {'product': product, 'name': item['DenumireP'] or '', 'um': item['UM'] or '',
-            'year': year, 'variants': cards}
+            'year': year, 'variants': cards, 'movement_scope': 'gestiune' if gest['type'] == 'OI' else None}

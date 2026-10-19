@@ -2,7 +2,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from . import numeric, protocol, receipt_choices, receipt_rules, receipt_number, receipt_auto
+from . import numeric, protocol, receipt_choices, receipt_rules, receipt_number, receipt_auto, receipt_products
 from .nomenclatoare import NomError
 from .documents import (_int, _dec, _text, _one, _all, _fail, _exists, _scope,
                         _line_key, _account_of_product, _account_of_variant,
@@ -56,6 +56,8 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
         if not isinstance(selected, list) or not selected or any(_int(value) is None for value in selected):
             errors['h.Accounts'] = 'Bifați cel puțin un cont.'
         selected = {_int(value) for value in selected} if isinstance(selected, list) else set()
+        if ctx['type'] in ('MF', 'OI') and any(not receipt_products.account(repo, ctx, identity) for identity in selected):
+            errors['h.Accounts'] = 'Alegeți numai conturi MAGAZIE din gestiunea curentă.'
     if family == 'storno':
         cols['IdStorno'] = source['IdIntrare'] if source else None
         if source and cols['DataFc'] and source['DataFc'] and cols['DataFc'] < source['DataFc'].date():
@@ -70,16 +72,37 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
     if len(raw_lines) > _MAX_LINES:
         errors['lines'] = 'Cel mult %d linii pe document.' % _MAX_LINES
     mf = ctx['type'] == 'MF' and family == 'nir'
+    protected = []
+    if mf and stored:
+        from .receipt_mf_edit import partition
+        raw_lines, protected = partition(repo, raw_lines, stored, errors)
     undo_ids = receipt_auto.permitted_undos(ctx, body.get('id'), _int(body.get('version')), body.get('undo_tokens') or [])
+    drafted_products, codes = {}, {str(line.get('COD') or '').strip().casefold() for line in protected if line.get('COD')}
     for index, raw in enumerate(raw_lines[:_MAX_LINES]):
         raw = raw if isinstance(raw, dict) else {}
         key = _line_key(raw, index)
         line = {'key': key, 'id': _int(raw.get('id')), 'invoice_line': _int(raw.get('invoice_line'))}
         old = (stored or {}).get(line['id'])
+        drafted = receipt_products.draft(cursor, repo, ctx, raw, errors, key) if family == 'nir' else None
+        if raw.get('new_product') is not None:
+            identity = _int(raw.get('product'))
+            if old or identity is None or identity >= 0 or drafted is None:
+                errors['l|%s|product' % key] = 'Produsul nou este incomplet sau invalid.'
+            elif identity in drafted_products and drafted_products[identity] != drafted:
+                errors['l|%s|product' % key] = 'Același produs nou are definiții diferite în ciornă.'
+            else:
+                drafted_products[identity] = drafted
+                line['new_product'] = drafted
         if family == 'nir' and selected is not None:
-            account = _account_of_product(repo, _int(raw.get('product')))
+            account = drafted['IdMasina'] if drafted else _account_of_product(repo, _int(raw.get('product')))
             if account not in selected and not (account is None and old and unchanged(raw, old, mf)):
                 errors['l|%s|product' % key] = 'Produsul nu aparține conturilor bifate.'
+        if mf:
+            code = str(raw.get('code') or '').strip().casefold()
+            if code in codes:
+                errors['l|%s|code' % key] = 'Numărul de inventar este repetat în această intrare.'
+            if code:
+                codes.add(code)
         if old and old.get('calc_mode') == 'GROSS' and (not unchanged(raw, old, mf) or _int(raw.get('invoice_line')) != old.get('invoice_line')):
             if line['id'] not in undo_ids or raw.get('calc_mode') == 'GROSS':
                 errors['lines'] = 'Rândurile auto-calculate pot fi numai șterse cu revenire în grupul de origine.'
@@ -87,7 +110,7 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
         if line['id'] and old is None and stored is not None:
             errors['lines'] = 'O linie nu aparține documentului sau nu mai există.'
             continue
-        if old and not raw.get('recalculate') and unchanged(raw, old, mf):
+        if old and not mf and not raw.get('recalculate') and unchanged(raw, old, mf):
             line.update({'preserve': True, 'variant': old['variant'], 'product': old['product'], 'IDTVA': old['IDTVA'],
                          'name': old['name'], 'v': {field: Decimal(old[field]) if old[field] is not None else None
                          for field in ('Cant', 'Pret', 'PUTVA', 'Valoare', 'TVA', 'ValoareCUTVA')}})
@@ -95,8 +118,6 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
             line['rate'] = Decimal(vat_rows[0]['TVA'] or 0) if vat_rows else None
             if old.get('calc_mode') == 'GROSS':
                 line['calculation'] = {'mode': 'GROSS', 'gross': Decimal(old['gross_total']), 'input_price': Decimal(old['input_price']), 'origin': old.get('auto_origin')}
-            if mf:
-                line.update({'COD': old['code'], 'data_intrarii': protocol.to_date(old['data_intrarii'], 'Data intrării') if old['data_intrarii'] else None, 'DNF': old['DNF'], 'DF': old['DF']})
             out['lines'].append(line)
             continue
         bad = lambda field, message, key=key: errors.__setitem__('l|%s|%s' % (key, field), message)
@@ -117,24 +138,24 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
                 line['IDTVA'] = tva_id
         if mf:
             product = _int(raw.get('product'))
-            if product is None or not _exists(repo, 'VC_Produse', 'ID', product, True):
+            if product is None or not drafted and not _exists(repo, 'VC_Produse', 'ID', product, True):
                 bad('product', 'Alegeți produsul.')
             line['product'] = product
             line['COD'] = _text(raw.get('code'), 'l|%s|code' % key, errors, True, 255)
             line['data_intrarii'] = protocol.to_date(raw.get('data_intrarii'), 'Data intrării', None, errors, 'l|%s|data_intrarii' % key)
-            dnf, df = _int(raw.get('DNF')), _int(raw.get('DF') if raw.get('DF') not in (None, '') else 0)
+            dnf, df = _int(raw.get('DNF')), _int(raw.get('DF'))
             if dnf is None or dnf < 1:
                 bad('DNF', 'Durata normală trebuie să fie de cel puțin 1 lună.')
             if df is None or df < 0:
-                bad('DF', 'Durata folosită nu poate fi negativă.')
+                bad('DF', 'Durata folosită este obligatorie și nu poate fi negativă.')
             if cant is not None and cant != cant.to_integral_value():
                 bad('Cant', 'Un mijloc fix se recepționează în bucăți întregi.')
             if cant is not None and cant != 1:
                 bad('Cant', 'Fiecare activ MF are propriul rând, cu cantitatea 1.')
             if old and product != old['product']:
                 bad('product', 'Identitatea unui activ existent nu se schimbă. Scoateți activul și adăugați unul nou dacă dependențele permit.')
-            if line['data_intrarii'] and cols.get('DataFc') and line['data_intrarii'] > cols['DataFc']:
-                bad('data_intrarii', 'Data intrării MF nu poate depăși data facturii.')
+            if line['data_intrarii'] and cols.get('Data') and line['data_intrarii'] > cols['Data']:
+                bad('data_intrarii', 'Data intrării MF nu poate depăși data NIR-ului.')
             if line.get('COD'):
                 used = repo.select('VC_ProduseP', {'COD': line['COD']}, columns=('IdProdus',))
                 if any(r['IdProdus'] != (old or {}).get('variant') for r in used):
@@ -142,14 +163,15 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
                 if any(r.get('COD') == line['COD'] for r in out['lines']):
                     bad('code', 'Numărul de inventar este repetat în ciornă.')
             # The shared classification catalogue stores years; asset DNF is in months.
-            classification = _one(cursor, 'SELECT c.DNF_MIN,c.DNF_MAX FROM VC_Produse p JOIN AVACONT_COMUN.VC_ClasificariMF c ON c.Cod=p.CC '
-                                  'WHERE p.SubunitId=%s AND p.GestiuneId=%s AND p.ID=%s', (ctx['subunit'], ctx['gestiune'], product))
-            if classification and dnf is not None and ((classification['DNF_MIN'] is not None and dnf < classification['DNF_MIN'] * 12) or (classification['DNF_MAX'] is not None and dnf > classification['DNF_MAX'] * 12)):
-                bad('DNF', 'Durata nu respectă intervalul clasificării MF.')
+            classification = receipt_products.classification(cursor, repo, ctx, product, drafted)
+            if not classification or classification['DNF_MIN'] is None or classification['DNF_MAX'] is None:
+                bad('DNF', 'Alegeți o clasificare MF cu limite de durată înainte de DNF.')
+            if classification and classification['DNF_MIN'] is not None and classification['DNF_MAX'] is not None and dnf is not None and not classification['DNF_MIN'] * 12 <= dnf <= classification['DNF_MAX'] * 12:
+                bad('DNF', receipt_products.duration_message(classification['code'], classification['DNF_MIN'], classification['DNF_MAX']))
             line['DNF'], line['DF'] = dnf, df or 0
         elif family == 'nir' and 'product' in raw:
             product = _int(raw.get('product'))
-            if product is None or not _exists(repo, 'VC_Produse', 'ID', product, True):
+            if product is None or not drafted and not _exists(repo, 'VC_Produse', 'ID', product, True):
                 bad('product', 'Alegeți produsul.')
             line['product'] = product
         else:
@@ -159,10 +181,28 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
             line['variant'] = variant
             if family != 'nir' and variant is not None and cols['IdMasina'] is not None and _account_of_variant(repo, variant) != cols['IdMasina']:
                 bad('variant', _NOT_IN_ACCOUNT)
+        if mf and old and not raw.get('recalculate') and unchanged(raw, old, mf):
+            line.update({'preserve': True, 'variant': old['variant'], 'name': old['name'],
+                         'ValoareLuna': _dec(old.get('ValoareLuna')),
+                         'v': {field: Decimal(old[field]) if old[field] is not None else None
+                               for field in ('Cant', 'Pret', 'PUTVA', 'Valoare', 'TVA', 'ValoareCUTVA')}})
+            if old.get('calc_mode') == 'GROSS':
+                line['calculation'] = {'mode': 'GROSS', 'gross': Decimal(old['gross_total']), 'input_price': Decimal(old['input_price']), 'origin': old.get('auto_origin')}
+            out['lines'].append(line)
+            continue
         if cant is not None and pret is not None and (rate is not None or family == 'storno'):
             try:
                 if family == 'nir':
                     line['v'] = receipt_line(cant, pret, rate, ctx['zec'], ctx['scale'])
+                    if old and not mf and not old.get('calc_mode') and all(
+                            _dec(raw.get(field)) == _dec(old.get(field)) for field in ('product', 'IDTVA', 'Pret')):
+                        # A quantity split must retain the variant of the units already issued.
+                        unit = _dec(old.get('PUTVA'))
+                        if unit is not None:
+                            line['variant'] = old['variant']
+                            line['v']['PUTVA'] = unit
+                            line['v']['ValoareCUTVA'] = numeric.to_stored(numeric.calc_round(cant * unit, ctx['zec']))
+                            line['v']['TVA'] = line['v']['ValoareCUTVA'] - line['v']['Valoare']
                     if raw.get('calc_mode') == 'GROSS':
                         receipt_auto.verify_row(ctx, body.get('id'), raw)
                         gross = _dec(raw.get('gross_total'))
@@ -176,14 +216,17 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
                             line['v'] = receipt_rules.gross_values(cant, gross, rate, ctx['zec'])
                             line['calculation'] = {'mode': 'GROSS', 'gross': gross, 'input_price': input_price, 'origin': raw.get('auto_origin')}
                     if mf and line.get('DNF'):
-                        line['ValoareLuna'] = numeric.to_stored(numeric.calc_round(numeric.from_stored(line['v']['ValoareCUTVA'], ctx['scale']) / line['DNF'], ctx['zec']), ctx['scale'])
+                        line['ValoareLuna'] = receipt_products.monthly(line)
             except numeric.NumericError as error:
                 bad('Cant', str(error))
         product_id = line.get('product')
         if product_id is not None:
-            products = repo.select('VC_Produse', {'ID': product_id}, columns=('DenumireP',))
-            line['name'] = products[0]['DenumireP'] if products else ''
+            products = repo.select('VC_Produse', {'ID': product_id}, columns=('DenumireP',)) if not drafted else []
+            line['name'] = drafted['DenumireP'] if drafted else products[0]['DenumireP'] if products else ''
         out['lines'].append(line)
+    out['lines'].extend(protected)
+    if len(out['lines']) > _MAX_LINES:
+        errors['lines'] = 'Cel mult %d linii pe document, inclusiv activele cu ieșire păstrate.' % _MAX_LINES
     ids = [r['id'] for r in out['lines'] if r.get('id')]
     if len(ids) != len(set(ids)):
         errors['lines'] = 'Aceeași linie salvată apare de mai multe ori în cerere.'
@@ -192,8 +235,10 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
             errors['lines'] = 'Ștergerea corecției cere revenirea cantității în grupul de origine.'
     _fail(errors)
     if family == 'nir':
-        accounts = {_account_of_product(repo, row['product']) if row.get('product') is not None
+        accounts = {row['new_product']['IdMasina'] if row.get('new_product') else _account_of_product(repo, row['product']) if row.get('product') is not None
                     else _account_of_variant(repo, row.get('variant')) for row in out['lines']}
+        if ctx['type'] in ('MF', 'OI') and any(not receipt_products.account(repo, ctx, identity) for identity in accounts):
+            raise NomError('INVALID', 'Produsele MF/OI trebuie să aparțină unor conturi MAGAZIE din aceeași gestiune.', 422)
         cols['IdMasina'] = next(iter(accounts)) if len(accounts) == 1 else None
     return out
 
@@ -231,7 +276,9 @@ def create_nir(cursor, repo, ctx, exercise, body, request_key, request_id, parse
     if _numarsub_column(cursor, ctx):
         values['NumarSub'] = sub
     nir_id = repo.insert('VC_NIR', values)
+    created_products = {}
     for line in parsed['lines']:
+        receipt_products.materialize(cursor, repo, ctx, line, created_products)
         line['saved_id'] = _write_receipt_line(cursor, repo, ctx, nir_id, line, now)
     invoices.receipt_saved(cursor, ctx, nir_id, parsed, invoice_id, current, request_id)
     protocol.freeze(cursor, ctx)
@@ -252,7 +299,7 @@ def _write_receipt_line(cursor, repo, ctx, nir_id, line, now, existing=None):
         return existing['ID']
     variant = line.get('variant')
     if ctx['type'] == 'MF':
-        line['ValoareLuna'] = numeric.calc_round(v['ValoareCUTVA'] / line['DNF'], ctx['zec'])
+        line['ValoareLuna'] = receipt_products.monthly(line)
         if existing is None:
             variant = repo.insert('VC_ProduseP', {'ID': line['product'], 'PUTVA': v['PUTVA'], 'COD': line['COD'], 'DataSalvare': now})
             repo.insert('VC_ProduseM', {'IdProdus': variant, 'DataIntrare': line['data_intrarii'], 'DNF': line['DNF'], 'DF': line['DF'], 'ValoareLuna': line['ValoareLuna']})
@@ -316,7 +363,9 @@ def edit_nir(cursor, repo, ctx, exercise, doc_id, body, request_id):
     touched = {r['IdProdus'] for r in stored}
     now = datetime.now()
     kept = set()
+    created_products = {}
     for line in parsed['lines']:
+        receipt_products.materialize(cursor, repo, ctx, line, created_products)
         existing = by_id.get(line['id']) if line['id'] else None
         if line['id'] and existing is None:
             raise NomError('CONFLICT', 'O linie a documentului nu mai există. Reîncărcați documentul.', 409)

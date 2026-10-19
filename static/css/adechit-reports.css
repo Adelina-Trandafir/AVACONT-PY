@@ -3,16 +3,18 @@
 .ade-reports__toggle { position: absolute; z-index: 2; top: 0; right: 0; width: 32px; height: var(--ade-head-h); padding: 0; color: var(--ink); background: var(--sky-2); border: 0; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); font: 800 calc(1.2rem + 1px)/1 sans-serif; cursor: pointer; }
 .ade-reports__toggle:hover { color: var(--blue-deep); background: var(--sky-1); }
 .ade-reports__content { box-sizing: border-box; height: 100%; min-width: 320px; padding: calc(var(--ade-head-h) + 6px) 10px 10px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
-.ade-reports__content h2 { position: absolute; inset: 0 32px auto 0; height: var(--ade-head-h); margin: 0; display: grid; place-items: center; background: var(--sky-2); border-bottom: 1px solid var(--line); font-size: var(--fs-ms); letter-spacing: .04em; }
+.ade-reports__content h2 { position: absolute; inset: 0 32px auto 0; height: var(--ade-head-h); margin: 0; display: grid; place-items: center; background: var(--sky-2); border-bottom: 1px solid var(--line); font-size: calc(var(--fs-ms) - 2pt); letter-spacing: .04em; }
 .ade-rep-group { padding: 5px 0; display: grid; gap: 5px; border-bottom: 1px solid var(--line); }
 .ade-rep-icon { display: none; }
-.ade-reports label { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: var(--fs-lg); }
+.ade-reports label { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: calc(var(--fs-lg) - 2pt); }
 .ade-reports input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
-.ade-report-command { width: 100%; min-height: 36px; padding: 5px 8px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink); background: linear-gradient(var(--card), var(--sky-2)); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 800 calc(.78rem + 1px + 2pt)/1.1 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.ade-report-command:disabled { opacity: .62; }
+.ade-report-command { width: 100%; min-height: 36px; padding: 5px 8px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 5px; font: inherit; font-size: var(--fs-button); font-weight: var(--fw-normal); line-height: 1.2; cursor: pointer; }
+.ade-report-command:disabled { opacity: .45; cursor: default; }
 .ade-report-date { display: grid !important; grid-template-columns: 125px minmax(0,1fr); }
 .ade-report-date input { box-sizing: border-box; width: 100%; min-width: 0; height: 25px; color: var(--ink); background: var(--card); border: 1px solid var(--line); font: inherit; }
-.ade-reports__content .kdp__field { font-size: var(--fs-lg); }
+.ade-reports__content .kdp__field { font-size: calc(var(--fs-lg) - 2pt); }
+/* Keep the integrated calendar button at its original size when its label shrinks. */
+.ade-reports .kdp__button { font-size: calc(var(--fs-lg) * .95); }
 .ade-reports__cancelled { min-height: 46px; }
 .ade-reports__spacer { flex: 1; min-height: 12px; }
 /* Collapsed rail: one icon per element; hovering or focusing an icon reveals only that element, to its left. */

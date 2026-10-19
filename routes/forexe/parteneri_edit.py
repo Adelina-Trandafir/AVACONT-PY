@@ -1,12 +1,13 @@
 # routes/forexe/parteneri_edit.py
 """
 The «Parteneri» window of K-BOT (slice 0087-02): the partners of the session's database, their
-details and their «coduri angajament» (Parteneri_Coduri).
+details and their «coduri angajament» (since slice 0121-03: the links of the supplier's CodFiscal in
+Parteneri_Angajamente / Parteneri_Angajamente_Indicatori, see partner_links.py).
 
     GET    /api/forexe/nomenclatoare/parteneri
         -> 200 { "partners": [ { "id_partener", "id_unitate", "ss", "cod_partener", "denumire",
                                  "cod_fiscal", "cont_iban", "banca", "adresa", "tip", "ascuns",
-                                 "activ", "coduri": [ { "id", "id_clsf", "clsf", "denumire_clsf",
+                                 "activ", "coduri": [ { "id", "id_leg", "id_clsf", "clsf", "denumire_clsf",
                                                         "cont_bancar", "cod_ang", "cod_ind" } ] } ],
                  "clasificatii": [ { "id_clsf", "clsf", "denumire", "ss", "id_unitate" } ],
                  "units": [ { "id_unitate", "ss" } ],
@@ -19,8 +20,8 @@ details and their «coduri angajament» (Parteneri_Coduri).
     POST   /api/forexe/nomenclatoare/parteneri
         { "partner": { "id_partener": null|n, "ss": "02A", "cod_partener", "denumire", "cod_fiscal",
                        "cont_iban", "banca", "adresa", "tip", "ascuns" },
-          "coduri": [ { "id": null|n, "id_clsf", "cont_bancar", "cod_ang", "cod_ind" } ],
-          "coduri_sterse": [ids] }
+          "coduri": [ { "id": null|n, "id_leg": null|n, "cont_bancar", "cod_ang", "cod_ind" } ],
+          "coduri_sterse": [ids of removed indicators], "legaturi_sterse": [ids of removed links without indicator] }
         -> 200 { "id_partener": n }
 
     DELETE /api/forexe/nomenclatoare/parteneri/<id_partener>
@@ -29,7 +30,12 @@ details and their «coduri angajament» (Parteneri_Coduri).
 MAPPING (MariaDB_Schema/AVACONT_SURSA.sql)
   * Parteneri: IdUnitate NOT NULL, unique (IdUnitate, CodPartener). A new partner goes into the
     unit of the sector-source the window was opened on (the session's SS, sent as "ss").
-  * Parteneri_Coduri: unique (IdPartener, IdClsf), CodPartener copied from the partner.
+  * «Coduri angajament» (slice 0121-03): the rows belong to the SUPPLIER's normalized CodFiscal, not to this unit's partner
+    row -- one row per indicator (CodAng + CodInd = CodAI, ContBancar), or a link with no indicator (cod_ind empty, "id"
+    null, "id_leg" set). The classification is only shown: it comes from FX_Indicatori.IdClsf by CodAI (null when the
+    indicator is unknown to FX_Indicatori). Parteneri_Coduri is no longer read or written. A partner whose CodFiscal
+    normalizes to nothing has no codes (the window disables the grid; a save with codes is refused). Deleting a partner
+    leaves the links: they belong to the CodFiscal, other units' partner rows may share it.
   * Slice 0093 (operator, 29.09.2026) -- the list shows ONLY partners with Tip = '1', a
     non-empty CodFiscal that is not the unit's own (AVACONT_COMUN.Unitati.CF of the session's
     DC) and Ascuns = 0; partners sharing a fiscal code are shown once, the first one found
@@ -59,7 +65,7 @@ from routes.auth.guard import require_session
 from routes.inregistrare import anaf
 from utils.database import get_kbot_connection, get_kbot_comun_connection
 
-from . import forexe_bp
+from . import forexe_bp, partner_links
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +88,6 @@ _SQL_PARTNERS = (
     "   AND COALESCE(P.Ascuns, 0) = 0 "
     " ORDER BY P.IdPartener"
 )
-_SQL_CODES = (
-    "SELECT K.IdPartenerAng, K.IdPartener, K.IdClsf, C.Clsf, C.Denumire, K.ContBancar, "
-    "       K.CodAng, K.CodInd "
-    "  FROM Parteneri_Coduri K LEFT JOIN Clasificatii C ON C.IDClsf = K.IdClsf "
-    " ORDER BY C.Clsf"
-)
 _SQL_UNIT_CF = "SELECT CF FROM Unitati WHERE DC = %s"
 _SQL_BIC = "SELECT Cod, Banca FROM BIC"
 _SQL_FISCAL_CODES = (
@@ -109,16 +109,6 @@ _SQL_UPDATE = (
     "UPDATE Parteneri SET CodPartener = %s, DenumirePartener = %s, CodFiscal = %s, ContIBAN = %s, "
     "Banca = %s, Adresa = %s, Tip = %s, Ascuns = %s WHERE IdPartener = %s"
 )
-_SQL_CODE_INSERT = (
-    "INSERT INTO Parteneri_Coduri (IdPartener, CodPartener, IdClsf, ContBancar, CodAng, CodInd) "
-    "VALUES (%s, %s, %s, %s, %s, %s)"
-)
-_SQL_CODE_UPDATE = (
-    "UPDATE Parteneri_Coduri SET CodPartener = %s, IdClsf = %s, ContBancar = %s, CodAng = %s, "
-    "CodInd = %s WHERE IdPartenerAng = %s AND IdPartener = %s"
-)
-_SQL_CODE_DELETE = "DELETE FROM Parteneri_Coduri WHERE IdPartenerAng = %s AND IdPartener = %s"
-_SQL_CODE_REFRESH = "UPDATE Parteneri_Coduri SET CodPartener = %s WHERE IdPartener = %s"
 _SQL_DELETE = "DELETE FROM Parteneri WHERE IdPartener = %s"
 _SQL_UNIT_OF_SS = "SELECT IdUnitate FROM Unitati WHERE SursaSector = %s ORDER BY IdUnitate"
 
@@ -129,8 +119,9 @@ _MAX = {"cod_partener": 50}
 _TIP = "1"
 
 
-class _Refused(ValueError):
-    """A request the operator can fix; the message is Romanian and goes to the `error` field."""
+# A request the operator can fix; the message is Romanian and goes to the `error` field.
+# The link rules (partner_links) refuse with the same class.
+_Refused = partner_links.LinkRefused
 
 
 def _json_utf8(payload, status):
@@ -196,18 +187,7 @@ def get_parteneri():
         unit_cf, bic = _comun_lookups(db_name)
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor(dictionary=True, buffered=True)
-        cursor.execute(_SQL_CODES)
-        codes = {}
-        for r in cursor.fetchall():
-            codes.setdefault(int(r["IdPartener"]), []).append({
-                "id": int(r["IdPartenerAng"]),
-                "id_clsf": int(r["IdClsf"]),
-                "clsf": _text(r["Clsf"]),
-                "denumire_clsf": _text(r["Denumire"]),
-                "cont_bancar": _text(r["ContBancar"]),
-                "cod_ang": _text(r["CodAng"]),
-                "cod_ind": _text(r["CodInd"]),
-            })
+        codes = partner_links.read_links(cursor)
         cursor.execute(_SQL_PARTNERS)
         rows = []
         seen_cf = set()
@@ -230,7 +210,7 @@ def get_parteneri():
             "tip": _text(r["Tip"]),
             "ascuns": bool(r["Ascuns"]),
             "activ": bool(r["Activ"]),
-            "coduri": codes.get(int(r["IdPartener"]), []),
+            "coduri": codes.get(partner_links.normalize_cui(r["CodFiscal"]), []),
         } for r in rows]
         cursor.execute(_SQL_CLSF)
         clasificatii = [{
@@ -310,37 +290,15 @@ def _save(cursor, body: dict, unit_cf: str, bic: dict) -> int:
         if anaf.normalize_cf(stored["CodFiscal"]) != cf:
             _check_fiscal_code(cursor, cf, id_partener, unit_cf)
         cursor.execute(_SQL_UPDATE, (*values, id_partener))
-        cursor.execute(_SQL_CODE_REFRESH, (cod, id_partener))
     else:
         _check_fiscal_code(cursor, cf, None, unit_cf)
         id_unitate = _unit_for_new(cursor, _text(partner.get("ss")))
         cursor.execute(_SQL_INSERT, (id_unitate, *values))
         id_partener = int(cursor.lastrowid)
 
-    deleted = body.get("coduri_sterse") or []
-    if not isinstance(deleted, list):
-        raise _Refused("Lista codurilor șterse nu are forma așteptată.")
-    for raw_id in deleted:
-        cursor.execute(_SQL_CODE_DELETE, (int(raw_id), id_partener))
-
-    codes = body.get("coduri") or []
-    if not isinstance(codes, list):
-        raise _Refused("Lista codurilor de angajament nu are forma așteptată.")
-    for index, row in enumerate(codes, start=1):
-        if not isinstance(row, dict):
-            raise _Refused(f"Rândul {index} al codurilor nu are forma așteptată.")
-        try:
-            id_clsf = int(row.get("id_clsf"))
-        except (TypeError, ValueError):
-            raise _Refused(f"Rândul {index} al codurilor: alegeți clasificația.")
-        cont = _field(row, "cont_bancar", "Cont bancar asociat")
-        cod_ang = _field(row, "cod_ang", "Cod ang.")
-        cod_ind = _field(row, "cod_ind", "Cod ind.")
-        row_id = row.get("id")
-        if row_id:
-            cursor.execute(_SQL_CODE_UPDATE, (cod, id_clsf, cont, cod_ang, cod_ind, int(row_id), id_partener))
-        else:
-            cursor.execute(_SQL_CODE_INSERT, (id_partener, cod, id_clsf, cont, cod_ang, cod_ind))
+    # The codes belong to the supplier's CodFiscal, as saved now (partner_links.py).
+    partner_links.save_codes(cursor, partner_links.normalize_cui(cod_fiscal), body.get("coduri") or [],
+                             body.get("coduri_sterse") or [], body.get("legaturi_sterse") or [])
     return id_partener
 
 
@@ -372,8 +330,8 @@ def post_partener():
         _rollback(conn)
         if e.errno == 1062:
             text = str(e)
-            if "idx_partener_clsf" in text:
-                message = "Aceeași clasificație apare de două ori în codurile partenerului."
+            if "Parteneri_Angajamente" in text:
+                message = "Același cod de angajament apare de două ori în codurile partenerului."
             else:
                 message = "Există deja un partener cu acest cod în unitate."
             return _json_utf8({"error": message}, 409)

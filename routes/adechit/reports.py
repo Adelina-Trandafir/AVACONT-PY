@@ -132,7 +132,7 @@ def _situation_table(rows):
 
 def _situation_totals(rows, label):
     sums = [num(sum((r.get(key) or 0) for r in rows)) if summed else '' for key, _, _, _, _, summed in SITUATION_COLUMNS[2:]]
-    return {'cells': ['', {'t': label, 'span': 2}, *sums], 'cls': 'total'}
+    return {'cells': ['', {'t': label, 'span': 2}, *sums], 'cls': 'grand' if label == 'TOTAL GENERAL' else 'total'}
 
 
 def situation_report(repo, unit, args):
@@ -158,7 +158,9 @@ def situation_report(repo, unit, args):
     if not split:
         rows = sorted(rows, key=lambda r: collate(r.get('Nume')))
         columns, body = _situation_table(rows)
-        body.append(_situation_totals(rows, 'TOTAL GENERAL'))
+        groups = {row.get('IDG') for row in rows}
+        total_label = 'TOTAL GENERAL' if len(groups) > 1 else f"TOTAL {rows[0].get('Grupa') or ''}"
+        body.append(_situation_totals(rows, total_label))
         blocks = [*head, {'t': 'text', 'text': 'TOATE GRUPELE', 'align': 'center', 'bold': True},
                   {'t': 'table', 'cols': columns, 'rows': body}]
         return model('Situație lunară - toate grupele', 'Situatie_lunara_toate', blocks, landscape=True, font=7.5)
@@ -174,7 +176,8 @@ def situation_report(repo, unit, args):
             blocks.append({'t': 'break'})
         blocks += [*head, {'t': 'text', 'text': banner(members[0]), 'align': 'center', 'bold': True},
                    {'t': 'table', 'cols': columns, 'rows': body}]
-    blocks.append({'t': 'table', 'cols': _situation_table([])[0], 'head': False, 'rows': [_situation_totals(rows, 'TOTAL GENERAL')]})
+    if len(ordered) > 1:
+        blocks[-1]['rows'].append(_situation_totals(rows, 'TOTAL GENERAL'))
     return model('Situație lunară - grupe separate', 'Situatie_lunara_grupe', blocks, landscape=True, font=7.5)
 
 

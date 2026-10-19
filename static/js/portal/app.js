@@ -13,13 +13,13 @@
 // and Ordonantari (the ORD documents and the CAB correction notes).
 
 import { Combobox } from '../components/combobox/combobox.js';
-import { DataGrid } from '../dgv/datagrid.js';
 import { TreeView } from '../components/treeview/treeview.js';
 import { createPdfView } from './pdfview.js';
 import { createClasificatiiPage } from './clasificatii.js';
 import { createParteneriPage } from './parteneri.js';
 import { createExtrasePage } from './extrase.js';
-import { columnsOf } from './columns.js';
+import { TABS, DOC_TABS, makeGrid } from './cards.js';
+import { applyPortalAccess, canOpenTab, isAccountant } from './access.js';
 import { buildTabTree, hasTree, ROOT } from './tabtrees.js';
 import { createExtraseCard } from './extrasecard.js';
 
@@ -42,11 +42,6 @@ function statusMark(stare) {
   const norm = String(stare || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const hit = STATUS_MARKS.find(([token]) => norm.includes(token));
   return hit ? hit[1] : '⚪';
-}
-
-/** Row height of the grids (group bands included): tight, tighter still on a phone. */
-function gridRowHeight() {
-  return window.matchMedia('(max-width: 900px)').matches ? 20 : 23;
 }
 
 const nameCmp = new Intl.Collator('ro', { sensitivity: 'base', numeric: true });
@@ -86,91 +81,13 @@ function angajamentNode(row) {
   };
 }
 
-// The cards whose data is one list of rows. `grid` is the id of the grid in columns.js (its columns and
-// its saved layout). No card groups its rows by date any more: on a computer the tree does that job.
-const TABS = {
-  sumar: {
-    path: 'sumar',
-    rows: (d) => d.rows || [],
-    grid: 'ang.sumar',
-    options: { frozen: 1, footer: true, footerCaption: '{0} indicatori' },
-  },
-  istoric: {
-    path: 'istoric',
-    rows: (d) => d.randuri || [],
-    grid: 'ang.istoric',
-    options: { footer: true, footerCaption: '{0} rânduri' },
-  },
-  rezervari: {
-    path: 'rezervari',
-    rows: (d) => d.rows || [],
-    grid: 'ang.rezervari',
-    options: { footer: true, footerCaption: '{0} rezervări' },
-  },
-  receptii: {
-    path: 'receptii',
-    rows: (d) => d.receptii || [],
-    grid: 'ang.receptii',
-    options: { footer: true, footerCaption: '{0} rânduri' },
-  },
-  extrase: {
-    path: 'extrase',
-    // the operations of the angajament; the statement's date and classification come from its header
-    rows: (d) => {
-      const heads = new Map((d.antete || []).map((a) => [a.idexh, a]));
-      return (d.operatiuni || []).map((o) => {
-        const a = heads.get(o.idfxh) || {};
-        return { ...o, clsf: a.clsf || '', data_extras: a.data_extras || null };
-      });
-    },
-    grid: 'ang.extrase',
-    options: { footer: true, footerCaption: '{0} operațiuni' },
-  },
-  plati: {
-    path: 'plati',
-    rows: (d) => d.plati || [],
-    grid: 'ang.plati',
-    options: { footer: true, footerCaption: '{0} plăți' },
-  },
-};
-
-// The cards of signed documents (slice 0110-10): the lines of the documents in a grid, the chosen one's
-// PDF under it. grid / listGrid are ids in columns.js: the lines, and (phone only) the list of documents.
-const DOC_TABS = {
-  fundamentari: {
-    grid: 'ang.fundamentari',
-    listGrid: 'ang.fundamentari-lista',
-    emptyLines: 'Nu există linii de fundamentare.',
-    emptyList: 'Angajamentul nu are fundamentări.',
-    none: 'Angajamentul nu are documente de fundamentare.',
-    pick: 'Alegeți o revizie din arbore ca să-i vedeți documentul.',
-    pickList: 'Alegeți o revizie din listă.',
-  },
-  ordonantari: {
-    grid: 'ang.ordonantari',
-    listGrid: 'ang.ordonantari-lista',
-    emptyLines: 'Nu există linii de ordonanțare.',
-    emptyList: 'Angajamentul nu are ordonanțări sau note de corecție.',
-    none: 'Angajamentul nu are ordonanțări sau note de corecție CAB.',
-    pick: 'Alegeți o ordonanțare sau o notă din arbore ca să-i vedeți documentul.',
-    pickList: 'Alegeți un document din listă.',
-  },
-};
-
-/** A grid in a host element: its columns and saved layout come from the catalog by id. */
-function makeGrid(host, id, extra = {}) {
-  return new DataGrid($(host), {
-    columns: columnsOf(id), layoutId: id, rowHeight: gridRowHeight(), ...extra,
-  });
-}
-
 // ---------------------------------------------------------------- the page
 /**
  * @param {{call: Function, callBytes: Function, onUnauthorized: Function}} deps
  *   call(method, path, body) -> {ok, status, data}, as in portal.js;
  *   callBytes(path) -> the same, with the raw bytes (ArrayBuffer) as `data` when ok.
  */
-export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
+export function createApp({ call, callBytes, onUnauthorized, onUnitOpened, onAccessChanged }) {
   let me = null;
   let unitCombo = null;
   let anCombo = null;
@@ -322,9 +239,13 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
     me.role = r.data.role;
     me.periods = r.data.periods;
     me.sections = r.data.sections;
+    treeSeq += 1;
+    if (!isAccountant(me.role)) closePage();
+    tab = applyPortalAccess(me.role, tab);
+    if (onAccessChanged) onAccessChanged(me.role);
     if (onUnitOpened) onUnitOpened();
     cache.clear();
-    resetSelection();
+    await resetSelection();
     fillPeriods();
     if (activePage) await pages[activePage].reload();
     else await loadTree();
@@ -354,7 +275,8 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
       return;
     }
     cache.clear();
-    resetSelection();
+    await resetSelection();
+    if (mine !== treeSeq) return;
     treeRows = r.data.rows;
     rowsByCod.clear();
     treeRows.forEach((row) => rowsByCod.set(String(row.CodAngajament), row));
@@ -411,7 +333,8 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
     paintTree();
   }
 
-  function resetSelection() {
+  async function resetSelection() {
+    tabSeq += 1;
     picked = null;
     $('card-app').classList.remove('is-detail');
     if (treeAng) treeAng.clearSelection();
@@ -420,6 +343,8 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
     gridTabKey = '';
     rowsState = null;
     docState = null;
+    pendingDoc = null;
+    nodeLines = [];
     treeMode = '';
     if (extCard) extCard.destroy();
     if (treeTab) {
@@ -429,6 +354,9 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
     if (gridLines) gridLines.setRows([]);
     if (gridDocs) gridDocs.setRows([]);
     if (detailUpdate) detailUpdate(null);
+    await clearViewer();
+    showPane('grid', false);
+    setupDetail('');
   }
 
   // ------------------------------------------------------------ one angajament
@@ -442,6 +370,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
 
   function switchTab(name) {
     if (!TABS[name] && !DOC_TABS[name]) throw new Error(`Unknown tab: ${name}`);
+    if (!canOpenTab(me?.role, name)) return;
     tab = name;
     document.querySelectorAll('.pa__tabs button[data-tab]').forEach((b) => {
       const on = b.dataset.tab === name;
@@ -622,6 +551,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
 
   /** The data of a card: the rows of a row card; the answers of the routes of a document card. Null when the read failed. */
   async function fetchTab(name, cod) {
+    if (!canOpenTab(me?.role, name)) return null;
     const q = encodeURIComponent(cod);
     if (TABS[name]) {
       const r = await call('GET', `/api/portal/date/${TABS[name].path}?cod=${q}`);
@@ -641,7 +571,11 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
       }
       return r.data;
     }
-    const [ord, note] = await Promise.all(['ord', 'note'].map((n) => call('GET', `/api/portal/date/${n}?cod=${q}`)));
+    const [ord, note] = await Promise.all([
+      call('GET', `/api/portal/date/ord?cod=${q}`),
+      isAccountant(me.role) ? call('GET', `/api/portal/date/note?cod=${q}`)
+        : Promise.resolve({ ok: true, data: { note: [] } }),
+    ]);
     const bad = [ord, note].find((r) => !r.ok);
     if (bad) {
       fail(bad, 'Documentele nu au putut fi citite.');
@@ -651,7 +585,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
   }
 
   async function loadTab() {
-    if (!picked) return;
+    if (!picked || !canOpenTab(me?.role, tab)) return;
     say('');
     const isDoc = !!DOC_TABS[tab];
     const key = `${picked.CodAngajament}|${tab}`;
@@ -1029,6 +963,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
 
   async function openPage(name) {
     if (!pageMakers[name]) throw new Error(`Unknown page: ${name}`);
+    if (!isAccountant(me?.role)) return;
     if (!me || !me.db_name) {
       say('Alegeți mai întâi unitatea.');
       return;
@@ -1046,10 +981,14 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened }) {
     /** Shows the page for the account `meData` ({email, units, db_name, role, periods}). */
     async open(meData) {
       me = meData;
+      treeSeq += 1;
       ensureWidgets();
+      closePage();
+      tab = applyPortalAccess(me.role, tab);
+      if (onAccessChanged) onAccessChanged(me.role);
       say('');
       cache.clear();
-      resetSelection();
+      await resetSelection();
       setOptions(unitCombo, unitItems(), me.db_name);
       if (me.db_name) {
         fillPeriods();

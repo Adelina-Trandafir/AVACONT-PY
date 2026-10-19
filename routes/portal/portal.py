@@ -418,6 +418,8 @@ def portal_me():
         return refusal
     try:
         units = _user_units(note["email"])
+        active_unit = next((u for u in units if u["DC"] == note.get("db_name")), None)
+        note["role"] = active_unit["Rol"] if active_unit else None
         periods = _unit_periods(note["db_name"]) if note.get("db_name") else []
         sections = drepturi.sections_of(note["email"], note.get("db_name"))
         operations = {k: sorted(drepturi.operations_of(note["email"], note.get("db_name"), k)) for k in sections}

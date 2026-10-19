@@ -1,0 +1,12 @@
+/* Manual recovery of migrated lines, scoped to its dialog. */
+.vc-orphan-storno .vc-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: center;
+  margin-top: 12px;
+}
+.vc-orphan-storno .vc-grid > p { overflow-wrap: anywhere; }
+.vc-orphan-storno > footer { flex-wrap: wrap; }
+.vc-orphan-storno [role="status"] { overflow-wrap: anywhere; }
+@media (max-width: 650px) {
+  .vc-orphan-storno .vc-grid { grid-template-columns: minmax(0, 1fr); }
+}

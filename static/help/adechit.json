@@ -16,6 +16,7 @@
           "Listați sau descărcați **rapoartele** ([vezi Rapoarte](#rapoarte))."
         ]},
         {"note": "Cât timp nu ați ales luna și grupa, tabelul copiilor este gol. Este normal: alegeți mai întâi luna, apoi grupa."},
+        {"p": "Notificarea de eroare de sub antet se șterge și se ascunde la următoarea acțiune: clic, tastare, schimbarea unei valori sau trimiterea unui formular. Dacă noua acțiune eșuează, apare mesajul ei. Simpla deplasare a mouse-ului nu ascunde eroarea.", "slice": "ADE9-08"},
         {"h": "Butonul ? și acest ajutor", "id": "start-ajutor"},
         {"p": "Butonul **?** din bara de sus, lângă butonul de meniu, deschide acest ajutor. În stânga este cuprinsul; apăsați un titlu ca să mergeți direct la el. Din bara ferestrei puteți **Imprima** ajutorul sau îl puteți **exporta în PDF**."}
       ]
@@ -117,7 +118,7 @@
         {"h": "Chitanța: listare și PDF", "id": "incasari-chitanta"},
         {"p": "Pe calculator, butonul **📥** de pe rândul unei chitanțe deschide un meniu:"},
         {"ul": [
-          "**Listare** — deschide o fereastră cu două exemplare și dialogul de imprimare al browserului.",
+          "**Listare** — deschide chitanța cu două exemplare în previzualizarea PDF comună. Apăsați **Tipărește** sau **Alege imprimanta** pentru imprimare.",
           "**Trimitere pe mail** — apare doar dacă plătitorul are email, dar nu este încă disponibilă.",
           "**Descarcă PDF** — descarcă aceeași chitanță."
         ]},
@@ -201,10 +202,10 @@
     },
     {
       "id": "rapoarte",
-      "slice": "ADE9-04",
+      "slice": "ADE9-09",
       "title": "Rapoarte",
       "blocks": [
-        {"p": "Panoul **RAPOARTE** din dreapta ecranului listează sau descarcă în PDF situații pe luna, grupa sau copilul alese. Rapoartele doar citesc datele: nu emit numere și nu schimbă situația."},
+        {"p": "Panoul **RAPOARTE** din dreapta ecranului listează sau descarcă în PDF situații pe luna, grupa sau copilul alese. Rapoartele doar citesc datele: nu emit numere și nu schimbă situația. Butoanele au același stil ca în VERCON, cu bordură și umbră la trecerea mouse-ului sau la selectarea din tastatură; comenzile indisponibile sunt estompate."},
         {"table": {
           "head": ["Raport", "Ce conține", "Ce alegeți"],
           "rows": [
@@ -221,9 +222,11 @@
         {"p": "**Situație de plată** calculează: **sold inițial debit + zilele configurate ale lunii × taxa zilnică a lunii − sold inițial credit**. Taxa este pentru luna integrală, indiferent de zilele de prezență. Dacă bifați **Toate grupele?**, fiecare grupă începe pe pagină nouă, fără să fie necesară bifa **Separă grupe?**. O sumă negativă indică bani rămași în cont după acoperirea taxei lunare."},
         {"p": "Din **meniu → Text situație de plată**, utilizatorii cu dreptul **Catalog** configurează textul pentru subunitatea curentă. Selectați text și folosiți butoanele pentru aldine, cursive, subliniere, liste, aliniere, font, mărime și culoare. **Editează sursa HTML** permite introducerea HTML-ului simplu. Lipirea în editor adaugă text simplu; pentru formatare HTML folosiți modul sursă. La sfârșit apăsați **Salvează și închide**."},
         {"p": "Variabilele **[UNITATE]**, **[CONT]**, **[COD_FISCAL]**, **[GRUPA]**, **[LUNA]** și **[AN]** se completează în fiecare raport. **[CONT]** folosește primul cont al unității; pentru un alt cont scrieți direct IBAN-ul dorit. Textul se repetă sub tabelul fiecărei grupe, cu formatare în listare și PDF. În Excel se exportă ca text simplu. Scripturile, imaginile și linkurile nu sunt incluse în raport."},
+        {"p": "Titlul, etichetele și datele din panoul Rapoarte folosesc un text cu 2pt mai mic; textul butoanelor își păstrează dimensiunea.", "slice": "ADE9-09"},
         {"h": "Pe ecran, la imprimantă sau în PDF", "id": "rapoarte-iesire"},
-        {"p": "Raportul se deschide într-o fereastră nouă, cu butoane pentru **Listare**, **Selecție imprimantă**, **Export PDF**, micșorare și mărire (doar pe ecran) și **Înapoi**. Pe ecran, raportul urmărește tema luminoasă sau întunecată; la imprimantă și în PDF, rămâne pe alb. Fereastra raportului se închide singură dacă treceți pe altă filă a browserului."},
-        {"note": "Dacă browserul blochează fereastra raportului, permiteți ferestrele popup pentru această pagină."}
+        {"p": "Fereastra apare imediat, cu mesajul **Se pregătește raportul…** și indicator de încărcare. Până la rezultat sau eroare nu poate porni alt raport ori export în aceeași pagină; clicurile repetate nu adaugă solicitări. La previzualizare, încărcarea dispare când prima pagină este afișată. La descărcare, fereastra se închide când fișierul este pregătit și trimis browserului. Erorile apar în fereastra raportului. Dacă închideți fereastra în timpul pregătirii, așteptați terminarea cererii înainte să porniți alta.", "slice": "ADE9-07"},
+        {"p": "Raportul se deschide în aplicație, în aceeași previzualizare PDF ca în VERCON: **Tipărește**, **Alege imprimanta**, **Descarcă PDF**, zoom, **Potrivește lățimea**, **100 %**, navigare între pagini și **Închide**. Documentul afișat este PDF-ul folosit la tipărire și descărcare. **Export Excel** permite alegerea coloanelor și folosește aceleași date generate ca PDF-ul. Pentru date actualizate, închideți și generați din nou raportul."},
+        {"note": "Exportul Excel este disponibil timp de 10 minute de la generare. Dacă previzualizarea a expirat, închideți și generați din nou raportul. La schimbarea contextului sau expirarea sesiunii, previzualizările se închid."}
       ]
     },
     {

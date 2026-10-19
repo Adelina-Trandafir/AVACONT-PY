@@ -153,6 +153,8 @@ def list_documents(cursor, ctx, family):
                 (s, g, e, 1 if family == 'br' else 0))
     return [{'id': r['IdBonConsum'], 'number': r['NumarBC'], 'date': _iso(r['DataBC']), 'total': _money(r['ValoareBC'], scale),
              'receiver_id': r['IDC'], 'receiver': r['Primitor'] or '', 'category_id': r['IdMasina'], 'source': r['IdRetur'],
+             'source_missing': family == 'br' and r['IdRetur'] is None,
+             'source_label': 'Fără bon sursă' if family == 'br' and r['IdRetur'] is None else None,
              'linked': bool(r['Legaturi']), 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows]
 
 
@@ -174,6 +176,11 @@ def get_document(cursor, repo, ctx, family, doc_id):
                           'Cant': _money(r['Cant'], scale), 'Pret': _money(r['Pret'], scale), 'IDTVA': r['IDTVA'], 'PUTVA': _money(r['PUTVA'], scale),
                           'Valoare': _money(r['Valoare'], scale), 'TVA': _money(r['TVA'], scale), 'ValoareCUTVA': _money(r['ValoareCUTVA'], scale),
                           'data_intrarii': _iso(r['DataIntrare']), 'DNF': r['DNF'], 'DF': r['DF'], 'ValoareLuna': _money(r['ValoareLuna'], scale)} for r in lines]
+            from .receipt_mf_edit import annotate
+            annotate(cursor, ctx, out_lines)
+            from .receipt_adjustment import annotate as annotate_adjustment
+            stock_day = h['DataFc'] or h['Data']
+            annotate_adjustment(cursor, ctx, out_lines, stock_day.date() if hasattr(stock_day, 'date') else stock_day)
         else:
             lines = _all(cursor, 'SELECT s.ID, s.IdProdus, pr.DenumireP, pr.UM, s.Cant, s.PUTVA FROM VC_IntrariStorno s ' + _name_join('s') +
                                  ' WHERE s.SubunitId=%s AND s.GestiuneId=%s AND s.ExercitiuId=%s AND s.IdIntrare=%s ORDER BY s.ID', (s, g, e, doc_id))
@@ -215,10 +222,14 @@ def get_document(cursor, repo, ctx, family, doc_id):
                           'PUTVA': _money(r['PUTVA'], scale), 'ValoareCUTVA': _money(value, scale)})
     client = _one(cursor, 'SELECT Denumire FROM VC_Clienti WHERE SubunitId=%s AND GestiuneId=%s AND IDC=%s', (s, g, h['IDC'])) if h['IDC'] else None
     linked = _one(cursor, 'SELECT COUNT(*) AS n FROM VC_LegBCLA WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s', (s, g, e, doc_id))
+    source = _one(cursor, 'SELECT NumarBC FROM VC_Iesiri_H WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s',
+                  (s, g, e, h['IdRetur'])) if family == 'br' and h['IdRetur'] is not None else None
+    source_missing = family == 'br' and h['IdRetur'] is None
     return {'family': family, 'id': doc_id, 'version': h['Version'], 'annulled': bool(h['Anulat']), 'reason': h['MotivAnulare'], 'annulled_by': h['AnulatDe'],
-            'number': h['NumarBC'], 'linked': bool(linked['n']),
+            'number': h['NumarBC'], 'linked': bool(linked['n']), 'source_missing': source_missing,
             'header': {'IDC': h['IDC'], 'receiver': client['Denumire'] if client else None, 'IdMasina': h['IdMasina'], 'Data': _iso(h['DataBC']),
-                       'Expl': h['Expl'], 'Valoare': _money(h['ValoareBC'], scale), 'source': h['IdRetur']},
+                       'Expl': h['Expl'], 'Valoare': _money(h['ValoareBC'], scale), 'source': h['IdRetur'],
+                       'source_label': 'Fără bon sursă' if source_missing else 'BC %s' % source['NumarBC'] if source else None},
             'lines': out_lines}
 
 
@@ -347,7 +358,9 @@ def _guard_dependents(cursor, ctx, family, doc_id, action):
     if family == 'nir':
         if _one(cursor, 'SELECT 1 FROM VC_NIR WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdStorno=%s AND Anulat=0 LIMIT 1', (s, g, e, doc_id)):
             raise NomError('HAS_STORNO', 'Recepția are storno: anulați mai întâi storno-ul, apoi puteți modifica sau anula recepția.', 409)
-        if _one(cursor, 'SELECT 1 FROM VC_Intrari i JOIN VC_ProduseP p ON p.SubunitId=i.SubunitId AND p.GestiuneId=i.GestiuneId AND p.IdProdus=i.IdProdus '
+        # Edits protect issued MF rows in _clean_nir and retain stock for all exits
+        # through simulate/check_timeline. Registry use alone cannot block a free unit.
+        if action != 'edit' and _one(cursor, 'SELECT 1 FROM VC_Intrari i JOIN VC_ProduseP p ON p.SubunitId=i.SubunitId AND p.GestiuneId=i.GestiuneId AND p.IdProdus=i.IdProdus '
                         'WHERE i.SubunitId=%s AND i.GestiuneId=%s AND i.ExercitiuId=%s AND i.IdIntrare=%s AND (EXISTS (SELECT 1 FROM VC_OI_Predare x WHERE x.SubunitId=p.SubunitId AND x.GestiuneId=p.GestiuneId AND x.IdProdus=p.IdProdus AND x.Anulat=0) '
                         'OR EXISTS (SELECT 1 FROM VC_OI_Transfer x WHERE x.SubunitId=p.SubunitId AND x.GestiuneId=p.GestiuneId AND x.IdProdus=p.IdProdus AND x.Anulat=0) '
                         'OR EXISTS (SELECT 1 FROM VC_OI_Casare x WHERE x.SubunitId=p.SubunitId AND x.GestiuneId=p.GestiuneId AND x.IdProdus=p.IdProdus AND x.Anulat=0)) LIMIT 1', (s, g, e, doc_id)):
@@ -713,6 +726,9 @@ def create_br(cursor, repo, ctx, exercise, body, request_key, request_id):
 
 def edit_br(cursor, repo, ctx, exercise, doc_id, body, request_id):
     table, pk, before = _load_for_write(repo, ctx, 'br', doc_id, body.get('version'))
+    if before['IdRetur'] is None:
+        message = 'Returul nu are bon sursă. Asociați-l mai întâi cu un bon de consum, apoi îl puteți modifica.'
+        raise NomError('SOURCE_REQUIRED', message, 422, {'source': message})
     source = _source_bc(repo, before['IdRetur'])
     header = body.get('header') if isinstance(body.get('header'), dict) else {}
     errors = {}

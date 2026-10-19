@@ -1,4 +1,5 @@
 // ComboTree owns keyboard focus separately from the shared TreeView behavior.
+import { layoutRect } from '../../utils/layout-geometry.js';
 export function configureComboTreeKeyboard(combo) {
   const tree = combo.treeContainer;
   tree.tabIndex = -1;
@@ -29,7 +30,7 @@ export function configureComboTreeKeyboard(combo) {
     const row = tree.querySelector(`.treeview-item[data-index="${combo.highlightedIndex}"]`);
     if (row) {
       tree.setAttribute('aria-activedescendant', row.id);
-      const bounds = tree.getBoundingClientRect(), target = row.getBoundingClientRect();
+      const bounds = layoutRect(tree), target = layoutRect(row);
       const top = bounds.top + tree.clientTop, bottom = top + tree.clientHeight;
       // Follow each key immediately and scroll only the node list, not the page.
       if (target.top < top) tree.scrollTop -= top - target.top;

@@ -1,4 +1,5 @@
 .ade-grid { min-height: 0; overflow: hidden; }
+#ade-grid .dgv__row.is-debtor .dgv__cell[data-key="TotalLuna"] { color: #d32f2f; font-weight: 700; }
 .ade-grid .dgv__cell[data-key="ZilePrezenta"] { font-weight: 800; background: var(--sky-1); }
 .ade-ledger { min-height: 0; display: grid; grid-template-rows: var(--ade-head-h) minmax(0,1fr); overflow: hidden; }
 .ade-tablist { display: flex; align-items: end; gap: 1px; padding: 3px 6px 0; border-bottom: 1px solid var(--line); background: var(--sky-1); }

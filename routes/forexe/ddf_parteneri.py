@@ -42,7 +42,7 @@ from routes.auth.guard import require_session
 from routes.inregistrare import anaf
 from utils.database import get_kbot_connection
 
-from . import forexe_bp
+from . import forexe_bp, partner_links
 
 logger = logging.getLogger(__name__)
 
@@ -173,12 +173,15 @@ def citeste_parteneri(cursor, db_name: str, iddf: int, part_ang, antet_cf, antet
 
 
 def sincronizeaza_parteneri(cursor, db_name: str, iddf: int, parteneri,
-                            part_ang, antet_cf, antet_nume) -> dict:
+                            part_ang, antet_cf, antet_nume, cod_angajament=None) -> dict:
     """Makes the table hold EXACTLY `parteneri` (plus the header partner, which is always a
     row). The editor's save: the list the operator saw is the list that is stored.
 
     `parteneri` None = the client did not send the list (an older build): nothing is touched.
     Raises `ParteneriInvalizi` when a second partner needs a table the database does not have.
+
+    `cod_angajament` (slice 0121-04): when given, every partner stored is also linked to that angajament, with its indicators,
+    when the link is missing (partner_links.ensure_for_partners; insert only).
     """
     if parteneri is None:
         return {"adaugati": 0, "stersi": 0, "actualizati": 0}
@@ -192,6 +195,8 @@ def sincronizeaza_parteneri(cursor, db_name: str, iddf: int, parteneri,
     if not tabela_prezenta(cursor, db_name):
         if any(c != antet_cheie for c, _, _ in dorite):
             raise ParteneriInvalizi(_mesaj_tabela_lipsa())
+        if cod_angajament:
+            partner_links.ensure_for_partners(cursor, db_name, cod_angajament, [cod for _, cod, _ in dorite])
         return {"adaugati": 0, "stersi": 0, "actualizati": 0}
 
     cursor.execute(_SQL_LISTA, (iddf,))
@@ -222,12 +227,16 @@ def sincronizeaza_parteneri(cursor, db_name: str, iddf: int, parteneri,
         elif _txt(r.get("CodFiscal")) != cod or _txt(r.get("NumePartener")) != nume:
             cursor.execute(_SQL_UPDATE, (cod, nume or None, int(r["IdDdfPartener"])))
             actualizati += 1
+    if cod_angajament:
+        partner_links.ensure_for_partners(cursor, db_name, cod_angajament, [cod for _, cod, _ in dorite])
     return {"adaugati": adaugati, "stersi": len(de_sters), "actualizati": actualizati}
 
 
-def adauga_parteneri(cursor, db_name: str, iddf: int, parteneri, part_ang, antet_cf, antet_nume) -> int:
+def adauga_parteneri(cursor, db_name: str, iddf: int, parteneri, part_ang, antet_cf, antet_nume,
+                     cod_angajament=None) -> int:
     """ADD ONLY (the Sumar button): inserts the partners the document does not have yet, and
-    the header partner when its row is missing. Returns how many rows were added."""
+    the header partner when its row is missing. Returns how many rows were added.
+    `cod_angajament` (slice 0121-04): the partners named are also linked to that angajament (insert only)."""
     if not tabela_prezenta(cursor, db_name):
         raise ParteneriInvalizi(_mesaj_tabela_lipsa())
 
@@ -248,6 +257,8 @@ def adauga_parteneri(cursor, db_name: str, iddf: int, parteneri, part_ang, antet
         cheile.add(cheie)
         cursor.execute(_SQL_INSERT, (iddf, cod, nume or None))
         adaugati += 1
+    if cod_angajament:
+        partner_links.ensure_for_partners(cursor, db_name, cod_angajament, [cod for _, cod, _ in de_adaugat])
     return adaugati
 
 
@@ -327,7 +338,7 @@ def post_ddf_parteneri_asociati():
         adaugati = adauga_parteneri(
             cursor, db_name, int(rand["IDDF"]),
             [{"cod_fiscal": c, "nume_partener": n} for _, c, n in parteneri],
-            rand.get("PartAng"), rand.get("CodFiscal"), rand.get("NumePartener"))
+            rand.get("PartAng"), rand.get("CodFiscal"), rand.get("NumePartener"), cod_angajament=cod)
         conn.commit()
 
         raspuns = _raspuns(cursor, db_name, rand)

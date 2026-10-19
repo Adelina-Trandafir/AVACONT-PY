@@ -22,7 +22,7 @@ add('Fisa_Produsului', 'product')
 add('Stoc_Final', 'final')
 add('LISTA_INVENTAR', 'inventory')
 add('Fisa_Magazie|FM1-u|FM2', 'statement', variant_required=True)
-add('Fisa_Magazie_BF', 'statement', variant_required=True, supplier_required=True)
+add('Fisa_Magazie_BF', 'statement', variant_required=True)
 add('OI_Balanta', 'balance', ('OI',), 'Obiecte de inventar', ledger='custody')
 add('MF_Balanta|MF_Balanta_Subinv', 'balance', ('MF',), 'Mijloace fixe', ledger='custody')
 add('OI_LISTA_INVENTAR|MF_LISTA_INVENTAR', 'inventory', ('OI', 'MF'),
@@ -38,9 +38,9 @@ add('OI_Fisa_Evidenta|OI_Fisa_Evidenta_Primitori|OI_Fisa_Evidenta_Produse',
 add('Amortizare', 'depreciation', ('MF',), 'Mijloace fixe')
 add('NIR|NIR_SFP', 'documents', family='nir', group='Recepții')
 CATALOG['nir_sfp']['types'] = G
-CATALOG['nir']['document_required'] = True
+CATALOG['nir']['include_storno'] = True
 add('NIR_Storno', 'documents', family='storno', group='Recepții', document_required=True)
-add('Bon_Consum', 'documents', G, 'Consumuri', family='bc')
+add('Bon_Consum', 'documents', G, 'Consumuri', family='bc', outgoing_selection=True, include_returns=True, document_options=True)
 add('BUConsum|BUConsum_F|BUConsum_F1', 'documents', G, 'Consumuri', family='bc', document_required=True)
 add('BonRetur', 'documents', G, 'Consumuri', family='br', document_required=True)
 for prefix, types in (('OI', ('OI',)), ('MF', ('MF',))):
@@ -50,22 +50,28 @@ for name, family in (('OI_Predare', 'bp'), ('OI_Transfer', 'bt'), ('OI_Casare', 
     add(name, 'documents', ('OI', 'MF'), 'Bonuri OI / MF', family=family, document_required=True)
 for suffix, family in (('BP', 'bp'), ('BT', 'bt'), ('BS', 'bs')):
     add(f'Centralizator_OI_Bon_{suffix}', 'document_summary', ('OI',), 'Centralizatoare OI', family=family)
-add('Centralizator_BC', 'document_summary', G, 'Centralizatoare', family='bc')
+add('Centralizator_BC', 'document_summary', G, 'Centralizatoare', family='bc', outgoing_selection=True, receiver_options=True)
 add('Consumuri_Produs', 'consumption', G, 'Centralizatoare', grouping=('name', 'variant', 'receiver'))
 add('Consumuri_Unitati', 'consumption', G, 'Centralizatoare', grouping=('receiver', 'name', 'variant'))
 add('Fisa_Evidenta', 'consumption_sheet', G, 'Centralizatoare')
 add('Centralizator_Conturi_Furnizori', 'receipts_summary', group='Centralizatoare', grouping=('account', 'supplier'))
 add('Centralizator_Furnizori', 'receipts_summary', G, 'Centralizatoare', grouping=('supplier', 'account'))
 add('nou_Furnizori', 'suppliers', group='Recepții')
-add('Nota_Comanda', 'purchases', G, 'Achiziții', grouping=('supplier', 'name', 'um'))
-add('Referat_periodic_Intrari', 'purchases', G, 'Achiziții', grouping=('supplier', 'name', 'um'))
-add('Referat_periodic_produs', 'purchases', group='Achiziții', grouping=('name', 'um'))
-add('Plan_Achizitii|Situatie_Intrari', 'purchases', ('MATERIALE', 'ALIMENTE', 'OI'), 'Achiziții', grouping=('name', 'um', 'cpv'))
+add('Nota_Comanda', 'purchases', G, 'Achiziții', grouping=('supplier', 'name', 'um'), document_options=True)
+add('Referat_periodic_Intrari', 'purchases', G, 'Achiziții', grouping=('supplier', 'name', 'um'), document_options=True)
+add('Referat_periodic_produs', 'purchases', group='Achiziții', grouping=('name', 'um'), document_options=True)
+add('Plan_Achizitii|Situatie_Intrari', 'purchases', ('MATERIALE', 'ALIMENTE', 'OI'), 'Achiziții', grouping=('name', 'um', 'cpv'), document_options=True)
 add('ListaAlimente2015|BC subreport 2013|MicDejun subreport|Dejun subreport|Cina subreport',
     'food', ('ALIMENTE',), 'Alimente', family='lista', document_required=True)
 EXCLUDED = ('Balanta_produse_AFB', 'Balanta_Produse_BF', 'Balanta_produse_furnizor')
 
 for name, label in {
+    'Referat_periodic_produs': 'Referat Periodic',
+    'Referat_periodic_Intrari': 'Referat Periodic',
+    'Centralizator_Furnizori': 'Situație Furnizori',
+    'nou_Furnizori': 'Centralizator Furnizori',
+    'Bon_Consum': 'BONURI',
+    'Centralizator_BC': 'CENTRALIZATOR',
     'OI_Balanta': 'Balanță obiecte de inventar',
     'OI_LISTA_INVENTAR': 'Listă de inventariere pe deținător',
     'OI_LISTA_INVENTAR_TOTAL': 'Listă de inventariere — total produse',
@@ -81,16 +87,20 @@ for name, label in {
 }.items():
     CATALOG[name.casefold()]['label'] = label
 
+for name in ('NIR', 'NIR_SFP', 'NIR_Storno', 'Centralizator_Conturi_Furnizori',
+             'Centralizator_Furnizori', 'nou_Furnizori', 'Nota_Comanda', 'Referat_periodic_Intrari'):
+    CATALOG[name.casefold()]['incoming_selection'] = True
+
 
 def spec_of(name, gest_type):
-    if gest_type not in (*G, 'OI'):
-        raise NomError('FORM_NOT_AVAILABLE', 'Rapoartele MF sunt amânate.', 403)
     spec = CATALOG.get(str(name).casefold())
     if not spec:
         raise NomError('REPORT_UNKNOWN', 'Raportul nu există sau este exclus din portare.', 404)
     if gest_type not in spec['types']:
         raise NomError('FORM_NOT_AVAILABLE', 'Raportul nu este disponibil pentru acest tip de gestiune.', 403)
-    if spec.get('ledger') == 'custody':
+    if spec['kind'] == 'depreciation':
+        filters = ['variant']
+    elif spec.get('ledger') == 'custody':
         filters = ['category', 'variant', 'receiver']
     elif spec.get('family') in ('bp', 'bt', 'bs'):
         filters = ['category', 'variant', 'receiver', 'document']
@@ -102,8 +112,9 @@ def spec_of(name, gest_type):
         filters = ['category', 'variant', 'receiver', 'document']
     else:
         filters = ['category', 'variant', 'supplier', 'document']
-    return {**spec, 'filters': filters}
+    return {**spec, 'filters': filters,
+            'outgoing_filters': spec.get('family') in ('bc', 'br') or spec['kind'].startswith('consumption')}
 
 
 def catalog(gest_type):
-    return [spec for spec in CATALOG.values() if gest_type in (*G, 'OI') and gest_type in spec['types']]
+    return [spec_of(spec['id'], gest_type) for spec in CATALOG.values() if gest_type in spec['types']]

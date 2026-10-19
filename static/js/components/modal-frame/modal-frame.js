@@ -11,6 +11,7 @@
  * caption can also be an existing header element; the frame adds its close button there without moving existing controls.
  */
 import { registerDebugTool } from '../../utils/debug-tools.js';
+import { layoutRect } from '../../utils/layout-geometry.js';
 
 const FOCUSABLE = 'input:not([type="hidden"]):not(:disabled), button:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 const POPUPS = '.combobox-dropdown.visible, .kdp__popup, .ade-receipt-menu, .kmenu-popup';
@@ -43,7 +44,7 @@ export class ModalFrame {
     this.placeholder.setAttribute('aria-hidden', 'true');
     this.placeholder.inert = true;
     this.placeholder.style.visibility = 'hidden';
-    this.placeholder.style.height = `${this.element.getBoundingClientRect().height}px`;
+    this.placeholder.style.height = `${layoutRect(this.element).height}px`;
     this.element.before(this.placeholder);
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'kmodal-backdrop';

@@ -21,6 +21,8 @@
  *   events   onSelect({ item }) after a choice, onBeforeSelect(item) -> false cancels
  *   The active item (or the parent of the active child) is marked aria-current="true".
  */
+import { layoutRect, layoutViewport } from '../../utils/layout-geometry.js';
+
 let closeCurrent = null;
 let currentPopup = null;
 
@@ -30,7 +32,7 @@ export function openMenu(k_anchor, k_entries, { label = 'Meniu', align = 'left',
   const k_bar = k_anchor.closest('.kmenu-bar');
   const k_previousRect = currentPopup && currentPopup.anchor !== k_anchor && k_bar &&
     currentPopup.anchor.closest('.kmenu-bar') === k_bar && currentPopup.menu.isConnected
-    ? currentPopup.menu.getBoundingClientRect() : null;
+    ? layoutRect(currentPopup.menu) : null;
   closeCurrent?.();
   const k_menu = document.createElement('div');
   k_menu.className = `kmenu-popup${iconRight ? ' kmenu-popup--icon-right' : ''}${up ? ' kmenu-popup--up' : ''}`;
@@ -75,22 +77,23 @@ export function openMenu(k_anchor, k_entries, { label = 'Meniu', align = 'left',
     k_menu.style.setProperty('--_menu-min-width', `${dropdownMinWidth}px`);
   }
   k_menu.style.zIndex = String(window.ZIndexManager?.getNext() || 1001);
-  const k_rect = k_anchor.getBoundingClientRect();
+  const k_rect = layoutRect(k_anchor);
+  const k_viewport = layoutViewport();
   const k_barButton = k_anchor.classList.contains('kmenu-item');
   if (k_barButton) {
     k_menu.style.setProperty('--_menu-anchor-width', `${k_rect.width}px`);
     k_menu.classList.add('kmenu-popup--anchored');
   }
-  const k_menuWidth = k_menu.getBoundingClientRect().width;
+  const k_menuWidth = layoutRect(k_menu).width;
   const k_inset = k_barButton ? Math.max(0, (k_rect.width - k_menuWidth) / 2) : 0;
   const k_left = align === 'right' ? k_rect.right - k_inset - k_menuWidth : k_rect.left + k_inset;
   const k_gutter = k_barButton ? 0 : 8;
-  const k_placedLeft = Math.max(k_gutter, Math.min(k_left, innerWidth - k_menu.offsetWidth - k_gutter));
+  const k_placedLeft = Math.max(k_gutter, Math.min(k_left, k_viewport.width - k_menu.offsetWidth - k_gutter));
   k_menu.style.left = `${k_placedLeft}px`;
   // The icon band keeps the same compact CSS width for every popup, independently of its anchor icon.
   // `below`: an element (the header) whose lower edge the menu hangs from, instead of the button's own
-  const k_top = up ? k_rect.top - k_menu.offsetHeight - 2 : (below ? below.getBoundingClientRect().bottom - 1 : k_rect.bottom + (k_barButton ? 0 : 2)); // bar popups touch their button
-  const k_placedTop = Math.max(8, Math.min(k_top, innerHeight - k_menu.offsetHeight - 8));
+  const k_top = up ? k_rect.top - k_menu.offsetHeight - 2 : (below ? layoutRect(below).bottom - 1 : k_rect.bottom + (k_barButton ? 0 : 2)); // bar popups touch their button
+  const k_placedTop = Math.max(8, Math.min(k_top, k_viewport.height - k_menu.offsetHeight - 8));
   k_menu.style.top = `${k_placedTop}px`;
   if (k_barButton && !up && !below && Math.abs(k_placedTop - k_rect.bottom) < .5) {
     const k_joinStart = Math.max(0, Math.min(k_menuWidth, k_rect.left + 1 - k_placedLeft));
@@ -121,7 +124,7 @@ export function openMenu(k_anchor, k_entries, { label = 'Meniu', align = 'left',
   const k_initialClass = k_previousRect ? 'is-moving' : 'is-opening';
   const k_finalClass = k_previousRect ? 'is-positioned' : 'is-revealed';
   if (k_previousRect) {
-    const k_targetRect = k_menu.getBoundingClientRect();
+    const k_targetRect = layoutRect(k_menu);
     for (const [k_name, k_value] of Object.entries({
       '--_menu-from-x': k_previousRect.left - k_targetRect.left,
       '--_menu-from-y': k_previousRect.top - k_targetRect.top,

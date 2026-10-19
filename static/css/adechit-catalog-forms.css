@@ -1,12 +1,12 @@
 /* SLICE-ADE6-06: three catalogs and their uniform modal forms. */
-.ade-payers-window { width: min(1560px, 96vw); height: min(720px, 92vh); }
+.ade-payers-window { width: min(1560px, calc(96 * var(--application-vw, 1vw))); height: min(720px, calc(92 * var(--application-vh, 1vh))); }
 .ade-payers-mobile-action { display: none; }
 .ade-payers-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; min-height: 0; flex: 1; padding: 4px 16px 16px; }
 .ade-list-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--line); }
 .ade-list-grid { flex: 1; min-height: 0; }
 .ade-catalog .ade-list-actions { justify-content: space-between; gap: 12px; padding: 8px; }
-.ade-record-window { width: min(920px, 96vw); }
-.ade-record-window form { display: flex; flex-direction: column; min-height: 0; max-height: 92vh; overflow: hidden; }
+.ade-record-window { width: min(920px, calc(96 * var(--application-vw, 1vw))); }
+.ade-record-window form { display: flex; flex-direction: column; min-height: 0; max-height: calc(92 * var(--application-vh, 1vh)); overflow: hidden; }
 .ade-record-window form > header, .ade-record-window form > footer { flex-shrink: 0; }
 .ade-record-body { display: flex; flex-direction: column; gap: 20px; min-height: 0; padding: 24px; overflow: auto; }
 .ade-record-body > * { flex-shrink: 0; }
@@ -34,13 +34,13 @@
 .ade-educator-grid { height: 250px; }
 .ade-educator-grid .dgv { box-sizing: border-box; }
 .ade-educator-grid .dgv__head { box-sizing: border-box; }
-.ade-record-window[data-kind="group"] { width: min(1120px, 96vw); }
-.ade-record-window[data-kind="compact"] { width: min(460px, 96vw); }
+.ade-record-window[data-kind="group"] { width: min(1120px, calc(96 * var(--application-vw, 1vw))); }
+.ade-record-window[data-kind="compact"] { width: min(460px, calc(96 * var(--application-vw, 1vw))); }
 .ade-record-window[data-kind="compact"] .ade-record-body { gap: 10px; padding: 12px; }
 .ade-record-window[data-kind="compact"] .ade-form-field { grid-template-columns: 140px minmax(0, 1fr); gap: 7px; }
 .ade-record-window[data-kind="compact"] .ade-form-pair { grid-template-columns: 1fr; gap: 10px; }
 @media (max-width: 980px) {
-  .ade-payers-window { width: calc(100vw - 20px); max-width: calc(100vw - 20px); height: calc(100vh - 20px); height: calc(100dvh - 20px); max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); margin: 10px; border: 0; border-radius: 0; overflow: hidden; }
+  .ade-payers-window { width: calc(calc(100 * var(--application-vw, 1vw)) - 20px); max-width: calc(calc(100 * var(--application-vw, 1vw)) - 20px); height: calc(calc(100 * var(--application-vh, 1vh)) - 20px); height: calc(calc(100 * var(--application-dvh, 1dvh)) - 20px); max-height: calc(calc(100 * var(--application-vh, 1vh)) - 20px); max-height: calc(calc(100 * var(--application-dvh, 1dvh)) - 20px); margin: 10px; border: 0; border-radius: 0; overflow: hidden; }
   .ade-payers-window > .ade-catalog-header { flex-direction: row; align-items: center; flex-shrink: 0; min-height: 46px; padding: 0 8px; }
   .ade-payers-window #ade-payers-back { margin-left: auto; color: var(--ade-header-text); background: transparent; border: 0; }
   .ade-payers-window > .msg[role="status"] { display: none !important; }

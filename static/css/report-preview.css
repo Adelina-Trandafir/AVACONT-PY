@@ -1,0 +1,38 @@
+/* Common PDF report control. Application theme tokens are inherited. */
+.confirm-box.report-view { position: fixed; inset: 0; box-sizing: border-box; width: 100%; max-width: none; height: calc(100 * var(--application-vh, 1vh)); height: calc(100 * var(--application-dvh, 1dvh)); max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; display: flex; flex-direction: column; overflow: hidden; }
+.report-view > header, .report-view > footer { flex: 0 0 auto; }
+.report-view > header { display: flex; align-items: center; gap: 12px; font-family: var(--font-ui); font-size: var(--fs-button); }
+.report-view > header h2 { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; font-family: inherit; font-size: inherit; }
+.report-view-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.report-view-pdf { position: relative; flex: 1; min-height: 0; }
+.report-view-toolbar { display: flex; flex: 0 1 auto; min-width: 0; max-width: 100%; margin-left: auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.report-view .report-view-toolbar button { min-width: 32px; min-height: 32px; padding: 4px 8px; display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: inherit; white-space: nowrap; }
+.report-view .kmenu-popup { border-radius: 0; }
+/* Keep popup entries flat instead of inheriting the dialog's rounded button styles. */
+.report-view .kmenu-popup > button { min-width: 0; min-height: 30px; padding: 0; border: 0; border-radius: 0; background: transparent; font: inherit; }
+.report-view-page, .report-view-zoom { padding: 0 6px; font-size: inherit; font-variant-numeric: tabular-nums; }
+.report-view-status:empty { display: none; }
+.report-view > footer:has(.report-view-status:empty) { display: none; }
+.report-file-download { display: none; }
+.report-print-frame { position: fixed; left: -10000px; top: 0; width: 1px; height: 1px; border: 0; }
+.confirm-box.report-columns { width: min(620px, calc(94 * var(--application-vw, 1vw))); max-height: calc(90 * var(--application-vh, 1vh)); }
+.report-columns-content { overflow: auto; padding: 16px; }
+.report-columns-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.report-columns-list label { display: flex; align-items: center; gap: 8px; }
+.report-columns input { accent-color: var(--blue); }
+.report-loading { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; overflow: auto; padding: 24px; background: var(--card); }
+.report-loading-card { display: grid; justify-items: center; gap: 16px; width: min(440px, 100%); padding: 28px; text-align: center; color: var(--ink); background: var(--sky-1); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.report-loading-card h3 { margin: 0; font-size: var(--fs-xl); }
+.report-loading-card p { margin: 0; color: var(--ink-soft); overflow-wrap: anywhere; }
+.report-loading-spinner { box-sizing: border-box; width: 48px; height: 48px; border: 4px solid var(--line); border-top-color: var(--blue); border-radius: 50%; animation: report-loading-spin .85s linear infinite; }
+.report-loading-spinner[hidden] { display: none; }
+.report-loading-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.report-loading--error .report-loading-card { border-color: var(--err-line); background: var(--err-bg); }
+.report-loading--error h3, .report-loading--error p { color: var(--err-ink); }
+@keyframes report-loading-spin { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .report-loading-spinner { animation: none; } }
+@media (max-width: 600px) {
+  .report-view > header { flex-wrap: wrap; gap: 8px 16px; }
+  .report-view-toolbar { flex-basis: 100%; }
+  .report-columns-list { grid-template-columns: 1fr; }
+}

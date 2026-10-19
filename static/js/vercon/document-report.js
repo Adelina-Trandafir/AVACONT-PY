@@ -17,24 +17,24 @@ function stornoDisplay(row) {
 }
 
 export async function documentReport({ api, selection, family, document, title, date = document?.header?.Data, sections, owner, isCurrent = () => true }) {
-  const details = { date };
-  if (document && !document.annulled && ['ALIMENTE', 'MATERIALE', 'OI'].includes(selection.type) && names[family]) {
-    const year = selection.type === 'OI' ? Number(document.header.Data.slice(0, 4)) : Number(selection.year);
-    const params = new URLSearchParams({ ...selection, start: `${year}-01-01`, end: `${year}-12-31`, document: document.id });
-    try {
-      const model = await api(`/api/vercon/reports/${encodeURIComponent(names[family])}/generate?${params}`);
-      if (!isCurrent()) return;
-      const data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${new URLSearchParams(selection)}`, { responseType: 'arrayBuffer' });
-      if (isCurrent()) return pdfPreview(title, data, owner, isCurrent, details);
-      return;
-    } catch (error) {
-      // A reader without the separate report right may still print the document already loaded.
-      if (error.status !== 403) throw error;
-      if (!isCurrent()) return;
+  return pdfPreview(title, async view => {
+    const current = () => isCurrent() && !view.closed;
+    if (document && !document.annulled && ['ALIMENTE', 'MATERIALE', 'OI'].includes(selection.type) && names[family]) {
+      const year = selection.type === 'OI' ? Number(document.header.Data.slice(0, 4)) : Number(selection.year);
+      const params = new URLSearchParams({ ...selection, start: `${year}-01-01`, end: `${year}-12-31`, document: document.id });
+      try {
+        const model = await api(`/api/vercon/reports/${encodeURIComponent(names[family])}/generate?${params}`);
+        if (!current()) return null;
+        const data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${new URLSearchParams(selection)}`, { responseType: 'arrayBuffer' });
+        return current() ? data : null;
+      } catch (error) {
+        // A reader without the report right may still print the document already loaded.
+        if (error.status !== 403) throw error;
+        if (!current()) return null;
+      }
     }
-  }
-  const frozenSections = sections.map(section => ({ ...section,
-    rows: section.rows.map(row => family === 'storno' ? stornoDisplay(row) : { ...row }) }));
-  const data = await snapshotPdf(title, frozenSections);
-  if (isCurrent()) return pdfPreview(title, data, owner, isCurrent, details);
+    const frozenSections = sections.map(section => ({ ...section,
+      rows: section.rows.map(row => family === 'storno' ? stornoDisplay(row) : { ...row }) }));
+    return snapshotPdf(title, frozenSections);
+  }, owner, isCurrent, { date });
 }

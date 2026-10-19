@@ -1,0 +1,34 @@
+/* Application zoom belongs to the shared menu, including its document scale. */
+html[data-application-zoom] {
+  zoom: var(--application-scale, 1);
+  --application-vw: calc(1vw / var(--application-scale, 1));
+  --application-vh: calc(1vh / var(--application-scale, 1));
+  --application-dvh: calc(1dvh / var(--application-scale, 1));
+}
+
+.application-zoom-button { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+body:is(.ade-page, .vc-page) :is(.ade-header, .vc-header) .application-zoom-button { padding-inline: 7px; font-size: var(--fs-ms); }
+.application-zoom-popup {
+  position: fixed;
+  box-sizing: border-box;
+  width: 264px;
+  max-width: calc(100 * var(--application-vw, 1vw) - 8px);
+  padding: 12px;
+  color: var(--ink, #1f2937);
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #cdd5e0);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: 0 6px 20px rgb(0 0 0 / .22);
+  font-size: var(--fs-md);
+}
+.application-zoom-popup__heading { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
+.application-zoom-popup output { font-variant-numeric: tabular-nums; }
+.application-zoom-popup input[type="range"] { display: block; box-sizing: border-box; width: 100%; margin: 12px 0; accent-color: var(--blue, #309eff); cursor: pointer; }
+.application-zoom-popup__presets { display: flex; gap: 5px; }
+.application-zoom-popup__presets button { flex: 1; padding: 4px 0; font: inherit; color: inherit; background: var(--sky-1, #edf5fc); border: 1px solid var(--line, #cdd5e0); border-radius: 4px; cursor: pointer; }
+.application-zoom-popup__presets button:hover { border-color: var(--blue, #309eff); }
+
+@media print {
+  html[data-application-zoom] { zoom: 1; --application-scale: 1; }
+  .application-zoom-button, .application-zoom-popup { display: none; }
+}

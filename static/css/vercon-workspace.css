@@ -1,7 +1,7 @@
 /* Full-window page and header, with a bounded document workspace. */
 html:has(> body.vc-page) {
-  height: 100vh;
-  height: 100dvh;
+  height: calc(100 * var(--application-vh, 1vh));
+  height: calc(100 * var(--application-dvh, 1dvh));
   overflow: hidden;
   background: var(--sky-1);
 }
@@ -13,8 +13,8 @@ html:has(> body.vc-page) {
   flex-direction: column;
   width: 100%;
   max-width: none;
-  height: 100vh;
-  height: 100dvh;
+  height: calc(100 * var(--application-vh, 1vh));
+  height: calc(100 * var(--application-dvh, 1dvh));
   min-height: 0;
   margin: 0;
   overflow: hidden;
@@ -105,7 +105,7 @@ html:has(> body.vc-page) {
 .vc-page .vc-reports__types, .vc-page .vc-reports__selection { height: auto; min-height: 0; }
 .vc-page .vc-reports__period { min-height: 0; overflow: auto; }
 .vc-page .vc-reports__actions + div { max-height: 5em; overflow: auto; }
-.vc-page .vc-reports__output { max-height: 36dvh; overflow: auto; }
+.vc-page .vc-reports__output { max-height: calc(36 * var(--application-dvh, 1dvh)); overflow: auto; }
 @media (max-width: 1000px) {
   .vc-page .vc-work > .vc-reports { display: block; overflow: auto; }
   .vc-page .vc-reports > * { margin-bottom: 8px; }
@@ -115,7 +115,7 @@ html:has(> body.vc-page) {
   .vc-page .vc-header { height: auto; }
   .vc-page .vc-work > .vc-doc { display: flex; flex-direction: column; }
   .vc-page .vc-doc__main { flex: 1 1 0; }
-  .vc-page .vc-doc__header { max-height: 35dvh; overflow: auto; }
+  .vc-page .vc-doc__header { max-height: calc(35 * var(--application-dvh, 1dvh)); overflow: auto; }
   .vc-page .vc-doc__tree { flex: 0 1 25%; min-height: 0; }
   .vc-page .vc-doc--lista .vc-doc__main { overflow: auto; }
   .vc-page .vc-lista__meals { flex: 0 0 auto; }

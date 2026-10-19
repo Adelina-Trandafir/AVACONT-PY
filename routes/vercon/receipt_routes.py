@@ -1,7 +1,9 @@
 """Draft validation and common invoices. Read-only previews never reserve numbers or create variants."""
+from decimal import Decimal
+
 from flask import request
 
-from . import documents as d, receipts, receipt_rules, receipt_number, receipt_auto, invoices, protocol
+from . import documents as d, receipts, receipt_rules, receipt_number, receipt_auto, receipt_adjustment, invoices, protocol
 from .nomenclatoare import NomError
 
 
@@ -30,9 +32,16 @@ def register(bp, guard, scoped, session, build, repo_of, need):
             if data.get('action') == 'adjust':
                 selected = str(data.get('line_key') or '')
                 for raw in data.get('lines', []):
-                    if not selected or str(raw.get('key')) == selected:
+                    if not stored and (not selected or str(raw.get('key')) == selected):
                         raw['recalculate'] = True
             parsed = receipts._clean_nir(cursor, repo, ctx, exercise, data, 'nir', stored=stored, allow_empty=data.get('action') != 'adjust')
+            receipt_adjustment.prepare(parsed, stored or {})
+            if data.get('action') == 'adjust' and previous and previous.get('invoice') and not previous['invoice']['local']:
+                target = previous['invoice']['total']
+                if target is None:
+                    raise NomError('INVALID', 'Introduceți valoarea facturii comune înainte de corecție.', 422)
+                external = sum((Decimal(row['ValoareCUTVA'] or 0) for row in previous.get('other_lines', [])), Decimal(0))
+                parsed['declared'] = Decimal(str(target)) - external
             header = data.get('header') or {}
             if parsed['cols']['TipDoc'] != 'STOC_INITIAL':
                 changed = not previous or (str(header.get('Data')), str(header.get('Numar')), d._int(header.get('NumarSub')) or 0) != (

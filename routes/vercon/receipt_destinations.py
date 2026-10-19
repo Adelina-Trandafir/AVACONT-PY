@@ -7,29 +7,38 @@ from flask import request
 
 from .documents import _all, _one, _int
 from .nomenclatoare import NomError
+from .receipt_products import warehouse
 
 
 def catalog(cursor, current):
     rows = _all(cursor, 'SELECT g.SubunitId,g.GestiuneId,g.Name,g.Type,s.Name AS SubunitName,g.Zec '
                 'FROM VC_Gestiuni g JOIN VC_Subunitati s ON s.SubunitId=g.SubunitId '
                 'WHERE g.Active=1 AND s.Active=1 ORDER BY s.Name,g.Name,g.GestiuneId')
-    destinations, products, taxes, accounts = [], [], [], []
+    destinations, products, taxes, accounts, inventory = [], [], [], [], {}
     for row in rows:
         s, g = row['SubunitId'], row['GestiuneId']
+        if current['type'] in ('MF', 'OI') and (s, g) != (current['subunit'], current['gestiune']):
+            continue
         identity = '%s:%s' % (s, g)
         label = row['Name'] if s == current['subunit'] else '%s / %s' % (row['SubunitName'], row['Name'])
         destinations.append({'id': identity, 'subunit': s, 'gestiune': g, 'name': label, 'type': row['Type'],
                              'zec': row['Zec'], 'current': (s, g) == (current['subunit'], current['gestiune'])})
         accounts.extend({'id': a['IdMasina'], 'label': a['Masina'] or '', 'destination': identity}
-                        for a in _all(cursor, 'SELECT IdMasina,Masina FROM VC_Masini WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1 ORDER BY Masina', (s, g)))
+                        for a in _all(cursor, 'SELECT IdMasina,Masina,TIP FROM VC_Masini WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1 ORDER BY Masina', (s, g))
+                        if warehouse(row['Type'], a['TIP']))
         products.extend({'id': p['ID'], 'name': p['DenumireP'] or '', 'um': p['UM'] or '', 'category': p['IdMasina'],
-                         'destination': identity, 'type': row['Type'], 'dnf': p['DNF']}
-                        for p in _all(cursor, 'SELECT ID,DenumireP,UM,IdMasina,DNF FROM VC_Produse '
-                                      'WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1 ORDER BY DenumireP,ID', (s, g)))
+                         'destination': identity, 'type': row['Type'], 'dnf': p['DNF'], 'cc': p['CC'],
+                         'dnf_min': p['DNF_MIN'], 'dnf_max': p['DNF_MAX']}
+                        for p in _all(cursor, 'SELECT p.ID,p.DenumireP,p.UM,p.IdMasina,p.DNF,p.CC,c.DNF_MIN,c.DNF_MAX FROM VC_Produse p '
+                                      'LEFT JOIN AVACONT_COMUN.VC_ClasificariMF c ON c.Cod=p.CC '
+                                      'WHERE p.SubunitId=%s AND p.GestiuneId=%s AND p.Activ=1 ORDER BY p.DenumireP,p.ID', (s, g)))
+        if row['Type'] == 'MF':
+            inventory[identity] = [str(p['COD']).strip() for p in _all(cursor,
+                'SELECT COD FROM VC_ProduseP WHERE SubunitId=%s AND GestiuneId=%s AND COD IS NOT NULL', (s, g))]
         taxes.extend({'id': t['IdTVA'], 'percent': format((t['TVA'] or Decimal(0)) * 100, 'f'), 'destination': identity}
                      for t in _all(cursor, 'SELECT IdTVA,TVA FROM VC_TVA WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1 ORDER BY TVA', (s, g)))
     destinations.sort(key=lambda d: not d['current'])
-    return {'destinations': destinations, 'accounts': accounts, 'products': products, 'vat': taxes}
+    return {'destinations': destinations, 'accounts': accounts, 'products': products, 'vat': taxes, 'inventory': inventory}
 
 
 def selections(cursor, anchor, data, scoped, build, repo_of):
@@ -49,6 +58,9 @@ def selections(cursor, anchor, data, scoped, build, repo_of):
     grouped = {destination: [] for destination in targets}
     for raw in raw_lines:
         product = choices.get(_int(raw.get('product'))) if isinstance(raw, dict) else None
+        if isinstance(raw, dict) and isinstance(raw.get('new_product'), dict) and (_int(raw.get('product')) or 0) < 0:
+            chosen = accounts.get(_int(raw['new_product'].get('IdMasina')))
+            product = {'destination': chosen['destination']} if chosen else None
         if not product:
             raise NomError('INVALID', 'Un produs nu aparține conturilor bifate sau nu mai este activ.', 422,
                            {'l|%s|product' % (raw.get('key', '') if isinstance(raw, dict) else ''): 'Alegeți produsul din conturile bifate.'})

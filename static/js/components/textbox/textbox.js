@@ -223,6 +223,20 @@ export class TextBox {
   _bind() {
     const k_signal = { signal: this._abort.signal };
     const k_o = this.options;
+    // Windows maps the numpad decimal key to ',' on Romanian keyboards.
+    // Use the field's separator, including '.' for the NIR's en-US amount.
+    this.input.addEventListener('keydown', (k_event) => {
+      if (!['decimal', 'money'].includes(k_o.type) || this.input.readOnly || this.input.disabled
+        || k_event.defaultPrevented || k_event.isComposing || k_event.ctrlKey || k_event.altKey || k_event.metaKey
+        || k_event.code !== 'NumpadDecimal' || !['.', ',', 'Decimal'].includes(k_event.key)) return;
+      // With Num Lock off the same physical key is Delete; leave that action alone.
+      const k_separator = k_o.numberLocale === 'en-US' ? '.' : ',';
+      k_event.preventDefault();
+      this.input.setRangeText(k_separator, this.input.selectionStart, this.input.selectionEnd, 'end');
+      this.input.dispatchEvent(new InputEvent('input', {
+        bubbles: true, inputType: 'insertText', data: k_separator,
+      }));
+    }, k_signal);
     this.input.addEventListener('input', () => {
       if (k_o.casing !== 'none') {
         const k_start = this.input.selectionStart, k_end = this.input.selectionEnd;

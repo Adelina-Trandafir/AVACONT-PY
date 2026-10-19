@@ -1,3 +1,3 @@
-.vc-history { max-width: 900px; width: 92vw; }
+.vc-history { max-width: 900px; width: calc(92 * var(--application-vw, 1vw)); }
 .vc-history td { font-size: .85em; word-break: break-word; max-width: 420px; }
 

@@ -1,5 +1,5 @@
 /* SLICE-ADE1-04: the Access-like ADECHIT attendance workspace. */
-.portal.ade-page { cursor: default; /* text that cannot be edited shows the normal arrow, not the I-beam */ --avacont-blue: #3b5a85; --ade-header-back: var(--avacont-blue); --ade-field-radius: 7.5px; --ade-header-text: #fff; --ade-head-h: 32px; --ade-left: 258px; --ade-right: 320px; min-height: 100vh; height: 100vh; overflow: hidden; background: var(--sky-1); color: var(--ink); }
+.portal.ade-page { cursor: default; /* text that cannot be edited shows the normal arrow, not the I-beam */ --avacont-blue: #3b5a85; --ade-header-back: var(--avacont-blue); --ade-field-radius: 7.5px; --ade-header-text: #fff; --ade-head-h: 32px; --ade-left: 258px; --ade-right: 320px; min-height: calc(100 * var(--application-vh, 1vh)); height: calc(100 * var(--application-vh, 1vh)); overflow: hidden; background: var(--sky-1); color: var(--ink); }
 /* The header has the shell's columns (left panel | main grid | reports): the search box sits over the middle one. */
 .ade-header { box-sizing: border-box; display: grid; grid-template-columns: minmax(200px, var(--ade-left)) minmax(0, 1100px) var(--ade-right); justify-content: center; align-items: center; column-gap: 5px; width: 100%; max-width: 2048px; height: 46px; min-height: 46px; margin-inline: auto; padding: 4px 28px; border: 1px solid var(--line); border-top: 0; transition: grid-template-columns 160ms ease; }
 .ade-header__left { display: flex; align-items: center; gap: 18px; min-width: 0; }
@@ -30,7 +30,7 @@ button.ade-brand { padding: 0; background: none; border: 0; cursor: pointer; fon
 .ade-header__center { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .ade-search { flex: 0 1 320px; min-width: 0; margin-left: auto; display: block; }
 .ade-search input { box-sizing: border-box; width: 100%; height: 28px; padding: 3px 8px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--ade-field-radius); }
-.ade-main { box-sizing: border-box; width: 100%; max-width: 2048px; height: calc(100vh - 46px); margin-inline: auto; padding: 5px 7px 6px; display: grid; grid-template-rows: 24px minmax(0,1fr) auto; gap: 5px; }
+.ade-main { box-sizing: border-box; width: 100%; max-width: 2048px; height: calc(calc(100 * var(--application-vh, 1vh)) - 46px); margin-inline: auto; padding: 5px 7px 6px; display: grid; grid-template-rows: 24px minmax(0,1fr) auto; gap: 5px; }
 .ade-notice-row { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .ade-notice-row .msg { margin: 0; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--fs-ms); }
 .ade-page.is-left-collapsed { --ade-left: 96px; }

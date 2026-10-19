@@ -1,5 +1,6 @@
 // Context cards occupy the saved-tree column; they never change the document layout.
 import { el } from './ui.js';
+import { layoutRect } from '../utils/layout-geometry.js';
 import { parse, format } from './fields.js';
 import { decimalText } from './decimal-text.js';
 import { statementCache } from './statement-cache.js';
@@ -136,8 +137,8 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
     if (!visible || destroyed || !root.isConnected) return;
     const grid = linesHost.querySelector('.vc-doc__grid'), heading = linesHost.querySelector('h4');
     if (!grid || !heading) return;
-    const box = panels.getBoundingClientRect(), lines = grid.getBoundingClientRect();
-    const titleTop = heading.getBoundingClientRect().top;
+    const box = layoutRect(panels), lines = layoutRect(grid);
+    const titleTop = layoutRect(heading).top;
     for (const [name, value] of Object.entries({
       '--receipt-supplier-footer-height': Math.max(32, lines.top - titleTop),
       '--receipt-grid-top': Math.max(0, lines.top - box.top),

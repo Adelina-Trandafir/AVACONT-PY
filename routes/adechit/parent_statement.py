@@ -2,11 +2,8 @@
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
-from html import escape
-from io import BytesIO
 from .calculations import calculate, active
 from .domain import require, SCHEMA, DomainError
-from .receipt_output import FONT, _font_lock
 from .service import MONTHS
 
 
@@ -150,53 +147,5 @@ def statement_model(data):
 
 
 def statement_pdf(data):
-    try:
-        import reportlab
-    except ImportError as error:
-        raise DomainError('PDF_DEPENDENCY', 'Generarea PDF necesită dependențele din requirements-adechit.txt.', 503) from error
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-    with _font_lock:
-        if 'AdeStatement' not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont('AdeStatement', str(FONT)))
-    style = ParagraphStyle('statement', fontName='AdeStatement', fontSize=8, leading=11, wordWrap='CJK')
-    title = ParagraphStyle('title', parent=style, fontSize=15, leading=20, alignment=1)
-    numeric = ParagraphStyle('numeric', parent=style, alignment=2)
-    def p(value, kind=style):
-        return Paragraph(escape(str(value)), kind)
-    issuer = data['issuer']
-    account = ', '.join(str(r.get('Cont') or '') for r in issuer['accounts'])
-    blocks = [Table([[p(issuer['name']), p('Cod fiscal: '+issuer['tax_code'])],
-                     [p(issuer['address']), p('Cont: '+account)]], colWidths=[110*mm,70*mm]), Spacer(1,4*mm), p('Fișă cont', title),
-              Spacer(1,3*mm)]
-    identity = Table([[p(label),p(value)] for label,value in [('Nume',data['child']),('Adresa',data['address']),
-                     ('CNP',data['cnp']),('Email',data['email']),('Perioada',data['period'])]], colWidths=[30*mm,150*mm])
-    identity.setStyle(TableStyle([('GRID',(0,0),(-1,-1),.3,colors.lightgrey)]))
-    blocks += [identity,Spacer(1,3*mm)]
-    headers = ['Data','Explicație','DEBIT','CREDIT','Sold','Tip sold']
-    rows = [[p(v) for v in headers]] + [[p(r[k],numeric if k in ('debit','credit','balance') else style)
-            for k in ('date','explanation','debit','credit','balance','balance_type')] for r in data['rows']]
-    table = Table(rows,colWidths=[23*mm,73*mm,22*mm,22*mm,22*mm,18*mm],repeatRows=1,hAlign='LEFT')
-    rules = [('GRID',(0,0),(-1,-1),.4,colors.black),('VALIGN',(0,0),(-1,-1),'TOP'),
-             ('BACKGROUND',(0,0),(-1,0),colors.whitesmoke),('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4)]
-    for i,row in enumerate(data['rows'],1):
-        if row['kind'] == 'subtotal':
-            rules.append(('BACKGROUND',(0,i),(-1,i),colors.HexColor('#eeeeee')))
-        elif row['kind'] == 'total':
-            rules.append(('BACKGROUND',(0,i),(-1,i),colors.HexColor('#d6d6d6')))
-        elif row['kind'] != 'movement':
-            rules.append(('BACKGROUND',(0,i),(-1,i),colors.whitesmoke))
-    table.setStyle(TableStyle(rules)); blocks.append(table)
-    stream = BytesIO()
-    def footer(canvas, document):
-        canvas.setFont('AdeStatement',8)
-        canvas.drawString(15*mm,8*mm,'Generată la '+data['generated'])
-        canvas.drawRightString(195*mm,8*mm,f'Pagina {document.page}')
-    SimpleDocTemplate(stream,pagesize=A4,leftMargin=15*mm,rightMargin=15*mm,topMargin=12*mm,bottomMargin=15*mm,
-                      title='Fișă cont',author=issuer['name']).build(blocks,onFirstPage=footer,onLaterPages=footer)
-    return stream.getvalue()
+    from .report_render import pdf_bytes
+    return pdf_bytes(statement_model(data))

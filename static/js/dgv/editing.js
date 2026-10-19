@@ -174,17 +174,22 @@ export const editing = {
           state.value = choice.id; state.raw = choice.id; markRequired();
           const saved = await this.commitEdit();
           if (saved && column.focusAfterSelect && !this._edit && !this._destroyed) {
-            this.beginEdit(state.row, column.focusAfterSelect);
+            const next = typeof column.focusAfterSelect === 'function' ? column.focusAfterSelect(state.row) : column.focusAfterSelect;
+            if (next) this.beginEdit(state.row, next);
           }
         } });
       state.combo.setValue(row[key], column.formatter?.(row[key], row) || '');
       state.input = state.combo.input;
       state.combo.dropdown.addEventListener('focusout', event => this._onFocusOut(event), { signal: state.abort.signal });
       for (const input of [state.input, state.combo.searchInput].filter(Boolean)) {
-        input.addEventListener('input', () => { state.value = null; markRequired(); }, { signal: state.abort.signal });
+        input.addEventListener('input', () => {
+          state.value = column.allowCustom ? { newName: input.value.trim() } : null;
+          markRequired();
+        }, { signal: state.abort.signal });
       }
       state.combo.dropdown.addEventListener('keydown', event => {
-        if (!['Escape', 'Tab'].includes(event.key)) return;
+        const customEnter = event.key === 'Enter' && column.allowCustom && state.value?.newName && state.combo.highlightedIndex < 0;
+        if (!['Escape', 'Tab'].includes(event.key) && !customEnter) return;
         event.preventDefault(); event.stopImmediatePropagation();
         if (event.key === 'Escape') this.cancelEdit();
         else void this.commitEdit(event.shiftKey ? -1 : 1);

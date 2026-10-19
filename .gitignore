@@ -46,3 +46,4 @@ updates/
 data/dbip-country-lite.mmdb
 instance/vercon-reports/snapshots/
 config_sesiune.example.py
+instance/

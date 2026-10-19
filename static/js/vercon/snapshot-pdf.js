@@ -1,13 +1,27 @@
 // A local, paginated snapshot of the displayed values; official report APIs remain separate.
 // Canvas preserves Romanian glyphs without adding a font/PDF dependency to the application.
+import { readReportIdentity } from './report-identity.js';
+
 export async function snapshotPdf(title, sections) {
+  const identity = await readReportIdentity();
   await document.fonts.ready;
   const width = 1684, height = 1190, margin = 48, bottom = height - 65, pages = [];
   let canvas, context, y;
   function startPage() {
     canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; context = canvas.getContext('2d');
-    context.fillStyle = '#fff'; context.fillRect(0, 0, width, height); context.fillStyle = '#17345a'; context.font = 'bold 26px Arial';
-    context.fillText(title, margin, 45, width - margin * 2); y = 80;
+    context.fillStyle = '#fff'; context.fillRect(0, 0, width, height);
+    context.fillStyle = '#202936'; context.font = '19px Arial';
+    const leftWidth = (width - margin * 2) * .6, rightWidth = (width - margin * 2) * .4;
+    const left = [identity.name, identity.fiscal_code ? `Cod fiscal: ${identity.fiscal_code}` : '', identity.address]
+      .filter(Boolean).flatMap(text => wrap(text, leftWidth - 16));
+    const right = wrap(`Subunitatea: ${identity.subunit_name}`, rightWidth - 16);
+    left.forEach((line, index) => context.fillText(line, margin, 38 + index * 24));
+    context.textAlign = 'right';
+    right.forEach((line, index) => context.fillText(line, width - margin, 38 + index * 24));
+    context.textAlign = 'left';
+    y = 38 + Math.max(left.length, right.length) * 24 + 18;
+    context.fillStyle = '#17345a'; context.font = 'bold 26px Arial';
+    context.fillText(title, margin, y, width - margin * 2); y += 35;
   }
   function finishPage() {
     context.fillStyle = '#697386'; context.font = '18px Arial'; context.fillText('Previzualizare • pagina ' + (pages.length + 1), margin, height - 25);

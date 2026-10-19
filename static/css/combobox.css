@@ -147,7 +147,7 @@
 }
 /* nu depășește ecranul */
 @media (max-width: 350px){
-    .combobox-dropdown{max-width: calc(100vw - 16px);}
+    .combobox-dropdown{max-width: calc(calc(100 * var(--application-vw, 1vw)) - 16px);}
 }
 
 /**

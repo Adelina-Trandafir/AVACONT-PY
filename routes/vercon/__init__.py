@@ -15,7 +15,7 @@ from .capabilities import FormUnavailable
 from .connection import connection  # noqa: F401  re-exported for the repositories of VC03+
 from .context import SelectionInvalid, resolve
 from .lock import Busy, LockLost, LockService, SqlLockStore
-from .nomenclatoare import FORM_KINDS, NomError
+from .nomenclatoare import form_kinds, NomError
 from .provider import SqlProvider
 
 SECTION = "VR"
@@ -69,8 +69,8 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
                                 response = _refuse(403, 'FORBIDDEN', 'Nu aveți dreptul necesar pentru această operație VERCON.')
                             else:
                                 result = function(*args, **kwargs)
-                                diagnostics.info(operation, 'success', context, rid)
                                 response = result if isinstance(result, (Response, tuple)) else jsonify(result)
+                                diagnostics.info(operation, 'success', context, rid)
                     except SelectionInvalid as error:
                         diagnostics.refusal(operation, context, rid, error.reason)
                         response = _refuse(409, error.reason, str(error))
@@ -111,10 +111,10 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
         response.headers.update(_PAGE_HEADERS)
         return response
 
-    def _resolved(source=None):
+    def _resolved(source=None, *, auto_subunit=True):
         args = source if source is not None else request.args
         return resolve(provider.tree(g.portal['db_name'], g.portal['email']),
-                       args.get('subunit'), args.get('gestiune'), args.get('year'))
+                       args.get('subunit'), args.get('gestiune'), args.get('year'), auto_subunit=auto_subunit)
 
     def _locks():
         return lock_factory(g.portal['db_name'])
@@ -143,7 +143,7 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
     @bp.get('/api/vercon/context')
     @guard('read')
     def context():
-        ctx = _resolved()
+        ctx = _resolved(auto_subunit=False)
         gest = ctx.pop('gestiune')
         menu = []
         ops = set(g.vercon_operations)
@@ -171,7 +171,7 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
         occupied = bool(gest.get('occupied_by')) or _other_holds(_locks(), gest, ctx['selection']['subunit'])
         capabilities.check_open(form, gest['type'], operations.effective(g.vercon_operations, gest['type']), occupied)
         return {'form': form, 'type': gest['type'], 'selection': ctx['selection'], 'version': ctx['version'], 'write': capabilities.form_writes(form),
-                'nom': list(FORM_KINDS.get(form, ())), 'columns': capabilities.columns_for(form, gest['type'])}
+                'nom': form_kinds(form, gest['type']), 'columns': capabilities.columns_for(form, gest['type'])}
 
     @bp.post('/api/vercon/gestiune/type')
     @guard('configure')

@@ -18,7 +18,7 @@
 @media (max-width: 900px) {
   .portal.ade-page .combobox-input, .portal.ade-page .combobox-option { font-size: var(--fs-md); } /* 1pt below the phone size above */
   .portal.ade-page .combobox-option { display: block; box-sizing: border-box; height: 44px; max-height: none; line-height: 42px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .portal.ade-page .combobox-dropdown { --combobox-min-width: 170px; max-height: 240px; max-width: calc(100vw - 16px); overflow-x: hidden; } /* at least 5 rows, never a sideways scroll */
+  .portal.ade-page .combobox-dropdown { --combobox-min-width: 170px; max-height: 240px; max-width: calc(calc(100 * var(--application-vw, 1vw)) - 16px); overflow-x: hidden; } /* at least 5 rows, never a sideways scroll */
   .portal.ade-page .combobox-input { min-height: 32px; }
   .ade-combo-lock { position: absolute; right: 32px; top: 0; bottom: 0; display: flex; align-items: center; font-size: var(--fs-md); pointer-events: none; }
   .ade-combo-lock[hidden] { display: none; }

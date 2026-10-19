@@ -1,7 +1,7 @@
 """Report data from owner-editable SQL. Exact decimals until the output boundary."""
 from collections import defaultdict
 from decimal import Decimal, localcontext
-from . import numeric, report_query, report_store, stock
+from . import numeric, report_query, report_store, stock, oi_accounts
 from .nomenclatoare import NomError
 
 REQUIRED_FIELDS = {
@@ -28,20 +28,26 @@ class Source:
         self.cursor, self.unit, self.ctx, self.params = cursor, unit, ctx, params
         self.cache, self.versions = {}, {}
 
-    def rows(self, key):
-        if key not in self.cache:
+    def rows(self, key, *, result_filters=None):
+        cache_key = (key, tuple(sorted(result_filters.items()))) if result_filters else key
+        if cache_key not in self.cache:
             configured = report_store.read(self.unit, 'query', key)
-            self.cache[key] = report_query.execute(self.cursor, configured['value'], self.ctx, self.params)
+            self.cache[cache_key] = report_query.execute(self.cursor, configured['value'], self.ctx, self.params,
+                                                       result_filters=result_filters)
             required = set(REQUIRED_FIELDS[key].split())
-            for row in self.cache[key]:
+            for row in self.cache[cache_key]:
                 missing = required - row.keys()
                 if missing:
                     raise NomError('REPORT_SOURCE', 'Sursa SQL ' + key + ' nu întoarce câmpurile obligatorii: ' + ', '.join(sorted(missing)) + '.', 422)
+            if key in ('custody_ledger', 'oi_documents') and self.cache[cache_key]:
+                if '_oi_line_accounts' not in self.cache:
+                    self.cache['_oi_line_accounts'] = oi_accounts.line_accounts(self.cursor, self.ctx)
+                self.cache[cache_key] = oi_accounts.apply_lines(self.cache[cache_key], self.cache['_oi_line_accounts'], key == 'oi_documents')
             self.versions[key] = configured['version']
-        return self.cache[key]
+        return self.cache[cache_key]
 
-    def metadata(self):
-        rows = self.rows('metadata')
+    def metadata(self, *, result_filters=None):
+        rows = self.rows('metadata', result_filters=result_filters)
         result = {row['variant']: row for row in rows}
         if len(result) != len(rows) or None in result:
             raise NomError('REPORT_SOURCE', 'Sursa metadata trebuie să întoarcă exact un rând pentru fiecare variantă.', 409)
@@ -63,6 +69,16 @@ def accepted(row, params, *, day='date', document=True):
     date = stock.day_of(row[day])
     if not params['start'] <= date <= params['end']:
         return False
+    receipts = params.get('receipt_selection')
+    if receipts and (('receipt-product', row.get('supplier'), row.get('category'), row.get('product')) not in receipts
+                     and ('receipt-document-product', row.get('supplier'), row.get('document'), row.get('product')) not in receipts):
+        return False
+    outgoing = params.get('outgoing_selection')
+    if outgoing:
+        scopes = (('account', row.get('category')), ('receiver', row.get('receiver')), ('all', None))
+        if not any((scope, scope_id, row.get('document'), product) in outgoing
+                   for scope, scope_id in scopes for product in (None, row.get('product'))):
+            return False
     checks = ('variant', 'category', 'supplier', 'receiver') + (('document',) if document else ())
     return all(selected(row.get(key), params, key) for key in checks)
 
@@ -82,12 +98,12 @@ def storno_display(row):
     return displayed
 
 
-def documents(source, family=None):
+def documents(source, family=None, *, include_returns=False):
     metadata, ctx = source.metadata(), source.ctx
     kind = 'receipts' if family in ('nir', 'storno') or family is None else 'consumption'
     out = []
     for raw in source.rows(kind):
-        if raw['annulled'] or family is not None and raw['family'] != family:
+        if raw['annulled'] or family is not None and raw['family'] != family and not (include_returns and raw['family'] == 'br'):
             continue
         info = metadata.get(raw['variant'])
         if info is None:
@@ -170,6 +186,18 @@ def balances(source, final=False):
 
 
 def dataset(source, spec):
+    if spec['kind'] == 'depreciation':
+        from . import depreciation_read
+
+        # Reuse the same date projection as the register, without filtering its
+        # historical movements to the report period (the first handover matters).
+        result = depreciation_read.read(source.cursor, source.ctx, source.params['end'], source.params.get('variant'))
+        labels = {'invalid': 'Date de corectat', 'not_entered': 'Neintrată la data aleasă',
+                  'not_in_use': 'Nepredat', 'active': 'În amortizare',
+                  'fully_depreciated': 'Amortizat integral', 'written_off': 'Casat'}
+        return [{**row, 'variant': row['id'], 'status': labels.get(row['status'], row['status']),
+                 'issues_text': '; '.join(issue['message'] for issue in row.get('issues', []))}
+                for row in result['assets'] if selected(row['id'], source.params, 'variant')]
     if spec.get('ledger') == 'custody' or spec.get('family') in ('bp', 'bt', 'bs'):
         from . import report_oi
         return report_oi.dataset(source, spec)
@@ -186,7 +214,12 @@ def dataset(source, spec):
         return rows
     family = spec.get('family')
     if kind in ('documents', 'document_summary'):
-        rows = documents(source, family)
+        rows = documents(source, None if spec.get('include_storno') else family, include_returns=spec.get('include_returns', False))
+        if spec.get('include_storno'):
+            rows = [storno_display(row) if row['family'] == 'storno' else row for row in rows]
+            rows.sort(key=lambda row: (row['date'], str(row['document'])), reverse=True)
+        if spec.get('include_returns') or spec.get('outgoing_selection'):
+            rows.sort(key=lambda row: (row['date'], str(row['document'])), reverse=True)
         if kind == 'document_summary':
             rows = aggregate(rows, ('document', 'category', 'account'), ('value',))
         return rows

@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from flask import request
 
-from . import receipt_destinations as destinations, receipts, receipt_rules, receipt_auto, receipt_number, invoices, protocol
+from . import receipt_destinations as destinations, receipts, receipt_rules, receipt_auto, receipt_number, receipt_adjustment, invoices, protocol
 from .documents import _dec, _int, _scope
 from .nomenclatoare import NomError
 
@@ -45,8 +45,16 @@ def preview(cursor, groups, data):
     action = data.get('action', 'validate')
     if action in ('adjust', 'undo_adjustment'):
         selected = str(data.get('line_key') or '')
-        chosen = next((group for group in groups if any(not selected or row['key'] == selected for row in group['parsed']['lines'])), None)
+        choices = groups
+        if action == 'adjust':
+            choices = sorted(groups, key=lambda group: not any(row['key'] == selected for row in group['parsed']['lines']))
+        chosen = next((group for group in choices if any(
+            receipt_adjustment.eligible(row) if action == 'adjust' else row['key'] == selected
+            for row in group['parsed']['lines'])), None)
         if chosen is None:
+            if action == 'adjust':
+                raise NomError('ADJUST_LINE', receipt_adjustment.unavailable_message(
+                    [row for group in groups for row in group['parsed']['lines']]), 422)
             raise NomError('ADJUST_LINE', 'Alegeți un rând pentru corecție.', 422)
         if action == 'adjust':
             target = _dec((data.get('header') or {}).get('Valoare'))

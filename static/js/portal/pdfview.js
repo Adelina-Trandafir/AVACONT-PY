@@ -33,7 +33,7 @@ async function loadLibs() {
   }
 }
 
-export function createPdfView(container, { onState, initialScale = 'page-width' } = {}) {
+export function createPdfView(container, { onState, onRendered, initialScale = 'page-width' } = {}) {
   container.classList.add('pdfview');
   const scroll = document.createElement('div');
   scroll.className = 'pdfview__scroll';
@@ -84,6 +84,9 @@ export function createPdfView(container, { onState, initialScale = 'page-width' 
       eventBus.on('pagesinit', () => { v.currentScaleValue = initialScale; notify(); });
       eventBus.on('pagechanging', notify);
       eventBus.on('scalechanging', notify);
+      eventBus.on('pagerendered', event => {
+        if (mine === seq && event.pageNumber === v.currentPageNumber) onRendered?.(event.error);
+      });
       let doc;
       try {
         // Copy: pdf.js takes ownership of (transfers) the buffer it is given.

@@ -1,7 +1,7 @@
 /* The shared confirmation box (js/utils/confirm-box.js): blurred page behind, question in the middle. */
-.confirm-box { box-sizing: border-box; width: min(420px, 92vw); padding: 0; color: var(--ink, #1f2937); background: var(--card, #fff); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); box-shadow: 0 10px 30px rgb(0 0 0 / .25); font-family: inherit; }
+.confirm-box { box-sizing: border-box; width: min(420px, calc(92 * var(--application-vw, 1vw))); padding: 0; color: var(--ink, #1f2937); background: var(--card, #fff); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); box-shadow: 0 10px 30px rgb(0 0 0 / .25); font-family: inherit; }
 .confirm-box::backdrop { background: rgb(0 0 0 / .25); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
-.confirm-box header { padding: 12px 16px; background: var(--sky-2, #eaf2fb); border-bottom: 1px solid var(--line, #cdd5e0); }
+.confirm-box header { padding: 4px 16px; background: var(--sky-2, #eaf2fb); border-bottom: 1px solid var(--line, #cdd5e0); }
 .confirm-box h2 { margin: 0; font-size: var(--fs-xl); }
 .confirm-box__text { margin: 0; padding: 22px 20px; text-align: center; font-size: var(--fs-lg); white-space: pre-line; }
 .confirm-box footer { display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line, #cdd5e0); }
@@ -23,7 +23,7 @@
 .confirm-box--warning footer button:last-child:disabled:hover { background: #c0392b; }
 
 /* pickBox: a vertical list of choices, at most five and a half rows high, then it scrolls */
-.confirm-box--pick { width: min(360px, 92vw); }
+.confirm-box--pick { width: min(360px, calc(92 * var(--application-vw, 1vw))); }
 .confirm-box__list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; padding: 12px 16px; overflow-y: auto; }
 .confirm-box__list button { width: 100%; min-height: 44px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirm-box--pick footer { justify-content: flex-start; }

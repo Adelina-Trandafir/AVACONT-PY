@@ -119,7 +119,8 @@ export const treeViewSearchMixin = {
     }, 300);
   },
 
-  updateResults(results, query) {
+  updateResults(results, query, { preserveExpanded = false } = {}) {
+    const expanded = preserveExpanded ? new Set(this.expandedNodes) : null;
     const normalizeNodes = (nodes) => {
       return nodes.map((node) => {
         const normalizedNode = {
@@ -145,6 +146,8 @@ export const treeViewSearchMixin = {
     }
 
     this.clearLocalSearch();
+
+    if (expanded) this.expandedNodes = expanded;
 
     if (!this.isVisible) return;
 

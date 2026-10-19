@@ -1,80 +1,78 @@
-// VERCON v2: the saved-receipts tree (supplier > month > receipt), read one level at a time.
-// Only the suppliers are read when the page opens; the months of a supplier and the receipts of a month are read when the
-// operator opens that branch. Until then a branch holds one placeholder child, so that it can be opened.
-import { format, formatMoney } from './fields.js';
-import { docNode } from './ui.js';
+// NIR stays lazy in either mode: month > documents or supplier > documents.
+import { documentLeaf, documentMonthId, documentMonthLabel, documentPartyId } from './document-tree-order.js';
 
-const MONTHS = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
-const partyId = (party) => `party:${encodeURIComponent(party)}`;
-const monthId = (party, month) => `month:${encodeURIComponent(party)}|${month}`;
-const waiting = (parent) => ({ id: `wait:${parent}`, label: 'Se încarcă…' });
-const monthLabel = (month) => `${MONTHS[Number(month.slice(5)) - 1]}/${month.slice(0, 4)}`;
-// A receipt row: NIR date, invoice number (left, the label) and the value (right-aligned by the tree, no unit, 2 decimals).
-// The NIR number is left out on purpose.
-const leafLabel = (doc) => [format(doc.date, { type: 'date' }), doc.invoice, doc.annulled ? 'anulat' : ''].filter(Boolean).join(' • ');
-const sameParty = (a, b) => a.toLocaleLowerCase('ro') === b.toLocaleLowerCase('ro');
-
-function parse(id) {
+const waiting = parent => ({ id: `wait:${parent}`, label: 'Se încarcă…', selectable: false });
+function targetOf(id) {
   if (id.startsWith('party:')) return { party: decodeURIComponent(id.slice(6)) };
-  if (id.startsWith('month:')) { const [party, month] = id.slice(6).split('|'); return { party: decodeURIComponent(party), month }; }
+  if (id.startsWith('document-month:')) return { month: id.slice('document-month:'.length) };
   return null;
 }
 
-// fetchLevel({ level, party?, month? }) -> the server answer { items, ... }
-export function receiptTree(fetchLevel) {
-  let parties = [], months = new Map(), docs = new Map();   // months: party -> [{ month, count }]; docs: month node id -> [summary]
-  const pending = new Map();
-  const needs = (id) => { const target = parse(id); return !!target && (target.month ? !docs.has(id) : !months.has(target.party)); };
+export function receiptTree(fetchLevel, byDate = () => true) {
+  const roots = new Map(), docs = new Map(), pending = new Map();
+  let generation = 0;
+  const mode = () => byDate() ? 'months' : 'parties';
+  const needs = id => !!targetOf(id) && !docs.has(id);
 
-  async function load() { const answer = await fetchLevel({ level: 'parties' }); parties = answer.items; return answer; }
+  async function load() {
+    const level = mode(), version = generation;
+    const answer = await fetchLevel({ level });
+    if (version === generation) roots.set(level, answer.items);
+    return answer;
+  }
 
-  // Reads the branch `id` (a party or a month node) unless it is already here. Resolves true when something was read.
   function expand(id) {
-    const target = parse(id); if (!target || !needs(id)) return Promise.resolve(false);
+    const target = targetOf(id);
+    if (!target || !needs(id)) return Promise.resolve(false);
     if (!pending.has(id)) {
-      pending.set(id, (async () => {
-        if (target.month) docs.set(id, (await fetchLevel({ level: 'documents', party: target.party, month: target.month })).items);
-        else months.set(target.party, (await fetchLevel({ level: 'months', party: target.party })).items);
+      const version = generation;
+      const request = (async () => {
+        const answer = await fetchLevel({ level: 'documents', ...target });
+        if (version !== generation) return false;
+        docs.set(id, answer.items);
         return true;
-      })().finally(() => pending.delete(id)));
+      })().finally(() => { if (pending.get(id) === request) pending.delete(id); });
+      pending.set(id, request);
     }
     return pending.get(id);
   }
 
   function nodes() {
-    return parties.map(({ party }) => {
-      const id = partyId(party);
-      return { id, label: party || '—', children: months.has(party) ? months.get(party).map(({ month }) => {
-        const key = monthId(party, month);
-        return { id: key, label: monthLabel(month), children: docs.has(key) ? docs.get(key).map((doc) => docNode(doc, leafLabel(doc), formatMoney(doc.total))) : [waiting(key)] };
-      }) : [waiting(id)] };
-    });
+    return (roots.get(mode()) || []).map(item => {
+      const id = byDate() ? documentMonthId(item.month) : documentPartyId(item.party);
+      return { id, label: byDate() ? documentMonthLabel(item.month) : item.party || '—',
+        children: docs.has(id) ? docs.get(id).map(documentLeaf) : [waiting(id)] };
+    }).sort((a, b) => byDate() ? b.id.localeCompare(a.id) : a.label.localeCompare(b.label, 'ro', { sensitivity: 'base' }));
   }
 
   function find(id) {
-    for (const list of docs.values()) { const hit = list.find((doc) => String(doc.id) === String(id)); if (hit) return hit; }
+    for (const list of docs.values()) {
+      const found = list.find(doc => String(doc.id) === String(id));
+      if (found) return found;
+    }
     return null;
   }
 
-  // After a save or a cancel: reads again what the operator had opened. `target` ({ party, month: 'YYYY-MM' }) is the receipt
-  // to show; its branches are read if needed. Resolves the node ids to keep open for it.
-  async function refresh(target) {
-    const fresh = (await fetchLevel({ level: 'parties' })).items, nextMonths = new Map(), nextDocs = new Map();
-    await Promise.all([...months.keys()].filter((party) => fresh.some((item) => item.party === party)).map(async (party) => {
-      nextMonths.set(party, (await fetchLevel({ level: 'months', party })).items);
-    }));
-    await Promise.all([...docs.keys()].map(async (id) => {
-      const { party, month } = parse(id);
-      if (nextMonths.has(party)) nextDocs.set(id, (await fetchLevel({ level: 'documents', party, month })).items);
-    }));
-    parties = fresh; months = nextMonths; docs = nextDocs;
-    const shown = [], hit = target && (parties.find((item) => item.party === target.party) || parties.find((item) => sameParty(item.party, target.party)));
-    if (hit && /^\d{4}-\d{2}$/.test(target.month)) {
-      const party = partyId(hit.party), month = monthId(hit.party, target.month);
-      await expand(party); await expand(month); shown.push(party, month);
-    }
-    return shown;
+  async function reveal(target) {
+    if (!target) return [];
+    const item = byDate() ? (roots.get('months') || []).find(item => item.month === target.month)
+      : (roots.get('parties') || []).find(item => item.party.localeCompare(target.party, 'ro', { sensitivity: 'base' }) === 0);
+    if (!item) return [];
+    const id = byDate() ? documentMonthId(item.month) : documentPartyId(item.party);
+    await expand(id);
+    return [id];
   }
 
-  return { load, expand, needs, nodes, find, refresh };
+  async function refresh(target) {
+    const loaded = [...docs.keys()], version = ++generation;
+    pending.clear(); roots.clear();
+    await load();
+    await Promise.all(loaded.map(async id => {
+      const answer = await fetchLevel({ level: 'documents', ...targetOf(id) });
+      if (version === generation) docs.set(id, answer.items);
+    }));
+    return version === generation ? reveal(target) : [];
+  }
+
+  return { load, expand, needs, nodes, find, refresh, reveal };
 }

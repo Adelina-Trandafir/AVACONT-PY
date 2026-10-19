@@ -1,9 +1,9 @@
-"""Report catalog, filters, snapshots and exact exports for Materiale/Alimente/OI."""
+"""Report catalog, filters, snapshots and exact exports for all VERCON types."""
 from decimal import Decimal
-from datetime import date
 from flask import Response, current_app, g, request
-from . import report_catalog, report_data, report_output, report_service, report_excel, protocol, stock
+from . import report_catalog, report_data, report_output, report_service, report_excel, report_period, report_selection, protocol, stock
 from .nomenclatoare import NomError
+from . import report_identity
 from .stock_routes import optional_id
 
 
@@ -23,12 +23,69 @@ def selected_ids(key):
         raise NomError('INVALID', 'Selecția %s este invalidă.' % key, 422) from None
 
 
+def selected_receipts():
+    raw = request.args.get('receipt_selection')
+    if raw is None:
+        return None
+    try:
+        items = raw.split(',')
+        if not 1 <= len(items) <= 1000:
+            raise ValueError()
+        chosen = set()
+        for item in items:
+            parts = item.split(':')
+            if len(parts) != 4 or parts[0] not in ('receipt-product', 'receipt-document-product'):
+                raise ValueError()
+            values = []
+            for index, value in enumerate(parts[1:]):
+                if value == 'none' and (index == 0 or index == 1 and parts[0] == 'receipt-product'):
+                    values.append(None)
+                elif value.isdecimal() and int(value) > 0:
+                    values.append(int(value))
+                else:
+                    raise ValueError()
+            chosen.add((parts[0], *values))
+        return chosen
+    except (ValueError, TypeError):
+        raise NomError('INVALID', 'Selecția produselor de la furnizori este invalidă.', 422) from None
+
+
+def selected_outgoing():
+    raw = request.args.get('outgoing_selection')
+    if raw is None:
+        return None
+    try:
+        items = raw.split(',')
+        if not 1 <= len(items) <= 1000:
+            raise ValueError()
+        chosen = set()
+        for item in items:
+            parts = item.split(':')
+            if len(parts) != 5 or parts[0] != 'outgoing-item' or parts[1] not in ('account', 'receiver', 'all'):
+                raise ValueError()
+            scope, scope_id, document, product = parts[1:]
+            if scope_id != 'none' and (not scope_id.isdecimal() or int(scope_id) <= 0):
+                raise ValueError()
+            if scope == 'all' and scope_id != 'none':
+                raise ValueError()
+            if not document.isdecimal() or int(document) <= 0:
+                raise ValueError()
+            if product != 'all' and (not product.isdecimal() or int(product) <= 0):
+                raise ValueError()
+            chosen.add((scope, None if scope_id == 'none' else int(scope_id), int(document), None if product == 'all' else int(product)))
+        return chosen
+    except (ValueError, TypeError):
+        raise NomError('INVALID', 'Selecția bonurilor este invalidă.', 422) from None
+
+
 def register(bp, guard, scoped, session, build):
     def selection():
         params = {'start': protocol.to_date(request.args.get('start'), 'De la'),
                   'end': protocol.to_date(request.args.get('end'), 'Până la')}
         if params['start'] > params['end']:
             raise NomError('REPORT_PERIOD', 'Data de început trebuie să fie înaintea datei de sfârșit.', 422)
+        params['receipt_selection'] = selected_receipts()
+        params['outgoing_selection'] = selected_outgoing()
         for key in ('document', 'variant', 'category', 'supplier', 'receiver'):
             params[key] = optional_id(key)
             values = selected_ids(key)
@@ -39,6 +96,11 @@ def register(bp, guard, scoped, session, build):
                     params[key] = values[0]
                 else:
                     params[key + '_ids'] = values
+        for key in ('show_without_movements', 'page_break_accounts'):
+            value = request.args.get(key, '0')
+            if value not in ('0', '1'):
+                raise NomError('REPORT_OPTION', 'Opțiunea de afișare este invalidă: ' + key + '.', 422)
+            params[key] = value == '1'
         return params
 
     def owner(ctx):
@@ -47,23 +109,23 @@ def register(bp, guard, scoped, session, build):
     def cache():
         return current_app.extensions.setdefault('vercon_report_snapshots', report_service.Snapshots())
 
+    @bp.get('/api/vercon/reports/identity')
+    @guard('read')
+    def identity():
+        # Local printouts of an already loaded document need only its read right.
+        vctx = scoped('read')
+        with session(False) as cursor:
+            ctx, _ = build(cursor, vctx, None, False)
+            return report_identity.read(cursor, g.portal['db_name'], ctx)
+
     @bp.get('/api/vercon/reports/catalog')
     @guard('raport')
     def catalog():
         vctx = scoped('raport')
-        years = []
-        if vctx['gestiune']['type'] == 'OI':
-            with session(False) as cursor:
-                ctx, _ = build(cursor, vctx, None, False)
-                cursor.execute('SELECT MIN(y) AS first_year,MAX(y) AS last_year FROM ('
-                               'SELECT YEAR(COALESCE(Data,DataFc)) AS y FROM VC_NIR WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s '
-                               'UNION ALL SELECT YEAR(DATABP) FROM VC_OI_Predare WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s) history',
-                               (ctx['subunit'], ctx['gestiune'], ctx['exercitiu']) * 2)
-                limits = cursor.fetchone()
-                last = max(date.today().year, ctx['year'], (limits or {}).get('last_year') or 0)
-                first = (limits or {}).get('first_year') or last
-                years = list(range(first, last + 1))
-        return {'reports': report_catalog.catalog(vctx['gestiune']['type']), 'years': years}
+        with session(False) as cursor:
+            ctx, _ = build(cursor, vctx, None, False)
+            period = report_period.catalog_period(cursor, ctx)
+        return {'reports': report_catalog.catalog(vctx['gestiune']['type']), **period}
 
     @bp.get('/api/vercon/reports/<name>/selection')
     @guard('raport')
@@ -74,6 +136,11 @@ def register(bp, guard, scoped, session, build):
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, None, False)
             source = report_data.Source(cursor, g.portal['db_name'], ctx, params)
+            branch = request.args.get('branch')
+            if branch is not None:
+                return report_selection.selection_branch(source, spec, branch, recursive=request.args.get('recursive') == '1',
+                                                         documents=request.args.get('selection_mode') == 'documents',
+                                                         receivers=request.args.get('selection_mode') == 'receivers')
             variants = list(source.metadata().values())
             categories = {r['category']: r['account'] for r in variants}
             documents, suppliers, receivers = {}, {}, {}
@@ -127,6 +194,8 @@ def register(bp, guard, scoped, session, build):
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, None, False)
             model = cache().get(owner(ctx), token)
+            if model.get('letterhead_version') != report_identity.VERSION:
+                raise NomError('REPORT_EXPIRED', 'Generați din nou raportul pentru antetul actualizat.', 409)
             report_catalog.spec_of(model['report_name'], ctx['type'])
             widths = report_excel.read_widths(cursor, model) if format_name == 'xlsx' else None
         try:

@@ -8,6 +8,7 @@ import { CheckBox } from '../components/checkbox/checkbox.js';
 import { openMenu, closeMenu } from '../adechit/menu.js';
 import { showMessage } from '../portal/messages.js';
 import { snapshotPdf } from './snapshot-pdf.js';
+import { openPdfReport } from './pdf-preview.js';
 import { parse, format } from './fields.js';
 import { createReportHeader, reportHeading } from './report-header.js';
 
@@ -68,11 +69,12 @@ export function field(column, value, editable, onChange, owner) {
   if (column.type === 'ref' || column.type === 'select') {
     source = el('input', { type: 'hidden', value: value == null ? '' : String(value) });
     const host = el('div', { className: 'vc-field__combo' }); label.append(host, source);
-    const items = (column.options || []).map((item) => ({ value: String(item.value ?? item.id), label: item.label }));
+    const items = () => (typeof column.options === 'function' ? column.options() : column.options || [])
+      .map((item) => ({ value: String(item.value ?? item.id), label: item.label }));
     const combo = owner.own(new Combobox(host, { placeholder: column.placeholder || 'Alegeți…', dropDownStyle: column.dropDownStyle, dropDownOnEnter: column.dropDownOnEnter, maxResults: column.maxResults, dropDownMinWidth: column.dropDownMinWidth, showArrow: column.showArrow,
-      onSearch: async (query) => items.filter((item) => item.label.toLocaleLowerCase('ro').includes(query.toLocaleLowerCase('ro'))),
+      onSearch: async (query) => items().filter((item) => item.label.toLocaleLowerCase('ro').includes(query.toLocaleLowerCase('ro'))),
       onSelect: (id) => { combo._pendingSelection = false; source.value = id; source.dispatchEvent(new Event('change', { bubbles: true })); } }));
-    combo.setValue(source.value, items.find((item) => item.value === source.value)?.label || column.fallback || ''); combo.setEnabled(editable);
+    combo.setValue(source.value, items().find((item) => item.value === source.value)?.label || column.fallback || ''); combo.setEnabled(editable);
     combo.input.setAttribute('aria-label', column.label); tipTarget = combo.input; source._combo = combo;
     combo.input.addEventListener('input', () => { source.value = ''; combo._pendingSelection = true; error.textContent = ''; markRequired(); });
     combo.input.addEventListener('blur', () => setTimeout(touch, 200));   // after the click that picks an option has landed
@@ -111,14 +113,15 @@ export function grid(host, options, owner) {
     columns: options.columns.map((item) => ({ width: 120, ...item })) });
   owner?.own(instance); return instance;
 }
-export function paintTree(host, nodes, { selected, onSelect, onAction, onToggle, exclusiveRoots = false, title = 'Documente salvate', checkable = false, onCheckChange, branchChecks = false, showSearchBox = true, collapsed = false } = {}, owner) {
+export function paintTree(host, nodes, { selected, onSelect, onAction, onToggle, exclusiveRoots = false, autoCollapse = false, title = 'Documente salvate', checkable = false, onCheckChange, branchChecks = false, showSearchBox = true, collapsed = false, expandRoots = false } = {}, owner) {
   host.replaceChildren();
   const body = el('div', { className: 'vc-tree-body' }); host.append(el('h4', { textContent: title }), body);
-  const tree = new TreeView(body, { inline: true, autoCollapse: false, autoResize: false, indent: 14, checkable, onCheckChange, branchChecks, showSearchBox, onToggle, exclusiveRoots,
+  const tree = new TreeView(body, { inline: true, incrementalRender: true, autoCollapse, autoResize: false, indent: 14, checkable, onCheckChange, branchChecks, showSearchBox, onToggle, exclusiveRoots,
     onSelect: (selection) => { if (String(selection.id).startsWith('doc:')) onSelect?.(String(selection.id).slice(4)); } });
   owner?.own(() => { if (collapsed) host._vcExpanded = new Set(tree.expandedNodes); tree.destroy(); });
   tree.setData(nodes);
   if (collapsed) tree.expandedNodes = new Set(host._vcExpanded || []); else tree.expandAllNodes(nodes);
+  if (expandRoots) nodes.filter(node => node.children?.length).forEach(node => tree.expandedNodes.add(String(node.id)));
   tree.treeContainer.replaceChildren(); tree.isTreeRendered = false;
   if (selected != null) tree.selectedValue = `doc:${selected}`;
   if (nodes.length) tree.renderTree(''); else tree.renderNoResults();
@@ -133,11 +136,9 @@ export function paintTree(host, nodes, { selected, onSelect, onAction, onToggle,
 // Draws new data into a tree already on screen (a lazy branch just arrived): open nodes and scroll position stay.
 export function refreshTree(tree, nodes, selected) {
   const scroller = tree.treeContainer.closest('.treeview-dropdown') || tree.treeContainer, top = scroller.scrollTop;
-  const open = new Set(tree.expandedNodes), chosen = tree.selectedValue;
-  tree.setData(nodes);
-  tree.expandedNodes = open;   // setData ends in clearLocalSearch(), which closes every node: put the open ones back
-  tree.treeContainer.replaceChildren(); tree.isTreeRendered = false;
-  tree.selectedValue = selected != null ? `doc:${selected}` : chosen;
+  tree.selectedValue = selected != null ? `doc:${selected}` : tree.selectedValue;
+  tree.setData(nodes, { preserveExpanded: true });
+  tree.isTreeRendered = false;
   if (nodes.length) tree.renderTree(''); else tree.renderNoResults();
   scroller.scrollTop = top;
 }
@@ -181,7 +182,7 @@ export function preview(title, sections, owner, details = {}) {
   const pdf = el('button', { type: 'button', textContent: 'Previzualizare PDF' });
   pdf.addEventListener('click', async () => {
     pdf.disabled = true;
-    try { const data = await snapshotPdf(title, sections); if (!view.closed) await pdfPreview(title, data, view.scope, () => !view.closed, details); }
+    try { await snapshotPreview(title, sections, view.scope, () => !view.closed, details); }
     catch (error) { if (!view.closed) { const message = el('p'); view.body.append(message); showMessage(message, error.message || 'PDF-ul nu a putut fi pregătit.', 'error'); } }
     finally { pdf.disabled = false; }
   });
@@ -189,12 +190,11 @@ export function preview(title, sections, owner, details = {}) {
   return view;
 }
 // Reports that return PDF use the same PDF.js viewer as Portal; no endpoint is invented by the UI.
-export async function snapshotPreview(title, sections, owner, isCurrent = () => true, details = {}) {
-  const data = await snapshotPdf(title, sections);
-  if (isCurrent()) return pdfPreview(title, data, owner, isCurrent, details);
+export function snapshotPreview(title, sections, owner, isCurrent = () => true, details = {}) {
+  return pdfPreview(title, () => snapshotPdf(title, sections), owner, isCurrent, details);
 }
 
-export async function pdfPreview(title, data, owner, isCurrent = () => true, details = {}) {
-  const { openPdfReport } = await import('./pdf-preview.js');
-  if (isCurrent()) return openPdfReport(title, data, owner, details);
+export function pdfPreview(title, source, owner, isCurrent = () => true, details = {}) {
+  if (isCurrent()) return openPdfReport(title, source, owner, { ...details, isCurrent });
+  return Promise.resolve(null);
 }

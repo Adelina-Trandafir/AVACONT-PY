@@ -1,14 +1,11 @@
-/* OI documents share the NIR grid; no context panels are mounted in the editor. */
-.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs).is-editing {
-  grid-template-columns: minmax(0, 1fr);
-}
+/* PTC shares the BC new-row grid and action bar; BP keeps its saved tree. */
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__header--oi {
   grid-template-columns: repeat(3, minmax(0, 280px));
   align-content: start;
 }
 .vc-doc--bp .vc-field[data-field="IdMasinaP"] { grid-column: 1; grid-row: 1; }
 .vc-doc--bp .vc-field[data-field="IDC_BP"] { grid-column: 2; grid-row: 1; }
-.vc-doc--bp .vc-field[data-field="IdMasina"] { grid-column: 2; grid-row: 2; }
+.vc-doc--bp .vc-field[data-field="IdMasina"] { grid-column: 1; grid-row: 2; }
 .vc-doc--bp .vc-field[data-field="Numar"] { grid-column: 3; grid-row: 1; }
 .vc-doc--bp .vc-field[data-field="Data"] { grid-column: 3; grid-row: 2; }
 .vc-doc--bt .vc-field[data-field="IDC_OLD"] { grid-column: 1; grid-row: 1; }
@@ -21,11 +18,70 @@
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-field[data-field="Expl"] { grid-row: 3; }
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-receipt-tree > h4 { display: flex; align-items: center; }
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-receipt-tree__add { margin-inline-start: auto; }
+.vc-page .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__tree:not([hidden]) { display: flex; flex-direction: column; overflow: hidden; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-oi-tree-order {
+  margin: 0; padding: 8px; align-self: center; justify-self: start;
+  display: inline-flex; align-items: center; justify-content: flex-start;
+}
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv { --dgv-size: calc(var(--fs-ms) - 1pt); }
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv__cell { font-size: var(--dgv-size); }
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv__cell:not(.is-action) { padding-inline: 4px; }
 .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-dgv .dgv__cell:has(> .dgv__editor) { padding-inline: 0; }
+.vc-page .vc-work > .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  row-gap: 8px;
+}
+.vc-page .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) > .vc-doc__main {
+  grid-row: 1 / -1; grid-column: 1;
+  display: grid; grid-template-rows: subgrid; row-gap: 8px;
+}
+.vc-page .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) :is(.vc-doc__titlebar, .vc-doc__header, .vc-doc__bar) { margin-block: 0; }
+.vc-page .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) > .vc-doc__tree:not([hidden]) {
+  box-sizing: border-box; grid-row: 1 / -1; grid-column: 2;
+  display: grid; grid-template-rows: subgrid; row-gap: 8px;
+}
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-receipt-tree { grid-row: 1 / 4; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-oi-tree-order { grid-row: 4; }
+.vc-doc--bp .vc-doc__tree[aria-disabled="true"] .vc-receipt-tree { opacity: .65; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__bar--nir-editing {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-areas: "cancel messages save"; align-items: center; gap: 12px;
+}
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__cancel { grid-area: cancel; justify-self: start; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__save { grid-area: save; justify-self: end; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__messages { grid-area: messages; min-width: 0; overflow-wrap: anywhere; }
+.vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-save-status { margin: 0; }
+.vc-page .vc-doc:is(.vc-doc--bt, .vc-doc--bs).is-editing {
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 360px);
+}
+.vc-page .vc-doc:is(.vc-doc--bt, .vc-doc--bs).is-editing > .vc-doc__main { grid-column: 1; }
+.vc-oi-context {
+  grid-column: 2; grid-row: 1 / -1; min-height: 0; min-width: 0;
+  display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 8px;
+}
+.vc-oi-context[hidden] { display: none; }
+.vc-oi-context--bs { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.vc-oi-card {
+  min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--card);
+  font-size: var(--vc-mini-statement-font-size);
+}
+.vc-oi-card > h4 { flex: 0 0 auto; margin: 0; padding: 5px 8px; background: var(--sky-2); font-size: inherit; }
+.vc-oi-card__identity { flex: 0 0 auto; margin: 4px 8px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-oi-card__message { margin: 8px; overflow: auto; }
+.vc-oi-card__body { flex: 1 1 0; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.vc-oi-card table { width: 100%; table-layout: fixed; border-collapse: collapse; font: inherit; }
+.vc-oi-card th, .vc-oi-card td { padding: 3px 5px; text-align: left; border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-oi-card th { position: sticky; top: 0; background: var(--sky-2); }
+.vc-oi-card .vc-oi-card__date { width: 6.5em; }
+.vc-oi-card .vc-oi-card__number { width: 6em; text-align: right; font-variant-numeric: tabular-nums; }
+.vc-oi-card td small { display: block; overflow: hidden; text-overflow: ellipsis; font-size: .9em; color: var(--ink-muted, var(--ink)); }
 @media (max-width: 800px) {
   .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-doc__header--oi { grid-template-columns: minmax(0, 1fr); }
   .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-field[data-field] { grid-column: auto; grid-row: auto; }
+  .vc-page .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) > .vc-doc__main { display: flex; }
+  .vc-page .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) > .vc-doc__tree:not([hidden]) { display: flex; }
+  .vc-oi-context { order: 2; flex: 0 0 35%; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
+  .vc-oi-context--bs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vc-doc:is(.vc-doc--bp, .vc-doc--bt, .vc-doc--bs) .vc-oi-tree-order { align-self: flex-start; }
 }

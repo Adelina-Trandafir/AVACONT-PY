@@ -23,7 +23,9 @@ The READ-ONLY data routes of the web area (slice 0110-06).
 THE QUERIES ARE NOT COPIED. Each route calls the function the desktop app's route already
 runs (routes/forexe/{tree,sumar,rezervari,receptii,plati}.py) -- the undecorated one, reached
 through `__wrapped__`, so the bearer guard of the desktop app is skipped and ours
-(`require_portal_session`) stands in front instead. Those functions read exactly two things
+(`require_portal_data`) stands in front instead, checking the current unit role as well as
+the session. Only accountants can read accounting data; document roles get DDF/ORD and
+the navigation fields of the tree. Those functions read exactly two things
 from the outside: the query string, which is the portal request's own, and
 `g.session.db_name`, which is set here from the portal session -- never from the request. So a
 portal token reaches the unit it opened and no other, and the answer has exactly the shape the
@@ -57,7 +59,8 @@ from routes.forexe.rezervari import get_rezervari
 from routes.forexe.sumar import get_sumar
 from routes.forexe.tree import get_tree
 
-from .portal import portal_bp, require_portal_session
+from .access import TREE_FIELDS, is_accountant, require_portal_data
+from .portal import _json, portal_bp
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +108,18 @@ def _run(name):
     # The one thing the wrapped functions read from the session: the unit. It comes from the
     # portal session note (set by /api/portal/unit after checking the user owns it).
     g.session = SimpleNamespace(db_name=g.portal["db_name"], username=g.portal["email"])
-    return _READERS[name]()
+    response = _READERS[name]()
+    if name == "tree" and not is_accountant(g.portal["role"]) and response.status_code == 200:
+        # The desktop tree also carries reception/reservation diagnostics and amounts.
+        # Document-only users receive just the fields needed to choose an angajament.
+        data = response.get_json()
+        data["rows"] = [{key: row.get(key) for key in TREE_FIELDS} for row in data["rows"]]
+        return _json(data)
+    return response
 
 
 def _make(name):
-    @require_portal_session
+    @require_portal_data(name)
     def view():
         return _run(name)
     view.__name__ = f"portal_date_{name.replace('-', '_')}"
@@ -117,7 +127,7 @@ def _make(name):
 
 
 def _make_pdf(name):
-    @require_portal_session
+    @require_portal_data(name)
     def view(doc_id):
         g.session = SimpleNamespace(db_name=g.portal["db_name"], username=g.portal["email"])
         response = _PDF_READERS[name](doc_id)
@@ -132,7 +142,7 @@ def _make_pdf(name):
 
 
 def _make_id(name):
-    @require_portal_session
+    @require_portal_data(name)
     def view(item_id):
         g.session = SimpleNamespace(db_name=g.portal["db_name"], username=g.portal["email"])
         return _ID_READERS[name](item_id)

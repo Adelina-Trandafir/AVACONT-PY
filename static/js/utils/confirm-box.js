@@ -9,10 +9,10 @@ function ensureStyle(doc = document) {
 }
 
 // One-button notice, using the same custom dialog as confirmations.
-export function messageBox(text, { title = 'Mesaj', button = 'Am înțeles', warning = false, ownerDocument = document } = {}) {
+export function messageBox(text, { title = 'Mesaj', button = 'Am înțeles', warning = false, className = '', ownerDocument = document } = {}) {
   ensureStyle(ownerDocument);
   const dialog = ownerDocument.createElement('dialog');
-  dialog.className = `confirm-box confirm-box--message${warning ? ' confirm-box--warning' : ''}`;
+  dialog.className = `confirm-box confirm-box--message${warning ? ' confirm-box--warning' : ''}${className ? ` ${className}` : ''}`;
   dialog.setAttribute('aria-label', title);
   const header = ownerDocument.createElement('header'), heading = ownerDocument.createElement('h2');
   heading.textContent = title; header.append(heading);

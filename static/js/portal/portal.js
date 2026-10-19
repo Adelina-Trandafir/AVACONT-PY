@@ -7,6 +7,7 @@
 import sessionMonitoring from '../session/session-monitoring.js';
 import { createApp } from './app.js';
 import { createMenu } from './menu.js';
+import { isAccountant } from './access.js';
 import { installLayouts } from './layouts.js';
 import { createCertificate } from './certificat.js';
 import eventBus, { EVENTS } from '../event-bus/event-bus.js';
@@ -214,6 +215,7 @@ installLayouts(); // the grids ask layouts.js for their column order, visibility
 const app = createApp({
   call,
   callBytes,
+  onAccessChanged: (role) => menu.setVisible(isAccountant(role)),
   onUnitOpened: goNext,
   onUnauthorized: (message) => {
     writeToken('');

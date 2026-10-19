@@ -1,7 +1,7 @@
 .combotree { width: 100%; min-width: 0; }
 .combotree .treeview-input { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; }
 .combotree .treeview-input.is-invalid { border-color: var(--danger-color, #b42318); }
-.combotree-popup { position: fixed; display: flex; flex-direction: column; box-sizing: border-box; max-width: calc(100vw - 16px); min-height: 0; }
+.combotree-popup { position: fixed; display: flex; flex-direction: column; box-sizing: border-box; max-width: calc(calc(100 * var(--application-vw, 1vw)) - 16px); min-height: 0; }
 .combotree-popup.hidden { display: none; }
 .combotree-popup .treeview-search-wrapper {
   position: fixed;

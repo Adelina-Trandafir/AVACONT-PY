@@ -103,7 +103,7 @@ def create_parent_blueprint(repository_factory=None, deliver=None, preview_units
                 logger.exception('Parent portal request failed')
                 response = jsonify(error='Operația nu a fost finalizată. Reîncercați.', reason='SERVER'); response.status_code=500
             response.headers.update({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
-                'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})
+                'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})
             return response
         return wrapped
 
@@ -231,7 +231,7 @@ def create_parent_blueprint(repository_factory=None, deliver=None, preview_units
     @authenticated
     def statement(repo,parents,unit,child_id,output):
         parent=select_child(repo,parents,child_id)
-        require(output in ('print','pdf','xlsx'),'OUTPUT','Format necunoscut.',404)
+        require(output in ('print','pdf','xlsx','columns'),'OUTPUT','Format necunoscut.',404)
         start=end=None
         require(request.args.get('interval','0') in ('0','1'),'DATE','Interval invalid.',400)
         if request.args.get('interval')=='1':
@@ -245,6 +245,10 @@ def create_parent_blueprint(repository_factory=None, deliver=None, preview_units
         data=child_data(repo,child_id)
         monthly_rows(data) # refuse incomplete closed histories in every output
         report=make_statement(data,parent,issuer_data(repo,unit),start,end)
+        if output=='columns':
+            from .parent_statement import statement_model
+            from .report_excel import column_options
+            return {'columns': column_options(statement_model(report))}
         if output=='print':
             from .parent_statement import statement_model
             from .report_excel import dialog_html

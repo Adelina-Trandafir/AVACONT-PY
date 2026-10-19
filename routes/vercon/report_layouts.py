@@ -37,8 +37,9 @@ TITLES = {'Balanta_produse': 'Balanță stocuri produse', 'Fisa_Magazie': 'FIȘ�
           'Fisa_Magazie_BF': 'FIȘĂ DE MAGAZIE', 'Stoc_Final': 'Stoc final',
           'LISTA_INVENTAR': 'LISTĂ DE INVENTARIERE\nMAGAZIE', 'NIR': 'NOTĂ DE RECEPȚIE ȘI CONSTATARE DE DIFERENȚE',
           'NIR_SFP': 'NOTĂ DE RECEPȚIE ȘI CONSTATARE DE DIFERENȚE', 'NIR_Storno': 'NOTĂ DE RECEPȚIE — STORNO',
-          'Centralizator_BC': 'Centralizator Bonuri de Consum', 'Centralizator_Conturi': 'Centralizator conturi',
-          'Centralizator_Conturi_Furnizori': 'Situații furnizori', 'Centralizator_Furnizori': 'Situații furnizori',
+          'Bon_Consum': 'BONURI', 'Centralizator_BC': 'CENTRALIZATOR', 'Centralizator_Conturi': 'Centralizator conturi',
+          'Centralizator_Conturi_Furnizori': 'Situații furnizori', 'Centralizator_Furnizori': 'Situație Furnizori',
+          'nou_Furnizori': 'Centralizator Furnizori',
           'Consumuri_Produs': 'Situație consumuri / conturi', 'Consumuri_Unitati': 'Situație consumuri / gestionari',
           'Nota_Comanda': 'NOTĂ DE COMANDĂ', 'Referat_periodic_produs': 'REFERAT DE ACHIZIȚIE',
           'Referat_periodic_Intrari': 'REFERAT DE ACHIZIȚIE', 'Plan_Achizitii': 'Situație intrări produse în perioada',
@@ -116,7 +117,7 @@ def default(spec):
                        money('quantity', 'Cantitatea\neliberată'), PRICE, VALUE]
             signs = ['Data și semnătura', 'Șef compartiment', 'Gestionar', 'Primitor']
     elif kind == 'document_summary':
-        columns = [col('number', 'Număr bon consum', 1.4), col('date', 'Data'), VALUE, col('party', 'Primitor', 2.7)]
+        columns = [col('number', 'Număr bon', 1.4), col('date', 'Data'), VALUE, col('party', 'Primitor', 2.7)]
         groups, totals = ['account'], ['value']
     elif kind == 'receipts_summary':
         columns = [col('invoice', 'Serie/Număr fact.', 2), col('date', 'Dată'), col('number', 'NIR', .6), col('account', 'Cont', 2), VALUE]
@@ -141,6 +142,14 @@ def default(spec):
         else:
             groups = ['party'] if name != 'Referat_periodic_produs' else []
             signs = ['ÎNTOCMIT,\nResponsabil achiziții', 'VIZĂ CFP']
+    elif kind == 'depreciation':
+        columns = [NAME, col('code', 'Nr. inventar', 1.2), col('start_date', 'Prima predare', 1, 'date'),
+                   col('used_months', 'Luni folosite', .7, 'int'), col('remaining_months', 'Luni rămase', .7, 'int'),
+                   money('value', 'Valoare variantă'), money('monthly', 'Valoare lunară'),
+                   money('month_depreciation', 'Amortizare lună'), money('accumulated', 'Amortizare cumulată'),
+                   money('remaining', 'Valoare rămasă'), col('status', 'Stare', 1.3),
+                   col('issues_text', 'Observații', 2)]
+        groups, totals = [], []
     elif kind == 'food':
         columns, groups, totals = [], [], []
     if spec.get('ledger') == 'custody':
@@ -178,7 +187,7 @@ def default(spec):
         'font_size': 8,
         'title_size': 16 if kind == 'documents' and spec.get('family') == 'nir' else 15,
         'form': 'nir-classic' if kind == 'documents' and spec.get('family') == 'nir' else 'generic',
-        'landscape': kind in ('balance', 'inventory', 'product'),
+        'landscape': kind in ('balance', 'inventory', 'product', 'depreciation'),
         'table_width': 1, 'columns': columns, 'groups': groups, 'totals': totals, 'headers': headers,
         'signatures': signs, 'elements': [], 'sections': food_sections() if kind == 'food' else {},
         'reference': 'VERCON/FLUXURI_UI.md — Predare, transfer și casare OI/MF' if spec.get('ledger') == 'custody' or spec.get('family') in ('bp', 'bt', 'bs') else 'CAPTURI_RAPOARTE/Magazie-Alimente',
@@ -188,11 +197,13 @@ def default(spec):
                    'inventory', 'actual', 'plus', 'minus', 'value_plus', 'value_minus', 'inventory_value', 'loss_value', 'loss_quantity',
                    'control', 'signature', 'meal', 'portions', 'allocation', 'distributed', 'period', 'economy', 'overrun', 'Explicatie', 'receiver', 'md', 'd', 'c',
                    'warehouse_account', 'giver_name', 'entries', 'transfers_in', 'transfers_out', 'scrapping',
-                   'entries_value', 'transfers_in_value', 'transfers_out_value', 'scrapping_value']})
+                   'entries_value', 'transfers_in_value', 'transfers_out_value', 'scrapping_value',
+                   'start_date', 'used_months', 'remaining_months', 'monthly', 'month_depreciation',
+                   'accumulated', 'remaining', 'status', 'issues_text']})
 
 
 def unit_default(unit):
-    return {'name': unit, 'fiscal_code': '', 'address': '', 'manager': '',
+    return {'name': '', 'fiscal_code': '', 'address': '', 'manager': '',
             'header': '{UNITATE}', 'footer': 'Raport generat în VERCON',
             'elements': [{'id': 'unit-name', 'band': 'header', 'text': '{ANTET}', 'x': 0, 'y': 0, 'w': .72, 'h': 12, 'size': 10},
                          {'id': 'footer-text', 'band': 'footer', 'text': '{SUBSOL}', 'x': 0, 'y': 0, 'w': .75, 'h': 12, 'size': 7},

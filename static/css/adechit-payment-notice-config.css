@@ -1,5 +1,5 @@
-.ade-notice-config { width: min(1000px, 96vw); }
-.ade-notice-config form { display: flex; flex-direction: column; max-height: 90vh; min-height: 0; }
+.ade-notice-config { width: min(1000px, calc(96 * var(--application-vw, 1vw))); }
+.ade-notice-config form { display: flex; flex-direction: column; max-height: calc(90 * var(--application-vh, 1vh)); min-height: 0; }
 .ade-notice-config-body { padding: 12px 24px; overflow: auto; }
 .ade-notice-config-body > p { margin: 0 0 12px; }
 .ade-notice-config .msg { margin: 8px 24px; }

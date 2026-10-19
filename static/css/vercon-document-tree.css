@@ -1,0 +1,10 @@
+/* Shared grouping footer for incoming/outgoing document trees, including PTC. */
+.vc-doc .vc-document-tree-order {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin: 0;
+  padding: 8px;
+}
+.vc-doc .vc-receipt-tree > .vc-document-tree-order { border-top: 1px solid var(--line); align-self: stretch; }
+.vc-doc .vc-doc__tree .treeview-label { min-width: 0; }
+.vc-doc .vc-doc__tree .treeview-righttext { flex-shrink: 0; }

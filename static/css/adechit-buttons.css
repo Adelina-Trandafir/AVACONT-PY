@@ -1,0 +1,17 @@
+/* Standalone actions follow VERCON; embedded controls keep their own geometry. */
+.ade-page :is(.btn, .ade-report-command) {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font-family: inherit;
+  font-weight: var(--fw-normal);
+  cursor: pointer;
+  transform: none;
+}
+.ade-page :is(.btn, .ade-report-command):where(:not([aria-pressed="true"])) { background: transparent; }
+.ade-page .ade-report-command { padding: 7px 14px; }
+.ade-page :is(.ade-main, .ade-catalog) .btn:not(:disabled):not([aria-pressed="true"]):hover { background: transparent; }
+.ade-page :is(.btn, .ade-report-command):disabled,
+.ade-page :is(.btn, .ade-report-command)[aria-disabled="true"] {
+  opacity: .45;
+  cursor: default;
+}

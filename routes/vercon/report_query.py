@@ -60,7 +60,7 @@ def validate(sql):
     return sql
 
 
-def execute(cursor, sql, ctx, params):
+def execute(cursor, sql, ctx, params, *, result_filters=None):
     validate(sql)
     def scoped(match):
         table = match.group(1)
@@ -74,5 +74,17 @@ def execute(cursor, sql, ctx, params):
         return '(SELECT * FROM ' + table + ' WHERE ' + where + ')'
     values = {**{key: params.get(key) for key in PARAMETERS}, 'scope_s': ctx['subunit'],
               'scope_g': ctx['gestiune'], 'scope_e': ctx['exercitiu']}
-    cursor.execute(MARKER.sub(scoped, sql), values)
+    statement = MARKER.sub(scoped, sql)
+    if result_filters:
+        predicates = []
+        for key, value in result_filters.items():
+            if key not in ('category', 'product'):
+                raise ValueError('Unsupported report selection column')
+            if value is None:
+                predicates.append(key + ' IS NULL')
+            else:
+                predicates.append(key + '=%(selection_' + key + ')s')
+                values['selection_' + key] = value
+        statement = 'SELECT * FROM (' + statement + ') report_selection WHERE ' + ' AND '.join(predicates)
+    cursor.execute(statement, values)
     return cursor.fetchall()

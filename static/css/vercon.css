@@ -1,4 +1,5 @@
 /* Ordered entry point. Keep imports in this order to preserve the cascade. */
+@import url("../js/components/menu/menu-zoom.css");
 @import url("vercon-base.css");
 @import url("vercon-nomenclatoare-base.css");
 @import url("vercon-documente-base.css");
@@ -11,6 +12,7 @@
 @import url("vercon-integration.css");
 @import url("vercon-lista-totals.css");
 @import url("vercon-preview.css");
+@import url("report-preview.css");
 @import url("vercon-nomenclatoare.css");
 @import url("vercon-responsive.css");
 @import url("vercon-stock.css");
@@ -28,3 +30,6 @@
 @import url("vercon-storno.css");
 @import url("vercon-consumption.css");
 @import url("vercon-oi.css");
+@import url("vercon-migration.css");
+@import url("../js/components/menu/application-header.css");
+@import url("vercon-document-tree.css");

@@ -2,6 +2,7 @@
 .vc-field > input:not([type="hidden"]), .vc-field .tb__input, .vc-field .combobox-input, .vc-field .kdp__field { width: 100%; box-sizing: border-box; min-height: 32px; }
 .vc-field__combo { width: 100%; }
 /* Match ADECHIT's header selector; do not animate the gradient hover background. */
+.portal.vc-page .vc-selectors .vc-picker[hidden] { display: none; }
 .portal.vc-page .vc-selectors .vc-picker,
 .portal.vc-page .vc-selectors .combobox-container { height: 28px; }
 .portal.vc-page .vc-selectors .combobox-input {
@@ -12,7 +13,8 @@
 }
 .vc-field-error:empty { display: none; }
 .vc-field-error, .vc-save-status[role="alert"] { color: var(--err-ink); }
-.vc-save-status { margin-right: auto; }
+.vc-save-status { margin-right: auto; text-align: center; }
+.vc-doc__messages .vc-save-status { display: block; }
 .vc-doc__bar { border-top: 1px solid var(--line); padding-top: 10px; }
 .vc-actions button { border: 1px solid var(--line); border-radius: 5px; padding: 7px 14px; background: transparent; color: inherit; cursor: pointer; }
 .vc-actions button:disabled { opacity: .45; cursor: default; }

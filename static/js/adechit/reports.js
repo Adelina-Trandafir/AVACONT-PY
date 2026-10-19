@@ -1,51 +1,52 @@
-// SLICE-ADE9-01: the Rapoarte panel. Every button asks the server for one report (print page or PDF); the server reads,
-// the page never calculates. The panel works on what is chosen on the screen: month, group, child, and the two dates.
+// ADE report filters use the common PDF preview and frozen report exports.
 import { DatePicker } from '../components/datepicker/datepicker.js';
-import { messageBox } from '../utils/confirm-box.js';
-import { trackSessionWindow } from '../utils/session-exit.js';
+import { openPdfReport } from '../reporting/pdf-preview.js';
+import { chooseColumns } from '../reporting/columns.js';
 
 const $ = (id) => document.getElementById(id);
+const views = new Set();
+let generation = 0;
 
-function fileNameOf(k_response, k_fallback) {
-  const k_match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(k_response.headers.get('Content-Disposition') || '');
-  return k_match ? decodeURIComponent(k_match[1]) : k_fallback;
+export function closeReportPreviews() {
+  ++generation;
+  for (const close of views) close();
+  views.clear();
 }
+window.addEventListener('app:session-expired', closeReportPreviews);
 
-async function downloadOutput(k_response, k_fallback) {
-  const k_url = URL.createObjectURL(await k_response.blob());
-  const k_link = document.createElement('a'); k_link.href = k_url; k_link.download = fileNameOf(k_response, k_fallback);
-  document.body.append(k_link); k_link.click(); k_link.remove();
-  setTimeout(() => URL.revokeObjectURL(k_url), 60000);
-}
-
-// Print: the window is opened first, from the click, so the browser accepts it; the report is written into it afterwards.
-export async function outputReport({ fetchOutput, path, pdf, title }) {
-  const k_window = pdf ? null : trackSessionWindow(window.open('', '_blank'));
-  try {
-    if (!pdf && !k_window) throw new Error('Browserul a blocat fereastra de listare. Permiteți ferestrele popup pentru această pagină.');
-    if (k_window) { k_window.document.title = title; k_window.document.body.textContent = 'Se pregătește raportul…'; }
-    const k_response = await fetchOutput(path, pdf ? 'application/pdf' : 'text/html');
-    if (!pdf) {
-      const k_html = await k_response.text();
-      if (k_window.closed) return;
-      k_window.document.open(); k_window.document.write(k_html); k_window.document.close();
-      // on screen the report follows the theme of this page; printing and the PDF stay on the Access palette
-      if (document.documentElement.dataset.theme === 'dark') k_window.document.documentElement.dataset.theme = 'dark';
-      // the page keeps its opener: the PDF button asks it to download (it holds the sign-in the request needs)
-      k_window.adePdf = () => outputReport({ fetchOutput, path: path.replace('/print?', '/pdf?'), pdf: true, title })
-        .catch((k_error) => { if (!k_window.closed) messageBox(k_error.message, { title: 'Raport', warning: true, ownerDocument: k_window.document }); });
-      k_window.adeExcel = async (k_columns) => {
-        const k_url = new URL(path, window.location.origin);
-        k_url.pathname = k_url.pathname.replace(/\/print$/, '/xlsx');
-        k_url.searchParams.set('columns', k_columns.join(','));
-        const k_excel = await fetchOutput(k_url.pathname + k_url.search,
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        await downloadOutput(k_excel, 'Raport.xlsx');
-      };
-      return;
-    }
-    await downloadOutput(k_response, 'Raport.pdf');
-  } catch (k_error) { k_window?.close(); throw k_error; }
+export function outputReport({ fetchOutput, path, pdf, title }) {
+  const sequence = generation;
+  const current = () => sequence === generation;
+  const owner = { own(close) { views.add(close); } };
+  return openPdfReport(title, async view => {
+    const valid = () => current() && !view.closed;
+    const url = new URL(path, location.origin);
+    const reportPath = /^\/api\/adechit\/reports\/[^/]+\/(print|pdf)$/.test(url.pathname);
+    let model;
+    if (reportPath) {
+      url.pathname = url.pathname.replace(/\/(print|pdf)$/, '/generate');
+      model = await (await fetchOutput(url.pathname + url.search, 'application/json')).json();
+      if (!valid()) return null;
+      url.pathname = `/api/adechit/reports/export/${model.snapshot}/pdf`;
+      url.search = '';
+    } else url.pathname = url.pathname.replace(/\/print$/, '/pdf');
+    const response = await fetchOutput(url.pathname + url.search, 'application/pdf');
+    const data = await response.arrayBuffer();
+    if (!valid()) return null;
+    const filename = model ? model.filename + '.pdf' : title.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
+    const exportExcel = model ? async (preview, progress) => {
+      const columns = await chooseColumns(model.columns, progress.scope);
+      if (columns === null || preview.closed || progress.closed || !current()) return null;
+      const query = new URLSearchParams({ columns: columns.join(',') });
+      const response = await fetchOutput(`/api/adechit/reports/export/${model.snapshot}/xlsx?${query}`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const data = await response.arrayBuffer();
+      if (preview.closed || progress.closed || !current()) return null;
+      return { data, filename: model.filename + '.xlsx',
+        mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+    } : null;
+    return { data, filename, title: model?.title || title, exportExcel };
+  }, owner, { downloadOnly: pdf, isCurrent: current, onClose: close => views.delete(close) });
 }
 
 // snapshot() -> { month, monthId, groupId, selected }; the panel reads it on every click, never keeps a copy.

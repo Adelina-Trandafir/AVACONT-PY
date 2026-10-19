@@ -24,11 +24,11 @@ FORMS = {
     "bc":             ("Bon de consum",           "Iesiri",       frozenset({MATERIALE, ALIMENTE}), "consum"),
     "br":             ("Retur",                   "Iesiri",       frozenset({MATERIALE, ALIMENTE}), "retur"),
     "lista_alimente": ("Lista de alimente",       "Iesiri",       frozenset({ALIMENTE}),        "alimente"),
-    "mf_registru":    ("Registru MF",             "OI / MF",      frozenset({MF}),              "mf"),
-    "bp":             ("Bon de predare",          "OI / MF",      frozenset({OI, MF}),          "oi_predare"),
-    "bt":             ("Bon de transfer",         "OI / MF",      frozenset({OI, MF}),          "oi_transfer"),
-    "bs":             ("Bon de casare",           "OI / MF",      frozenset({OI, MF}),          "oi_casare"),
-    "rapoarte":       ("Rapoarte",                "Rapoarte",     frozenset({MATERIALE, ALIMENTE, OI}), "raport"),
+    "bp":             ("Bon de predare",          "Fluxuri",      frozenset({OI, MF}),          "oi_predare"),
+    "bt":             ("Bon de transfer",         "Fluxuri",      frozenset({OI, MF}),          "oi_transfer"),
+    "bs":             ("Bon de casare",           "Fluxuri",      frozenset({OI, MF}),          "oi_casare"),
+    "mf_registru":    ("Registru MF",             "Fluxuri",      frozenset({MF}),              "mf"),
+    "rapoarte":       ("Rapoarte",                "Rapoarte",     ALL,                          "raport"),
 }
 
 # Documents that have a header + lines editor (the others are lists / settings handled in later slices).

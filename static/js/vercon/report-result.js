@@ -1,5 +1,12 @@
 import { el, grid, column } from './ui.js';
 
+export function paintReportLetterhead(model, target) {
+  const head = model.identity.letterhead;
+  target.append(el('div', { className: 'vc-report-letterhead' },
+    el('div', {}, ...head.left.map(text => el('p', { textContent: text }))),
+    el('p', { className: 'vc-report-letterhead__subunit', textContent: head.right })));
+}
+
 export function paintReportBlock(block, target, owner) {
   if (block.t === 'positioned') {
     block.elements.forEach(item => target.append(el('p', { textContent: item.text })));
@@ -32,14 +39,18 @@ export function paintReportBlock(block, target, owner) {
   } else if (block.t === 'break') target.append(el('hr'));
 }
 
-export function reportNodes(reports) {
-  reports = reports.filter(report => !['OI_Predare', 'OI_Transfer', 'OI_Casare'].includes(report.id));
-  const oi = reports.filter(report => report.ledger === 'custody' || ['bp', 'bt', 'bs'].includes(report.family));
+function buildReportNodes(reports) {
+  reports = reports.filter(report => !['OI_Predare', 'OI_Transfer', 'OI_Casare', 'FM1-u', 'FM2', 'Fisa_Magazie_BF',
+    'NIR_SFP', 'NIR_Storno', 'Centralizator_Conturi_Furnizori', 'BUConsum', 'BUConsum_F', 'BUConsum_F1', 'BonRetur'].includes(report.id));
+  const mf = reports.some(report => report.types.length === 1 && report.types[0] === 'MF');
+  const oi = reports.filter(report => report.ledger === 'custody' || ['bp', 'bt', 'bs'].includes(report.family) || report.kind === 'depreciation');
   if (oi.length) {
     const nodes = reports.filter(report => !oi.includes(report));
-    return [...(nodes.length ? reportNodes(nodes) : []), { id: 'oi-reports', label: 'Obiecte de inventar în folosință',
-      children: [...new Set(oi.map(report => report.group))].map((group, index) => ({ id: `oi-reports:${index}`, label: group,
-        children: oi.filter(report => report.group === group).map(report => ({ id: 'doc:' + report.id, label: report.label })) })) }];
+    return [...(nodes.length ? buildReportNodes(nodes) : []), { id: 'oi-reports', label: mf ? 'Mijloace fixe' : 'Obiecte de inventar în folosință',
+      children: [...new Set(oi.map(report => report.group))].flatMap((group, index) => {
+        const children = oi.filter(report => report.group === group).map(report => ({ id: 'doc:' + report.id, label: report.label }));
+        return mf && group === 'Mijloace fixe' ? children : [{ id: `oi-reports:${index}`, label: group, children }];
+      }) }];
   }
   const groups = new Map();
   for (const report of reports.filter(item => !item.id.endsWith('subreport') && item.id !== 'BC subreport 2013')) {
@@ -50,6 +61,14 @@ export function reportNodes(reports) {
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push({ id: 'doc:' + report.id, label: report.label });
   }
+  const products = groups.get('Produse');
+  if (products) products.sort((first, second) => Number(second.id === 'doc:Fisa_Magazie') - Number(first.id === 'doc:Fisa_Magazie'));
   return [{ id: 'warehouse', label: 'Magazie', children: ['Produse', 'Intrări', 'Ieșiri', 'Liste de alimente']
     .filter(group => groups.has(group)).map(group => ({ id: 'reports:' + group, label: group, children: groups.get(group) })) }];
+}
+
+export function reportNodes(reports) {
+  const uppercase = nodes => nodes.map(node => ({ ...node, label: node.label.toLocaleUpperCase('ro-RO'),
+    ...(node.children ? { children: uppercase(node.children) } : {}) }));
+  return uppercase(buildReportNodes(reports));
 }

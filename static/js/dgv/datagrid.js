@@ -16,6 +16,7 @@
 // The data logic (formats, filters, sort, grouping, aggregates) is in engine.js and has no DOM.
 
 import { testMode } from '../utils/debug-tools.js';
+import { applicationScale, layoutRect, layoutViewport } from '../utils/layout-geometry.js';
 import {
   ValueType, Operator,
   formatValue, aggregate, aggregatesFor, buildItems, groupCaption, filterIsActive,
@@ -384,7 +385,7 @@ export class DataGrid {
     const style = getComputedStyle(s);
     const borders = (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0);
     const present = Math.max(0, s.offsetWidth - s.clientWidth - borders);
-    const inner = s.getBoundingClientRect().width - borders;
+    const inner = layoutRect(s).width - borders;
     const current = Math.min(s.clientWidth, inner - present);
     const pending = needsBar && present < 1 ? this._scrollbarWidth() : 0;
     // Fractional layout widths at browser zoom must not round the columns past the viewport.
@@ -557,7 +558,7 @@ export class DataGrid {
         cell.classList.add('is-action');
       } else {
         const title = el('span', 'dgv__title', col.title);
-        title.title = col.title;
+        title.title = col.tooltip || col.title;
         cell.appendChild(title);
       }
 
@@ -585,7 +586,7 @@ export class DataGrid {
       }
 
       if (col.sortable) cell.addEventListener('click', () => this._cycleSort(col), { signal });
-      cell.addEventListener('contextmenu', (ev) => { ev.preventDefault(); this._openMenu(col, ev.clientX, ev.clientY); }, { signal });
+      cell.addEventListener('contextmenu', (ev) => { ev.preventDefault(); this._openMenu(col, ev.clientX / applicationScale(), ev.clientY / applicationScale()); }, { signal });
       this._head.appendChild(cell);
     });
     this._positionFrozen(this._head);
@@ -610,7 +611,7 @@ export class DataGrid {
     const grip = ev.currentTarget;
     grip.setPointerCapture(ev.pointerId);
     const move = (e) => {
-      col.width = Math.max(col.minWidth, Math.round(startW + e.clientX - startX));
+      col.width = Math.max(col.minWidth, Math.round(startW + (e.clientX - startX) / applicationScale()));
       col._auto = false;
       this._applyWidths();
       this._scheduleRender(true);
@@ -936,7 +937,7 @@ export class DataGrid {
   _tipIfClipped(ev) {
     const cell = ev.target.closest('.dgv__cell');
     if (!cell || cell.classList.contains('is-band')) return;
-    cell.title = cell.scrollWidth > cell.clientWidth ? cell.textContent : '';
+    cell.title = this._col(cell.dataset.key)?.tooltip || (cell.scrollWidth > cell.clientWidth ? cell.textContent : '');
   }
 
   _emit(name, payload) {
@@ -959,9 +960,9 @@ export class DataGrid {
 
   _placePopup(popup, x, y) {
     this._root.appendChild(popup);
-    const r = popup.getBoundingClientRect();
-    const left = Math.min(Math.max(8, x), window.innerWidth - r.width - 8);
-    const top = Math.min(Math.max(8, y), window.innerHeight - r.height - 8);
+    const r = layoutRect(popup), viewport = layoutViewport();
+    const left = Math.min(Math.max(8, x), viewport.width - r.width - 8);
+    const top = Math.min(Math.max(8, y), viewport.height - r.height - 8);
     popup.style.left = `${left}px`;
     popup.style.top = `${top}px`;
     this._popup = popup;

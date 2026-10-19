@@ -27,8 +27,9 @@ SEMNALEAZA (avertisment), nu se rescrie -- ar cere alt rand de rezervare.
 
 DOUA MODURI, ACEEASI PLIMBARE
 =============================
-`aplica = false` (implicit) e o PROBA: numara si arata ce s-ar schimba, fara sa scrie.
-`aplica = true` scrie, intr-o singura tranzactie.
+`aplica = false` (implicit) e o PROBA: numara si arata ce s-ar schimba, fara sa scrie, SI cand
+schimbarea ar atinge o luna cu revizii (fereastra de previzualizare trebuie sa apara oricum).
+`aplica = true` scrie, intr-o singura tranzactie; daca ar atinge o luna cu revizii, refuza (409).
 
 VERIFICAT (12.10.2026) pe jurnalele unui utilizator (Istoric.txt / Rezervari.txt, simulare in node): cu
 filtrul vechi (doar Prelucrat = 1) plimbarea da exact stricaciunea raportata (14 randuri din septembrie);
@@ -278,8 +279,10 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
                 ant_noua, val_noua,
                 1 if val_noua > 0 else 0, 1 if val_noua < 0 else 0, int(rz["IDRZ"])))
 
-    # --- luni cu revizii: nu se repara (nici proba nu trece) ---------------------
-    if luni_atinse:
+    # --- luni cu revizii: nu se repara -------------------------------------------
+    # Proba (aplica = false) NU se opreste aici (19.10.2026): operatorul vede in fereastra ce s-a gasit si ce
+    # s-ar schimba, iar refuzul vine abia la «Repara» (scrierea reala), cu acelasi mesaj.
+    if aplica and luni_atinse:
         cursor.execute(_REV_LUNI_SQL, (cod,))
         luni_revizii = {int(x["Luna"]) for x in cursor.fetchall() if x["Luna"] is not None}
         blocate = sorted(l for l in luni_atinse if l in luni_revizii or l in luni_legate)

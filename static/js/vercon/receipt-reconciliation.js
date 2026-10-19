@@ -13,6 +13,10 @@ const sumUnits = (lines, name, precision) => lines.reduce((sum, row) => sum + (u
 
 export function receiptTotal(lines, name, decimals) {
   const precision = Math.max(2, decimals), total = sumUnits(lines, name, precision);
+  return decimalAmount(total, precision);
+}
+
+function decimalAmount(total, precision) {
   const digits = (total < 0n ? -total : total).toString().padStart(precision + 1, '0');
   return `${total < 0n ? '-' : ''}${digits.slice(0, -precision)}.${digits.slice(-precision)}`;
 }
@@ -25,5 +29,6 @@ export function receiptDifference(declared, lines, decimals) {
   if (target === null) return { different: false, canCorrect: false };
   const total = sumUnits(lines, 'ValoareCUTVA', precision);
   const delta = target >= total ? target - total : total - target;
-  return { different: delta !== 0n, canCorrect: delta > 0n && delta <= scale };
+  return { different: delta !== 0n, canCorrect: delta > 0n && delta <= scale,
+    amount: decimalAmount(target - total, precision) };
 }

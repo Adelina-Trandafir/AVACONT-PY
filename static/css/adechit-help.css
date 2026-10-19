@@ -1,5 +1,5 @@
 /* SLICE-AD12: the ADECHIT help. Screen: a dialog (summary left, text right). Print window: the whole text on white. */
-.ade-help { width: min(1120px, 96vw); height: min(780px, 92vh); }
+.ade-help { width: min(1120px, calc(96 * var(--application-vw, 1vw))); height: min(780px, calc(92 * var(--application-vh, 1vh))); }
 .ade-help-actions { display: flex; align-items: center; gap: 8px; }
 .ade-help-body { display: grid; grid-template-columns: 270px minmax(0, 1fr); flex: 1; min-height: 0; }
 .ade-help-toc { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 10px 6px 14px; background: var(--sky-1); border-right: 1px solid var(--line); }
@@ -26,7 +26,7 @@
 .ade-help-table th, .ade-help-table td { padding: 6px 10px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
 .ade-help-table th { background: var(--sky-2); }
 @media (max-width: 760px) {
-  .ade-help { width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
+  .ade-help { width: calc(100 * var(--application-vw, 1vw)); height: calc(100 * var(--application-vh, 1vh)); max-height: calc(100 * var(--application-vh, 1vh)); border-radius: 0; }
   .ade-help-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 30%) minmax(0, 1fr); }
   .ade-help-toc { border-right: 0; border-bottom: 1px solid var(--line); }
   .ade-help-content { padding-inline: 16px; }

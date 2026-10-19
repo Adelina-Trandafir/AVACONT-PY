@@ -1,4 +1,4 @@
-.portal.vc-page { --vc-head-h: 46px; min-height: 100vh; background: var(--sky-1); color: var(--ink); }
+.portal.vc-page { --vc-head-h: 46px; min-height: calc(100 * var(--application-vh, 1vh)); background: var(--sky-1); color: var(--ink); }
 .vc-header { display: flex; align-items: center; justify-content: space-between; height: var(--vc-head-h); padding: 0 12px; background: #3b5a85; color: #fff; }
 .vc-brand { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
 .vc-brand__name { font-weight: 700; letter-spacing: .04em; }

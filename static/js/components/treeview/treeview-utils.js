@@ -1,3 +1,5 @@
+import { layoutRect, layoutViewport } from '../../utils/layout-geometry.js';
+
 export const treeViewUtilsMixin = {
   // Output lands inside attributes too (data-text="…", data-path='…'), so quotes are
   // escaped as well; textContent/innerHTML alone leaves them raw. Diverges from JS_COMPONENTS.
@@ -55,8 +57,8 @@ export const treeViewUtilsMixin = {
     let treeHeight = 0;
 
     const searchWrapperHeight = this.searchWrapper ? this.searchWrapper.offsetHeight : 0; // a tree without a search box has none
-    const viewportHeight = window.innerHeight;
-    const rect = this.container.getBoundingClientRect();
+    const viewportHeight = layoutViewport().height;
+    const rect = layoutRect(this.container);
     const spaceBelow = viewportHeight - rect.top - searchWrapperHeight - 10;
     // With only collapsed parents on screen there is no leaf to measure; any row is
     // closer to the truth than the 24px fallback. Diverges from JS_COMPONENTS.

@@ -15,7 +15,7 @@
  * search is showing a filtered copy: what the box shows is what a click does.
  *
  * The dropdown stays open while boxes are ticked. The main input is read-only in
- * this mode and the count is shown as its placeholder: `show()` treats a non-empty
+ * this mode and the selection summary is shown as its placeholder: `show()` treats a non-empty
  * `input.value` as a search query, so the value itself must stay empty.
  */
 export const treeViewCheckableMixin = {
@@ -35,8 +35,8 @@ export const treeViewCheckableMixin = {
   },
 
   /** Replaces the tree. Checks on codes that no longer exist are dropped. */
-  setData(nodes) {
-    this.updateResults(nodes || [], '');
+  setData(nodes, { preserveExpanded = false } = {}) {
+    this.updateResults(nodes || [], '', { preserveExpanded });
     this.isTreeRendered = false;
     this._buildCheckIndex();
     for (const id of [...this.checkedLeaves]) {
@@ -139,7 +139,11 @@ export const treeViewCheckableMixin = {
   updateCheckSummary() {
     if (!this.options.checkable || !this.input) return;
     const count = this.checkedLeaves.size;
-    const text = this.options.formatCheckSummary
+    this._buildCheckIndex();
+    const single = count === 1 ? this._checkIndex.get(this.checkedLeaves.values().next().value) : null;
+    const text = single
+      ? single.label || single.name || single.text || `Item ${single.id}`
+      : this.options.formatCheckSummary
       ? this.options.formatCheckSummary(count)
       : count === 0
       ? this.basePlaceholder

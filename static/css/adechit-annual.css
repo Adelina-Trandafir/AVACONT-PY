@@ -1,5 +1,5 @@
-dialog.ade-annual { width: min(1220px, 96vw); }
-.ade-annual form { display: flex; flex-direction: column; max-height: 92vh; }
+dialog.ade-annual { width: min(1220px, calc(96 * var(--application-vw, 1vw))); }
+.ade-annual form { display: flex; flex-direction: column; max-height: calc(92 * var(--application-vh, 1vh)); }
 .ade-annual-help, #ade-annual-message { margin: 10px 16px; }
 .ade-annual-workspace { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; min-height: 0; padding: 0 16px 16px; margin: 0; border: 0; overflow: auto; }
 .ade-annual-groups { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--line); }
@@ -9,7 +9,7 @@ dialog.ade-annual { width: min(1220px, 96vw); }
 .ade-annual-detail h3 { margin: 10px 0 6px; font-size: var(--fs-lg); }
 .ade-annual-name { display: flex; align-items: center; gap: 10px; }
 .ade-annual-name input { flex: 1; padding: 5px 8px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); }
-.ade-annual-grid { height: clamp(160px, 30vh, 350px); }
+.ade-annual-grid { height: clamp(160px, calc(30 * var(--application-vh, 1vh)), 350px); }
 .ade-annual-educator-grid { height: 150px; margin-bottom: 6px; }
 .ade-annual-transfer { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 #ade-annual-target { flex: 1; min-width: 150px; }

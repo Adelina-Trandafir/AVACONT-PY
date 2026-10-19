@@ -128,3 +128,4 @@
   .pa__tabs button.is-active { border-bottom-width: 2px; }
 }
 
+.pa__tabs button[hidden] { display: none; }

@@ -44,12 +44,13 @@ def _digest(value):
     return hashlib.sha1(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:16]
 
 
-def resolve(tree, subunit=None, gestiune=None, year=None):
+def resolve(tree, subunit=None, gestiune=None, year=None, *, auto_subunit=True):
     """Validate the selection against the tree and return the context.
 
     The `version` changes whenever the selection OR the options it was resolved from change; the page throws
     away any response whose version is not the latest one it asked for."""
-    chosen_sub = _pick(tree, subunit, "Subunitatea")
+    # The menu starts with an explicit subunit choice, even when only one exists.
+    chosen_sub = _pick(tree, subunit, "Subunitatea") if auto_subunit or subunit not in (None, "") else None
     gestiuni = chosen_sub["gestiuni"] if chosen_sub else []
     chosen_gest = _pick(gestiuni, gestiune, "Gestiunea") if chosen_sub else None
     if gestiune not in (None, "") and chosen_sub is None:

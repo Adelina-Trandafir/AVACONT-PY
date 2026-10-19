@@ -1,5 +1,6 @@
 // Searchable tree selector with viewport positioning shared by forms and grid cells.
 import { TreeView } from '../treeview/treeview.js';
+import { layoutRect, layoutViewport } from '../../utils/layout-geometry.js';
 import { configureComboTreeKeyboard } from './combotree-keyboard.js';
 
 export class ComboTree extends TreeView {
@@ -75,16 +76,17 @@ export class ComboTree extends TreeView {
       this.searchInput?.focus({ preventScroll: true });
     };
     this.positionDropdown = () => {
-      const rect = this.input.getBoundingClientRect(), gap = 6, margin = 8;
+      const rect = layoutRect(this.input), gap = 6, margin = 8;
+      const viewport = layoutViewport();
       this.rect = rect;
-      const below = Math.max(0, innerHeight - rect.bottom - gap - margin);
+      const below = Math.max(0, viewport.height - rect.bottom - gap - margin);
       const above = Math.max(0, rect.top - gap - margin);
       const minimum = options.minHeight || 220, desired = options.dropdownHeight || 320;
       const down = below >= minimum || below >= above;
       const height = Math.min(Math.max(minimum, desired), down ? below : above);
-      const width = Math.min(Math.max(rect.width, options.minWidth || 300), innerWidth - 2 * margin);
+      const width = Math.min(Math.max(rect.width, options.minWidth || 300), viewport.width - 2 * margin);
       Object.assign(this.treeElement.style, { height: `${height}px`, width: `${width}px`,
-        left: `${Math.max(margin, Math.min(rect.left, innerWidth - width - margin))}px`,
+        left: `${Math.max(margin, Math.min(rect.left, viewport.width - width - margin))}px`,
         top: `${down ? rect.bottom + gap : rect.top - gap - height}px`,
         zIndex: String(Number(window.ZIndexManager?.getMax?.() || 1000) + 10000) });
       this.treeElement.style.setProperty('--combotree-input-left', `${rect.left}px`);

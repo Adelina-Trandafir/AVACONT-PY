@@ -1,17 +1,11 @@
 """Build once; screen and exports share a short-lived, user-scoped snapshot."""
-from copy import deepcopy
 from datetime import date, datetime
 from decimal import Decimal
 import hashlib
 import json
-import secrets
-import os
-from pathlib import Path
-import re
-import tempfile
-import time
-from . import report_body, report_catalog, report_data, report_food, report_store, report_output, report_reception
+from . import report_balance, report_body, report_catalog, report_data, report_food, report_store, report_output, report_reception, report_identity
 from .nomenclatoare import NomError
+from reporting.snapshots import Snapshots as ReportSnapshots
 
 
 def primitive(value):
@@ -26,8 +20,12 @@ def primitive(value):
     return value
 
 
-def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None):
+def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None, issuer=None):
     spec = report_catalog.spec_of(name, ctx['type'])
+    if params.get('receipt_selection') and not spec.get('incoming_selection'):
+        raise NomError('REPORT_FILTER', 'Raportul nu folosește selecția produselor pe furnizori.', 422)
+    if params.get('outgoing_selection') and not (spec.get('outgoing_selection') or spec.get('outgoing_filters')):
+        raise NomError('REPORT_FILTER', 'Raportul nu folosește selecția bonurilor pe conturi/primitori.', 422)
     unsupported = [key for key in ('document', 'variant', 'category', 'supplier', 'receiver')
                    if (params.get(key) is not None or params.get(key + '_ids') is not None) and key not in spec['filters']]
     if unsupported:
@@ -41,6 +39,12 @@ def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None):
     identity = report_store.read(unit, 'unit')
     report_store.validate('layout', layout['value'])
     report_store.validate('unit', identity['value'])
+    issuer = report_identity.read(cursor, unit, ctx, issuer=issuer)
+    identity = {**identity, 'value': report_identity.configured(identity['value'], issuer, unit)}
+    layout = {**layout, 'value': report_identity.display_definition(layout['value'], unit, issuer['name'])}
+    if spec['id'] in ('Centralizator_Furnizori', 'nou_Furnizori', 'Bon_Consum', 'Centralizator_BC'):
+        layout['value']['title'] = spec['label']
+    layout['value']['elements'] = [e for e in layout['value'].get('elements', []) if e['band'] != 'header']
     source = source if source is not None else report_data.Source(cursor, unit, ctx, params)
     notes = []
     receptions = []
@@ -48,20 +52,29 @@ def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None):
         blocks = report_food.build(source, spec, layout['value'])
     else:
         rows = report_data.dataset(source, spec)
+        if spec['kind'] == 'balance':
+            rows = report_balance.prepare(rows, params)
+            layout = {**layout, 'value': report_balance.display_layout(layout['value'], params)}
         if (params.get('document') is not None or params.get('document_ids') is not None) and not rows:
             raise NomError('NOT_FOUND', 'Documentul nu este disponibil în selecția raportului.', 404)
         committees = {row['IdComisie']: row for row in source.rows('committee')} if spec.get('family') in ('nir', 'storno') else {}
         if layout['value'].get('form') == 'nir-classic' and spec.get('family') in ('nir', 'storno'):
             receptions = report_reception.documents(rows, committees)
-        blocks = report_body.build(spec, layout['value'], rows, ctx, identity['value'], committees)
+        blocks = report_body.build(spec, layout['value'], rows, ctx, identity['value'], committees,
+                                   page_break_accounts=spec['kind'] == 'balance' and params.get('page_break_accounts', False))
+        if spec['kind'] == 'depreciation':
+            notes.append('Amortizare la data de sfârșit selectată, cu parametrii curenți din registru și prețul curent al variantei. '
+                         'Calculul folosește întregul istoric; data de început nu limitează amortizarea cumulată. '
+                         'Observațiile din tabel indică activele care necesită corectarea datelor.')
         if spec.get('ledger') == 'custody' or spec['kind'] in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
             notes.append('Stoc evaluat la prețul curent al variantei; documentele păstrează valorile proprii.')
         if (params.get('supplier') is not None or params.get('supplier_ids') is not None) and spec['kind'] == 'statement':
             notes.append('Furnizorul selectează variantele recepționate de la acesta. Fișa păstrează toate mișcările variantelor; consumurile nu au o alocare istorică pe furnizori.')
     title = layout['value']['title']
-    period = report_body.date(params['start']) + ' — ' + report_body.date(params['end'])
+    period = ('La data ' + report_body.date(params['end']) if spec['kind'] == 'depreciation'
+              else report_body.date(params['start']) + ' — ' + report_body.date(params['end']))
     values = {'UNITATE': identity['value']['name'], 'CUI': identity['value']['fiscal_code'],
-              'ADRESA': identity['value']['address'], 'GESTIUNE': gestiune_name,
+              'ADRESA': identity['value']['address'], 'GESTIUNE': gestiune_name, 'SUBUNITATE': issuer['subunit_name'],
               'ANTET': identity['value']['header'], 'SUBSOL': identity['value']['footer'],
               'PERIOADA': period, 'RAPORT': title}
     def band(name):
@@ -72,6 +85,7 @@ def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None):
     if spec['id'] != 'ListaAlimente2015':
         heading.append({'t': 'text', 'text': period})
     model = {'title': title, 'report_name': spec['id'], 'layout': layout['value'], 'identity': identity['value'],
+             'letterhead_version': report_identity.VERSION,
              'gestiune_name': gestiune_name, 'period_text': period,
              'filename': spec['id'].replace(' ', '_') + '_' + params['end'].isoformat(),
              'blocks': heading + band('before') + blocks + band('after'),
@@ -85,44 +99,6 @@ def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None):
     return model
 
 
-class Snapshots:
-    """Shared by server workers; exports accept only an owner-bound saved model."""
-
-    def folder(self, owner):
-        digest = hashlib.sha256(json.dumps(owner).encode()).hexdigest()
-        return report_store.ROOT / 'snapshots' / digest
-
-    def put(self, owner, model):
-        token, now = secrets.token_urlsafe(24), time.time()
-        folder = self.folder(owner)
-        folder.mkdir(parents=True, exist_ok=True)
-        for path in folder.glob('*.json'):
-            try:
-                if path.stat().st_mtime < now - 600:
-                    path.unlink(missing_ok=True)
-            except FileNotFoundError:
-                pass
-        files = sorted(folder.glob('*.json'), key=lambda path: path.name)
-        if len(files) >= 40:
-            files[0].unlink(missing_ok=True)
-        fd, temporary = tempfile.mkstemp(dir=folder, suffix='.tmp')
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
-                json.dump({'expires': now + 600, 'owner': owner, 'model': model}, stream, ensure_ascii=False)
-            os.replace(temporary, folder / (token + '.json'))
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
-        return token
-
-    def get(self, owner, token):
-        if not re.fullmatch(r'[A-Za-z0-9_-]{32}', token):
-            raise NomError('REPORT_EXPIRED', 'Previzualizarea a expirat. Generați din nou raportul.', 409)
-        path = self.folder(owner) / (token + '.json')
-        try:
-            row = json.loads(path.read_text(encoding='utf-8'))
-        except FileNotFoundError:
-            row = None
-        if not row or row['expires'] <= time.time() or tuple(row['owner']) != owner:
-            raise NomError('REPORT_EXPIRED', 'Previzualizarea a expirat. Generați din nou raportul.', 409)
-        return row['model']
+class Snapshots(ReportSnapshots):
+    def __init__(self):
+        super().__init__(report_store.ROOT / 'snapshots', NomError)

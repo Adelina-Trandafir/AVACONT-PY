@@ -38,6 +38,7 @@ export function createMenu(host, onPick) {
   li.appendChild(top);
   li.appendChild(list);
   host.appendChild(li);
+  li.hidden = true; // enabled only for the accountant of the active unit
 
   function closeAll() {
     isOpen = false;
@@ -87,6 +88,10 @@ export function createMenu(host, onPick) {
   document.addEventListener('click', (e) => { if (!li.contains(e.target)) closeAll(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
   return {
-    closeAll
+    closeAll,
+    setVisible(visible) {
+      closeAll();
+      li.hidden = !visible;
+    },
   };
 }

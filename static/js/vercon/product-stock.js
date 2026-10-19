@@ -8,8 +8,9 @@ const amount = (value) => value == null ? '—' : decimalText(value, 2);
 const price = (value) => value == null ? 'Fără preț' : decimalText(value, 4) + ' lei';
 
 export function mountProductStock(host, opts) {
+  const movements = opts.sel().type === 'OI';
   const ui = scope();
-  const title = el('h3', { textContent: 'Fișe de magazie pe prețuri' });
+  const title = el('h3', { textContent: movements ? 'Fișa mișcărilor pe prețuri' : 'Fișe de magazie pe prețuri' });
   const identity = el('p', { className: 'vc-products-stock__identity' });
   const treeHost = el('div', { className: 'vc-products-stock__tree' });
   const card = el('section', { className: 'vc-products-stock__card', 'aria-live': 'polite' });
@@ -23,6 +24,7 @@ export function mountProductStock(host, opts) {
     root.classList.add('is-empty');
   }
   function renderCard(variant) {
+    if (movements) { renderMovements(variant); return; }
     const head = el('tr', {}, ...['Data', 'Document', 'Cant.', 'Sold'].map((label, index) =>
       el('th', { textContent: label, scope: 'col', className: index > 1 ? 'is-number' : '' })));
     const body = el('tbody', {}, ...variant.rows.map((row) => el('tr', {},
@@ -36,6 +38,23 @@ export function mountProductStock(host, opts) {
         : el('p', { className: 'vc-products-stock__message', textContent: 'Fără mișcări în anul selectat.' })),
       el('footer', { className: 'vc-products-stock__total', textContent: `Stoc: ${amount(variant.closing)} ${data.um}` }));
   }
+  function renderMovements(variant) {
+    const head = el('tr', {}, ...['Data / Document', 'Traseu', 'Cant.'].map(label => el('th', { textContent: label, scope: 'col' })));
+    const body = el('tbody', {}, ...(variant.movements || []).map(row => el('tr', {},
+      el('td', { textContent: `${format(row.date, { type: 'date' })} · ${kinds[row.kind] || row.kind.toUpperCase()} ${row.number ?? ''}` }),
+      el('td', { textContent: `${row.from} → ${row.to} · ${row.gestiune}${row.account ? ' / ' + row.account : ''}` }),
+      el('td', { className: 'is-number', textContent: amount(row.quantity) }))));
+    const locations = el('footer', { className: 'vc-products-stock__locations' },
+      el('b', { textContent: `În prezent · ${format(variant.location_date, { type: 'date' })}` }),
+      ...(variant.locations?.length ? variant.locations.map(location => el('p', {
+        textContent: `${location.gestiune} · ${location.holder}${location.account ? ' / ' + location.account : ''}: ${amount(location.quantity)} ${data.um}`,
+      })) : [el('p', { textContent: 'Fără cantități rămase în magazie sau la deținători.' })]));
+    card.replaceChildren(el('h4', { textContent: 'Mișcări · ' + price(variant.price) }),
+      el('div', { className: 'vc-products-stock__movements vc-products-stock__movements--oi' },
+        variant.movements?.length ? el('table', {}, el('thead', {}, head), body)
+          : el('p', { className: 'vc-products-stock__message', textContent: 'Fără mișcări salvate.' })), locations,
+      el('p', { className: 'vc-products-stock__scope', textContent: 'Istoricul gestiunii selectate, pe toate datele salvate.' }));
+  }
   function select(id) {
     selected = id;
     const variant = data?.variants.find((item) => String(item.id) === String(id));
@@ -45,7 +64,7 @@ export function mountProductStock(host, opts) {
   }
   function render() {
     ui.clear(); tree = null;
-    identity.textContent = data.name + ' · ' + data.year;
+    identity.textContent = data.name + (movements ? '' : ' · ' + data.year);
     if (!data.variants.length) { message('Produsul nu are prețuri salvate.'); return; }
     root.classList.remove('is-empty');
     nodes = data.variants.map((variant) => ({ id: 'doc:' + variant.id,

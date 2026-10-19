@@ -1,3 +1,5 @@
+import { layoutRect } from '../../utils/layout-geometry.js';
+
 export const treeViewUIMixin = {
   show(useSecondaryValue = false) {
     if (this.disabled) return;
@@ -85,7 +87,7 @@ export const treeViewUIMixin = {
   },
 
   positionDropdown() {
-    const rect = this.container.getBoundingClientRect();
+    const rect = layoutRect(this.container);
     const dropdownHeight = Number(this.getComputedTreeHeight());
     const containerWidth = parseFloat(window.getComputedStyle(this.container).width);
 
@@ -109,7 +111,7 @@ export const treeViewUIMixin = {
 
   resizeDropdown() {
     if (!this.isVisible) return;
-    const rect = this.container.getBoundingClientRect();
+    const rect = layoutRect(this.container);
     const dropdownHeight = Number(this.getComputedTreeHeight());
     const containerWidth = parseFloat(window.getComputedStyle(this.container).width);
     const width = Math.max(containerWidth, Math.floor(this.maxRowWidth));

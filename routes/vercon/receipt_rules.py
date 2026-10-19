@@ -46,6 +46,7 @@ def gross_values(quantity, gross, rate, zec):
 def adjust(parsed, ctx, key=None):
     """Split at most one unit. Retain quantity, product and the real VAT rate."""
     from .documents import receipt_line
+    from .receipt_adjustment import eligible, unavailable_message
     target = parsed['declared']
     if target is None:
         raise NomError('INVALID', 'Introduceți valoarea aferentă acestui NIR înainte de corecție.', 422,
@@ -57,22 +58,29 @@ def adjust(parsed, ctx, key=None):
     if any(line.get('calculation') for line in parsed['lines']):
         raise NomError('AUTO_ROW_LOCKED', 'Ștergeți corecția existentă cu revenire în grup înainte de o nouă ajustare.', 422)
     if abs(delta) > Decimal(1):
-        raise NomError('ADJUST_LIMIT', 'Diferența depășește 1 leu. Corectați produsele sau repartizarea facturii.', 422)
+        raise NomError('ADJUST_LIMIT', 'Diferența de %s lei depășește limita de 1 leu (valoare NIR %s lei, total produse %s lei). Corectați produsele sau repartizarea facturii.' % (
+            format(delta, 'f'), format(target, 'f'), format(original, 'f')), 422)
     result = deepcopy(parsed)
-    candidates = [r for r in result['lines'] if (not key or r['key'] == str(key)) and not r.get('preserve')
-                  and r['v']['Cant'] > 0 and not r.get('calculation')]
+    candidates = [r for r in result['lines'] if eligible(r)]
+    candidates.sort(key=lambda r: r['key'] != str(key))
     if not candidates:
-        raise NomError('ADJUST_LINE', 'Alegeți un rând calculabil, fără o corecție deja aplicată.', 422)
+        raise NomError('ADJUST_LINE', unavailable_message(result['lines']), 422)
     for chosen in candidates:
         quantity = chosen['v']['Cant']
-        fragment = min(Decimal(1), quantity)
+        fragment = Decimal(1)
         rest = quantity - fragment
         remaining = receipt_line(rest, chosen['v']['Pret'], chosen['rate'], ctx['zec'], ctx['scale']) if rest else None
+        if remaining and chosen.get('preserve'):
+            # The consumed part keeps the original price variant, including historical prices.
+            remaining['PUTVA'] = chosen['v']['PUTVA']
+            remaining['ValoareCUTVA'] = numeric.to_stored(numeric.calc_round(rest * remaining['PUTVA'], ctx['zec']))
+            remaining['TVA'] = remaining['ValoareCUTVA'] - remaining['Valoare']
         others = sum((r['v']['ValoareCUTVA'] for r in result['lines'] if r is not chosen), Decimal(0))
         gross = target - others - (remaining['ValoareCUTVA'] if remaining else 0)
         if gross < 0:
             continue
         corrected = deepcopy(chosen)
+        corrected.pop('preserve', None)
         corrected['v'] = gross_values(fragment, gross, chosen['rate'], ctx['zec'])
         corrected['calculation'] = {'mode': 'GROSS', 'gross': gross, 'input_price': chosen['v']['Pret'], 'origin': {
             'parent_key': chosen['key'], 'parent_id': chosen.get('id'), 'split': bool(rest),
@@ -82,9 +90,11 @@ def adjust(parsed, ctx, key=None):
             if ctx['type'] == 'MF':
                 raise NomError('MF_QUANTITY', 'Un activ MF trebuie să aibă cantitatea 1.', 422)
             chosen['v'] = remaining
+            chosen.pop('preserve', None)
             corrected.update({'id': None, 'key': chosen['key'] + '-adjust', 'variant': None})
             result['lines'].insert(result['lines'].index(chosen) + 1, corrected)
         else:
+            chosen.pop('preserve', None)
             chosen.update(corrected)
         result['adjustment'] = {'difference': format(delta, 'f'), 'line': corrected['key'], 'vat': format(chosen['rate'], 'f')}
         return result
@@ -145,6 +155,10 @@ def serialize(parsed, ctx=None, doc_id=None):
     for line in parsed['lines']:
         row = {'key': line['key'], 'id': line.get('id'), 'product': line.get('product'), 'variant': line.get('variant'),
                'IDTVA': line['IDTVA'], 'invoice_line': line.get('invoice_line')}
+        if line.get('has_warehouse_exit'):
+            row['has_warehouse_exit'] = True
+        if 'adjustable_quantity' in line:
+            row['adjustable_quantity'] = format(line['adjustable_quantity'], 'f')
         row.update({k: None if v is None else format(v, 'f') for k, v in line['v'].items()})
         if line.get('calculation'):
             row.update({'calc_mode': 'GROSS', 'gross_total': format(line['v']['ValoareCUTVA'], 'f'),
@@ -154,9 +168,16 @@ def serialize(parsed, ctx=None, doc_id=None):
             if src in line:
                 value = line[src]
                 row[dest] = value.isoformat() if hasattr(value, 'isoformat') else value
+        if line.get('new_product'):
+            row['new_product'] = line['new_product']
+        if line.get('DNF'):
+            from .receipt_products import monthly
+            value = line.get('ValoareLuna') if line.get('preserve') else monthly(line)
+            row['ValoareLuna'] = None if value is None else format(value, '.4f')
         if row.get('calc_mode') == 'GROSS' and ctx:
             from .receipt_auto import sign_row
             row['auto_token'] = sign_row(ctx, doc_id, row)
         rows.append(row)
     return {'lines': rows, 'total': format(sum((r['v']['ValoareCUTVA'] or Decimal(0) for r in parsed['lines']), Decimal(0)), 'f'),
+            'declared': None if parsed['declared'] is None else format(parsed['declared'], 'f'),
             'adjustment': parsed.get('adjustment'), 'undo_token': parsed.get('undo_token')}

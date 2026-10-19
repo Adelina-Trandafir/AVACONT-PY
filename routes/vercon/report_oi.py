@@ -7,6 +7,7 @@ from .nomenclatoare import NomError
 
 def documents(source, spec):
     metadata, params, scale = source.metadata(), source.params, source.ctx['scale']
+    accounts = {row['category']: row['account'] for row in source.rows('oi_accounts')}
     rows = []
     for raw in source.rows('oi_documents'):
         if raw['annulled'] or raw['family'] != spec['family']:
@@ -14,7 +15,7 @@ def documents(source, spec):
         info = metadata.get(raw['variant'])
         if info is None:
             raise NomError('REPORT_SOURCE', 'O linie OI nu are produsul în nomenclatorul contextului.', 409)
-        row = {**info, **raw}
+        row = {**info, **raw, 'account': accounts.get(raw['category']) or 'Fără cont'}
         if not accepted(row, params):
             continue
         rows.append({**row, 'date': stock.day_of(row['date']).isoformat(),

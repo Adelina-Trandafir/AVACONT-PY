@@ -52,7 +52,7 @@ export function receiptAllocation({ api, selection, draft, mode }) {
         operation.catch(() => {}).finally(() => { if (combo._accountChange === operation) combo._accountChange = null; });
       } }));
     combo.setCheckedLeaves((draft()?.accounts || []).map(String)); loading = false;
-    combo.disabled = !editable || catalog.accounts.length === 1;
+    combo.disabled = !editable || choices.length === 1;
     combo.input.disabled = combo.disabled;
     combo.arrow.setAttribute('aria-disabled', String(combo.disabled));
     Object.defineProperty(combo, 'hasEdit', { get: () => !!combo._accountChange });
@@ -80,6 +80,15 @@ export function receiptAllocation({ api, selection, draft, mode }) {
       return catalog;
     },
     ensure, nodes, product, destination, selectedAccounts, roots, accountField,
+    addProduct: item => { catalog.products.push(item); return item; },
+    productsForAccount: id => catalog.products.filter(item => item.category === id),
+    clearDraftProducts: () => {
+      for (let index = catalog.products.length - 1; index >= 0; --index) {
+        if (catalog.products[index].id < 0) catalog.products.splice(index, 1);
+      }
+    },
+    nextProductId: () => catalog.products.reduce((minimum, item) => Math.min(minimum, Number(item.id)), 0) - 1,
+    inventory: row => catalog.inventory?.[product(row?.product)?.destination || current()] || [],
     precision: row => destination(product(row?.product)?.destination)?.zec,
     account: id => catalog.accounts.find(item => String(item.id) === String(id)),
     selectionForProduct: id => {

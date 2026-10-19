@@ -1,3 +1,5 @@
+import { patchTree } from './treeview-patch.js';
+
 export const treeViewRenderMixin = {
   renderTreeWithData(data, asParent = false) {
     const query = data.toLowerCase();
@@ -51,7 +53,9 @@ export const treeViewRenderMixin = {
 
     const html = this.renderNodes(dataToRender, query, 1, [], asParent);
 
-    this.treeContainer.innerHTML = html;
+    if (this.options.incrementalRender) {
+      patchTree(this.treeContainer, html, Math.max(0, Number(this.options.indent ?? 12) || 0), Number(this.expanderWidth) || 0);
+    } else this.treeContainer.innerHTML = html;
 
     // Keep indentation outside the painted row. A leaf's invisible expander slot
     // belongs to that indentation too; its label/checkbox stays in the same place.
@@ -59,7 +63,8 @@ export const treeViewRenderMixin = {
       const level = Number(item.dataset.level) || 1;
       const indent = Math.max(0, Number(this.options.indent ?? 12) || 0);
       const spacer = item.dataset.hasChildren === 'true' ? 0 : Number(this.expanderWidth) || 0;
-      item.style.setProperty('--tv-node-start', `${(level - 1) * indent + spacer}px`);
+      const start = `${(level - 1) * indent + spacer}px`;
+      if (item.style.getPropertyValue('--tv-node-start') !== start) item.style.setProperty('--tv-node-start', start);
     });
 
     this.isTreeRendered = true;

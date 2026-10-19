@@ -226,9 +226,17 @@ def _legaturi(cursor, id_primita):
     return out
 
 
+def _are_legaturi_furnizor(cursor):
+    """Does the unit database have the supplier <-> angajament links (sql/P121_01, slice 0121)? A database without them keeps working."""
+    cursor.execute("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                   "AND TABLE_NAME = 'Parteneri_Angajamente'")
+    return int((cursor.fetchone() or {}).get("n") or 0) > 0
+
+
 def _angajamente_candidate(cursor, row, links):
-    """The angajamente an invoice can be linked to: those of its DDFs (the supplier's partner link or the manual link) and those
-    it is already linked to. [{CodAngajament, Descriere, Stare, Sursa}]"""
+    """The angajamente an invoice can be linked to: those of its DDFs (the supplier's partner link or the manual link), those the
+    SUPPLIER is linked to (Parteneri_Angajamente, by its normalized tax code, slice 0121-05: «furnizor») and those it is already
+    linked to. [{CodAngajament, Descriere, Stare, Sursa}]"""
     found = {}
     cursor.execute("SELECT DISTINCT d.CodAngajament FROM EF_PrimiteAsocieri a JOIN FX_DDF d ON d.IDDF = a.IDDF WHERE a.IdPrimita = %s",
                    (row["IdPrimita"],))
@@ -238,6 +246,11 @@ def _angajamente_candidate(cursor, row, links):
                    + primite._PARTNER_CUI + " = %s", (row["CuiNormalizat"] or "-",))
     for item in cursor.fetchall():
         found.setdefault(item["CodAngajament"], "ddf")
+    if row["CuiNormalizat"] and _are_legaturi_furnizor(cursor):
+        cursor.execute("SELECT DISTINCT CodAng FROM Parteneri_Angajamente WHERE CodFiscal = %s", (row["CuiNormalizat"],))
+        for item in cursor.fetchall():
+            if item["CodAng"]:
+                found.setdefault(item["CodAng"], "furnizor")
     for link in links:
         found[link["CodAngajament"]] = "legatura"
     if not found:
@@ -335,6 +348,39 @@ def angajamente(dc, q=None):
                        " WHERE d.CodAngajament = a.CodAngajament) AS Parteneri "
                        "FROM FX_Angajamente a WHERE " + where + f" ORDER BY a.DataCreare DESC LIMIT {MAX_ANGAJAMENTE}", tuple(params))
         return {"angajamente": [primite._plain(r) for r in cursor.fetchall()]}
+
+
+def disponibil(dc, cod, ziua):
+    """Slice KE12-03: per indicator of the angajament, the budget of its classification ON `ziua` and the receptions taken BEFORE that day -- the rule of the
+    fundamentation document (routes/forexe/ddf_edit.py: «Buget» = budget_on_day, «Receptii» = FX_Receptii with DATE(Data) < the day). A classification with no budget
+    version on that day keeps today's credit (FX_Indicatori_Buget) and the answer says so in `avertismente`.
+    {ziua, indicatori: [{IdClsf, CodIndicator, Buget (or null), Receptii}], avertismente: [text]}"""
+    from routes.forexe.budget_on_day import BudgetByDay, as_day  # lazy: the forexe package must not load with this module
+    day = as_day(ziua)
+    if day is None:
+        raise EfEroare("Data nu este validă (aaaa-ll-zz).", "CAMP_INVALID", 400)
+    with F._unit(dc, KE_SQL) as conn:
+        cursor = conn.cursor(dictionary=True)
+        _angajament(cursor, cod)
+        cursor.execute(_SQL_INDICATORI, (cod,))
+        indicators = cursor.fetchall()
+        cursor.execute("SELECT CodIndicator, SUM(Valoare) AS T FROM FX_Receptii WHERE CodAngajament = %s AND DATE(Data) < %s GROUP BY CodIndicator",
+                       (cod, day))
+        before = {(r["CodIndicator"] or ""): r["T"] for r in cursor.fetchall()}
+        budget = BudgetByDay(cursor)
+        rows = []
+        for ind in indicators:
+            id_clsf, value = ind["IdClsf"], None
+            if id_clsf is not None:
+                value = budget.value(id_clsf, day)
+                if value is None:
+                    budget.note_missing(id_clsf, ind["Clsf"] or "", day)
+                    cursor.execute("SELECT CreditBugetar FROM FX_Indicatori_Buget WHERE IdClsf = %s", (id_clsf,))
+                    credit = cursor.fetchone()
+                    value = credit["CreditBugetar"] if credit else None
+            rows.append({"IdClsf": id_clsf, "CodIndicator": ind["CodIndicator"], "Buget": None if value is None else _num(value),
+                         "Receptii": _num(before.get(ind["CodIndicator"] or "", 0))})
+        return {"ziua": day.isoformat(), "indicatori": rows, "avertismente": budget.warnings()}
 
 
 def _valori_receptii(cursor, cod):

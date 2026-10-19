@@ -162,7 +162,7 @@
 .dgv__mi:disabled { color: var(--dgv-dim); cursor: default; opacity: .6; }
 .dgv__sep { height: 1px; margin: 4px 6px; background: var(--dgv-line); }
 
-.dgv__filter { width: 290px; max-width: calc(100vw - 16px); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.dgv__filter { width: 290px; max-width: calc(calc(100 * var(--application-vw, 1vw)) - 16px); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .dgv__ptitle { font-weight: 700; }
 .dgv__ptitle--sub { margin-top: 4px; }
 .dgv__search, .dgv__op, .dgv__operand {

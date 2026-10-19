@@ -2011,7 +2011,8 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
     try:
         sincronizeaza_parteneri(
             cursor, g.session.db_name, iddf, sarcina.get("parteneri"),
-            antet.get("part_ang"), antet.get("cod_fiscal"), antet.get("nume_partener"))
+            antet.get("part_ang"), antet.get("cod_fiscal"), antet.get("nume_partener"),
+            cod_angajament=cod)
     except ParteneriInvalizi as e:
         raise DateInvalide(str(e))
 
@@ -2544,6 +2545,9 @@ def get_ddf_att_imagine(idrevatt):
             rand["Continut"], status=200,
             mimetype=_txt(rand["TipMime"]) or "application/octet-stream")
         raspuns.headers[H_SHA] = _txt(rand["Sha256"])
+        # The client (ApiClient.DownloadPdfAsync) re-checks the bytes against the ETag, the same
+        # as for the signed PDFs and the ORD attachments; without it every download is refused.
+        raspuns.headers["ETag"] = f'"{_txt(rand["Sha256"])}"'
         raspuns.headers["Content-Length"] = str(_int0(rand["Dimensiune"]))
         return raspuns
     except Exception as e:

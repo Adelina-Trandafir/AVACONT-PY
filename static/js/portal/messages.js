@@ -13,3 +13,16 @@ export function showMessage(element, message, level = 'info') {
   }
 }
 export function messageHistory() { return history.map((item) => ({ ...item })); }
+
+// Opt-in lifecycle for transient page errors; clear before the next action runs.
+export function clearMessageOnAction(element) {
+  const listeners = new AbortController();
+  const target = element.ownerDocument.defaultView;
+  const clear = () => {
+    if (element.getAttribute('role') === 'alert' && element.textContent) showMessage(element, '');
+  };
+  for (const type of ['pointerdown', 'click', 'keydown', 'input', 'change', 'submit']) {
+    target.addEventListener(type, clear, { capture: true, signal: listeners.signal });
+  }
+  return () => listeners.abort();
+}

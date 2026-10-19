@@ -5,6 +5,7 @@ All quantities remain direct decimals. OI custody is a separate ledger from ware
 stock: a BP creates one warehouse BC, never a second consumption here.
 """
 from decimal import Decimal
+from . import oi_accounts
 
 WAREHOUSE = (
     ('nir', 'VC_Intrari', 'i', 'VC_NIR', 'n', 'IdIntrare',
@@ -74,7 +75,8 @@ def custody(cursor, ctx):
                 holder=holder, table=table))
     cursor.execute(' UNION ALL '.join(parts),
                    {'s': ctx['subunit'], 'g': ctx['gestiune'], 'e': ctx['exercitiu']})
-    return [{**row, 'q': Decimal(row['q'] or 0)} for row in cursor.fetchall()]
+    rows = [{**row, 'q': Decimal(row['q'] or 0)} for row in cursor.fetchall()]
+    return oi_accounts.apply_lines(rows, oi_accounts.line_accounts(cursor, ctx)) if rows else []
 
 
 def variants(cursor, ctx):

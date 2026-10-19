@@ -63,7 +63,7 @@ def pdf(model):
     values = {'UNITATE': identity['name'], 'CUI': identity['fiscal_code'],
               'ADRESA': identity['address'], 'GESTIUNE': model['gestiune_name'],
               'PERIOADA': model['period_text'], 'RAPORT': model['title'],
-              'ANTET': identity['header'], 'SUBSOL': identity['footer']}
+              'ANTET': identity['header'], 'SUBSOL': identity['footer'], 'SUBUNITATE': identity.get('subunit_name', '')}
 
     def paragraph(value='', align=TA_LEFT, point=None, font='NirMono'):
         point = point or size
@@ -103,10 +103,11 @@ def pdf(model):
 
     title = paragraph(model['title'], TA_CENTER, layout.get('title_size', 16), 'NirMonoBold')
     title_height = title.wrap(width, page_height)[1]
-    unit_text = tokens(tokens(identity['header'], values), values) or identity['name']
-    unit = paragraph(unit_text, TA_CENTER, 11, 'NirMonoItalic')
-    unit_top = max(48, 16 + title_height + 6)
-    header_top = max(78, unit_top + unit.wrap(width, page_height)[1] + 12)
+    issuer = identity['letterhead']
+    letterhead = table([[paragraph('\n'.join(issuer['left']), point=9),
+                         paragraph(issuer['right'], TA_RIGHT, 11)]], [.6, .4])
+    title_top = 16 + letterhead.wrap(width, page_height)[1] + 8
+    header_top = max(78, title_top + title_height + 12)
 
     def header(document):
         row = document['header']
@@ -206,8 +207,8 @@ def pdf(model):
     canvas.setTitle(model['title'])
     count = len(pages) or 1
     for index, plan in enumerate(pages or [None], 1):
-        draw(title, canvas, 16)
-        draw(unit, canvas, unit_top)
+        draw(letterhead, canvas, 16)
+        draw(title, canvas, title_top)
         if plan:
             top = header_top
             for item, gap in zip(plan['bands'], (8, 6, 24)):
@@ -236,7 +237,7 @@ def pdf(model):
                 canvas.line(margin + 3, page_height - end, page_width - margin - 3, page_height - top)
             draw(plan['signature'], canvas, plan['sign_top'])
         else:
-            draw(paragraph('Nu există înregistrări pentru selecția curentă.'), canvas, 90)
+            draw(paragraph('Nu există înregistrări pentru selecția curentă.'), canvas, header_top)
         canvas.setLineWidth(.5)
         canvas.line(margin, page_height - footer_top, page_width - margin, page_height - footer_top)
         current = {**values, 'PAGINA': index, 'PAGINI': count}

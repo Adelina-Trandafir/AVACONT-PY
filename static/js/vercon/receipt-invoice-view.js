@@ -8,6 +8,8 @@ export function invoiceRows(doc, local) {
   // Keep the automatic new-row slot last, even when the invoice has external rows.
   return [...local.filter(row => !blank(row)), ...(doc.other_lines || []), ...local.filter(blank)];
 }
+export const receiptGridRows = (doc, local, editingMF) => invoiceRows(doc, local)
+  .filter(row => !editingMF || !row.has_warehouse_exit);
 export const invoiceValue = (doc, header) => sharedReceipt(doc)
   ? doc.invoice.total ?? doc.invoice.received ?? receiptTotal(invoiceRows(doc, doc.lines), 'ValoareCUTVA', 4)
   : header.Valoare;

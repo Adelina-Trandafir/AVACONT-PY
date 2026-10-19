@@ -1,5 +1,6 @@
-import { consumptionCategory, consumptionNodes } from './consumption-ui.js';
-import { format } from './fields.js';
+import { consumptionCategory } from './consumption-ui.js';
+import { docNode } from './ui.js';
+import { format, formatMoney } from './fields.js';
 
 export function oiAccount(owner, spec, value, enabled, onChange, onTab) {
   return consumptionCategory(owner, spec, value, enabled, onChange, onTab);
@@ -15,15 +16,23 @@ export function oiProductNodes(items, categories, held = false) {
     const details = held
       ? `lot ${item.origin} / ${format(item.date, { type: 'date' })} / disponibil ${format(item.left, { type: 'decimal' })}`
       : item.code || item.id;
-    groups.get(account).children.push({ id: String(held ? index : item.id),
+    groups.get(account).children.push({ id: String(held ? item.choiceIndex ?? index : item.id),
       label: `${item.name} / ${format(held ? item.PUTVA : item.putva, { type: 'decimal' })} lei / ${details}` });
   });
   return [...groups.values()];
 }
 
 export function oiDocumentNodes(documents, family) {
-  return consumptionNodes(documents.map(doc => ({ ...doc,
-    receiver: family === 'bt' ? doc.old : doc.holder,
-    number: `${family.toUpperCase()} ${doc.number}${family === 'bt' ? ' → ' + doc.holder : ''}`,
-  })));
+  const holders = new Map();
+  for (const doc of documents) {
+    const holder = doc.holder_id ?? doc.holder ?? '—';
+    if (!holders.has(holder)) holders.set(holder, []);
+    holders.get(holder).push(doc);
+  }
+  return [...holders].map(([holder, docs]) => ({
+    id: `receiver:${encodeURIComponent(holder)}`, label: docs[0].holder || '—',
+    children: [...docs].sort((a, b) => Number(b.number) - Number(a.number)
+      || String(b.date || '').localeCompare(String(a.date || '')) || b.id - a.id)
+      .map(doc => docNode(doc, `${family.toUpperCase()} ${doc.number}${doc.annulled ? ' • anulat' : ''}`, formatMoney(doc.total))),
+  }));
 }

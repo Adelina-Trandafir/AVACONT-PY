@@ -1,5 +1,12 @@
 # Resursele rapoartelor VERCON
 
+<!-- slice: ADE9-07 -->
+La generarea unui raport/document sau la export, fereastra apare imediat cu
+indicator de încărcare. Cât timp operația este în pregătire nu pornește alt
+raport în aceeași pagină. Indicatorul dispare după afișarea primei pagini PDF;
+la descărcare, fereastra se închide după pregătirea fișierului. Erorile apar în
+aceeași fereastră. Implementare locală, fără probe funcționale/vizuale.
+
 Directorul `queries/` conține interogările SELECT folosite la generarea
 rapoartelor. Aceste fișiere sunt resurse ale aplicației: se copiază pe server,
 nu se execută separat și nu instalează/modifică schema bazei de date.
@@ -79,8 +86,8 @@ semnului, fără o a doua scădere a stornării.
 Machetele implicite NIR/NIR_SFP folosesc `form: nir-classic`: A4 portret,
 antet compact cu celule reunite, font monospațiat, opt coloane de produse,
 total numai în dreapta, anularea spațiului liber cu diagonală și certificarea
-comisiei în partea de jos. Denumirea unității și subsolul sunt preluate din
-configurarea unității; datele din imaginea de referință nu sunt copiate ca
+comisiei în partea de jos. Denumirea unității provine din datele comune, iar
+subsolul din configurarea raportului; datele din imagine nu sunt copiate ca
 valori fixe. Nu se tipărește intervalul anual în această machetă.
 Coloanele se încadrează în lățimea utilă a paginii portret; fontul implicit
 este de 8pt, iar titlul de 16pt. Previzualizarea VERCON se deschide la 100%.
@@ -102,3 +109,25 @@ Fonturile Mono sunt redistribuite sub licența DejaVu existentă, din
 La publicare sunt necesare noile fonturi și modulele Python modificate, apoi
 repornirea serviciului. Raportul se generează din nou după publicare;
 snapshot-urile existente păstrează macheta cu care au fost create.
+
+## Antet comun și identitatea unității (2026-10-19)
+
+Toate rapoartele folosesc datele reale ale unității din
+AVACONT_COMUN.Unitati/Unitati_Date și denumirea subunității active din
+VC_Subunitati: nume, cod fiscal și adresă în stânga, subunitate în dreapta.
+Antetul este comun PDF-urilor generice, NIR/FCS, Excel-ului, rezultatului
+în pagină și snapshot-urilor PDF locale. Se repetă pe paginile PDF și
+la imprimarea Excel-ului.
+
+Numele bazei de date nu se tipărește și nu este fallback pentru numele
+unității. Dacă identificarea necesară lipsește, raportul cere completarea
+acesteia. Definițiile vechi care conțin DC în textele de prezentare sunt
+adaptate numai în modelul din memorie; datele economice și fișierele de
+configurare nu se rescriu. Antetele de unitate/machetă sunt înlocuite la
+randare de antetul comun; managerul și subsolul configurat rămân disponibile.
+Tokenul {SUBUNITATE} poate fi folosit și în benzile de text ale raportului.
+
+Snapshot-urile generate anterior schimbării cer regenerare la export.
+Publicați împreună modulele Python/JS/CSS modificate și reporniți serviciul.
+Schimbarea este scrisă local, fără teste, generări PDF/Excel sau verificări
+vizuale/automate, conform instrucțiunilor proiectului.

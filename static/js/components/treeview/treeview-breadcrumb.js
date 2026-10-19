@@ -3,6 +3,8 @@
  * Gestionează breadcrumb header-ul cu întreg path-ul de părinți
  */
 
+import { layoutRect } from '../../utils/layout-geometry.js';
+
 export const treeViewBreadcrumbMixin = {
   /**
    * Extrage inițialele din label (prima literă din fiecare cuvânt)
@@ -108,7 +110,7 @@ export const treeViewBreadcrumbMixin = {
    */
   findFirstVisibleItem() {
     const items = this.treeContainer.querySelectorAll('.treeview-item');
-    const containerRect = this.treeContainer.getBoundingClientRect();
+    const containerRect = layoutRect(this.treeContainer);
 
     const breadcrumbHeight =
       this.breadcrumbElement && this.breadcrumbElement.classList.contains('visible')
@@ -118,7 +120,7 @@ export const treeViewBreadcrumbMixin = {
     const topOffset = containerRect.top;
 
     for (let item of items) {
-      const itemRect = item.getBoundingClientRect();
+      const itemRect = layoutRect(item);
 
       if (itemRect.top >= topOffset && itemRect.bottom <= containerRect.bottom) {
         return item;
@@ -174,8 +176,8 @@ export const treeViewBreadcrumbMixin = {
   isParentVisible(parentElement) {
     if (!parentElement) return false;
 
-    const containerRect = this.treeContainer.getBoundingClientRect();
-    const parentRect = parentElement.getBoundingClientRect();
+    const containerRect = layoutRect(this.treeContainer);
+    const parentRect = layoutRect(parentElement);
 
     const searchHeight = this.searchWrapper ? this.searchWrapper.offsetHeight : 0;
     const topOffset = containerRect.top + searchHeight;

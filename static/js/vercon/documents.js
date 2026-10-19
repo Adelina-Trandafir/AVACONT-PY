@@ -3,6 +3,7 @@
 // built with the chosen DC / subunit / gestiune / year, and the page's own preferences use the `vercon.` prefix
 // so the ADECHIT preferences are never read or changed.
 import { outputReport } from '../adechit/reports.js';
+import { openPdfReport } from './pdf-preview.js';
 import { portalToken } from './api.js';
 
 const PREF_PREFIX = 'vercon.';
@@ -33,12 +34,11 @@ export function createDocuments({ context, signal }) {
     // kind: 'print' | 'pdf'. xlsx is a plain download of the same data (no templates, decision 11.10.2026).
     open: (k_report, k_kind, k_query, k_title) => outputReport({
       fetchOutput, path: `/api/vercon/reports/${k_report}/${k_kind}?${new URLSearchParams(k_query)}`, pdf: k_kind === 'pdf', title: k_title }),
-    download: async (k_report, k_query, k_name) => {
-      const k_response = await fetchOutput(`/api/vercon/reports/${k_report}/xlsx?${new URLSearchParams(k_query)}`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      const k_url = URL.createObjectURL(await k_response.blob());
-      const k_link = document.createElement('a'); k_link.href = k_url; k_link.download = k_name;
-      document.body.append(k_link); k_link.click(); k_link.remove();
-      setTimeout(() => URL.revokeObjectURL(k_url), 60000);
-    },
+    download: (k_report, k_query, k_name) => openPdfReport('Export Excel', async () => {
+      const response = await fetchOutput(`/api/vercon/reports/${k_report}/xlsx?${new URLSearchParams(k_query)}`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      return { data: await response.arrayBuffer(), filename: k_name,
+        mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+    }, null, { downloadOnly: true, isCurrent: () => !signal?.aborted }),
   };
 }
