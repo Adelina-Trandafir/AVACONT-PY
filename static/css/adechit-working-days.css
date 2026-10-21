@@ -1,0 +1,35 @@
+.ade-working-days { width: min(960px, calc(96 * var(--application-vw, 1vw))); }
+.ade-working-days__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 12px; }
+.ade-working-days__tools label { display: flex; align-items: center; gap: 8px; }
+.ade-working-days__tools input {
+  box-sizing: border-box;
+  width: 7em;
+  min-height: 32px;
+  padding: 5px 8px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.ade-working-days__hint { margin: 0; font-size: var(--fs-ms); color: var(--ink-soft); }
+.ade-working-days__grid { height: min(470px, calc(55 * var(--application-vh, 1vh))); min-height: 260px; flex: 0 0 auto; }
+.ade-working-days__grid .dgv__hc { padding: 4px 6px; }
+.ade-working-days__grid .dgv__title {
+  white-space: pre-line;
+  line-height: 1.2;
+  text-overflow: clip;
+  max-height: 2.4em;
+}
+.ade-working-days__grid .dgv__cell[data-key="extra"] {
+  font-weight: 800;
+  background: var(--sky-1);
+}
+.ade-working-days__grid .dgv__cell[data-key="extra"] .dgv__editor input {
+  background: var(--sky-1);
+}
+.ade-working-days__holidays { font-size: var(--fs-ms); padding: 8px 0; }
+.ade-working-days__holidays[hidden] { display: none; }
+.ade-working-days__holidays ul { margin: 8px 0; padding-inline-start: 22px; }
+.ade-working-days__holidays a { color: var(--ink); }
+.ade-working-days footer { gap: 10px; }

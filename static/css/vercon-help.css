@@ -1,0 +1,40 @@
+/* Shared content typography and print layout; VERCON supplies its dialog frame. */
+@import url("adechit-help.css");
+
+.vc-page .vc-help {
+  box-sizing: border-box;
+  max-height: calc(92 * var(--application-vh, 1vh));
+  padding: 0;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.vc-page .vc-help[open] { display: flex; flex-direction: column; }
+.vc-page .vc-help::backdrop { background: var(--ink); opacity: .45; }
+.vc-help__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--sky-2);
+  border-bottom: 1px solid var(--line);
+}
+.vc-help__header h2 { margin: 0; font-size: var(--fs-2xl); }
+.vc-help .ade-help-actions { flex-wrap: wrap; }
+.vc-help .btn {
+  min-height: 32px;
+  padding: 6px 12px;
+  color: var(--ink);
+  background: var(--sky-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.vc-help .btn:hover { background: var(--sky-1); }
+@media (max-width: 760px) {
+  .vc-page .vc-help { max-height: calc(100 * var(--application-vh, 1vh)); border-radius: 0; }
+}

@@ -41,16 +41,23 @@ export function paintReportBlock(block, target, owner) {
 
 function buildReportNodes(reports) {
   reports = reports.filter(report => !['OI_Predare', 'OI_Transfer', 'OI_Casare', 'FM1-u', 'FM2', 'Fisa_Magazie_BF',
-    'NIR_SFP', 'NIR_Storno', 'Centralizator_Conturi_Furnizori', 'BUConsum', 'BUConsum_F', 'BUConsum_F1', 'BonRetur'].includes(report.id));
+    'NIR_SFP', 'NIR_Storno', 'Centralizator_Conturi_Furnizori', 'BUConsum', 'BUConsum_F', 'BUConsum_F1', 'BonRetur',
+    'MF_Balanta_Subinv'].includes(report.id));
   const mf = reports.some(report => report.types.length === 1 && report.types[0] === 'MF');
   const oi = reports.filter(report => report.ledger === 'custody' || ['bp', 'bt', 'bs'].includes(report.family) || report.kind === 'depreciation');
   if (oi.length) {
     const nodes = reports.filter(report => !oi.includes(report));
+    const mfDocuments = ['MF_Bon_BP', 'MF_Bon_BT', 'MF_Bon_BS'];
+    const children = mf
+      ? [...mfDocuments.flatMap(id => oi.filter(report => report.id === id)),
+        ...oi.filter(report => !mfDocuments.includes(report.id))]
+        .map(report => ({ id: 'doc:' + report.id, label: report.label }))
+      : [...new Set(oi.map(report => report.group))].map((group, index) => ({
+        id: `oi-reports:${index}`, label: group,
+        children: oi.filter(report => report.group === group).map(report => ({ id: 'doc:' + report.id, label: report.label })),
+      }));
     return [...(nodes.length ? buildReportNodes(nodes) : []), { id: 'oi-reports', label: mf ? 'Mijloace fixe' : 'Obiecte de inventar în folosință',
-      children: [...new Set(oi.map(report => report.group))].flatMap((group, index) => {
-        const children = oi.filter(report => report.group === group).map(report => ({ id: 'doc:' + report.id, label: report.label }));
-        return mf && group === 'Mijloace fixe' ? children : [{ id: `oi-reports:${index}`, label: group, children }];
-      }) }];
+      children }];
   }
   const groups = new Map();
   for (const report of reports.filter(item => !item.id.endsWith('subreport') && item.id !== 'BC subreport 2013')) {

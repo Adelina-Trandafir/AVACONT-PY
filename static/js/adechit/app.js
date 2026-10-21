@@ -5,6 +5,8 @@ import { DatePicker } from '../components/datepicker/datepicker.js';
 import { showMessage as paintMessage, clearMessageOnAction } from '../portal/messages.js';
 import { openMenu } from './menu.js';
 import { bindMenuZoom } from '../components/menu/menu-zoom.js';
+import { tooltipSettingsMenuEntry } from '../components/tooltip/tooltip-settings.js';
+import '../components/tooltip/tooltip-titles.js';
 import { layoutRect, layoutViewport } from '../utils/layout-geometry.js';
 import { startSessionTimer } from './session.js';
 import { beginSessionExit } from '../utils/session-exit.js';
@@ -14,11 +16,13 @@ import { bindReports, outputReport, closeReportPreviews } from './reports.js';
 import { bindHelp } from './help.js';
 import { bindNoticeConfig } from './payment-notice-config.js';
 import { bindBankAssociations } from './bank-associations.js';
+import { bindWorkingDays } from './working-days.js';
+import { bindChildSearch } from './child-search.js';
 import { confirmBox, pickBox, reasonBox } from '../utils/confirm-box.js';
 
 const $ = (id) => document.getElementById(id);
-// The notice strip stays empty unless something went wrong (operator, 10.10.2026): confirmations are not written there.
-function showMessage(k_element, k_text, k_kind) { paintMessage(k_element, k_kind === 'info' ? '' : k_text, k_kind); }
+// Confirmations use the shared tooltip; errors also remain beside the working area.
+function showMessage(k_element, k_text, k_kind) { paintMessage(k_element, k_text, k_kind, { inline: k_kind !== 'info' }); }
 const state = { context: null, unit: null, subunit: null, pending: 0, subunitCombo: null, showHiddenGroups: false, groupsSequence: 0, monthId: null, groupId: null, rows: [], shownRows: [],
   selected: null, grid: null, monthTree: null, groupTree: null, yearCombo: null, monthCombo: null, groupCombo: null, year: null, loadedYears: new Map(), groupsRequest: null, plan: { hidden: [], nameWidth: null }, ledger: 'receipt', request: 0,
   childFilter: { presence: 'all', payments: false, refunds: false }, leftCollapsed: false, annual: null };
@@ -55,7 +59,7 @@ async function api(path, options = {}) {
     result = await response.json().catch(() => ({}));
   } finally { if (writing) state.pending -= 1; }
   if (response.status === 401 || result.reason === 'UNITATE_NEDESCHISA') { toPortal(response.status === 401); throw new Error(result.error || 'Autentificați-vă.'); }
-  if (!response.ok) throw Object.assign(new Error(result.error || `Eroare HTTP ${response.status}`), { reason: result.reason, details: result.details });
+  if (!response.ok) throw Object.assign(new Error(result.error || `Eroare HTTP ${response.status}`), { status: response.status, reason: result.reason, details: result.details });
   return result;
 }
 
@@ -229,6 +233,7 @@ function syncTreeSelection() {
 }
 
 function syncPickers() {
+  state.childSearch?.syncContext();
   if (!state.monthCombo || !state.context) return;
   syncTreeSelection();
   state.yearCombo.options.staticData = state.context.years.map((year) => ({ value: String(year), label: String(year) }));
@@ -274,23 +279,13 @@ async function saveAttendance({ row, value }) {
 
 const childFilterActive = () => state.childFilter.presence !== 'all' || state.childFilter.payments || state.childFilter.refunds;
 
-// The group, the search box and the footer filters (presence / payments / refunds) together decide which children are listed.
+// The header search navigates across groups; only group and footer filters decide the rows shown here.
 function visibleRows() {
-  const k_query = $('ade-search').value.trim().toLocaleLowerCase('ro-RO');
   const k_filter = state.childFilter;
   return state.rows.filter((row) => (state.groupId == null || row.IDG === state.groupId)
-    && (!k_query || `${row.Nume || ''} ${row.CNP || ''}`.toLocaleLowerCase('ro-RO').includes(k_query))
     && (k_filter.presence === 'all' || (Number(row.ZilePrezenta || 0) > 0) === (k_filter.presence === 'with'))
     && (!k_filter.payments || Number(row.TotalPlati || 0) !== 0)
     && (!k_filter.refunds || Number(row.Retur || 0) !== 0));
-}
-
-function filterGrid() {
-  state.shownRows = visibleRows();
-  state.selected = null;
-  $('ade-selected-child').textContent = 'Selectați un copil din tabel.';
-  state.grid?.setRows(state.shownRows, { keepWidths: true });
-  renderLedger();
 }
 
 // Phone layout (keep in step with the 980px breakpoint in adechit.css): the grid keeps Copil, Prezență and TOTAL;
@@ -405,6 +400,7 @@ function createGrid() {
 }
 
 async function loadSituation() {
+  state.childSearch?.syncContext();
   const own = ++state.request;
   state.rows = []; state.shownRows = []; state.selected = null; createGrid(); renderLedger();
   $('ade-selected-child').textContent = 'Selectați un copil din tabel.';
@@ -866,9 +862,11 @@ function bind() {
   wireLongPress();
   bindHelp({ fetchOutput, report });
   const noticeConfig = bindNoticeConfig({ api, context: () => state.context, report });
+  const workingDays = bindWorkingDays({ api, context: () => state.context, year: () => selectedMonth()?.Anul, refresh: () => loadContext(true), report });
   state.reports = bindReports({ fetchOutput, report,
     snapshot: () => ({ month: state.context ? selectedMonth() : null, monthId: state.monthId, groupId: state.groupId, selected: state.selected }) });
-  $('ade-search').addEventListener('input', filterGrid);
+  state.childSearch = bindChildSearch({ container: $('ade-child-search'), state, api,
+    chooseGroup, loadSituation, toggleHiddenGroups, report });
   $('ade-show-hidden-groups').checked = false;
   $('ade-show-hidden-groups').addEventListener('change', (event) => toggleHiddenGroups(event.target.checked).catch(report));
   $('ade-refresh').addEventListener('click', () => loadSituation().catch(report));
@@ -898,6 +896,7 @@ function bind() {
       { icon: '👥', label: 'Plătitori', run: () => $('ade-payers').click() },
       { icon: '🏦', label: 'Asociere extrase cu copii', run: () => bankAssociations.open() },
       { icon: '💶', label: 'Taxe', run: () => $('ade-taxes').click() },
+      { icon: '📅', label: 'Zile lucrătoare pe luni', run: () => workingDays.open() },
       { icon: '📝', label: 'Text situație de plată', run: () => noticeConfig.open() },
       { icon: k_dark ? '☀️' : '🌙', label: k_dark ? 'Tema luminoasă' : 'Tema întunecată', rule: true, run: toggleTheme },
     ], { label: 'Meniu', below: $('ade-menu').closest('header') });
@@ -909,6 +908,7 @@ function bind() {
       { icon: '🤖', label: 'K-BOT', rule: true, run: () => leaveApplication('/portal') },
       { icon: '🏗️', label: 'VERCON', run: () => leaveApplication('/vercon') },
       { icon: '📒', label: 'Avacont · în curând', disabled: true },
+      tooltipSettingsMenuEntry(),
     ], { label: 'Aplicații', below: $('ade-apps').closest('header') });
   });
   if (document.documentElement.dataset.adePreview !== 'true' && portalToken()) {
@@ -1025,6 +1025,7 @@ async function loadContext(rebuildTrees = false) {
   const context = await readContext(rebuildTrees);
   state.context = { ...context, months: [], groups: [], years: [] }; state.unit = context.unit;
   state.subunit = context.subunit ? context.subunit.id : null;
+  state.childSearch?.syncContext();
   showSubunits(context);
   if (state.subunit == null) {
     // No subunit chosen yet (several in this unit, or none): nothing of the evidence is read until one is picked.

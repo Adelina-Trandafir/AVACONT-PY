@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from flask import request
 
-from . import receipt_destinations as destinations, receipts, receipt_rules, receipt_auto, receipt_number, receipt_adjustment, invoices, protocol
+from . import receipt_destinations as destinations, receipts, receipt_rules, receipt_auto, receipt_number, receipt_adjustment, invoices, protocol, efactura_queue
 from .documents import _dec, _int, _scope
 from .nomenclatoare import NomError
 
@@ -113,7 +113,7 @@ def write(cursor, anchor, groups, header, data, key, request_id):
             local_header.update({'Numar': None, 'NumarSub': 0})
         result = receipts.create_nir(cursor, group['repo'], ctx, group['exercise'],
                                      {**group['body'], 'header': local_header}, key, request_id, parsed=parsed)
-        results.append({**result, 'subunit': ctx['subunit'], 'gestiune': ctx['gestiune'], 'name': group['destination']['name']})
+        results.append({**result, 'subunit': ctx['subunit'], 'gestiune': ctx['gestiune'], 'exercitiu': ctx['exercitiu'], 'name': group['destination']['name']})
         if (ctx['subunit'], ctx['gestiune']) == (anchor['subunit'], anchor['gestiune']):
             document = receipts.saved_document(cursor, group['repo'], ctx, result['id'])
     if invoice_id:
@@ -171,5 +171,7 @@ def register(bp, guard, scoped, session, build, repo_of, need):
                     return replay
                 header = parse_groups(cursor, anchor, groups, data)
                 result = write(cursor, anchor, groups, header, data, key, request.headers.get('X-Request-Id'))
+                if data.get('efactura'):   # VC06-08: the NIR(s) made from an invoice K-BOT sent close its sending, in this same transaction
+                    efactura_queue.close(cursor, anchor, _int(data['efactura']), result['receipts'], request.headers.get('X-Request-Id'))
                 protocol.remember(cursor, anchor, key, fingerprint, result)
                 return result

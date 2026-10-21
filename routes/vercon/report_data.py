@@ -187,7 +187,7 @@ def balances(source, final=False):
 
 def dataset(source, spec):
     if spec['kind'] == 'depreciation':
-        from . import depreciation_read
+        from . import depreciation_read, report_mf
 
         # Reuse the same date projection as the register, without filtering its
         # historical movements to the report period (the first handover matters).
@@ -195,12 +195,21 @@ def dataset(source, spec):
         labels = {'invalid': 'Date de corectat', 'not_entered': 'Neintrată la data aleasă',
                   'not_in_use': 'Nepredat', 'active': 'În amortizare',
                   'fully_depreciated': 'Amortizat integral', 'written_off': 'Casat'}
+        eligible = None
+        if source.params.get('mf_selection'):
+            eligible = {row['variant'] for row in report_mf.depreciation_options(source)
+                        if report_mf.accepted(spec, row, source.params)}
         return [{**row, 'variant': row['id'], 'status': labels.get(row['status'], row['status']),
                  'issues_text': '; '.join(issue['message'] for issue in row.get('issues', []))}
-                for row in result['assets'] if selected(row['id'], source.params, 'variant')]
+                for row in result['assets'] if selected(row['id'], source.params, 'variant')
+                and (eligible is None or row['id'] in eligible)]
     if spec.get('ledger') == 'custody' or spec.get('family') in ('bp', 'bt', 'bs'):
         from . import report_oi
-        return report_oi.dataset(source, spec)
+        rows = report_oi.dataset(source, spec)
+        if spec.get('mf_selection'):
+            from . import report_mf
+            rows = [row for row in rows if report_mf.accepted(spec, row, source.params)]
+        return rows
     kind = spec['kind']
     if kind in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
         rows, statements = balances(source, kind in ('final', 'inventory'))

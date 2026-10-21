@@ -105,6 +105,7 @@ import hashlib
 import json
 import logging
 from datetime import date, datetime, timedelta
+from utils.clock import utc_now
 
 from flask import request, g, current_app
 
@@ -1428,7 +1429,7 @@ _SQL_LOCK_DUPA_ID = "SELECT * FROM FX_NumberLock WHERE IdLock = %s"
 
 
 def _lock_expira() -> datetime:
-    return datetime.now() + timedelta(minutes=LOCK_TTL_MINUTE)
+    return utc_now() + timedelta(minutes=LOCK_TTL_MINUTE)
 
 
 def _numar_folosit(cursor, tip: str, dc: str, cod: str, valoare: int) -> bool:

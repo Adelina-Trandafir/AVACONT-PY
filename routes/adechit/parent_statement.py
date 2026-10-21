@@ -1,6 +1,7 @@
 """SLICE-AD11: child-only monthly projection and chronological account statement."""
 from calendar import monthrange
 from datetime import date
+from utils.clock import bucharest_today
 from decimal import Decimal
 from .calculations import calculate, active
 from .domain import require, SCHEMA, DomainError
@@ -123,7 +124,7 @@ def make_statement(data, parent, issuer, start=None, end=None):
             'cnp': '•••••••••' + str(child.get('CNP') or '')[-4:] if child.get('CNP') else '',
             'email': parent.get('EMail') or '', 'rows': output,
             'period': f'{date.fromisoformat(start):%d.%m.%Y} - {date.fromisoformat(end):%d.%m.%Y}' if start else 'Toată perioada',
-            'generated': date.today().strftime('%d.%m.%Y')}
+            'generated': bucharest_today().strftime('%d.%m.%Y')}
 
 
 def statement_model(data):

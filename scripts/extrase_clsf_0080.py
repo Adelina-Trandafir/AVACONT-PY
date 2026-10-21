@@ -125,7 +125,7 @@ def connect():
     cfg.setdefault("charset", "utf8mb4")
     cfg["autocommit"] = True
     try:
-        return mysql.connector.connect(**cfg)
+        return mysql.connector.connect(**{**cfg, "time_zone": "+00:00"})
     except mysql.connector.Error as exc:
         raise MigrationError(
             f"Conectare eșuată la {cfg.get('host')}:{cfg.get('port')} — {exc}") from exc
@@ -296,7 +296,7 @@ def dump_tables(db: str, tables: list, backup_dir: str, say) -> str:
         raise MigrationError("mysqldump / mariadb-dump nu a fost găsit. Fără copie de "
                              "siguranță nu se modifică nimic.")
     os.makedirs(backup_dir, exist_ok=True)
-    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_path = os.path.join(backup_dir, f"{db}_0080_{stamp}.sql")
     cmd = [tool] + _client_args() + ["--single-transaction",
                                      "--default-character-set=utf8mb4", db] + tables

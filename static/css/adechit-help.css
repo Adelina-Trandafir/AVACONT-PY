@@ -25,6 +25,10 @@
 .ade-help-table table { width: 100%; border-collapse: collapse; font-size: var(--fs-mp); }
 .ade-help-table th, .ade-help-table td { padding: 6px 10px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
 .ade-help-table th { background: var(--sky-2); }
+.ade-help-figure { margin: 16px 0 22px; }
+.ade-help-figure > a { display: block; cursor: zoom-in; }
+.ade-help-figure img { display: block; box-sizing: border-box; width: 100%; height: auto; border: 1px solid var(--line, #cbd5e1); border-radius: var(--radius-sm, 4px); }
+.ade-help-figure figcaption { margin-top: 7px; color: var(--ink-soft, #555); font-size: .9em; line-height: 1.5; }
 @media (max-width: 760px) {
   .ade-help { width: calc(100 * var(--application-vw, 1vw)); height: calc(100 * var(--application-vh, 1vh)); max-height: calc(100 * var(--application-vh, 1vh)); border-radius: 0; }
   .ade-help-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 30%) minmax(0, 1fr); }
@@ -44,4 +48,6 @@ body.ade-help-print { margin: 0; color: #000; background: #fff; font: 11pt/1.5 "
 .ade-help-print .ade-help-table th { background: #e8eef7; }
 .ade-help-print .ade-help-table th, .ade-help-print .ade-help-table td { border: 1px solid #999; }
 .ade-help-print tr, .ade-help-print li { break-inside: avoid; }
+.ade-help-print .ade-help-figure { break-inside: avoid; }
+.ade-help-print .ade-help-figure img { max-height: 220mm; object-fit: contain; }
 @page { size: A4; margin: 12mm; }

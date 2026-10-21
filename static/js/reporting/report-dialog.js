@@ -33,8 +33,8 @@ export function reportDialog(title, owner, details = {}) {
   window.addEventListener('app:session-expired', close, { once: true });
   document.body.append(dialog); dialog.showModal();
   return { dialog, header, body, footer, scope, close,
-    setTitle(value) {
-      const text = details.headingFor?.(value) || value;
+    setTitle(value, metadata = {}) {
+      const text = details.headingFor?.(value, metadata) || value;
       header.querySelector('h2').textContent = text;
       dialog.setAttribute('aria-label', text);
     },

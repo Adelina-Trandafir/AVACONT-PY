@@ -16,6 +16,8 @@
  *   maxLength     characters (the box stops typing at it, and it is also validated)
  *   min           the smallest number (int / decimal / money)
  *   placeholder, name, id, ariaLabel
+ *   multiline     text only: use a textarea, keeping the same validation/API (default false)
+ *   rows          initial textarea rows (default 3)
  *   textAlign     'left' | 'right' | 'center'  (numbers default to 'right')
  *   casing        'none' | 'upper' | 'lower'
  *   selectOnFocus select the whole text when the field gets focus
@@ -55,6 +57,7 @@ export class TextBox {
     if (!container) throw new Error('TextBox: container is required');
     const k_type = options.type || 'text';
     if (!TYPES.includes(k_type)) throw new Error(`TextBox: unknown type "${k_type}"`);
+    if (options.multiline && k_type !== 'text') throw new Error('TextBox: multiline requires type "text"');
     const k_align = options.textAlign || (NUMERIC.includes(k_type) ? 'right' : 'left');
     if (!ALIGNS.includes(k_align)) throw new Error(`TextBox: unknown textAlign "${k_align}"`);
     const k_casing = options.casing || 'none';
@@ -75,9 +78,12 @@ export class TextBox {
     const k_o = this.options;
     this.element = document.createElement('div');
     this.element.className = `tb tb--${k_type} tb--align-${k_align} tb--cursor-${k_cursor}`;
-    this.input = document.createElement('input');
+    this.input = document.createElement(k_o.multiline ? 'textarea' : 'input');
     this.input.className = 'tb__input';
-    this.input.type = k_type === 'search' ? 'search' : 'text';
+    if (k_o.multiline) {
+      this.element.classList.add('tb--multiline');
+      this.input.rows = Math.max(1, Math.min(12, Number(k_o.rows) || 3));
+    } else this.input.type = k_type === 'search' ? 'search' : 'text';
     this.input.autocomplete = 'off';
     this.input.spellcheck = false;
     if (NUMERIC.includes(k_type)) this.input.inputMode = k_type === 'int' ? 'numeric' : 'decimal';

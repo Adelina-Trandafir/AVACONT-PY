@@ -1,6 +1,7 @@
 // The K-BOT logo opens the same application menu as the «A» of ADECHIT (shared popup: js/adechit/menu.js).
 // Signed out, the logo keeps its old job: a link to the presentation page.
 import { openMenu } from '../adechit/menu.js';
+import { tooltipSettingsMenuEntry } from '../components/tooltip/tooltip-settings.js';
 
 const brand = document.querySelector('#portal-header .brand');
 if (brand) {
@@ -16,6 +17,7 @@ if (brand) {
       { icon: '📋', label: 'ADECHIT', run: () => { window.location.href = '/adechit'; } },
       { icon: '🏗️', label: 'VERCON', run: () => { window.location.href = '/vercon'; } },
       { icon: '📒', label: 'Avacont · în curând', disabled: true },
+      tooltipSettingsMenuEntry(),
     ], { label: 'Aplicații', below: brand.closest('header') });
   });
 }

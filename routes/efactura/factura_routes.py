@@ -105,9 +105,9 @@ def _query_int(name, default, minimum, maximum):
     return number
 
 
-def _audit(action, target=None, details=None):
+def _audit(action, target=None, details=None, result="OK"):
     session = g.session
-    log_action(session.username, session.db_name, action, tinta=target, detalii=details,
+    log_action(session.username, session.db_name, action, tinta=target, detalii=details, rezultat=result,
                masina=session.pcname, ip=request.remote_addr)
 
 

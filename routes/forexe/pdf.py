@@ -66,7 +66,7 @@ import binascii
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import request, g, current_app
 
@@ -198,13 +198,16 @@ def _decode_b64_json(raw, header):
 
 
 def _parse_sign_time(text):
-    """ISO 8601 with offset -> naive datetime in the SERVER's local time (like NOW() in the
-    other columns); "" -> None. Raises ValueError on anything else."""
+    """ISO 8601 with offset -> naive UTC, matching the database session.
+
+    Offset-free legacy values are already UTC; an empty value means None.
+    Raises ValueError on anything else.
+    """
     if not text:
         return None
     moment = datetime.fromisoformat(text)
     if moment.tzinfo is not None:
-        moment = moment.astimezone().replace(tzinfo=None)
+        moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
     return moment
 
 

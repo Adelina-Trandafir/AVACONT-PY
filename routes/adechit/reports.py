@@ -527,5 +527,7 @@ REPORT_NAMES = {'payment-notice': 'ADECHIT_SITUATIE_PLATA', 'situation': 'ADECHI
 def build(repo, unit, kind, args):
     require(kind in BUILDERS and kind not in HIDDEN, 'REPORT', 'Raport necunoscut.', 404)
     built = BUILDERS[kind](repo, unit, args)
+    from .report_identity import add_subunit
+    add_subunit(built, issuer_data(repo, unit)['name'], repo.subunit_name)
     built['report_name'] = REPORT_NAMES[kind]
     return built

@@ -70,7 +70,8 @@ export const treeViewBreadcrumbMixin = {
       const parentSpan = document.createElement('span');
       parentSpan.className = 'treeview-breadcrumb-parent';
       parentSpan.textContent = level;
-      parentSpan.title = parent.label; // Tooltip cu numele complet
+      parentSpan.setAttribute('aria-label', parent.label);
+      parentSpan.dataset.treeTooltip = parent.label;
       parentSpan.dataset.parentId = parent.id;
 
       // Click handler pentru fiecare părinte

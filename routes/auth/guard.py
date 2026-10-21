@@ -92,7 +92,7 @@ def _safe_size():
         return -1
 
 
-def _resolve(fn, args, kwargs, allow_restricted=False):
+def _resolve(fn, args, kwargs, allow_restricted=False, touch=True):
     """Nucleul comun: valideaza bearer-ul, aseaza g.session/g.session_token, apeleaza
     handler-ul. Intoarce raspunsul de 401 (cu motiv) daca tokenul nu e viu."""
     auth = request.headers.get("Authorization", "")
@@ -104,7 +104,7 @@ def _resolve(fn, args, kwargs, allow_restricted=False):
     if not token:
         return reject(REASON_TOKEN_MALFORMED, "")
 
-    v = STORE.validate_and_touch_ex(token)
+    v = STORE.validate_and_touch_ex(token, touch=touch)
     if v.session is None:
         if v.reason in (REASON_EXPIRED_IDLE, REASON_EXPIRED_ABSOLUTE):
             return _reject_expiry(v, token)
@@ -138,6 +138,15 @@ def require_session(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         return _resolve(fn, args, kwargs)
+    return wrapper
+
+
+def require_session_no_touch(fn):
+    """Like require_session, but does NOT slide the idle window (SLICE-CHAT-08): for a poll that
+    must never keep an otherwise idle session alive. The absolute cap and revocation still apply."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        return _resolve(fn, args, kwargs, touch=False)
     return wrapper
 
 

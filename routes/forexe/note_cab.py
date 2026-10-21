@@ -49,6 +49,7 @@ import json
 import logging
 import re
 from datetime import date, datetime
+from utils.clock import bucharest_today
 from decimal import Decimal, InvalidOperation
 
 from flask import g, current_app, request
@@ -170,7 +171,7 @@ def _num(value):
 def get_note_cab_pregatire():
     """What the note window needs: the next number and the angajamente with their indicators."""
     db_name = g.session.db_name
-    an = date.today().year
+    an = bucharest_today().year
     conn = None
     try:
         conn = get_kbot_connection(db_name)

@@ -111,7 +111,7 @@ class SessionStore:
             self._by_token[token] = s
         return token, s
 
-    def validate_and_touch_ex(self, token) -> Validation:
+    def validate_and_touch_ex(self, token, touch=True) -> Validation:
         """Ca validate_and_touch, dar intoarce si MOTIVUL (pentru logul de 401) si
         marcajele de timp. Distinge token necunoscut / expirat-idle / expirat-absolut."""
         now = time.time()
@@ -131,8 +131,10 @@ class SessionStore:
                 return Validation(reason=REASON_EXPIRED_IDLE,
                                   issued_at=s.issued_at, last_seen=s.last_seen, now=now)
             # Fereastra glisanta, dar niciodata dincolo de plafonul absolut.
-            s.expires_at = min(now + _TTL_SECONDS, s.issued_at + s.abs_ttl)
-            s.last_seen = now
+            # touch=False (sondajul chatului, SLICE-CHAT-08): verifica, dar nu prelungeste sesiunea.
+            if touch:
+                s.expires_at = min(now + _TTL_SECONDS, s.issued_at + s.abs_ttl)
+                s.last_seen = now
             return Validation(session=s, reason=REASON_OK,
                               issued_at=s.issued_at, last_seen=s.last_seen, now=now)
 
@@ -254,7 +256,7 @@ class RedisSessionStore:
                        scope=d.get("scope", SCOPE_FULL), auth_version=d.get("auth_version", 0),
                        abs_ttl=d.get("abs_ttl", _ABS_TTL_SECONDS))
 
-    def validate_and_touch_ex(self, token) -> Validation:
+    def validate_and_touch_ex(self, token, touch=True) -> Validation:
         now = self._now()
         if not token:
             return Validation(reason=REASON_TOKEN_UNKNOWN, now=now)
@@ -272,10 +274,12 @@ class RedisSessionStore:
             return Validation(reason=REASON_EXPIRED_IDLE,
                               issued_at=s.issued_at, last_seen=s.last_seen, now=now)
         # Gliseaza fereastra de idle, taiata la plafonul absolut; rescrie blobul si TTL-ul.
-        s.expires_at = min(now + _TTL_SECONDS, s.issued_at + s.abs_ttl)
-        s.last_seen = now
-        ttl = max(1, int(s.issued_at + s.abs_ttl - now))
-        self._r.set(self._key(token), self._blob(s), ex=ttl)
+        # touch=False (sondajul chatului, SLICE-CHAT-08): verifica, dar nu prelungeste sesiunea.
+        if touch:
+            s.expires_at = min(now + _TTL_SECONDS, s.issued_at + s.abs_ttl)
+            s.last_seen = now
+            ttl = max(1, int(s.issued_at + s.abs_ttl - now))
+            self._r.set(self._key(token), self._blob(s), ex=ttl)
         return Validation(session=s, reason=REASON_OK,
                           issued_at=s.issued_at, last_seen=s.last_seen, now=now)
 

@@ -124,8 +124,11 @@ def events(cursor, ctx, holder=None, exclude=None):
             continue
         movement_day = dates.get((family, document, row['IdProdus']))
         if movement_day is None:
-            raise NomError('OI_ORIGIN', 'Poziția OI %s nu are un bon %s cu ID=%s activ pentru produsul %s '
-                           'în contextul curent.' % (row['IDOI'], family.upper(), document, row['IdProdus']), 409)
+            if not row['IdProdus']:
+                raise NomError('OI_ORIGIN', 'Poziția OI %s nu are produsul completat. Completați-l din «Reglare registru OI», '
+                               'butonul din pagina bonurilor de predare.' % row['IDOI'], 409)
+            raise NomError('OI_ORIGIN', 'Poziția OI %s se leagă de bonul %s (%s), dar acel bon nu are nicio linie activă cu produsul %s '
+                           'în gestiunea și exercițiul curent.' % (row['IDOI'], document, family.upper(), row['IdProdus']), 409)
         if row['IDBO']:
             sources = [(f, dates[(f, row['IDBO'], row['IdProdus'])]) for f in ('bp', 'bt')
                        if (f, row['IDBO'], row['IdProdus']) in dates]

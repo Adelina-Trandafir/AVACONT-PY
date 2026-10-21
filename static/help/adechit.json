@@ -6,19 +6,14 @@
       "id": "start",
       "title": "Primii pași",
       "blocks": [
-        {"p": "ADECHIT ține evidența lunară a copiilor din unitate: **prezența**, **încasările** (chitanțe, alte plăți, restituiri), **plătitorii** (părinții) și **rapoartele**. Aici găsiți, pe scurt, ce face fiecare parte a ecranului."},
-        {"h": "Cum lucrați de obicei", "id": "start-flux"},
-        {"ol": [
-          "Alegeți **luna** și **grupa** ([vezi Alegerea lunii și grupei](#luna-grupa)).",
-          "Completați **prezența** fiecărui copil ([vezi Prezența](#prezenta)).",
-          "Selectați un copil și înregistrați **încasările** sale ([vezi Încasări](#incasari)).",
-          "La sfârșitul lunii, **închideți luna** ([vezi Închiderea lunii](#inchidere)).",
-          "Listați sau descărcați **rapoartele** ([vezi Rapoarte](#rapoarte))."
-        ]},
-        {"note": "Cât timp nu ați ales luna și grupa, tabelul copiilor este gol. Este normal: alegeți mai întâi luna, apoi grupa."},
-        {"p": "Notificarea de eroare de sub antet se șterge și se ascunde la următoarea acțiune: clic, tastare, schimbarea unei valori sau trimiterea unui formular. Dacă noua acțiune eșuează, apare mesajul ei. Simpla deplasare a mouse-ului nu ascunde eroarea.", "slice": "ADE9-08"},
-        {"h": "Butonul ? și acest ajutor", "id": "start-ajutor"},
-        {"p": "Butonul **?** din bara de sus, lângă butonul de meniu, deschide acest ajutor. În stânga este cuprinsul; apăsați un titlu ca să mergeți direct la el. Din bara ferestrei puteți **Imprima** ajutorul sau îl puteți **exporta în PDF**."}
+        {"p":"ADECHIT ține evidența lunară a copiilor din unitate: **prezența**, **încasările** (chitanțe, alte plăți, restituiri), **plătitorii** (părinții) și **rapoartele**. Aici găsiți, pe scurt, ce face fiecare parte a ecranului."},
+        {"h":"Cum lucrați de obicei","id":"start-flux"},
+        {"ol":["Alegeți **luna** și **grupa** ([vezi Alegerea lunii și grupei](#luna-grupa)).","Completați **prezența** fiecărui copil ([vezi Prezența](#prezenta)).","Selectați un copil și înregistrați **încasările** sale ([vezi Încasări](#incasari)).","La sfârșitul lunii, **închideți luna** ([vezi Închiderea lunii](#inchidere)).","Listați sau descărcați **rapoartele** ([vezi Rapoarte](#rapoarte)).","Deschideți **DISCUȚII** pentru conversația comună cu ceilalți utilizatori ([vezi Chat](#chat))."]},
+        {"note":"Cât timp nu ați ales luna și grupa, tabelul copiilor este gol. Este normal: alegeți mai întâi luna, apoi grupa."},
+        {"p":"Notificarea de eroare de sub antet se șterge și se ascunde la următoarea acțiune: clic, tastare, schimbarea unei valori sau trimiterea unui formular. Dacă noua acțiune eșuează, apare mesajul ei. Simpla deplasare a mouse-ului nu ascunde eroarea.","slice":"ADE9-08"},
+        {"h":"Butonul ? și acest ajutor","id":"start-ajutor"},
+        {"p":"Butonul **?** din bara de sus, lângă butonul de meniu, deschide acest ajutor. În stânga este cuprinsul; apăsați un titlu ca să mergeți direct la el. Din bara ferestrei puteți **Imprima** ajutorul sau îl puteți **exporta în PDF**."},
+        {"p":"Capturile arată interfața ADECHIT. Datele personale, identificatorii, informațiile financiare, prezența și conținutul mesajelor sunt mascate cu **blur puternic**. Etichetele și comenzile rămân vizibile. Apăsați o imagine pentru a o vedea la dimensiunea originală."}
       ]
     },
     {
@@ -26,178 +21,185 @@
       "slice": "ADE9-04",
       "title": "Ecranul principal",
       "blocks": [
-        {"p": "Ecranul are patru zone:"},
-        {"ul": [
-          "**Bara de sus** — sigla **A** (meniul aplicațiilor), căutarea copilului, selectorul de subunitate (apare numai dacă aveți mai multe), unitatea, butonul **?** și butonul de **meniu**.",
-          "**Panoul din stânga** — arborele **LUNA / ANUL** și lista **GRUPA**.",
-          "**Zona din mijloc** — tabelul copiilor din grupa aleasă și, sub el, documentele copilului selectat (Chitanțe, Alte plăți, Restituiri).",
-          "**Panoul din dreapta** — **RAPOARTE**."
-        ]},
-        {"h": "Bara de sus", "id": "ecran-bara"},
-        {"ul": [
-          "**Sigla A** deschide lista aplicațiilor contului. De acolo puteți trece la K-BOT.",
-          "**Căutarea** („Scrie nume sau CNP copil”) filtrează copiii din tabel după nume sau CNP.",
-          "**Meniul** (cele trei linii) conține **Plătitori**, **Taxe**, **Text situație de plată** și comutarea între tema luminoasă și cea întunecată ([vezi Plătitori](#platitori), [Taxe](#taxe), [Rapoarte](#rapoarte))."
-        ]},
-        {"h": "Tema luminoasă și întunecată", "id": "ecran-tema"},
-        {"p": "Din meniu puteți alege tema. Rapoartele deschise pe ecran urmăresc tema aleasă; la listare și în PDF rămân pe alb."},
-        {"h": "Panourile laterale", "id": "ecran-panouri"},
-        {"p": "Panoul din stânga se poate restrânge cu săgeata **‹** din titlul lui, iar panoul **Rapoarte** cu săgeata **›**, ca să rămână mai mult loc pentru tabel."}
+        {"p":"Ecranul are patru zone:"},
+        {"ul":["**Bara de sus** — sigla **A** (meniul aplicațiilor), **Meniu**, selectorul de subunitate, căutarea copilului, unitatea și contul, timerul când este afișat, **Zoom aplicație** și **?**.","**Panoul din stânga** — arborele **LUNA / ANUL** și lista **GRUPA**.","**Zona din mijloc** — tabelul copiilor din grupa aleasă și, sub el, documentele copilului selectat (Chitanțe, Alte plăți, Restituiri).","**Panoul din dreapta** — **RAPOARTE**.","**DISCUȚII** — butonul plutitor deschide conversația comună ([vezi Chat](#chat))."]},
+        {"h":"Bara de sus","id":"ecran-bara"},
+        {"ul":["**Sigla A** deschide meniul aplicațiilor: puteți trece la **K-BOT** sau **VERCON** și deschide **Setări tooltip**. Intrările marcate „în curând” nu sunt disponibile.","**Căutarea** („Scrie nume sau CNP copil”) filtrează copiii din tabel după nume sau CNP.","**Meniu**, lângă siglă, deschide comenzile de administrare și comutarea temei ([vezi Meniul de sus](#ecran-meniu)).","**Zoom aplicație**, cu lupă și procent, mărește sau micșorează interfața între **75% și 150%**. Preferința este comună aplicațiilor din browser. Zoomul raportului PDF se reglează separat în vizualizator."]},
+        {"p":"Ceasul din antet indică timpul rămas până la deconectare. Citiți [Timerul și expirarea sesiunii](#sesiune) pentru pragurile de avertizare și continuarea lucrului."},
+        {"h":"Tema luminoasă și întunecată","id":"ecran-tema"},
+        {"p":"Din meniu puteți alege tema. Rapoartele deschise pe ecran urmăresc tema aleasă; la listare și în PDF rămân pe alb."},
+        {"h":"Panourile laterale","id":"ecran-panouri"},
+        {"p":"Când aveți nevoie să vedeți toate coloanele, restrângeți ambele panouri laterale. În stânga rămân lunile și grupele într-o formă compactă, iar în dreapta rămân pictogramele comenzilor. Treceți mouse-ul peste o pictogramă pentru explicație; săgețile extind din nou panourile."},
+        {"p":"Panoul din stânga se poate restrânge cu săgeata **‹** din titlul lui, iar panoul **Rapoarte** cu săgeata **›**, ca să rămână mai mult loc pentru tabel."},
+        {"image":{"src":"/static/help/images/adechit/02-tabel-complet.jpg","alt":"Tabelul de prezență cu panourile laterale restrânse, pentru vizibilitatea coloanelor.","caption":"Tabelul de prezență cu panourile laterale restrânse, pentru vizibilitatea coloanelor."}},
+        {"h":"Meniul de sus","id":"ecran-meniu"},
+        {"p":"Apăsați **Meniu** în bara de sus. Comenzile se deschid în ferestre peste ecranul principal și folosesc subunitatea curentă. Drepturile contului stabilesc ce puteți modifica."},
+        {"table":{"head":["Comandă","Ce face"],"rows":[["Plătitori","Administrarea grupelor, copiilor și părinților ([vezi Plătitori](#platitori))."],["Asociere extrase cu copii","Preluarea încasărilor din extrase, numai dacă unitatea încasează contribuțiile prin bancă ([vezi Plăți prin bancă](#banca))."],["Taxe","Taxele zilnice și perioadele lor de aplicare ([vezi Taxe](#taxe))."],["Zile lucrătoare pe luni","Configurarea zilelor folosite pentru contribuția lunară ([vezi Zile lucrătoare](#zile-lucratoare))."],["Text situație de plată","Textul și variabilele de sub tabelul raportului ([vezi Situație de plată](#rapoarte-situatie-plata))."],["Tema luminoasă / întunecată","Comutarea aspectului ecranului."]]}},
+        {"image":{"src":"/static/help/images/adechit/04-meniu-principal.jpg","alt":"Meniul de sus: Plătitori, asocierea extraselor, Taxe, Zile lucrătoare, textul situației de plată și tema.","caption":"Meniul de sus: Plătitori, asocierea extraselor, Taxe, Zile lucrătoare, textul situației de plată și tema."}},
+        {"h":"Indicațiile de lângă controale","id":"ecran-tooltip"},
+        {"p":"Din **sigla A → Setări tooltip** adaptați aspectul și afișarea indicațiilor: paletă, poziție, lățime, întârziere, animație, durată și antet. **Previzualizare** arată rezultatul, **Implicit** reface valorile propuse, **Salvează** aplică alegerile, iar **Renunță** închide fără salvare. Durata 0 înseamnă închidere manuală. Setările sunt comune aplicațiilor în acest browser."}
       ]
     },
     {
       "id": "luna-grupa",
       "title": "Alegerea lunii și grupei",
       "blocks": [
-        {"p": "La deschidere nu este aleasă nicio lună și nicio grupă. Cel mai recent an din arbore este deschis; ceilalți ani se deschid când apăsați pe ei."},
-        {"ol": [
-          "În arborele **LUNA / ANUL** apăsați luna dorită.",
-          "În lista **GRUPA** apăsați grupa. Tabelul se umple cu copiii grupei, cu situația lor pe luna aleasă."
-        ]},
-        {"p": "Butonul de reîncărcare din titlul panoului citește din nou situația lunii."},
-        {"h": "Grupele ascunse", "id": "luna-ascunse"},
-        {"p": "Grupele pe care le-ați ascuns nu apar în listă. Bifați **Arată și grupele ascunse** ca să le vedeți din nou ([vezi Plătitori](#platitori) pentru ascunderea unei grupe)."},
-        {"h": "Pe telefon", "id": "luna-telefon"},
-        {"p": "Pe telefon panoul din stânga lipsește: anul, luna și grupa se aleg din trei liste, în primul rând de deasupra tabelului ([vezi Pe telefon](#telefon))."}
+        {"p":"La deschidere nu este aleasă nicio lună și nicio grupă. Cel mai recent an din arbore este deschis; ceilalți ani se deschid când apăsați pe ei."},
+        {"ol":["În arborele **LUNA / ANUL** apăsați luna dorită.","În lista **GRUPA** apăsați grupa. Tabelul se umple cu copiii grupei, cu situația lor pe luna aleasă."]},
+        {"p":"Butonul de reîncărcare din titlul panoului citește din nou situația lunii."},
+        {"h":"Grupele ascunse","id":"luna-ascunse"},
+        {"p":"Grupele pe care le-ați ascuns nu apar în listă. Bifați **Arată și grupele ascunse** ca să le vedeți din nou ([vezi Plătitori](#platitori) pentru ascunderea unei grupe)."},
+        {"h":"Pe telefon","id":"luna-telefon"},
+        {"p":"Pe telefon panoul din stânga lipsește: anul, luna și grupa se aleg din trei liste, în primul rând de deasupra tabelului ([vezi Pe telefon](#telefon))."},
+        {"image":{"src":"/static/help/images/adechit/01-panouri-luna-grupa.jpg","alt":"Alegerea lunii și grupei în stânga, tabelul de prezență și rapoartele în dreapta.","caption":"Alegerea lunii și grupei în stânga, tabelul de prezență și rapoartele în dreapta."}}
       ]
     },
     {
       "id": "prezenta",
       "title": "Prezența",
       "blocks": [
-        {"p": "Tabelul copiilor arată, pentru luna și grupa alese: **Copil**, **S.I. Debit** și **S.I. Credit** (soldul inițial), **Prezență** (zilele), **Valoare** (contractul lunii), **Plăți**, **Restituiri** și **TOTAL**. Jos, tabelul arată câți copii sunt în listă."},
-        {"h": "Completarea prezenței", "id": "prezenta-completare"},
-        {"ul": [
-          "Pe calculator, un clic pe celula **Prezență** începe editarea. Pe telefon, un clic selectează rândul, iar editarea începe cu dublu clic.",
-          "Introduceți un număr întreg între **0** și **31**.",
-          "**Enter** confirmă și trece la următoarea celulă de completat; **Tab** face la fel, iar **Shift+Tab** merge înapoi.",
-          "**Escape** renunță la modificarea celulei, fără să închidă fereastra."
-        ]},
-        {"p": "După fiecare modificare, valoarea lunii, soldul și totalul copilului se recalculează."},
-        {"h": "Luna închisă", "id": "prezenta-inchisa"},
-        {"p": "Prezența unei luni închise nu se mai poate modifica. Face excepție **ultima** lună închisă, dar numai pentru conturile care au dreptul «Editare lună închisă» ([vezi Drepturi](#drepturi))."},
-        {"h": "Filtrarea și sortarea", "id": "prezenta-filtre"},
-        {"ul": [
-          "Apăsați antetul unei coloane ca să sortați tabelul după ea.",
-          "Numai coloanele **Copil** și **Grupa** au filtru de text.",
-          "Butonul cu lupă din josul tabelului filtrează copiii: doar cu prezență, doar fără prezență, doar cu plăți sau doar cu restituiri. Opțiunea **Arată toți copiii** scoate filtrele."
-        ]}
+        {"p":"Tabelul copiilor arată, pentru luna și grupa alese: **Copil**, **S.I. Debit** și **S.I. Credit** (soldul inițial), **Prezență** (zilele), **Valoare** (contractul lunii), **Plăți**, **Restituiri** și **TOTAL**. Jos, tabelul arată câți copii sunt în listă."},
+        {"h":"Completarea prezenței","id":"prezenta-completare"},
+        {"ul":["Pe calculator, un clic pe celula **Prezență** începe editarea. Pe telefon, un clic selectează rândul, iar editarea începe cu dublu clic.","Introduceți un număr întreg între **0** și **31**.","**Enter** confirmă și trece la următoarea celulă de completat; **Tab** face la fel, iar **Shift+Tab** merge înapoi.","**Escape** renunță la modificarea celulei, fără să închidă fereastra."]},
+        {"p":"După fiecare modificare, valoarea lunii, soldul și totalul copilului se recalculează."},
+        {"h":"Luna închisă","id":"prezenta-inchisa"},
+        {"p":"Prezența unei luni închise nu se mai poate modifica. Face excepție **ultima** lună închisă, dar numai pentru conturile care au dreptul «Editare lună închisă» ([vezi Drepturi](#drepturi))."},
+        {"h":"Filtrarea și sortarea","id":"prezenta-filtre"},
+        {"ul":["Apăsați antetul unei coloane ca să sortați tabelul după ea.","Numai coloanele **Copil** și **Grupa** au filtru de text.","Butonul cu lupă din josul tabelului filtrează copiii: doar cu prezență, doar fără prezență, doar cu plăți sau doar cu restituiri. Opțiunea **Arată toți copiii** scoate filtrele."]}
       ]
     },
     {
       "id": "copii",
       "title": "Copii și părinți",
       "blocks": [
-        {"h": "Adăugarea unui copil", "id": "copii-adaugare"},
-        {"p": "Alegeți luna și grupa, apoi apăsați **➕** din antetul primei coloane a tabelului. Se deschide formularul **Adaugă copil**, cu două părți:"},
-        {"ul": [
-          "**Copilul** — nume, CNP, grupa, data intrării, bifa **Plecat** și data ieșirii.",
-          "**Părinte (plătitor)** — nume, adresă, CNP, cod fiscal, cont bancar, bancă, telefon, email și **Activ**."
-        ]},
-        {"p": "Formularul are **un singur buton Salvează**. Numele părintelui este obligatoriu: fără el nu se salvează nimic. Dacă părintele este refuzat (de exemplu din cauza unui email deja folosit), nici copilul nu rămâne salvat."},
-        {"note": "Un copil nou intră imediat în prezența lunii deschise la acel moment."},
-        {"h": "Mutarea unui copil în altă grupă", "id": "copii-mutare"},
-        {"p": "Pe calculator, trageți rândul copilului peste o grupă din panoul din stânga. Pe telefon, butonul ↕ de pe rând deschide lista grupelor. Aplicația cere o confirmare („Mutare copil”) înainte să mute."},
-        {"p": "Mutarea schimbă grupa pentru prezența lunii deschise; lunile închise rămân cum au fost."},
-        {"h": "Dublu clic pe un copil", "id": "copii-dublu"},
-        {"p": "Dublu clic pe un rând al tabelului deschide fereastra **Plătitori** cu grupa și copilul respectiv deja selectate ([vezi Plătitori](#platitori)). Pe celula **Prezență**, dublu clic editează ziua, ca mai sus."}
+        {"h":"Adăugarea unui copil","id":"copii-adaugare"},
+        {"p":"Alegeți luna și grupa, apoi apăsați **➕** din antetul primei coloane a tabelului. Se deschide formularul **Adaugă copil**, cu două părți:"},
+        {"ul":["**Copilul** — nume, CNP, grupa, data intrării, bifa **Plecat** și data ieșirii.","**Părinte (plătitor)** — nume, adresă, CNP, cod fiscal, cont bancar, bancă, telefon, email și **Activ**."]},
+        {"p":"Formularul are **un singur buton Salvează**. Numele părintelui este obligatoriu: fără el nu se salvează nimic. Dacă părintele este refuzat (de exemplu din cauza unui email deja folosit), nici copilul nu rămâne salvat."},
+        {"note":"Un copil nou intră imediat în prezența lunii deschise la acel moment."},
+        {"image":{"src":"/static/help/images/adechit/09-adauga-copil.jpg","alt":"Adăugarea copilului și a părintelui în același formular, cu o singură salvare.","caption":"Adăugarea copilului și a părintelui în același formular, cu o singură salvare."}},
+        {"h":"Mutarea unui copil în altă grupă","id":"copii-mutare"},
+        {"p":"Pe calculator, trageți rândul copilului peste o grupă din panoul din stânga. Pe telefon, butonul ↕ de pe rând deschide lista grupelor. Aplicația cere o confirmare („Mutare copil”) înainte să mute."},
+        {"p":"Mutarea schimbă grupa pentru prezența lunii deschise; lunile închise rămân cum au fost."},
+        {"h":"Dublu clic pe un copil","id":"copii-dublu"},
+        {"p":"Dublu clic pe un rând al tabelului deschide fereastra **Plătitori** cu grupa și copilul respectiv deja selectate ([vezi Plătitori](#platitori)). Pe celula **Prezență**, dublu clic editează ziua, ca mai sus."}
       ]
     },
     {
       "id": "incasari",
       "title": "Încasări și restituiri",
       "blocks": [
-        {"p": "Sub tabelul copiilor, o bandă cu trei file arată documentele copilului selectat în luna aleasă: **Chitanțe**, **Alte plăți** și **Restituiri**. Selectați întâi copilul din tabel."},
-        {"h": "Adăugarea unui document", "id": "incasari-adaugare"},
-        {"ol": [
-          "Alegeți fila potrivită.",
-          "Pe ultimul rând (cel gol) completați **Data**, **Valoarea** și **Explicația**.",
-          "Apăsați butonul de salvare de pe rând. Documentul primește numărul lui, iar situația copilului se recalculează."
-        ]},
-        {"p": "Calendarul pentru dată se deschide pe ziua de azi, dacă azi este în luna aleasă, altfel pe prima zi a lunii."},
-        {"h": "Chitanța: listare și PDF", "id": "incasari-chitanta"},
-        {"p": "Pe calculator, butonul **📥** de pe rândul unei chitanțe deschide un meniu:"},
-        {"ul": [
-          "**Listare** — deschide chitanța cu două exemplare în previzualizarea PDF comună. Apăsați **Tipărește** sau **Alege imprimanta** pentru imprimare.",
-          "**Trimitere pe mail** — apare doar dacă plătitorul are email, dar nu este încă disponibilă.",
-          "**Descarcă PDF** — descarcă aceeași chitanță."
-        ]},
-        {"p": "Listarea și PDF-ul nu emit numere noi și nu salvează nimic. Chitanțele anulate apar marcate **ANULATĂ**."},
-        {"h": "Restituiri", "id": "incasari-restituiri"},
-        {"p": "La o restituire, butonul **📥** oferă **Dispoziția de plată**, pe care o puteți lista sau descărca în PDF."},
-        {"h": "Anularea unui document", "id": "incasari-anulare"},
-        {"p": "La Chitanțe și Alte plăți, fiecare document salvat are în dreapta butonul **❌ Anulare document**. Apăsați-l, scrieți **Motivul anulării** (obligatoriu) și confirmați cu **Anulează**. Documentul rămâne în listă, tăiat, iar situația copilului se recalculează."},
-        {"ul": [
-          "Butonul apare numai conturilor cu dreptul «Anulare documente» ([vezi Drepturi](#drepturi)).",
-          "Apare numai pentru luna deschisă sau pentru ultima lună închisă.",
-          "Nu apare la documentele deja anulate și nici la restituiri."
-        ]}
+        {"p":"Sub tabelul copiilor, o bandă cu trei file arată documentele copilului selectat în luna aleasă: **Chitanțe**, **Alte plăți** și **Restituiri**. Selectați întâi copilul din tabel."},
+        {"h":"Adăugarea unui document","id":"incasari-adaugare"},
+        {"ol":["Alegeți fila potrivită.","Pe ultimul rând (cel gol) completați **Data**, **Valoarea** și **Explicația**.","Apăsați butonul de salvare de pe rând. Documentul primește numărul lui, iar situația copilului se recalculează."]},
+        {"p":"Calendarul pentru dată se deschide pe ziua de azi, dacă azi este în luna aleasă, altfel pe prima zi a lunii."},
+        {"image":{"src":"/static/help/images/adechit/17-chitante.jpg","alt":"Fila Chitanțe și rândul pentru data, valoarea și explicația unui document nou.","caption":"Fila Chitanțe și rândul pentru data, valoarea și explicația unui document nou."}},
+        {"h":"Alte plăți","id":"incasari-alte-plati"},
+        {"p":"În fila **Alte plăți** înregistrați încasările care nu sunt chitanțe în numerar. Aici apar și documentele generate prin [asocierea extraselor bancare](#banca), pentru unitățile care încasează contribuțiile prin bancă. Documentele deja preluate din extras nu se introduc încă o dată manual."},
+        {"image":{"src":"/static/help/images/adechit/16-alte-plati.jpg","alt":"Fila Alte plăți: documentele existente, anularea și rândul de adăugare.","caption":"Fila Alte plăți: documentele existente, anularea și rândul de adăugare."}},
+        {"h":"Chitanța: listare și PDF","id":"incasari-chitanta"},
+        {"p":"Pe calculator, butonul **📥** de pe rândul unei chitanțe deschide un meniu:"},
+        {"ul":["**Listare** — deschide chitanța cu două exemplare în previzualizarea PDF comună. Apăsați **Tipărește** sau **Alege imprimanta** pentru imprimare.","**Trimitere pe mail** — apare doar dacă plătitorul are email, dar nu este încă disponibilă.","**Descarcă PDF** — descarcă aceeași chitanță."]},
+        {"p":"Listarea și PDF-ul nu emit numere noi și nu salvează nimic. Chitanțele anulate apar marcate **ANULATĂ**."},
+        {"h":"Restituiri","id":"incasari-restituiri"},
+        {"p":"La o restituire, butonul **📥** oferă **Dispoziția de plată**, pe care o puteți lista sau descărca în PDF."},
+        {"image":{"src":"/static/help/images/adechit/18-restituiri.jpg","alt":"Fila Restituiri și câmpurile pentru documentul de restituire.","caption":"Fila Restituiri și câmpurile pentru documentul de restituire."}},
+        {"h":"Anularea unui document","id":"incasari-anulare"},
+        {"p":"La Chitanțe și Alte plăți, fiecare document salvat are în dreapta butonul **❌ Anulare document**. Apăsați-l, scrieți **Motivul anulării** (obligatoriu) și confirmați cu **Anulează**. Documentul rămâne în listă, tăiat, iar situația copilului se recalculează."},
+        {"ul":["Butonul apare numai conturilor cu dreptul «Anulare documente» ([vezi Drepturi](#drepturi)).","Apare numai pentru luna deschisă sau pentru ultima lună închisă.","Nu apare la documentele deja anulate și nici la restituiri."]},
+        {"p":"Dacă unitatea încasează contribuțiile prin bancă, folosiți [Preluarea extraselor](#banca) pentru asocierea controlată cu copilul și înregistrarea în Alte plăți."}
       ]
     },
     {
       "id": "inchidere",
       "title": "Închiderea lunii",
       "blocks": [
-        {"h": "Închiderea și redeschiderea", "id": "inchidere-luna"},
-        {"p": "În arborele **LUNA / ANUL**, fiecare lună are o pictogramă: lacăt deschis (🔓) pentru luna deschisă, lacăt închis (🔒) pentru luna închisă. Apăsați lacătul deschis și confirmați **Închide** ca să închideți luna."},
-        {"p": "Doar **ultima** lună închisă poate fi redeschisă, cu lacătul închis."},
-        {"note": "Redeschiderea unei luni **șterge** luna deschisă în prezent, cu toată prezența introdusă în ea, iar acțiunea nu se poate anula. Dacă acea lună are deja plăți sau restituiri, redeschiderea poate fi blocată. Aplicația vă avertizează înainte."},
-        {"h": "Închiderea anuală (august)", "id": "inchidere-anuala"},
-        {"p": "Tabelul educatorilor pentru noul an include **Email** și **CNP**, ambele opționale. Datele deja completate sunt preluate; le puteți modifica sau șterge înainte de închiderea anului.", "slice": "ADE6-24"},
-        {"p": "La închiderea lunii **august** se deschide o fereastră în care pregătiți noul an: mutați copiii în grupele noi, marcați copiii **Plecat** și stabiliți educatorii grupelor. Fereastra apare numai pe calculator; pe telefon, închiderea lunii august nu este disponibilă."},
-        {"ul": [
-          "În stânga sunt grupele, în dreapta copiii grupei alese. Prima coloană bifează copiii; **Ctrl** adaugă sau scoate un copil din selecție, iar **Shift** bifează un interval.",
-          "Trageți copiii selectați peste grupa destinație, sau alegeți destinația din listă și apăsați **Mută copiii selectați**.",
-          "Copiii marcați **Plecat** ies la 31 august. Cei care mai au sold sunt trecuți în grupa specială a copiilor plecați.",
-          "**Adaugă grupă** creează o grupă nouă pentru noul an. Salvarea este refuzată dacă numele grupei nu este unic, dacă lipsește un educator sau dacă un copil care rămâne nu a fost repartizat.",
-          "**Renunță** abandonează planul. **Închide august și deschide septembrie** aplică planul."
-        ]},
-        {"p": "Operația necesită drepturile de închidere, de catalog și de transfer ([vezi Drepturi](#drepturi))."}
+        {"h":"Închiderea și redeschiderea","id":"inchidere-luna"},
+        {"p":"În arborele **LUNA / ANUL**, fiecare lună are o pictogramă: lacăt deschis (🔓) pentru luna deschisă, lacăt închis (🔒) pentru luna închisă. Apăsați lacătul deschis și confirmați **Închide** ca să închideți luna."},
+        {"p":"Doar **ultima** lună închisă poate fi redeschisă, cu lacătul închis."},
+        {"note":"Redeschiderea unei luni **șterge** luna deschisă în prezent, cu toată prezența introdusă în ea, iar acțiunea nu se poate anula. Dacă acea lună are deja plăți sau restituiri, redeschiderea poate fi blocată. Aplicația vă avertizează înainte."},
+        {"h":"Închiderea anuală (august)","id":"inchidere-anuala"},
+        {"p":"Tabelul educatorilor pentru noul an include **Email** și **CNP**, ambele opționale. Datele deja completate sunt preluate; le puteți modifica sau șterge înainte de închiderea anului.","slice":"ADE6-24"},
+        {"p":"La închiderea lunii **august** se deschide o fereastră în care pregătiți noul an: mutați copiii în grupele noi, marcați copiii **Plecat** și stabiliți educatorii grupelor. Fereastra apare numai pe calculator; pe telefon, închiderea lunii august nu este disponibilă."},
+        {"ul":["În stânga sunt grupele, în dreapta copiii grupei alese. Prima coloană bifează copiii; **Ctrl** adaugă sau scoate un copil din selecție, iar **Shift** bifează un interval.","Trageți copiii selectați peste grupa destinație, sau alegeți destinația din listă și apăsați **Mută copiii selectați**.","Copiii marcați **Plecat** ies la 31 august. Cei care mai au sold sunt trecuți în grupa specială a copiilor plecați.","**Adaugă grupă** creează o grupă nouă pentru noul an. Salvarea este refuzată dacă numele grupei nu este unic, dacă lipsește un educator sau dacă un copil care rămâne nu a fost repartizat.","**Renunță** abandonează planul. **Închide august și deschide septembrie** aplică planul."]},
+        {"p":"Operația necesită drepturile de închidere, de catalog și de transfer ([vezi Drepturi](#drepturi))."}
       ]
     },
     {
       "id": "platitori",
       "title": "Plătitori (grupe, copii, părinți)",
       "blocks": [
-        {"p": "Din **meniu → Plătitori** se deschide fereastra de administrare. Ea are trei liste legate între ele: **Grupe → Copii → Plătitori**. Alegeți o grupă ca să vedeți copiii ei, apoi un copil ca să vedeți plătitorii lui."},
-        {"p": "Fiecare listă are butoanele **Adaugă** și **Modifică**. Dublu clic pe un rând deschide direct fereastra de modificare. Coloana **I** (bifa) înseamnă: la grupe — grupă închisă; la copii — plecat; la plătitori — inactiv."},
-        {"h": "Grupa", "id": "platitori-grupa"},
-        {"p": "Formularul grupei conține denumirea, bifa **Grupă închisă**, anii și tabelul educatorilor, cu **Email**, **CNP** și perioadele lor (**Începând cu**, **Până la**). Perioadele aceluiași educator nu se pot suprapune. Coloana **A** din lista grupelor ascunde grupa din ecranul principal.", "slice": "ADE6-24"},
-        {"p": "**Email** și **CNP** sunt opționale pentru fiecare educator. Le completați sau le ștergeți direct în tabel, apoi apăsați **Salvează**. Dacă sunt completate, emailul trebuie să aibă un format valid, iar CNP-ul să conțină 13 cifre și o cifră de control corectă. CNP-ul se păstrează ca text, inclusiv zerourile de la început.", "slice": "ADE6-24"},
-        {"h": "Copilul", "id": "platitori-copil"},
-        {"p": "Formularul copilului conține nume, CNP, grupa, data intrării, **Plecat** și data ieșirii. Pentru un copil plecat, data ieșirii este obligatorie; invers, o dată de ieșire cere bifa **Plecat**. Mutarea în altă grupă și schimbarea stării **Plecat** cer dreptul de transfer ([vezi Drepturi](#drepturi))."},
-        {"p": "**Adaugă copil** deschide același formular ca ➕ din prezență, cu părintele în aceeași fereastră ([vezi Adăugarea unui copil](#copii-adaugare))."},
-        {"h": "Plătitorul (părintele)", "id": "platitori-platitor"},
-        {"p": "Formularul plătitorului conține nume, adresă, CNP, cod fiscal, cont, bancă, telefon, email și **Activ**."},
-        {"ul": [
-          "Un copil are **un singur plătitor activ**. Când salvați un plătitor nou, ceilalți plătitori ai aceluiași copil devin inactivi. Același lucru se întâmplă când activați unul existent.",
-          "**CNP-ul** se verifică la completare: 13 cifre și cifra de control. Poate rămâne gol pentru date vechi sau persoane juridice.",
-          "**Trimite Codul de Acces** apare numai când emailul este completat. Salvează datele și trimite părintelui codul pentru portalul părinților ([vezi Portalul părinților](#portal))."
-        ]},
-        {"h": "Email sau CNP deja folosit", "id": "platitori-conflict"},
-        {"p": "Același părinte (același CNP) poate apărea la mai mulți copii și poate avea același email. În schimb, un email nu poate fi folosit de **alt** părinte (alt CNP) cu copii activi din aceeași subunitate."},
-        {"p": "Dacă încercați să salvați un email deja folosit, aplicația scrie într-un mesaj roșu cine îl folosește: **părintele**, **copilul** și **grupa**. Fiecare dintre ele este un **link**: apăsați-l și se închide formularul curent și se deschide înregistrarea respectivă. Dacă ea este în altă subunitate, aplicația schimbă singură subunitatea."},
-        {"p": "Când părăsiți câmpul **CNP** sau **Email**, un mesaj vă spune dacă același CNP sau același email apare și la alți părinți din unitate (cu subunitatea, dacă sunt mai multe, și «(plecat)» pentru copiii plecați). Este doar o informare: ea nu blochează salvarea."},
-        {"h": "Părinți cu acces blocat la portal", "id": "platitori-blocati"},
-        {"p": "Dacă există părinți ale căror CNP sau email intră în conflict cu alte înregistrări, în fereastra Plătitori apare un avertisment: „Portal blocat pentru părinții cu conflicte CNP/email”. Fiecare rând al listei se poate apăsa: se deschide direct formularul părintelui de corectat. Accesul lor în portal rămâne blocat până la corectare."},
-        {"h": "Ferestrele de modificare", "id": "platitori-ferestre"},
-        {"p": "Ferestrele de modificare blochează restul ecranului. **Escape** și clicul în afara ferestrei nu o închid. **Salvează** închide fereastra numai dacă salvarea a reușit; la o eroare, datele rămân în formular. **Renunță** abandonează modificările."},
-        {"p": "Dacă apare mesajul **Baza de date este ocupată. Reîncercați încărcarea datelor.** la deschiderea unui formular, repetați **Modifică**. Dacă eroarea apare la salvare, păstrați formularul și repetați **Salvează**, pentru a reîncerca aceeași operație.", "slice": "ADE6-25"}
+        {"p":"Din **meniu → Plătitori** se deschide fereastra de administrare. Ea are trei liste legate între ele: **Grupe → Copii → Plătitori**. Alegeți o grupă ca să vedeți copiii ei, apoi un copil ca să vedeți plătitorii lui."},
+        {"image":{"src":"/static/help/images/adechit/05-platitori-liste.jpg","alt":"Fereastra Plătitori: grupe, copii și plătitorii copilului selectat.","caption":"Fereastra Plătitori: grupe, copii și plătitorii copilului selectat."}},
+        {"p":"Fiecare listă are butoanele **Adaugă** și **Modifică**. Dublu clic pe un rând deschide direct fereastra de modificare. Coloana **I** (bifa) înseamnă: la grupe — grupă închisă; la copii — plecat; la plătitori — inactiv."},
+        {"h":"Grupa","id":"platitori-grupa"},
+        {"p":"Formularul grupei conține denumirea, bifa **Grupă închisă**, anii și tabelul educatorilor, cu **Email**, **CNP** și perioadele lor (**Începând cu**, **Până la**). Perioadele aceluiași educator nu se pot suprapune. Coloana **A** din lista grupelor ascunde grupa din ecranul principal.","slice":"ADE6-24"},
+        {"p":"**Email** și **CNP** sunt opționale pentru fiecare educator. Le completați sau le ștergeți direct în tabel, apoi apăsați **Salvează**. Dacă sunt completate, emailul trebuie să aibă un format valid, iar CNP-ul să conțină 13 cifre și o cifră de control corectă. CNP-ul se păstrează ca text, inclusiv zerourile de la început.","slice":"ADE6-24"},
+        {"image":{"src":"/static/help/images/adechit/08-grupa-educatori.jpg","alt":"Grupa și istoricul educatorilor, cu perioade, email și CNP.","caption":"Grupa și istoricul educatorilor, cu perioade, email și CNP."}},
+        {"h":"Copilul","id":"platitori-copil"},
+        {"p":"Formularul copilului conține nume, CNP, grupa, data intrării, **Plecat** și data ieșirii. Pentru un copil plecat, data ieșirii este obligatorie; invers, o dată de ieșire cere bifa **Plecat**. Mutarea în altă grupă și schimbarea stării **Plecat** cer dreptul de transfer ([vezi Drepturi](#drepturi))."},
+        {"image":{"src":"/static/help/images/adechit/07-copil-formular.jpg","alt":"Formularul copilului: identitate, grupă, data intrării și starea Plecat.","caption":"Formularul copilului: identitate, grupă, data intrării și starea Plecat."}},
+        {"p":"**Adaugă copil** deschide același formular ca ➕ din prezență, cu părintele în aceeași fereastră ([vezi Adăugarea unui copil](#copii-adaugare))."},
+        {"h":"Plătitorul (părintele)","id":"platitori-platitor"},
+        {"p":"Formularul plătitorului conține nume, adresă, CNP, cod fiscal, cont, bancă, telefon, email și **Activ**."},
+        {"image":{"src":"/static/help/images/adechit/06-platitor-formular.jpg","alt":"Datele plătitorului și comanda de trimitere a codului de acces în portal.","caption":"Datele plătitorului și comanda de trimitere a codului de acces în portal."}},
+        {"ul":["Un copil are **un singur plătitor activ**. Când salvați un plătitor nou, ceilalți plătitori ai aceluiași copil devin inactivi. Același lucru se întâmplă când activați unul existent.","**CNP-ul** se verifică la completare: 13 cifre și cifra de control. Poate rămâne gol pentru date vechi sau persoane juridice.","**Trimite Codul de Acces** apare numai când emailul este completat. Salvează datele și trimite părintelui codul pentru portalul părinților ([vezi Portalul părinților](#portal))."]},
+        {"h":"Email sau CNP deja folosit","id":"platitori-conflict"},
+        {"p":"Același părinte (același CNP) poate apărea la mai mulți copii și poate avea același email. În schimb, un email nu poate fi folosit de **alt** părinte (alt CNP) cu copii activi din aceeași subunitate."},
+        {"p":"Dacă încercați să salvați un email deja folosit, aplicația scrie într-un mesaj roșu cine îl folosește: **părintele**, **copilul** și **grupa**. Fiecare dintre ele este un **link**: apăsați-l și se închide formularul curent și se deschide înregistrarea respectivă. Dacă ea este în altă subunitate, aplicația schimbă singură subunitatea."},
+        {"p":"Când părăsiți câmpul **CNP** sau **Email**, un mesaj vă spune dacă același CNP sau același email apare și la alți părinți din unitate (cu subunitatea, dacă sunt mai multe, și «(plecat)» pentru copiii plecați). Este doar o informare: ea nu blochează salvarea."},
+        {"h":"Părinți cu acces blocat la portal","id":"platitori-blocati"},
+        {"p":"Dacă există părinți ale căror CNP sau email intră în conflict cu alte înregistrări, în fereastra Plătitori apare un avertisment: „Portal blocat pentru părinții cu conflicte CNP/email”. Fiecare rând al listei se poate apăsa: se deschide direct formularul părintelui de corectat. Accesul lor în portal rămâne blocat până la corectare."},
+        {"h":"Ferestrele de modificare","id":"platitori-ferestre"},
+        {"p":"Ferestrele de modificare blochează restul ecranului. **Escape** și clicul în afara ferestrei nu o închid. **Salvează** închide fereastra numai dacă salvarea a reușit; la o eroare, datele rămân în formular. **Renunță** abandonează modificările."},
+        {"p":"Dacă apare mesajul **Baza de date este ocupată. Reîncercați încărcarea datelor.** la deschiderea unui formular, repetați **Modifică**. Dacă eroarea apare la salvare, păstrați formularul și repetați **Salvează**, pentru a reîncerca aceeași operație.","slice":"ADE6-25"}
       ]
     },
     {
       "id": "taxe",
       "title": "Taxe",
       "blocks": [
-        {"p": "Din **meniu → Taxe** se deschide lista taxelor zilnice, cu coloanele **Taxa zilnică**, **Explicație**, **De la**, **Până la** și **Activ**."},
-        {"ul": [
-          "**Taxa** trebuie să fie mai mare decât zero, iar **Explicația** nu poate fi goală.",
-          "**De la** se completează ca lună și an (ll.aaaa). **Până la** se completează singur.",
-          "O taxă nouă este activă și începe în luna curentă sau în luna de după ultima perioadă cunoscută. Ea trebuie să înceapă **după** începuturile taxelor existente.",
-          "Taxa activă până atunci devine inactivă și primește ca sfârșit luna dinaintea noului început."
-        ]},
-        {"p": "Dacă un rând nu este valid, aplicația afișează o fereastră cu **Continuă editarea** și **Anulează înregistrarea**. **Escape** pe un rând nou, în prima celulă, renunță la tot rândul."},
-        {"note": "Taxele mai vechi pot avea perioada necompletată. Ele rămân utilizabile și se pot modifica."}
+        {"p":"Din **meniu → Taxe** se deschide lista taxelor zilnice, cu coloanele **Taxă zilnică**, **Explicație**, **Început**, **Sfârșit** și **Activ**."},
+        {"ul":["**Taxa** trebuie să fie mai mare decât zero, iar **Explicația** nu poate fi goală.","**Început** se completează ca lună și an (ll.aaaa). **Sfârșit** se completează singur.","O taxă nouă este activă și începe în luna curentă sau în luna de după ultima perioadă cunoscută. Ea trebuie să înceapă **după** începuturile taxelor existente.","Taxa activă până atunci devine inactivă și primește ca sfârșit luna dinaintea noului început."]},
+        {"p":"Dacă un rând nu este valid, aplicația afișează o fereastră cu **Continuă editarea** și **Anulează înregistrarea**. **Escape** pe un rând nou, în prima celulă, renunță la tot rândul."},
+        {"note":"Taxele mai vechi pot avea perioada necompletată. Ele rămân utilizabile și se pot modifica."},
+        {"image":{"src":"/static/help/images/adechit/10-taxe.jpg","alt":"Taxele zilnice, perioadele de aplicare și starea activă.","caption":"Taxele zilnice, perioadele de aplicare și starea activă."}}
+      ]
+    },
+    {
+      "id": "zile-lucratoare",
+      "title": "Zile lucrătoare pe luni",
+      "blocks": [
+        {"p":"Din **Meniu → Zile lucrătoare pe luni**, conturile cu dreptul **Catalog** pregătesc numărul de zile folosit pentru contribuția lunară în subunitatea curentă. Acesta este distinct de prezența efectivă completată pentru fiecare copil."},
+        {"ol":["Alegeți **Anul** și apăsați **Încarcă anul**. Tabelul arată toate cele 12 luni.","Consultați **Zile Luna**, **Zile lucrătoare**, **Zile Libere Legale**, **Zile Libere suplimentare**, **Zile prezență / Luna** și **Stare**.","Folosiți **Descarcă zilele libere** pentru a propune sărbătorile legale ale anului. Verificați lista **Sărbători descărcate** și sursa indicată în fereastră. Zilele din weekend nu se scad încă o dată.","Editați **Zile Libere suplimentare** în celulele colorate ale lunilor care permit modificarea. Se acceptă numere întregi de la zero până la zilele rămase după scăderea sărbătorilor legale.","Verificați rezultatele, apoi apăsați **Salvează**. **Închide** permite renunțarea la modificările nesalvate."]},
+        {"p":"Calculul pentru valorile recalculate este: **zile de luni până vineri − zile libere legale în timpul săptămânii − zile libere suplimentare**. Descărcarea sărbătorilor pregătește propunerile în fereastră; aplicarea se face la salvare."},
+        {"note":"**Lunile închise sunt protejate** și își păstrează zilele salvate. Valorile istorice pot diferi de calculul calendaristic propus. Nu confundați zilele configurate ale lunii cu zilele de prezență ale unui copil."},
+        {"p":"Starea **Configurare** se referă la o lună care nu a fost încă deschisă în evidență. La schimbarea anului sau închiderea ferestrei, confirmați renunțarea numai dacă doriți să pierdeți modificările nesalvate. Dacă altcineva a schimbat între timp lunile sau configurarea, reîncărcați anul și reluați editarea."},
+        {"image":{"src":"/static/help/images/adechit/11-zile-lucratoare.jpg","alt":"Configurarea anuală a zilelor de prezență; lunile închise sunt protejate.","caption":"Configurarea anuală a zilelor de prezență; lunile închise sunt protejate."}}
+      ]
+    },
+    {
+      "id": "banca",
+      "title": "Plăți prin bancă — preluarea extraselor",
+      "blocks": [
+        {"note":"Folosiți acest flux **numai dacă unitatea încasează contribuțiile părinților prin bancă**. Unitățile care încasează exclusiv în numerar folosesc [Chitanțe](#incasari). Preluarea din extras înregistrează încasări deja efectuate; nu inițiază transferuri bancare."},
+        {"h":"Acces și pregătire","id":"banca-pregatire"},
+        {"p":"Deschideți **Meniu → Asociere extrase cu copii**. Extrasele trebuie să fie deja importate în K-BOT pentru unitatea respectivă; fereastra ADECHIT nu încarcă fișiere de extras. Pentru salvarea asocierilor sunt necesare ambele drepturi: **Încasare** și **Catalog**."},
+        {"ul":["Lista **Încasări neasociate · toate subunitățile** arată numai încasări pozitive, fără debit, care nu au fost încă asociate. Poate include și sume care nu sunt contribuții ale părinților.","Alegeți în arborele **LUNA / ANUL** perioada extraselor. La deschidere este selectată cea mai recentă perioadă disponibilă. Aceasta filtrează sursa bancară.","**Caută în explicația extrasului** filtrează după cel puțin două caractere; golirea câmpului scoate filtrul. **Reîncarcă** citește din nou listele. **Mai multe încasări**, când apare, încarcă următoarea parte a listei.","**Luna înregistrării** este luna evidenței copilului, distinctă de perioada extraselor. Verificați-o înainte de asociere; regulile aplicației refuză perioadele prea vechi."]},
+        {"h":"Asociere manuală","id":"banca-manuala"},
+        {"ol":["Selectați încasarea potrivită din tabelul de sus. Verificați plătitorul, codul fiscal, contul, data, numărul, suma și detaliile extrasului.","În partea de jos alegeți **Grupa**, apoi **Copilul**. **Arată ascunse** include grupele ascunse.","În **Plătitori · istoricul copilului**, verificați plătitorul activ. Înregistrările istorice închise ajută la identificare; pentru asociere este necesar plătitorul activ al copilului.","Alegeți **Luna înregistrării** și verificați **Explicație document**, propusă automat pentru acea lună și editabilă.","Apăsați **Asociază și înregistrează în Alte plăți**. Revizuiți suma, copilul, subunitatea, luna și explicația din confirmare. Confirmați numai dacă toate corespund."]},
+        {"image":{"src":"/static/help/images/adechit/13-extrase-asociere-manuala.jpg","alt":"Asocierea manuală: încasări neasociate, grupa, copilul, istoricul plătitorilor și luna înregistrării.","caption":"Asocierea manuală: încasări neasociate, grupa, copilul, istoricul plătitorilor și luna înregistrării."}},
+        {"h":"Previzualizare automată și revizuire","id":"banca-automata"},
+        {"p":"Activați **Previzualizare automată** pentru propuneri. Identificarea folosește combinația **Cod fiscal + Cont**, comparată cu plătitorii activi. O potrivire unică poate propune copilul; un cont folosit la mai mulți copii sau în mai multe subunități cere verificare și alegere explicită. Numele din explicație nu este suficient pentru asocierea automată."},
+        {"table":{"head":["Stare","Ce faceți"],"rows":[["Potrivire unică: Cod fiscal + Cont","Verificați copilul propus și datele documentului înainte de generare."],["Potrivire ambiguă","Alegeți explicit copilul corect; nu presupuneți că primul rezultat este potrivit."],["Fără potrivire","Identificați copilul și selectați-l explicit."],["Copil în altă subunitate sau într-o grupă ascunsă","Verificați subunitatea și vizibilitatea grupei; nu asociați unui alt copil doar ca să continuați."]]}},
+        {"ol":["Verificați copilul din fiecare rând și bifați numai încasările care trebuie înregistrate. Bifa din antet selectează rândurile care au un copil ales.","Revizuiți **Nume plătitor**, **Cod fiscal**, **Cont plătitor**, **Data document**, **Nr. document**, **Sumă (lei)** și **Explicație document**. Derulați tabelul orizontal pentru coloanele din dreapta.","Numele plătitorului, data, numărul, suma și explicația sunt obligatorii. Numele are maximum 50 de caractere, explicația maximum 255. Versiunea curentă acceptă încasări în lei întregi; sumele cu zecimale nu se rotunjesc automat.","Apăsați **Generează documentele bifate (n)** și verificați numărul documentelor, totalul, subunitatea și luna. **Înapoi la previzualizare** permite corectarea înainte de confirmare.","**Pagina următoare**, când apare, aduce următoarea pagină de propuneri. Lucrați și confirmați lotul revizuit înainte să treceți la altă pagină. **Asociere manuală** revine la cele trei liste."]},
+        {"image":{"src":"/static/help/images/adechit/14-extrase-previzualizare.jpg","alt":"Previzualizare automată: starea potrivirii și alegerea explicită a copilului înaintea generării.","caption":"Previzualizare automată: starea potrivirii și alegerea explicită a copilului înaintea generării."}},
+        {"image":{"src":"/static/help/images/adechit/15-extrase-date-document.jpg","alt":"Coloanele editabile ale documentului propus: plătitor, identificatori, dată, număr, sumă și explicație.","caption":"Coloanele editabile ale documentului propus: plătitor, identificatori, dată, număr, sumă și explicație."}},
+        {"p":"Simpla deschidere a previzualizării nu înregistrează plăți. Bifele și editările pregătesc documentele; salvarea are loc numai după comanda de generare și confirmare. La schimbarea lunii sau reîncărcarea propunerilor, confirmați înlocuirea modificărilor numai dacă doriți să le abandonați."},
+        {"h":"Ce se salvează și cum continuați","id":"banca-rezultat"},
+        {"ul":["Fiecare încasare confirmată creează un document distinct în **Alte plăți**, în evidența copilului și a lunii alese. Consultați apoi situația copilului, fila Alte plăți și **Raport bancă** pentru intervalul potrivit.","Se creează o nouă înregistrare activă a plătitorului, folosind numele, codul fiscal și contul revizuite din extras. Istoricul anterior se păstrează, împreună cu datele de contact și identitatea de portal ale plătitorului selectat.","Dacă lipsește înregistrarea lunară a copilului, aplicația poate crea legătura financiară cu zero zile de prezență. Prezența deja introdusă nu este suprascrisă.","Corecțiile din previzualizare se aplică documentului și plătitorului din ADECHIT; extrasul bancar sursă rămâne neschimbat.","Aceeași încasare nu se poate asocia din nou într-o altă subunitate a aceleiași unități. După salvare dispare din lista neasociatelor. Nu introduceți manual încă un document pentru aceeași încasare."]},
+        {"h":"Situații care cer revizuire","id":"banca-probleme"},
+        {"ul":["**Lipsesc încasări**: verificați importul extraselor în K-BOT, perioada selectată și filtrul de căutare. O încasare deja asociată nu mai apare aici.","**Butonul este indisponibil**: verificați drepturile Încasare și Catalog, copilul, plătitorul activ și Luna înregistrării; în previzualizare trebuie să existe și rânduri bifate.","**Suma are zecimale**: nu o modificați arbitrar ca să treacă validarea. Datele trebuie să poată fi înregistrate exact; cereți clarificare pentru acea încasare.","**Extrasul, copilul sau plătitorul s-au modificat**: reîncărcați lista și revizuiți din nou. Dacă încasarea este deja asociată, consultați documentul existent.","**Salvarea a reușit, dar listele nu s-au reîncărcat**: reîncărcați și consultați Alte plăți înainte de a relua înregistrarea.","**Funcția nu este pregătită pentru unitate**: transmiteți administratorului mesajul afișat; pregătirea tehnică se face separat de această fereastră."]}
       ]
     },
     {
@@ -205,108 +207,109 @@
       "slice": "ADE9-09",
       "title": "Rapoarte",
       "blocks": [
-        {"p": "Panoul **RAPOARTE** din dreapta ecranului listează sau descarcă în PDF situații pe luna, grupa sau copilul alese. Rapoartele doar citesc datele: nu emit numere și nu schimbă situația. Butoanele au același stil ca în VERCON, cu bordură și umbră la trecerea mouse-ului sau la selectarea din tastatură; comenzile indisponibile sunt estompate."},
-        {"table": {
-          "head": ["Raport", "Ce conține", "Ce alegeți"],
-          "rows": [
-            ["Situație lunară", "Situația grupei pe luna aleasă", "Luna, grupa; opțional **Toate grupele?** și **Separă grupe?**"],
-            ["Situație de plată", "Restanță, bani în cont, taxa lunară integrală și suma de plată", "Luna, grupa sau **Toate grupele?**; fiecare grupă începe automat pe o pagină nouă"],
-            ["Registru casă", "Încasările în numerar dintr-un interval", "**Dată început** și **Dată sfârșit** (completate cu luna aleasă)"],
-            ["Raport bancă", "Încasările prin bancă dintr-un interval", "**Dată început** și **Dată sfârșit**"],
-            ["Fișă cont", "Contul unui copil", "Copilul selectat, sau **Toți copiii din grupă**"],
-            ["Documente anulate", "Documentele anulate în luna aleasă", "Luna"]
-          ]
-        }},
-        {"p": "Pentru o lună închisă, rapoartele folosesc situația salvată la închidere."},
-        {"h": "Situație de plată și textul de sub tabel", "id": "rapoarte-situatie-plata"},
-        {"p": "**Situație de plată** calculează: **sold inițial debit + zilele configurate ale lunii × taxa zilnică a lunii − sold inițial credit**. Taxa este pentru luna integrală, indiferent de zilele de prezență. Dacă bifați **Toate grupele?**, fiecare grupă începe pe pagină nouă, fără să fie necesară bifa **Separă grupe?**. O sumă negativă indică bani rămași în cont după acoperirea taxei lunare."},
-        {"p": "Din **meniu → Text situație de plată**, utilizatorii cu dreptul **Catalog** configurează textul pentru subunitatea curentă. Selectați text și folosiți butoanele pentru aldine, cursive, subliniere, liste, aliniere, font, mărime și culoare. **Editează sursa HTML** permite introducerea HTML-ului simplu. Lipirea în editor adaugă text simplu; pentru formatare HTML folosiți modul sursă. La sfârșit apăsați **Salvează și închide**."},
-        {"p": "Variabilele **[UNITATE]**, **[CONT]**, **[COD_FISCAL]**, **[GRUPA]**, **[LUNA]** și **[AN]** se completează în fiecare raport. **[CONT]** folosește primul cont al unității; pentru un alt cont scrieți direct IBAN-ul dorit. Textul se repetă sub tabelul fiecărei grupe, cu formatare în listare și PDF. În Excel se exportă ca text simplu. Scripturile, imaginile și linkurile nu sunt incluse în raport."},
-        {"p": "Titlul, etichetele și datele din panoul Rapoarte folosesc un text cu 2pt mai mic; textul butoanelor își păstrează dimensiunea.", "slice": "ADE9-09"},
-        {"h": "Pe ecran, la imprimantă sau în PDF", "id": "rapoarte-iesire"},
-        {"p": "Fereastra apare imediat, cu mesajul **Se pregătește raportul…** și indicator de încărcare. Până la rezultat sau eroare nu poate porni alt raport ori export în aceeași pagină; clicurile repetate nu adaugă solicitări. La previzualizare, încărcarea dispare când prima pagină este afișată. La descărcare, fereastra se închide când fișierul este pregătit și trimis browserului. Erorile apar în fereastra raportului. Dacă închideți fereastra în timpul pregătirii, așteptați terminarea cererii înainte să porniți alta.", "slice": "ADE9-07"},
-        {"p": "Raportul se deschide în aplicație, în aceeași previzualizare PDF ca în VERCON: **Tipărește**, **Alege imprimanta**, **Descarcă PDF**, zoom, **Potrivește lățimea**, **100 %**, navigare între pagini și **Închide**. Documentul afișat este PDF-ul folosit la tipărire și descărcare. **Export Excel** permite alegerea coloanelor și folosește aceleași date generate ca PDF-ul. Pentru date actualizate, închideți și generați din nou raportul."},
-        {"note": "Exportul Excel este disponibil timp de 10 minute de la generare. Dacă previzualizarea a expirat, închideți și generați din nou raportul. La schimbarea contextului sau expirarea sesiunii, previzualizările se închid."}
+        {"p":"Panoul **RAPOARTE** din dreapta ecranului listează sau descarcă în PDF situații pe luna, grupa sau copilul alese. Rapoartele doar citesc datele: nu emit numere și nu schimbă situația. Butoanele au același stil ca în VERCON, cu bordură și umbră la trecerea mouse-ului sau la selectarea din tastatură; comenzile indisponibile sunt estompate."},
+        {"table":{"head":["Raport","Ce conține","Ce alegeți"],"rows":[["Situație lunară","Situația grupei pe luna aleasă","Luna, grupa; opțional **Toate grupele?** și **Separă grupe?**"],["Situație de plată","Restanță, bani în cont, taxa lunară integrală și suma de plată","Luna, grupa sau **Toate grupele?**; fiecare grupă începe automat pe o pagină nouă"],["Registru casă","Încasările în numerar dintr-un interval","**Dată început** și **Dată sfârșit** (completate cu luna aleasă)"],["Raport bancă","Încasările prin bancă dintr-un interval","**Dată început** și **Dată sfârșit**"],["Fișă cont","Contul unui copil","Copilul selectat, sau **Toți copiii din grupă**"],["Documente anulate","Documentele anulate în luna aleasă","Luna"]]}},
+        {"p":"Pentru o lună închisă, rapoartele folosesc situația salvată la închidere."},
+        {"image":{"src":"/static/help/images/adechit/19-panou-rapoarte.jpg","alt":"Panoul Rapoarte: situații lunare, situații de plată, casă, bancă, fișă cont și documente anulate.","caption":"Panoul Rapoarte: situații lunare, situații de plată, casă, bancă, fișă cont și documente anulate."}},
+        {"h":"Situație de plată și textul de sub tabel","id":"rapoarte-situatie-plata"},
+        {"p":"**Situație de plată** calculează: **sold inițial debit + zilele configurate ale lunii × taxa zilnică a lunii − sold inițial credit**. Taxa este pentru luna integrală, indiferent de zilele de prezență. Dacă bifați **Toate grupele?**, fiecare grupă începe pe pagină nouă, fără să fie necesară bifa **Separă grupe?**. O sumă negativă indică bani rămași în cont după acoperirea taxei lunare."},
+        {"p":"Din **meniu → Text situație de plată**, utilizatorii cu dreptul **Catalog** configurează textul pentru subunitatea curentă. Selectați text și folosiți butoanele pentru aldine, cursive, subliniere, liste, aliniere, font, mărime și culoare. **Editează sursa HTML** permite introducerea HTML-ului simplu. Lipirea în editor adaugă text simplu; pentru formatare HTML folosiți modul sursă. La sfârșit apăsați **Salvează și închide**."},
+        {"p":"Variabilele **[UNITATE]**, **[CONT]**, **[COD_FISCAL]**, **[GRUPA]**, **[LUNA]** și **[AN]** se completează în fiecare raport. **[CONT]** folosește primul cont al unității; pentru un alt cont scrieți direct IBAN-ul dorit. Textul se repetă sub tabelul fiecărei grupe, cu formatare în listare și PDF. În Excel se exportă ca text simplu. Scripturile, imaginile și linkurile nu sunt incluse în raport."},
+        {"image":{"src":"/static/help/images/adechit/12-text-situatie-plata.jpg","alt":"Editorul textului situației de plată, cu variabile și comenzi de formatare.","caption":"Editorul textului situației de plată, cu variabile și comenzi de formatare."}},
+        {"p":"Titlul, etichetele și datele din panoul Rapoarte folosesc un text cu 2pt mai mic; textul butoanelor își păstrează dimensiunea.","slice":"ADE9-09"},
+        {"h":"Pe ecran, la imprimantă sau în PDF","id":"rapoarte-iesire"},
+        {"p":"Fereastra apare imediat, cu mesajul **Se pregătește raportul…** și indicator de încărcare. Până la rezultat sau eroare nu poate porni alt raport ori export în aceeași pagină; clicurile repetate nu adaugă solicitări. La previzualizare, încărcarea dispare când prima pagină este afișată. La descărcare, fereastra se închide când fișierul este pregătit și trimis browserului. Erorile apar în fereastra raportului. Dacă închideți fereastra în timpul pregătirii, așteptați terminarea cererii înainte să porniți alta.","slice":"ADE9-07"},
+        {"p":"Raportul se deschide în aplicație, în aceeași previzualizare PDF ca în VERCON: **Tipărește**, **Alege imprimanta**, **Descarcă PDF**, zoom, **Potrivește lățimea**, **100 %**, navigare între pagini și **Închide**. Documentul afișat este PDF-ul folosit la tipărire și descărcare. **Export Excel** permite alegerea coloanelor și folosește aceleași date generate ca PDF-ul. Pentru date actualizate, închideți și generați din nou raportul."},
+        {"image":{"src":"/static/help/images/adechit/20-vizualizator-pdf.jpg","alt":"Vizualizatorul PDF: imprimare, export, zoom și navigare; conținutul raportului este blurat.","caption":"Vizualizatorul PDF: imprimare, export, zoom și navigare; conținutul raportului este blurat."}},
+        {"p":"În bara vizualizatorului, **Export Raport** deschide meniul **Descarcă PDF / Descarcă Excel**. La Excel puteți alege coloanele înaintea descărcării. Conținutul raportului din capturi este blurat pentru protejarea datelor."},
+        {"image":{"src":"/static/help/images/adechit/21-export-raport.jpg","alt":"Meniul Export Raport oferă descărcarea PDF și exportul Excel.","caption":"Meniul Export Raport oferă descărcarea PDF și exportul Excel."}},
+        {"note":"Exportul Excel este disponibil timp de 10 minute de la generare. Dacă previzualizarea a expirat, închideți și generați din nou raportul. La schimbarea contextului sau expirarea sesiunii, previzualizările se închid."}
       ]
     },
     {
       "id": "subunitati",
       "title": "Subunități",
       "blocks": [
-        {"p": "O unitate poate avea mai multe evidențe, numite **subunități**. Fiecare are propriile grupe, copii, luni, taxe, plăți și propria serie și propriul număr de chitanțe."},
-        {"ul": [
-          "Cu o singură subunitate, aceasta este aleasă automat și selectorul nu apare.",
-          "Cu mai multe, selectorul **Subunitate** apare în bara de sus. La prima deschidere alegeți una.",
-          "Alegerea este valabilă numai în fila curentă a browserului: două file pot lucra în subunități diferite.",
-          "Schimbarea subunității reîncarcă pagina. Dacă aveți o fereastră deschisă sau un rând de document început, salvați sau renunțați mai întâi.",
-          "Chitanța și PDF-ul numesc subunitatea."
-        ]},
-        {"p": "Accesul la o subunitate poate fi limitat la anumiți utilizatori; subunitățile la care nu aveți acces nu apar."}
+        {"p":"O unitate poate avea mai multe evidențe, numite **subunități**. Fiecare are propriile grupe, copii, luni, taxe, plăți și propria serie și propriul număr de chitanțe."},
+        {"ul":["Cu o singură subunitate, aceasta este aleasă automat și selectorul nu apare.","Cu mai multe, selectorul **Subunitate** apare în bara de sus. La prima deschidere alegeți una.","Alegerea este valabilă numai în fila curentă a browserului: două file pot lucra în subunități diferite.","Schimbarea subunității reîncarcă pagina. Dacă aveți o fereastră deschisă sau un rând de document început, salvați sau renunțați mai întâi.","Chitanța și PDF-ul numesc subunitatea."]},
+        {"p":"Accesul la o subunitate poate fi limitat la anumiți utilizatori; subunitățile la care nu aveți acces nu apar."}
       ]
     },
     {
       "id": "portal",
       "title": "Portalul părinților",
       "blocks": [
-        {"p": "Părinții au un portal separat, în care văd situația copiilor lor și pot descărca sau lista **Fișa de cont**, pentru toată perioada sau pentru un interval."},
-        {"ul": [
-          "Autentificarea se face cu CNP-ul părintelui, un cod permanent și un cod trimis pe email.",
-          "Portalul arată numai copiii care nu sunt marcați **Plecat**.",
-          "Un părinte primește codul de acces prin butonul **Trimite Codul de Acces** din formularul plătitorului, care apare numai dacă emailul este completat ([vezi Plătitorul](#platitori-platitor))."
-        ]},
-        {"p": "Părinții cu CNP sau email aflate în conflict nu pot intra până la corectare ([vezi Email sau CNP deja folosit](#platitori-conflict))."}
+        {"p":"Părinții au un portal separat, în care văd situația copiilor lor și pot descărca sau lista **Fișa de cont**, pentru toată perioada sau pentru un interval."},
+        {"ul":["Autentificarea se face cu CNP-ul părintelui, un cod permanent și un cod trimis pe email.","Portalul arată numai copiii care nu sunt marcați **Plecat**.","Un părinte primește codul de acces prin butonul **Trimite Codul de Acces** din formularul plătitorului, care apare numai dacă emailul este completat ([vezi Plătitorul](#platitori-platitor))."]},
+        {"p":"Părinții cu CNP sau email aflate în conflict nu pot intra până la corectare ([vezi Email sau CNP deja folosit](#platitori-conflict))."}
       ]
     },
     {
       "id": "telefon",
       "title": "Pe telefon",
       "blocks": [
-        {"p": "Pe ecrane înguste, aplicația se adaptează:"},
-        {"ul": [
-          "Anul, luna și grupa se aleg din trei liste, în primul rând deasupra tabelului.",
-          "În grilele editabile, un clic selectează; editarea începe cu dublu clic sau Enter.",
-          "Fereastra **Plătitori** arată o singură listă pe rând. Butonul **➡️** de pe rând deschide nivelul următor, iar butonul **↩️** din antet se întoarce la nivelul anterior; la **Grupe**, el închide fereastra.",
-          "**Listarea** chitanței și a rapoartelor nu este oferită; **Descarcă PDF** rămâne disponibil.",
-          "Închiderea anuală (luna august) nu este disponibilă."
-        ]}
+        {"p":"Pe ecrane înguste, aplicația se adaptează:"},
+        {"ul":["Anul, luna și grupa se aleg din trei liste, în primul rând deasupra tabelului.","În grilele editabile, un clic selectează; editarea începe cu dublu clic sau Enter.","Fereastra **Plătitori** arată o singură listă pe rând. Butonul **➡️** de pe rând deschide nivelul următor, iar butonul **↩️** din antet se întoarce la nivelul anterior; la **Grupe**, el închide fereastra.","**Listarea** chitanței și a rapoartelor nu este oferită; **Descarcă PDF** rămâne disponibil.","Închiderea anuală (luna august) nu este disponibilă."]}
       ]
     },
     {
       "id": "drepturi",
       "title": "Drepturi",
       "blocks": [
-        {"p": "Ce puteți face depinde de drepturile contului dumneavoastră. Drepturile se dau pe cont de administratorul sistemului. Dacă nu vedeți un buton sau o operațiune este refuzată cu mesajul „Nu aveți dreptul necesar”, contul nu are acel drept."},
-        {"table": {
-          "head": ["Operațiune", "Dreptul necesar"],
-          "rows": [
-            ["Vizualizarea situațiilor, rapoartelor, listarea chitanțelor", "Citire"],
-            ["Completarea prezenței", "Prezență"],
-            ["Salvarea chitanțelor, plăților și restituirilor", "Încasare"],
-            ["Modificarea grupelor, copiilor, plătitorilor și taxelor", "Catalog"],
-            ["Mutarea copiilor și schimbarea stării Plecat", "Transfer"],
-            ["Închiderea lunii", "Închidere"],
-            ["Redeschiderea lunii", "Redeschidere"],
-            ["Anularea documentelor", "Anulare documente"],
-            ["Corectarea prezenței în ultima lună închisă", "Editare lună închisă (împreună cu Prezență)"]
-          ]
-        }}
+        {"p":"Ce puteți face depinde de drepturile contului dumneavoastră. Drepturile se dau pe cont de administratorul sistemului. Dacă nu vedeți un buton sau o operațiune este refuzată cu mesajul „Nu aveți dreptul necesar”, contul nu are acel drept."},
+        {"table":{"head":["Operațiune","Dreptul necesar"],"rows":[["Vizualizarea situațiilor, rapoartelor, listarea chitanțelor","Citire"],["Completarea prezenței","Prezență"],["Salvarea chitanțelor, plăților și restituirilor","Încasare"],["Modificarea grupelor, copiilor, plătitorilor și taxelor","Catalog"],["Mutarea copiilor și schimbarea stării Plecat","Transfer"],["Închiderea lunii","Închidere"],["Redeschiderea lunii","Redeschidere"],["Anularea documentelor","Anulare documente"],["Corectarea prezenței în ultima lună închisă","Editare lună închisă (împreună cu Prezență)"],["Asocierea extraselor și generarea încasărilor bancare","Încasare și Catalog"],["Configurarea zilelor lucrătoare și a textului situației de plată","Catalog"]]}}
       ]
     },
     {
       "id": "mesaje",
       "title": "Mesaje și probleme frecvente",
       "blocks": [
-        {"h": "Mesajele de eroare", "id": "mesaje-eroare"},
-        {"p": "Erorile apar într-un chenar roșu deschis, cu text roșu închis, la fel peste tot în aplicație. Când mesajul conține nume de copii, părinți sau grupe sub formă de link, le puteți apăsa ca să ajungeți direct la înregistrarea respectivă."},
-        {"h": "Probleme frecvente", "id": "mesaje-probleme"},
-        {"ul": [
-          "**Tabelul este gol** — alegeți luna și grupa ([vezi Alegerea lunii și grupei](#luna-grupa)).",
-          "**„Datele s-au modificat. Reîncărcați rândul.”** — altcineva a modificat aceeași înregistrare. Reîncărcați situația și reluați modificarea.",
-          "**Nu pot modifica prezența** — luna este închisă ([vezi Luna închisă](#prezenta-inchisa)).",
-          "**Nu apare butonul de anulare a unui document** — contul nu are dreptul sau luna nu mai permite anularea ([vezi Anularea](#incasari-anulare)).",
-          "**Sesiunea expiră** — contorul din bara de sus arată timpul rămas; după expirare sunteți trimis la autentificare.",
-          "**Fereastra raportului nu se deschide** — permiteți ferestrele popup pentru pagina ADECHIT."
-        ]}
+        {"h":"Mesajele de eroare","id":"mesaje-eroare"},
+        {"p":"Erorile apar într-un chenar roșu deschis, cu text roșu închis, la fel peste tot în aplicație. Când mesajul conține nume de copii, părinți sau grupe sub formă de link, le puteți apăsa ca să ajungeți direct la înregistrarea respectivă."},
+        {"h":"Probleme frecvente","id":"mesaje-probleme"},
+        {"ul":["**Tabelul este gol** — alegeți luna și grupa ([vezi Alegerea lunii și grupei](#luna-grupa)).","**„Datele s-au modificat. Reîncărcați rândul.”** — altcineva a modificat aceeași înregistrare. Reîncărcați situația și reluați modificarea.","**Nu pot modifica prezența** — luna este închisă ([vezi Luna închisă](#prezenta-inchisa)).","**Nu apare butonul de anulare a unui document** — contul nu are dreptul sau luna nu mai permite anularea ([vezi Anularea](#incasari-anulare)).","**Sesiunea expiră** — contorul din bara de sus arată timpul rămas; după expirare sunteți trimis la autentificare.","**Fereastra raportului nu se deschide** — permiteți ferestrele popup pentru pagina ADECHIT."]}
+      ]
+    },
+    {
+      "id": "sesiune",
+      "title": "Timerul și expirarea sesiunii",
+      "blocks": [
+        {"p":"Timerul cu simbolul de ceas din bara de sus arată timpul rămas până la deconectarea automată, în format **minute:secunde**. Termenul este stabilit de server. În versiunea curentă, timerul devine vizibil când rămân cel mult **15 minute**."},
+        {"image":{"src":"/static/help/images/adechit/23-timer-sesiune.jpg","alt":"Timerul din antet arată timpul rămas până la deconectare.","caption":"Timerul din antet arată timpul rămas până la deconectare."}},
+        {"h":"Cele două avertizări","id":"sesiune-avertizari"},
+        {"table":{"head":["Când apare","Ce înseamnă"],"rows":[["15 minute rămase","„Sesiunea se apropie de încheiere”. Salvați modificările și pregătiți încheierea lucrului."],["5 minute rămase","„Deconectare iminentă — salvați acum”. Timerul și antetul intră în starea urgentă."],["Timp expirat","Aplicația încheie sesiunea și revine la autentificare; ferestrele și formularele se închid, iar modificările nesalvate se pierd."]]}},
+        {"image":{"src":"/static/help/images/adechit/24-avertizare-sesiune.jpg","alt":"Avertizarea reală de la pragul de 15 minute; Am înțeles închide mesajul fără prelungirea sesiunii.","caption":"Avertizarea reală de la pragul de 15 minute; Am înțeles închide mesajul fără prelungirea sesiunii."}},
+        {"p":"**Am înțeles** sau **Escape** închide avertizarea afișată. Nu confirmă salvarea documentului, nu oprește timerul și nu reînnoiește sesiunea. După închiderea primei avertizări, timerul rămâne în antet; avertizarea critică poate apărea ulterior, la pragul de 5 minute."},
+        {"h":"Cum continuați lucrul","id":"sesiune-continuare"},
+        {"ol":["Salvați documentul, rândul sau formularul aflat în lucru și așteptați confirmarea salvării.","Pentru a continua, reîmprospătați pagina. Încărcarea paginii reînnoiește sesiunea dacă aceasta este încă valabilă. Refreshul poate pierde ciornele nesalvate.","Dacă timpul a expirat deja, autentificați-vă din nou în portal și redeschideți aplicația."]},
+        {"note":"Clicurile, tastarea, navigarea între operațiile aceleiași pagini și actualizările automate ale chatului nu prelungesc singure termenul. O altă pagină cu aceeași sesiune îl poate reînnoi, iar timerul se sincronizează periodic; de aceea timpul afișat poate crește după o reîmprospătare în altă filă."}
+      ]
+    },
+    {
+      "id": "chat",
+      "title": "Chat — DISCUȚII",
+      "blocks": [
+        {"p":"DISCUȚII este conversația comună a utilizatorilor autentificați din VERCON, ADECHIT și K-BOT. Puteți citi mesaje, publica un mesaj și răspunde unui mesaj existent. Conversația este comună și independentă de unitatea, subunitatea, gestiunea, luna sau grupa selectată."},
+        {"h":"Deschiderea și închiderea panoului","id":"chat-panou"},
+        {"p":"Apăsați butonul plutitor **DISCUȚII**, cu simbolul de conversație. Panoul se deschide peste pagina curentă. Îl închideți din **×**, apăsând din nou butonul, prin **Escape** sau printr-un clic în exterior. Clicul din exterior continuă și acțiunea controlului apăsat."},
+        {"image":{"src":"/static/help/images/adechit/22-discutii.jpg","alt":"DISCUȚII: filtre pe aplicații, identitate, răspuns și caseta de mesaj.","caption":"DISCUȚII: filtre pe aplicații, identitate, răspuns și caseta de mesaj."}},
+        {"p":"Închiderea panoului păstrează textul netrimis și răspunsul pregătit cât timp rămâneți în aceeași pagină. Schimbarea aplicației, reîncărcarea paginii sau expirarea sesiunii poate pierde ciorna. Chatul este disponibil în paginile autentificate; previzualizările demonstrative pot să nu îl includă."},
+        {"h":"Filtrele VERCON, ADECHIT și K-BOT","id":"chat-filtre"},
+        {"p":"În zona **Afișează**, bifați aplicațiile ale căror mesaje doriți să le vedeți: **V — VERCON**, **A — ADECHIT**, **K — K-BOT**. Păstrați cel puțin o aplicație bifată. Filtrul se salvează pentru cont și se sincronizează între file la actualizarea următoare; schimbarea lui păstrează textul netrimis."},
+        {"note":"Filtrul schimbă afișarea, nu destinatarii sau accesul la conversație. Mesajul trimis primește marcajul aplicației din care scrieți: V din VERCON, A din ADECHIT sau K din K-BOT. Dacă ați ascuns acea aplicație prin filtru, mesajul este trimis, dar nu apare în lista curentă; panoul vă anunță acest lucru."},
+        {"h":"Trimiterea unui mesaj","id":"chat-trimitere"},
+        {"ol":["Deschideți DISCUȚII și alegeți cum doriți să apăreți: cu pseudonim sau cu nume.","Scrieți textul în caseta mesajului. Limita este de **4.000 de caractere**, indicată de contor; un mesaj gol nu poate fi trimis.","Apăsați **Trimite** sau **Enter**. Pentru un rând nou folosiți **Ctrl+Enter**; pe macOS puteți folosi **Cmd+Enter**.","După confirmarea trimiterii, caseta se golește și răspunsul pregătit se încheie. Dacă trimiterea eșuează, textul rămâne pentru reluare."]},
+        {"p":"Puteți scrie text, diacritice și emoji. Fiecare mesaj arată aplicația, autorul afișat și data/ora. Ora este prezentată în fusul folosit de browser."},
+        {"h":"Cu pseudonim sau cu nume","id":"chat-identitate"},
+        {"ul":["**Cu pseudonim** bifat: mesajul se publică folosind pseudonimul atribuit contului, afișat lângă opțiune.","**Cu pseudonim** debifat: apare câmpul pentru numele afișat. Completați-l înainte de trimitere; are maximum **80 de caractere**.","Numele afișat este declarat de dumneavoastră, fără verificarea identității. Adresa de e-mail a contului nu este introdusă automat ca nume public.","Modul ales se păstrează ca preferință, iar numele se salvează la trimiterea unui mesaj cu nume. Schimbarea numelui nu redenumește mesajele publicate anterior.","Pentru ceilalți participanți, mesajul și citatul unui răspuns arată identitatea folosită la publicare: numele sau pseudonimul. Legătura cu contul rămâne în evidența internă a serviciului."]},
+        {"h":"Răspuns la un mesaj","id":"chat-raspuns"},
+        {"ol":["Apăsați **Răspunde** sub mesajul ales.","Deasupra casetei de scriere apare destinatarul răspunsului și un fragment din textul sursă.","Scrieți răspunsul și trimiteți-l. Pentru a reveni la un mesaj independent, apăsați **× — Renunță la răspuns** înainte de trimitere."]},
+        {"p":"Răspunsul rămâne vizibil în conversația comună și include un scurt citat. Citatul poate proveni din altă aplicație decât cele bifate în filtrul curent. Comanda Răspunde nu deschide o conversație privată."},
+        {"h":"Mesaje necitite, istoric și actualizare","id":"chat-necitite"},
+        {"ul":["Butonul DISCUȚII arată numărul mesajelor necitite pentru aplicațiile filtrate; peste 99 apare **99+**. Mesajele proprii nu se numără ca necitite.","Mesajele sunt considerate citite când panoul este deschis, fila este vizibilă și focalizată, mesajele noi sunt încărcate și vă aflați la sfârșitul listei. Citirea unei aplicații nu marchează citite aplicațiile ascunse de filtru.","La deschidere se încarcă mesajele recente. **Mesaje mai vechi** aduce treptat istoricul anterior.","Dacă citiți mai sus și sosesc mesaje, folosiți **Mesaje noi** pentru a coborî la sfârșit.","Lista se actualizează automat periodic cât timp pagina este vizibilă. **↻ — Actualizează discuțiile** cere imediat actualizarea. Revenirea în filă reia actualizările."]},
+        {"h":"Conținut comun și probleme de conectare","id":"chat-probleme"},
+        {"p":"Mesajele se adresează participanților conversației comune, inclusiv din alte unități; nu sunt mesaje private și nu sunt întrebări către un asistent AI. Alegeți conținutul ținând cont de această audiență. Versiunea curentă oferă mesaje text și răspunsuri; nu are comenzi pentru atașamente, editarea sau ștergerea mesajelor publicate."},
+        {"p":"Dacă apare o eroare, păstrați textul și folosiți Actualizează discuțiile sau reluați trimiterea. Pentru o eroare persistentă, transmiteți administratorului mesajul afișat. La expirarea sesiunii, autentificați-vă din nou. Actualizările automate ale chatului nu prelungesc sesiunea aplicației."}
       ]
     }
   ]

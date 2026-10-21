@@ -6,7 +6,7 @@ export function documentNumbers({ family, state, allocation, selection, api, abo
   return {
     invalidate() { ++sequence; },
     async check(offer = false) {
-      if (!['nir', 'storno', 'bp', 'bt', 'bs'].includes(family) || state.mode === 'view' || allocation?.multi()) return;
+      if (!['nir', 'storno', 'bc', 'bp', 'bt', 'bs'].includes(family) || state.mode === 'view' || allocation?.multi()) return;
       const draft = state.draft, automatic = family === 'storno' && offer;
       const currentNumber = draft.header.Numar || '', currentSub = Number(draft.header.NumarSub) || 0;
       const raw = automatic ? '' : currentNumber, sub = automatic ? 0 : currentSub, token = ++sequence;
@@ -24,7 +24,7 @@ export function documentNumbers({ family, state, allocation, selection, api, abo
         if (subGroup) subGroup.hidden = !draft.header.NumarSub;
         subBox?.setValue(subText(draft.header.NumarSub));
       }
-      const custody = ['bp', 'bt', 'bs'].includes(family);
+      const custody = ['bc', 'bp', 'bt', 'bs'].includes(family);
       const message = !answer.valid ? custody ? 'Introduceți un număr întreg pozitiv.' : 'Introduceți un număr întreg pozitiv (și un sub-număr de cel mult 2 cifre).' : answer.duplicate ? 'Numărul este deja folosit. Alegeți alt număr.' : '';
       const sink = error(); if (sink) sink.textContent = message;
       if (input && !message) input.title = offer && !raw ? 'Propus automat. Verificat din nou la salvare.' : !raw ? `Următorul număr disponibil: ${answer.suggested}.` : answer.valid && !answer.duplicate ? 'Număr disponibil. Verificat din nou la salvare.' : `Număr disponibil propus: ${answer.suggested}.`;

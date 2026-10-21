@@ -13,6 +13,7 @@ would be noise.
 """
 
 import logging
+from utils.clock import UtcFormatter
 import os
 import re
 import sys
@@ -180,7 +181,7 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     if logger.handlers:
         return logger
 
-    fmt = logging.Formatter(
+    fmt = UtcFormatter(
         "%(asctime)s - %(levelname)s - %(ip)s - %(message)s")
     ip_filter = RequestIPFilter()
 
@@ -213,7 +214,7 @@ def connect(database: str = None):
     cfg.setdefault("charset", "utf8mb4")
     cfg["autocommit"] = True
     try:
-        return mysql.connector.connect(**cfg)
+        return mysql.connector.connect(**{**cfg, "time_zone": "+00:00"})
     except mysql.connector.Error as exc:
         raise SchemaSyncError(
             f"Conectare eșuată la {cfg.get('host')}:{cfg.get('port')} — {exc}"
@@ -379,9 +380,8 @@ def discover_targets(conn, logger) -> list:
     existing = {r["SCHEMA_NAME"] for r in query(
         conn, "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA")}
 
+    # A database the registry lists but the server does not have is not a target and is not reported (KBotAdmin ME01-05).
     targets = [d for d in named if d in existing]
-    for d in (d for d in named if d not in existing):
-        logger.warning("CAI listează `%s`, dar baza nu există — ignorată.", d)
 
     if not targets:
         raise SchemaSyncError("Nicio bază din CAI nu există pe server.")

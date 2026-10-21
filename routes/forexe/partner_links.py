@@ -203,7 +203,8 @@ def read_links(cursor) -> dict:
         result.setdefault(_text(r["CodFiscal"]), []).append({
             "id": int(r["IdLegInd"]) if has_indicator else None,
             "id_leg": int(r["IdLegAng"]),
-            "id_clsf": int(r["IdClsf"]) if r["IdClsf"] is not None else None,
+            # 0 = unknown, never null: the client before slice 0121 (App 1.1.2.4) reads "id_clsf" into a plain Integer.
+            "id_clsf": int(r["IdClsf"]) if r["IdClsf"] is not None else 0,
             "clsf": _text(r["Clsf"]),
             "denumire_clsf": _text(r["Denumire"]),
             "cont_bancar": _text(r["ContBancar"]),

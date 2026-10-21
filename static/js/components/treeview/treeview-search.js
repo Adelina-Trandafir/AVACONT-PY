@@ -185,7 +185,7 @@ export const treeViewSearchMixin = {
   filterTreeForSearch(nodes, query) {
     if (!query) return nodes;
 
-    const filterRecursive = (nodeList) => {
+    const filterRecursive = (nodeList, keepBranch = false) => {
       return nodeList.reduce((acc, node) => {
         const nodeLabel = (node.label || node.name || node.text || '').toLowerCase();
         const matches =
@@ -194,10 +194,11 @@ export const treeViewSearchMixin = {
 
         let filteredChildren = [];
         if (node.children && node.children.length > 0) {
-          filteredChildren = filterRecursive(node.children);
+          filteredChildren = filterRecursive(node.children,
+            keepBranch || !!this.options.includeDescendantsOnMatch && matches);
         }
 
-        if (matches || filteredChildren.length > 0) {
+        if (keepBranch || matches || filteredChildren.length > 0) {
           acc.push({
             ...node,
             children: filteredChildren,

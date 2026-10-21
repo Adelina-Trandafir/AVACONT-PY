@@ -45,13 +45,13 @@ export function mountLista(host, opts) {
   async function openDoc(id) {
     if (!await allowDiscard()) return; const token = ++generation;
     const doc = await opts.api(url('/' + id)); if (disposed || token !== generation) return;
-    state.doc = doc; rememberExplanations(doc); state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(); paint();
+    state.doc = doc; rememberExplanations(doc); state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(doc.order_message || ''); paint();
   }
   async function startAdd() {
     if (!await allowDiscard()) return; ++generation; state.mode = 'add'; state.dirty = false; state.request = null;
     state.draft = { header: { Numar: '', Data: state.lookups.today, Comentarii: '' }, meals: { md: blankMeal(), d: blankMeal(), c: blankMeal() }, bons: [] }; say(); paint();
   }
-  function startEdit() { ++generation; state.mode = 'edit'; state.draft = fromDoc(state.doc); state.dirty = false; state.request = null; say(); paint(); }
+  function startEdit() { if (!state.doc || !state.canWrite || state.doc.annulled) return; if (state.doc.order_locked) { say(state.doc.order_message, true); return; } ++generation; state.mode = 'edit'; state.draft = fromDoc(state.doc); state.dirty = false; state.request = null; say(); paint(); }
   async function discard() { if (!await allowDiscard()) return; ++generation; state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(); paint(); }
   function paint() {
     const v = value(); title.textContent = editing() ? 'Listă de alimente • ' + (state.mode === 'add' ? 'listă nouă' : 'modificare') : state.doc ? 'Listă de alimente • nr. ' + state.doc.number : 'Liste de alimente';
@@ -238,9 +238,9 @@ export function mountLista(host, opts) {
     }));
     paintTree(treeHost, nodes, { title: 'Liste salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onSelect: (id) => openDoc(id).catch(report), onAction: (id, anchor) => openMenu(anchor, [
       { label: 'Deschide', run: () => openDoc(id) },
-      { label: 'Modifică', disabled: !state.canWrite || state.docs.find((row) => String(row.id) === id)?.annulled, run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) startEdit(); } },
+      { label: 'Modifică', disabled: !state.canWrite || state.docs.some((row) => String(row.id) === id && (row.annulled || row.order_locked)), run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) startEdit(); } },
       { label: 'Previzualizare', run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await showPreview(); } },
-      { label: 'Anulează lista', disabled: !state.canWrite || state.docs.find((row) => String(row.id) === id)?.annulled, run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await cancelList(); } },
+      { label: 'Anulează lista', disabled: !state.canWrite || state.docs.some((row) => String(row.id) === id && (row.annulled || row.order_locked)), run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await cancelList(); } },
     ]) }, treeUi);
     treeUi.own(new ActionAddButton(treeHost.querySelector(':scope > h4'), {
       className: 'vc-lista__tree-add', title: 'Adaugă listă de alimente', disabled: !state.canWrite,
@@ -264,7 +264,7 @@ export function mountLista(host, opts) {
   function paintBar() {
     bar.replaceChildren(); const button = (label, run, disabled = false) => { const b = el('button', { type: 'button', textContent: label, disabled }); b.addEventListener('click', () => Promise.resolve(run()).catch(report)); return b; };
     if (editing()) bar.append(button('Renunță', discard), button('Salvează lista', save));
-    else if (state.doc) bar.append(button('Modifică', startEdit, !state.canWrite || state.doc.annulled), button('Previzualizare', showPreview));
+    else if (state.doc) bar.append(button('Modifică', startEdit, !state.canWrite || state.doc.annulled || state.doc.order_locked), button('Previzualizare', showPreview));
     bar.append(status); if (state.closed) bar.append(el('span', { className: 'vc-hint', textContent: 'Perioada este închisă.' }));
   }
   function collect() {
@@ -298,6 +298,7 @@ export function mountLista(host, opts) {
   }
   async function cancelList() {
     const doc = state.doc; if (!doc || doc.annulled || !state.canWrite) return;
+    if (doc.order_locked) { say(doc.order_message, true); return; }
     const reason = await reasonBox('Anulați lista nr. ' + doc.number + '? Bonurile pot fi asociate altei liste.', { title: 'Anulare listă', yes: 'Anulează lista' }); if (!reason || disposed) return;
     root.inert = true; try { const result = await write('POST', '/' + doc.id + '/cancel', { reason, version: doc.version }); if (disposed) return; state.doc = result.document; paint(); say('Anulată.'); await refresh(); if (!disposed) paintSaved(); } finally { if (!disposed) root.inert = false; }
   }

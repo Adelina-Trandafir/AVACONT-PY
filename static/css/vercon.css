@@ -18,6 +18,7 @@
 @import url("vercon-stock.css");
 @import url("vercon-mf.css");
 @import url("vercon-rapoarte.css");
+@import url("vercon-report-period.css");
 @import url("vercon-receptie.css");
 @import url("vercon-workspace.css");
 @import url("vercon-receipt-context.css");
@@ -33,3 +34,5 @@
 @import url("vercon-migration.css");
 @import url("../js/components/menu/application-header.css");
 @import url("vercon-document-tree.css");
+@import url("vercon-help.css");
+@import url("vercon-efactura.css");

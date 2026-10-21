@@ -49,7 +49,7 @@ def connect():
     cfg.setdefault("charset", "utf8mb4")
     cfg["autocommit"] = False
     try:
-        return mysql.connector.connect(**cfg)
+        return mysql.connector.connect(**{**cfg, "time_zone": "+00:00"})
     except mysql.connector.Error as exc:
         raise CleanupError(
             f"Conectare eșuată la {cfg.get('host')}:{cfg.get('port')} — {exc}") from exc

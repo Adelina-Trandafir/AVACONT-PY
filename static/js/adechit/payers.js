@@ -72,7 +72,8 @@ export function bindPayers({ api, context, refresh, moveToSubunit }) {
     if (found.cnp.length) nodes.push(textNode('CNP-ul mai apare la: '), ...joinNodes(found.cnp, true), textNode('. '));
     if (found.email.length) nodes.push(textNode('Emailul mai apare la: '), ...joinNodes(found.email, false), textNode('.'));
     if (!nodes.length) return;
-    showMessage(message, 'x', 'error'); message.replaceChildren(...nodes);
+    showMessage(message, nodes.map(node => typeof node === 'string' ? node : node.textContent).join(''), 'error', { tooltip: false });
+    message.replaceChildren(...nodes);
   }
   // depth: 1 = group (its children), 2 = the child (its payers); the parent link also selects that payer.
   async function goTo(item, depth, selectParent) {

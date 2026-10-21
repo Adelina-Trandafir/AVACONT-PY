@@ -35,6 +35,7 @@ new pair.
 import json
 import logging
 from datetime import datetime, timedelta
+from utils.clock import utc_now
 
 from flask import request, g, current_app
 
@@ -109,7 +110,7 @@ def _avanseaza_contorul(cursor, tip: str, cod: str) -> int:
 
 def _tine(cursor, tip: str, dc: str, cod: str, valoare: int, token: str,
           utilizator: str, ttl: timedelta) -> datetime:
-    expira = datetime.now() + ttl
+    expira = utc_now() + ttl
     cursor.execute(_SQL_LOCK_INSERT, (tip, dc, valoare, cod, token, utilizator, expira))
     return expira
 
@@ -157,7 +158,7 @@ def post_marcaj_rezerva():
                 # The same revision for every save of this edit session; the lock's life is
                 # pushed out so a long session does not lose it half way.
                 idrev = int(viu["Valoare"])
-                expira = datetime.now() + TTL_IDREV
+                expira = utc_now() + TTL_IDREV
                 cursor.execute("UPDATE FX_NumberLock SET ExpiraLa = %s WHERE IdLock = %s",
                                (expira, int(viu["IdLock"])))
                 refolosit = True

@@ -31,7 +31,7 @@ export async function openPdfReport(title, source, owner, details = {}) {
     data = output.data;
     const options = { ...details, ...output };
     filename = options.filename || title.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
-    if (options.title) view.setTitle(options.title);
+    if (options.title) view.setTitle(options.title, options);
     if (options.downloadOnly) {
       downloadFile(data, options.mime || 'application/pdf', filename);
       view.close(); return view;
@@ -43,7 +43,7 @@ export async function openPdfReport(title, source, owner, details = {}) {
     const host = el('div', { className: 'report-view-pdf' });
     const pageLabel = el('span', { className: 'report-view-page', textContent: 'Pagina —' });
     const zoomLabel = el('span', { className: 'report-view-zoom', textContent: '— %' });
-    const blobUrl = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+    let blobUrl = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
     view.scope.own(() => URL.revokeObjectURL(blobUrl));
     let currentPage = 1, printing = false, rendered = false;
     const controls = [];
@@ -65,6 +65,44 @@ export async function openPdfReport(title, source, owner, details = {}) {
       resolveRendered(error ? { error } : { ready: true });
     } });
     view.scope.own(() => { void pdf.clear(); });
+    let replacing = false;
+    // Optional application actions can redraw this viewer with a new report.
+    // The previous bytes and exports are retained if loading the replacement fails.
+    view.replaceReport = async replacement => {
+      if (!current() || replacing) return false;
+      replacing = true;
+      controls.forEach(node => { node.disabled = true; });
+      closeExportMenu?.();
+      view.dialog.setAttribute('aria-busy', 'true');
+      try {
+        rendered = false;
+        const nextPage = new Promise(resolve => { resolveRendered = resolve; });
+        await pdf.open(replacement.data);
+        const page = await nextPage;
+        if (page?.error) throw page.error;
+        if (!page?.ready || !current()) return false;
+        const nextUrl = URL.createObjectURL(new Blob([replacement.data], { type: 'application/pdf' }));
+        URL.revokeObjectURL(blobUrl); blobUrl = nextUrl;
+        data = replacement.data;
+        Object.assign(options, replacement);
+        filename = options.filename || filename;
+        view.setTitle(options.title || title, options);
+        showMessage(status, '', 'info');
+        return true;
+      } catch (error) {
+        if (current()) {
+          rendered = true;
+          await pdf.open(data);
+        }
+        throw error;
+      } finally {
+        replacing = false;
+        if (current()) {
+          controls.forEach(node => { node.disabled = false; });
+          view.dialog.setAttribute('aria-busy', 'false');
+        }
+      }
+    };
     function print() {
       if (printing) return;
       printing = true;
@@ -96,6 +134,11 @@ export async function openPdfReport(title, source, owner, details = {}) {
       button('🖨️', print, 'Tipărește', 'Tipărește raportul — Deschide dialogul de imprimare pentru raportul afișat.'),
       button('⚙️', print, 'Alege imprimanta', 'Alege imprimanta — Deschide dialogul de imprimare pentru alegerea imprimantei, paginilor și numărului de copii.'),
       exportButton,
+      ...(options.toolbarActions || []).map(action => button(action.icon, () => {
+        void Promise.resolve().then(() => action.run(view)).catch(error => {
+          if (current()) showMessage(status, error.message || 'Operația nu a putut fi finalizată.', 'error');
+        });
+      }, action.label, action.title || action.label)),
       button('➖', () => pdf.zoom(-.1), 'Micșorează', 'Micșorează — Reduce zoomul raportului cu 10 puncte procentuale.'), zoomLabel,
       button('➕', () => pdf.zoom(.1), 'Mărește', 'Mărește — Crește zoomul raportului cu 10 puncte procentuale.'),
       button('↔️', () => pdf.fitWidth(), 'Potrivește lățimea', 'Potrivește lățimea — Ajustează zoomul pentru a încadra lățimea paginii în fereastră.'),

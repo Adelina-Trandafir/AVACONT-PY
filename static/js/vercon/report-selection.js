@@ -43,8 +43,9 @@ export function mountSelection(host, response, checked, onChange, owner, { loadB
   const chosen = new Set(checked.filter(id => !id.startsWith('supplier:'))), pending = new Map(), checking = new Set();
   const controller = new AbortController();
   let disposed = false, suppress = true, searchVersion = 0, selectingAll = false;
-  const leaf = id => /^(variant|category-filter|receiver|document|receipt-product|receipt-document-product|outgoing-item):/.test(id);
-  const prefixOf = node => node.id.startsWith('out-account:') ? `outgoing-item:account:${node.id.split(':')[1]}:`
+  const leaf = id => /^(variant|category-filter|receiver|document|receipt-product|receipt-document-product|outgoing-item|mf-item):/.test(id);
+  const prefixOf = node => node.id.startsWith('mf-branch:') ? `mf-item:${node.id.split(':')[1]}:`
+    : node.id.startsWith('out-account:') ? `outgoing-item:account:${node.id.split(':')[1]}:`
     : node.id.startsWith('out-receiver:') ? `outgoing-item:receiver:${node.id.split(':')[1]}:`
     : node.id.startsWith('out-document:') ? node.id.replace('out-document:', 'outgoing-item:') + ':'
     : node.id.startsWith('outgoing-item:') ? node.id
@@ -85,6 +86,8 @@ export function mountSelection(host, response, checked, onChange, owner, { loadB
       onChange([...chosen]);
     },
   }, owner);
+  // Node labels are already visible; suppress both native and custom tooltips here.
+  tree.treeContainer.setAttribute('data-kbot-tooltip', 'off');
   const header = selectionHeader(owner, checked => { void selectAll(checked); });
   host.firstElementChild.replaceWith(header.node);
   const hint = el('p', { className: 'vc-hint', textContent: 'Deschideți ramurile pentru încărcare și bifați datele dorite. Fără bife într-o categorie de filtre se folosesc toate datele acesteia.' });
@@ -97,7 +100,7 @@ export function mountSelection(host, response, checked, onChange, owner, { loadB
   tree.hasCheckbox = node => {
     const full = tree._checkIndex.get(String(node.id)) || node;
     return !String(full.id).startsWith('waiting:')
-      && (/^(category|document-supplier|receipt-supplier|nir-supplier|out-account|out-receiver|out-document):/.test(String(full.id)) && (full.lazy || full.children?.length)
+      && (/^(category|document-supplier|receipt-supplier|nir-supplier|out-account|out-receiver|out-document|mf-branch):/.test(String(full.id)) && (full.lazy || full.children?.length)
         || (full.children?.length ? hasCheckbox(full) : leaf(full.id)));
   };
 
@@ -218,6 +221,7 @@ export function mountSelection(host, response, checked, onChange, owner, { loadB
   });
   return { getCheckedLeaves: () => [...chosen],
     getFilters: (spec = response.spec) => selectionFilters([...chosen].filter(id => {
+      if (id.startsWith('mf-item:')) return !!spec.mf_selection && !header.check.checked;
       if (/^receipt-(product|document-product):/.test(id)) return spec.incoming_selection && !header.check.checked;
       if (id.startsWith('outgoing-item:')) return (spec.outgoing_selection || spec.outgoing_filters) && !header.check.checked;
       const key = id.startsWith('category-filter:') ? 'category' : id.split(':')[0];
@@ -229,7 +233,9 @@ export function selectionFilters(ids) {
   const collected = {};
   const receipts = [];
   const outgoing = [];
+  const fixedAssets = [];
   for (const id of ids) {
+    if (id.startsWith('mf-item:')) { fixedAssets.push(id); continue; }
     if (/^receipt-(product|document-product):/.test(id)) { receipts.push(id); continue; }
     if (id.startsWith('outgoing-item:')) { outgoing.push(id); continue; }
     const [rawKey, value] = id.split(':');
@@ -240,6 +246,7 @@ export function selectionFilters(ids) {
   const filters = {};
   if (receipts.length) filters.receipt_selection = receipts.join(',');
   if (outgoing.length) filters.outgoing_selection = outgoing.join(',');
+  if (fixedAssets.length) filters.mf_selection = fixedAssets.join(',');
   for (const [key, values] of Object.entries(collected)) {
     if (values.length === 1) filters[key] = values[0]; else filters[`${key}_ids`] = values.join(',');
   }

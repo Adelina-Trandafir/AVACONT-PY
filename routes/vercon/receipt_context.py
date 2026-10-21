@@ -169,6 +169,9 @@ def register(bp, guard, scoped, session, build, need):
                 item = variants(cursor, ctx).get(preferred)
                 if not item:
                     raise NomError('INVALID', 'Produsul nu aparține gestiunii curente.', 422)
+                if family == 'bc':
+                    from .consumption_stock import summary
+                    return summary(cursor, ctx, item, preferred, on, _id('exclude', False))
                 data = stock.read(cursor, ctx, date(min(int(ctx['year'] or on.year), on.year), 1, 1), on, variant=preferred)
                 movements = data['statement']
                 return {'product': item['product'], 'name': item['name'], 'um': item['um'], 'price': format(item['price'] or 0, 'f'),

@@ -22,6 +22,7 @@ import { TABS, DOC_TABS, makeGrid } from './cards.js';
 import { applyPortalAccess, canOpenTab, isAccountant } from './access.js';
 import { buildTabTree, hasTree, ROOT } from './tabtrees.js';
 import { createExtraseCard } from './extrasecard.js';
+import { showMessage } from './messages.js';
 
 const ALL_SOURCES = '*';
 const isPc = () => window.matchMedia('(min-width: 901px)').matches;
@@ -122,8 +123,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened, onAcc
   let docBlob = null; // {bytes, name} of the document shown, for the download button
 
   const say = (text) => {
-    $('msg-app').textContent = text || '';
-    $('msg-app').hidden = !text;
+    showMessage($('msg-app'), text, 'error');
   };
   const hint = (text) => {
     $('app-lead').textContent = text || '';
@@ -639,8 +639,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened, onAcc
 
   // ------------------------------------------------------------ the document cards (slices 0110-08, 0110-10, 0110-12)
   const docMsg = (text) => {
-    $('msg-doc').textContent = text || '';
-    $('msg-doc').hidden = !text;
+    showMessage($('msg-doc'), text, 'error');
   };
 
   async function clearViewer() {

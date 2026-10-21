@@ -7,8 +7,9 @@ must allow the operation, the context revision must match and a write needs the 
 Business endpoints: nomenclatures and settings (VC06-01, nom_routes.py); documents arrive with VC06-02+."""
 import logging
 from functools import wraps
+from io import BytesIO
 
-from flask import Blueprint, Response, current_app, g, jsonify, request, send_from_directory
+from flask import Blueprint, Response, current_app, g, jsonify, request, send_file, send_from_directory
 
 from . import capabilities, diagnostics, doc_routes, nom_routes, operations
 from .capabilities import FormUnavailable
@@ -217,6 +218,15 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
         body = request.get_json(silent=True) or {}
         ctx = _resolved(body)
         return {'released': _locks().release(ctx['selection']['subunit'], ctx['selection']['gestiune'], request.headers.get('X-Vercon-Lock'), g.portal['email'])}
+
+    @bp.get('/api/vercon/help/pdf')
+    @guard('read')
+    def help_pdf():
+        from .help_pdf import pdf_bytes
+        response = send_file(BytesIO(pdf_bytes()), mimetype='application/pdf', as_attachment=True,
+                             download_name='Ajutor_VERCON.pdf', max_age=0)
+        response.headers.update({'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+        return response
 
     nom_routes.register(bp, guard, scoped, open_db)
     doc_routes.register(bp, guard, scoped, open_db)

@@ -10,14 +10,15 @@ are committed together or not at all. Rules shared by the four families:
   * a price is never negative and a quantity is always positive; stock never goes negative (protocol.check_timeline);
   * a saved document is edited only while its period is open, with the revision the page saw, and is never deleted: it is
     cancelled with a reason and stays visible as cancelled;
-  * a document another one depends on (a receipt with a storno, a bon with a return or a food list, an asset already in
-    the OI/MF register) is not edited or cancelled until that dependency is cancelled first.
+  * a document another one depends on (a receipt with a storno, a bon with a return, an asset already in
+    the OI/MF register) is not edited or cancelled until that dependency is cancelled first. Editing the latest BC
+    linked to the latest food list recalculates that list atomically; cancellation still requires unlinking it.
 Numbers: automatic, unique per gestiune + kind + exercise; a manual number is accepted only when free.
 """
-from datetime import datetime
+from utils.clock import utc_now
 from decimal import Decimal, InvalidOperation
 
-from . import numeric, protocol, receipt_choices
+from . import document_order, numeric, protocol, receipt_choices
 from .nomenclatoare import NomError
 
 FAMILIES = ('nir', 'storno', 'bc', 'br')
@@ -366,9 +367,10 @@ def _guard_dependents(cursor, ctx, family, doc_id, action):
                         'OR EXISTS (SELECT 1 FROM VC_OI_Casare x WHERE x.SubunitId=p.SubunitId AND x.GestiuneId=p.GestiuneId AND x.IdProdus=p.IdProdus AND x.Anulat=0)) LIMIT 1', (s, g, e, doc_id)):
             raise NomError('DOC_LINKED', 'Un produs al recepției apare deja în registrul OI/MF: documentul nu mai poate fi %s.' % what, 409)
     if family == 'bc':
+        document_order.require_latest(cursor, ctx, 'bc', doc_id)
         if _one(cursor, 'SELECT 1 FROM VC_Iesiri_H WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdRetur=%s AND COALESCE(Retur,0)=1 AND Anulat=0 LIMIT 1', (s, g, e, doc_id)):
             raise NomError('HAS_RETUR', 'Bonul are retur: anulați mai întâi returul.', 409)
-        if _one(cursor, 'SELECT 1 FROM VC_LegBCLA WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s LIMIT 1', (s, g, e, doc_id)):
+        if action != 'edit' and _one(cursor, 'SELECT 1 FROM VC_LegBCLA WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s LIMIT 1', (s, g, e, doc_id)):
             raise NomError('LINKED_LIST', 'Bonul este asociat unei liste de alimente: scoateți-l din listă înainte să fie %s.' % what, 409)
 
 
@@ -491,7 +493,7 @@ def create_storno(cursor, repo, ctx, exercise, body, request_key, request_id):
     if _has_numarsub(cursor):
         values['NumarSub'] = sub
     doc_id = repo.insert('VC_NIR', values)
-    now = datetime.now()
+    now = utc_now()
     for line in lines:
         repo.insert('VC_IntrariStorno', {'IdIntrare': doc_id, 'IdProdus': line['variant'], 'Cant': line['Cant'], 'PUTVA': line['PUTVA'], 'DataSalvare': now})
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in lines})
@@ -531,7 +533,7 @@ def edit_storno(cursor, repo, ctx, exercise, doc_id, body, request_id):
         cols['NumarSub'] = sub
     cols['Valoare'] = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     repo.delete('VC_IntrariStorno', {'IdIntrare': doc_id})
-    now = datetime.now()
+    now = utc_now()
     for line in lines:
         repo.insert('VC_IntrariStorno', {'IdIntrare': doc_id, 'IdProdus': line['variant'], 'Cant': line['Cant'], 'PUTVA': line['PUTVA'], 'DataSalvare': now})
     if repo.update('VC_NIR', cols, {'IdIntrare': doc_id, 'Version': before['Version']}, bump_version=True) != 1:
@@ -580,8 +582,8 @@ def create_bc(cursor, repo, ctx, exercise, body, request_key, request_id):
     number, text = _assign_number(cursor, ctx, 'bc', header.get('Numar'), errors)
     _fail(errors)
     total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
-    doc_id = repo.insert('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'Retur': 0, 'DataSalvare': datetime.now()})
-    now = datetime.now()
+    doc_id = repo.insert('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'Retur': 0, 'DataSalvare': utc_now()})
+    now = utc_now()
     for line in lines:
         repo.insert('VC_Iesiri', {'IdBonConsum': doc_id, 'IdProdus': line['variant'], 'Cant': line['Cant'], 'PUTVA': line['PUTVA'], 'ValoareCUTVA': line['ValoareCUTVA'], 'DataSalvare': now})
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in lines})
@@ -629,6 +631,7 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     old_lines = _all(cursor, 'SELECT ID, IdProdus, Cant, PUTVA FROM VC_Iesiri WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s', (*_scope(ctx), doc_id))
     lines = _clean_bon_lines(repo, ctx, body.get('lines'), errors, cols.get('IdMasina'))
     _fail(errors)
+    document_order.require_position(cursor, ctx, 'bc', doc_id, cols['DataBC'])
     text = before['NumarBC']
     manual = header.get('Numar')
     if manual not in (None, '') and str(_int(manual)) != str(text):
@@ -636,7 +639,7 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     _fail(errors)
     # a saved line keeps its price: a line of the same variant is re-priced only when the page changed its quantity
     old_price = {r['IdProdus']: r['PUTVA'] for r in old_lines}
-    now = datetime.now()
+    now = utc_now()
     repo.delete('VC_Iesiri', {'IdBonConsum': doc_id})
     total_lines = []
     for line in lines:
@@ -648,8 +651,10 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     if repo.update('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'DataSalvare': now}, {'IdBonConsum': doc_id, 'Version': before['Version']}, bump_version=True) != 1:
         raise NomError('CONFLICT', 'Documentul a fost modificat de altcineva. Reîncărcați documentul.', 409)
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in total_lines} | {r['IdProdus'] for r in old_lines})
+    from .food_list_recalculation import refresh_for_bon
+    recalculated = refresh_for_bon(cursor, repo, ctx, doc_id, request_id)
     protocol.audit(cursor, ctx, 'bc.update', 'VC_Iesiri_H', doc_id, {'NumarBC': before['NumarBC'], 'ValoareBC': before['ValoareBC']}, {'header': cols, 'total': total, 'lines': len(total_lines)}, None, request_id)
-    return {'id': doc_id, 'number': text}
+    return {'id': doc_id, 'number': text, 'recalculated_lists': recalculated}
 
 
 def return_eligible(cursor, ctx, bc_id, exclude=None):
@@ -715,8 +720,8 @@ def create_br(cursor, repo, ctx, exercise, body, request_key, request_id):
     number, text = _assign_number(cursor, ctx, 'br', header.get('Numar'), errors)
     _fail(errors)
     total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
-    doc_id = repo.insert('VC_Iesiri_H', {**cols, 'IdRetur': source['IdBonConsum'], 'NumarBC': text, 'ValoareBC': total, 'Retur': 1, 'DataSalvare': datetime.now()})
-    now = datetime.now()
+    doc_id = repo.insert('VC_Iesiri_H', {**cols, 'IdRetur': source['IdBonConsum'], 'NumarBC': text, 'ValoareBC': total, 'Retur': 1, 'DataSalvare': utc_now()})
+    now = utc_now()
     for line in lines:
         repo.insert('VC_IesiriRetur', {'IdBonConsum': doc_id, 'IdProdus': line['variant'], 'Cant': line['Cant'], 'PUTVA': line['PUTVA'], 'DataSalvare': now})
     protocol.freeze(cursor, ctx)
@@ -741,7 +746,7 @@ def edit_br(cursor, repo, ctx, exercise, doc_id, body, request_id):
         _, text = _assign_number(cursor, ctx, 'br', manual, errors, exclude=doc_id)
     _fail(errors)
     repo.delete('VC_IesiriRetur', {'IdBonConsum': doc_id})
-    now = datetime.now()
+    now = utc_now()
     for line in lines:
         repo.insert('VC_IesiriRetur', {'IdBonConsum': doc_id, 'IdProdus': line['variant'], 'Cant': line['Cant'], 'PUTVA': line['PUTVA'], 'DataSalvare': now})
     total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])

@@ -4,6 +4,7 @@ Aliases are case insensitive, as in Access. Subreports are also available as
 independent sections with the parent's explicit document/variant selection.
 """
 from .nomenclatoare import NomError
+from .report_mf import MODES as MF_SELECTION_MODES
 
 ALL = ('MATERIALE', 'ALIMENTE', 'OI', 'MF')
 G = ('MATERIALE', 'ALIMENTE')
@@ -73,6 +74,11 @@ for name, label in {
     'Bon_Consum': 'BONURI',
     'Centralizator_BC': 'CENTRALIZATOR',
     'OI_Balanta': 'Balanță obiecte de inventar',
+    'MF_Balanta': 'Balanta',
+    'MF_LISTA_INVENTAR': 'Lista Inventar',
+    'MF_Bon_BP': 'Bon Predare',
+    'MF_Bon_BT': 'Bon Transfer',
+    'MF_Bon_BS': 'Bon Casare',
     'OI_LISTA_INVENTAR': 'Listă de inventariere pe deținător',
     'OI_LISTA_INVENTAR_TOTAL': 'Listă de inventariere — total produse',
     'OI_Fisa_Evidenta_Primitori_STOC': 'Stoc final pe deținător',
@@ -113,6 +119,7 @@ def spec_of(name, gest_type):
     else:
         filters = ['category', 'variant', 'supplier', 'document']
     return {**spec, 'filters': filters,
+            'mf_selection': MF_SELECTION_MODES.get(spec['id']) if gest_type == 'MF' else None,
             'outgoing_filters': spec.get('family') in ('bc', 'br') or spec['kind'].startswith('consumption')}
 
 

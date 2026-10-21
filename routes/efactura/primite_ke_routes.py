@@ -20,10 +20,12 @@ session's. The rules are in primite_ke.py. Every WRITE needs the role «Contabil
   GET    /api/efactura/ke/angajament/<cod>/disponibil?data=aaaa-ll-zz   (KE12-03) -> { ziua, indicatori: [{ IdClsf, CodIndicator, Buget|null, Receptii }], avertismente }
   POST   /api/efactura/primite/<id>/ke/legaturi        body { CodAngajament, Tip, IDRR?, IDRH?, IDR?, alocari } -> 201, the state as GET
   DELETE /api/efactura/primite/<id>/ke/legaturi/<idl>  -> the state as GET
-  POST   /api/efactura/ke/propuneri                    (KE16) body { facturi: [IdPrimita], angajamente?: [CodAngajament] } -> { zile_dupa_factura, omise, facturi: [{ IdPrimita, NrFact, DataFact, Furnizor,
-                                                           Total, propunere (IDRR | null), motiv, candidate: [{ IDRR, CodAngajament, DataR, TipReceptie, Descriere,
-                                                           IdClsf, Clsf, Rest, Zile, InFereastra }] }] }   (reads only)
-  POST   /api/efactura/ke/propuneri/aplica             (KE16) body { legaturi: [{ IdPrimita, CodAngajament, IDRR }], angajamente?: [Cod] } -> 201 { legate }  (all or none)
+  POST   /api/efactura/ke/propuneri                    (KE16) body { facturi: [IdPrimita], angajamente?: [CodAngajament] } -> { zile_dupa_factura, omise,
+                                                           angajamente: [{ CodAngajament, Descriere }],
+                                                           receptii: [{ IDRR, CodAngajament, DataR, TipReceptie, Descriere, IdClsf, Clsf, Rest }]   (per reception AND classification, with rest),
+                                                           facturi: [{ IdPrimita, NrFact, DataFact, Furnizor, Total, IdClsfLinii, angajamente: [Cod], angajament,
+                                                           propunere: { IDRR, IdClsf, CodAngajament } | null, motiv }] }   (reads only)
+  POST   /api/efactura/ke/propuneri/aplica             (KE16) body { legaturi: [{ IdPrimita, CodAngajament, IDRR, IdClsf, Suma }], angajamente?: [Cod] } -> 201 { legate }  (all or none)
 
 Errors are `{ "error": "<text>", "reason": "<CODE>" }`. Audit journal: EF_KE_CLASIFICARE, EF_KE_LEGA, EF_KE_STERGE.
 """

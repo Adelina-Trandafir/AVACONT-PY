@@ -14,14 +14,14 @@ family = nir | storno | bc | br. A write needs the family's VR right, the CURREN
 revision the page saw; everything it touches is committed in ONE transaction or not at all.
 """
 from contextlib import contextmanager
-from datetime import datetime
+from utils.clock import bucharest_today
 
 from flask import g, request
 
-from . import depreciation_read, documents, lista, mf, oi, protocol, stock_routes, report_routes, receipt_number, receipt_choices, receipt_tree, receipt_context, receipt_routes, receipt_distribution, invoices
+from . import depreciation_read, documents, lista, mf, oi, protocol, stock_routes, report_routes, receipt_number, receipt_choices, receipt_tree, receipt_context, receipt_routes, receipt_distribution, invoices, efactura_queue
 from .capabilities import FormUnavailable
 from .nomenclatoare import NomError
-from . import migration_links, oi_context
+from . import document_order, migration_links, oi_context, oi_register_repair
 
 RIGHT = {'nir': 'receptie', 'storno': 'storno', 'bc': 'consum', 'br': 'retur', 'bp': 'oi_predare', 'bt': 'oi_transfer', 'bs': 'oi_casare', 'lista': 'alimente'}
 FORM_OF = {'lista': 'lista_alimente'}   # the menu key of a family whose name differs
@@ -114,6 +114,7 @@ def register(bp, guard, scoped, open_db):
 
     def read_document(cursor, ctx, family, doc_id):
         doc = backend(family).get_document(cursor, repo_of(cursor, ctx), ctx, family, doc_id)
+        document_order.annotate(cursor, ctx, family, doc)
         return invoices.enrich(cursor, ctx, doc) if family == 'nir' else doc
 
     stock_routes.register(bp, guard, scoped, session, build)
@@ -129,6 +130,7 @@ def register(bp, guard, scoped, open_db):
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, family, False)
             rows = backend(family).list_documents(cursor, ctx, family)
+            document_order.annotate_rows(cursor, ctx, family, rows)
         return {'family': family, 'documents': rows, 'year': ctx['an'], 'closed': ctx['closed'], 'scale': ctx['scale'], 'zec': ctx['zec'],
                 'can_write': RIGHT[family] in g.vercon_operations}
 
@@ -138,8 +140,10 @@ def register(bp, guard, scoped, open_db):
 
     receipt_context.register(bp, guard, scoped, session, build, _need)
     oi_context.register(bp, guard, scoped, session, build, _need)
+    oi_register_repair.register(bp, guard, scoped, session, build, repo_of, _need, RIGHT)
     receipt_routes.register(bp, guard, scoped, session, build, repo_of, _need)
     receipt_distribution.register(bp, guard, scoped, session, build, repo_of, _need)
+    efactura_queue.register(bp, guard, scoped, session, build, _need)   # VC06-07: invoices sent from K-BOT
 
     @bp.get('/api/vercon/doc/<family>/lookups')
     @guard('read')
@@ -154,7 +158,7 @@ def register(bp, guard, scoped, open_db):
                 out['warehouse_statement_cache'] = receipt_context.cache_settings()
             if family == 'nir' and not isinstance(out.get('products'), list):
                 out['products'] = receipt_choices.products(cursor, ctx['subunit'], ctx['gestiune'])
-        out.update({'scale': ctx['scale'], 'zec': ctx['zec'], 'year': ctx['an'], 'closed': ctx['closed'], 'today': datetime.now().strftime('%Y-%m-%d')})
+        out.update({'scale': ctx['scale'], 'zec': ctx['zec'], 'year': ctx['an'], 'closed': ctx['closed'], 'today': bucharest_today().isoformat()})
         return out
 
     @bp.get('/api/vercon/doc/nir/tree')
@@ -180,13 +184,16 @@ def register(bp, guard, scoped, open_db):
     @bp.get('/api/vercon/doc/<family>/number')
     @guard('read')
     def receipt_number_check(family):
-        if family not in ('nir', 'storno', *oi.FAMILIES_OI):
+        if family not in ('nir', 'storno', 'bc', *oi.FAMILIES_OI):
             raise NomError('FAMILY_UNKNOWN', 'Acest document nu folosește seria NIR/FCS.', 404)
         _need(family)
         vctx = scoped('read')
         exclude = documents._int(request.args.get('exclude'))
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, family, False)
+            if family == 'bc':
+                from .consumption_number import check
+                return check(cursor, ctx, request.args.get('number'), exclude)
             if family in oi.FAMILIES_OI:
                 from .oi_number import check
                 return check(cursor, ctx, family, request.args.get('number'), exclude)
@@ -204,7 +211,7 @@ def register(bp, guard, scoped, open_db):
             ctx, _ = build(cursor, vctx, family, False)
             if family == 'storno':
                 from .storno_stock import sources
-                on = protocol.to_date(request.args.get('date') or datetime.now().strftime('%Y-%m-%d'), 'Data FCS')
+                on = protocol.to_date(request.args.get('date') or bucharest_today().isoformat(), 'Data FCS')
                 rows = sources(cursor, ctx, on, documents._int(request.args.get('exclude')))
             else:
                 rows = documents.list_documents(cursor, ctx, 'bc')
@@ -223,7 +230,7 @@ def register(bp, guard, scoped, open_db):
             vctx = scoped('read')
             with session(False) as cursor:
                 ctx, _ = build(cursor, vctx, family, False)
-                on = protocol.to_date(request.args.get('date') or datetime.now().strftime('%Y-%m-%d'), 'Data bonului')
+                on = protocol.to_date(request.args.get('date') or bucharest_today().isoformat(), 'Data bonului')
                 return {'lines': oi.eligible(cursor, ctx, holder, (family, exclude) if exclude else None, on,
                                              documents._int(request.args.get('account')))}
         if family not in ('storno', 'br'):
@@ -235,7 +242,7 @@ def register(bp, guard, scoped, open_db):
         vctx = scoped('read')
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, family, False)
-            on = protocol.to_date(request.args.get('date') or datetime.now().strftime('%Y-%m-%d'), 'Data FCS') if family == 'storno' else None
+            on = protocol.to_date(request.args.get('date') or bucharest_today().isoformat(), 'Data FCS') if family == 'storno' else None
             lines = documents.storno_eligible(cursor, ctx, source, exclude, on) if family == 'storno' else documents.return_eligible(cursor, ctx, source, exclude)
         return {'lines': lines}
 

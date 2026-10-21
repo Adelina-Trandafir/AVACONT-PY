@@ -10,3 +10,16 @@
 @media (max-width: 650px) {
   .vc-orphan-storno .vc-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Register repair dialog (OI/MF): the same dialog layout as the storno recovery. */
+.vc-register-repair .vc-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: center;
+  margin-top: 12px;
+}
+.vc-register-repair .vc-grid > p { overflow-wrap: anywhere; }
+.vc-register-repair > footer { flex-wrap: wrap; }
+.vc-register-repair [role="status"] { overflow-wrap: anywhere; }
+@media (max-width: 650px) {
+  .vc-register-repair .vc-grid { grid-template-columns: minmax(0, 1fr); }
+}

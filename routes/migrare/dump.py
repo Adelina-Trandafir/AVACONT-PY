@@ -59,7 +59,7 @@ class SqlDump(object):
         self._parse_totals = {}
         self._parsed_count = 0
         self._ambiguous_count = 0
-        stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        stamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
         # The run subfolder is what keeps the failed run -- the interesting one --
         # from being overwritten by the next attempt.
         self.dir = os.path.join(storage.sql_dir(), db_name, "%s_scriere" % stamp)
@@ -310,4 +310,4 @@ class SqlDump(object):
 
 
 def _now():
-    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())

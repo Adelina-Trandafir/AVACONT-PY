@@ -348,7 +348,7 @@ def _status_of(result):
 def _write(run, status):
     total_ms = (time.perf_counter() - run.t0) * 1000.0
     out = ["=" * _WIDTH]
-    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(run.wall))
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(run.wall))
     out.append("%s.%03d  rulare %d  [%s]  status %s  %.0f ms"
                % (stamp, int((run.wall % 1) * 1000), run.id, run.label, status,
                   total_ms))

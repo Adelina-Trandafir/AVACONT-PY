@@ -1,0 +1,15 @@
+/* The period popup belongs only to VERCON report previews. */
+.vc-page .vc-report-period-popup {
+  width: min(380px, calc(94 * var(--application-vw, 1vw)));
+  max-width: calc(94 * var(--application-vw, 1vw));
+}
+.vc-report-period-popup .vc-reports__period { padding-bottom: 1px; }
+.vc-report-period-popup .vc-reports__period h4 {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+.vc-report-period-popup .vc-field__combo, .vc-report-period-popup .combotree { width: 100%; }
+.vc-report-period-popup .vc-hint:empty { display: none; }
+.vc-report-period-popup footer { gap: 8px; }

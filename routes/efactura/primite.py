@@ -19,6 +19,7 @@ import logging
 import re
 import zipfile
 from datetime import datetime
+from utils.clock import utc_now
 
 from . import anaf_api, facturi as F, primite_ubl, tokens, trimitere
 from .tokens import EfEroare
@@ -376,7 +377,7 @@ def trimite_mesaj(dc, id_primita, text):
         logger.error("[efactura] message for IdSol=%s WAS SENT (index_incarcare=%s) but the database write failed", id_sol, index,
                      exc_info=True)
         raise
-    return {"mesaj": {"IdMsg": new_id, "IdMesajAnaf": index, "Mesaj": text, "DataMesaj": datetime.now().isoformat(timespec="seconds")}}
+    return {"mesaj": {"IdMsg": new_id, "IdMesajAnaf": index, "Mesaj": text, "DataMesaj": utc_now().isoformat(timespec="seconds")}}
 
 
 def marcheaza_citita(dc, id_primita):

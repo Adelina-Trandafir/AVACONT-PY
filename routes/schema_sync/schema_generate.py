@@ -24,7 +24,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime
+from utils.clock import utc_now
 
 import mysql.connector
 
@@ -87,7 +87,7 @@ def write_blocks_report(blocks: list, logger) -> str:
         return None
 
     payload = {
-        "generat": datetime.now().isoformat(timespec="seconds"),
+        "generat": utc_now().isoformat(timespec="seconds"),
         "blocaje": len(blocks),
         "explicatie": (
             "Fiecare intrare este o cheie străină care NU poate fi creată. "
@@ -99,7 +99,7 @@ def write_blocks_report(blocks: list, logger) -> str:
 
     os.makedirs(OUT_DIR, exist_ok=True)
     path = os.path.join(
-        OUT_DIR, f"blocaje_{datetime.now():%Y%m%d_%H%M%S}.json")
+        OUT_DIR, f"blocaje_{utc_now():%Y%m%d_%H%M%S}.json")
     with open(path, "w", encoding="utf-8") as fh:
         # default=str: a blocking value can be a date or a Decimal, and a
         # report that crashes on one row is worth nothing.

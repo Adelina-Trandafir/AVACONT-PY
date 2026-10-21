@@ -11,6 +11,10 @@
 # >1 worker starea de upload s-ar fragmenta tacut. Pastram deliberat garda de un
 # singur worker pana cand SI _upload_sessions migreaza pe Redis. (vezi session_store.py)
 
+from utils.clock import configure_utc_process
+
+configure_utc_process()
+
 workers = 1
 threads = 4
 worker_class = "gthread"

@@ -108,7 +108,7 @@ def _verify_operator(username: str, password: str) -> bool:
             port=port,
             user=username,
             password=password,
-            connection_timeout=10,
+            connection_timeout=10, time_zone="+00:00",
         )
         return True
     except mysql.connector.Error as err:
@@ -609,7 +609,7 @@ def _set_operator_password(host, port, username, current_password, new_password)
     try:
         conn = mysql.connector.connect(
             host=host, port=port, user=username, password=current_password,
-            connection_timeout=10,
+            connection_timeout=10, time_zone="+00:00",
         )
         cur = conn.cursor()
         cur.execute("SET PASSWORD = PASSWORD(%s)", (new_password,))

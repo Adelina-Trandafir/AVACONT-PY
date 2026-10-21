@@ -353,6 +353,7 @@ def close_month(repo, body, username=''):
 
 
 def create_next_month(repo, closed):
+    from .working_days import configured_days
     month_number, year = next_period(closed['Luna'], closed['Anul'])
     existing = [row for row in repo.rows('LunaD')
                 if (row['Luna'], row['Anul']) == (month_number, year)]
@@ -362,7 +363,7 @@ def create_next_month(repo, closed):
     month = repo.insert('LunaD', {
         'IDV': taxes[0]['IDV'], 'Luna': month_number, 'Anul': year,
         'LunaT': MONTHS[month_number - 1], 'LA': f'{month_number:02d}{year}', 'Inchisa': False,
-        'ZileLuna': work_days(month_number, year),
+        'ZileLuna': configured_days(repo, month_number, year),
         'Ordine': max((month_order(row) for row in repo.rows('LunaD')), default=0) + 1,
     })
     attendance_by_person = {}

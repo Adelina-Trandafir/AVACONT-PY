@@ -1,4 +1,5 @@
 import logging
+from utils.clock import UtcFormatter
 from logging.handlers import RotatingFileHandler
 from flask import request, has_request_context, g
 
@@ -91,7 +92,7 @@ def _file_handler(path, formatter, *filters):
 
 
 def setup_logger():
-    log_formatter = logging.Formatter(
+    log_formatter = UtcFormatter(
         '%(asctime)s - %(levelname)s - %(ip)s - %(session_tag)s%(message)s')
 
     logger = logging.getLogger()

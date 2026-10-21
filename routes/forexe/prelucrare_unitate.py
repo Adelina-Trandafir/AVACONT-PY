@@ -60,6 +60,7 @@ a line does, not only why; the reader knows SQL and VB.NET, not Python):
 """
 import logging
 from datetime import datetime
+from utils.clock import utc_now
 from typing import Dict, List, Optional, Tuple
 
 import mysql.connector
@@ -231,7 +232,7 @@ def save_remembered_choice(cursor, ss: str, clsf_e: str, id_unitate: int,
     try:
         cursor.execute(
             _REMEMBERED_UPSERT_SQL,
-            (ss, clsf_e, int(id_unitate), un or "", moment or datetime.now()),
+            (ss, clsf_e, int(id_unitate), un or "", moment or utc_now()),
         )
     except mysql.connector.Error as err:
         if getattr(err, "errno", None) == _ER_NO_SUCH_TABLE:

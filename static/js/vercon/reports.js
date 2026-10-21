@@ -2,18 +2,19 @@
 import { el, scope, field, paintTree, pdfPreview, CheckBox } from './ui.js';
 import { messageBox } from '../utils/confirm-box.js';
 import { mountSelection, selectionHeader, selectionFilters, selectionError } from './report-selection.js';
-import { paintReportBlock, paintReportLetterhead, reportNodes } from './report-result.js';
+import { reportNodes } from './report-result.js';
 import { format as formatField } from './fields.js';
 import { reportPeriod } from './report-period.js';
+import { reportPeriodAction } from './report-period-action.js';
 
 export function mountReports(host, { api, sel }) {
-  const owner = scope(), selectionOwner = scope(), tablesOwner = scope();
-  owner.own(() => selectionOwner.clear()); owner.own(() => tablesOwner.clear());
+  const owner = scope(), selectionOwner = scope();
+  owner.own(() => selectionOwner.clear());
   const year = Number(sel().year);
   let dateOnly = false;
   const state = { start: `${year}-01-01`, end: `${year}-12-31`, name: null, label: '', spec: null, report: null, category: null,
     checked: [], documents: [], documentMode: false, selectionKind: '', model: null, seq: 0, lookupSeq: 0, destroyed: false, loading: false, selectionLoading: false, busy: false };
-  let selectionTree, errorBox;
+  let selectionTree, errorBox, periodCatalog;
   owner.own(() => errorBox?.close());
   const root = el('section', { className: 'vc-reports' });
   const periodTitle = el('h4', { textContent: 'Selectează perioada' });
@@ -31,8 +32,7 @@ export function mountReports(host, { api, sel }) {
       state.end = value;
       periods.sync(state.start, state.end); invalidate(); void lookups();
     }, owner);
-  const options = el('section', { className: 'vc-reports__options' }, el('h4', { textContent: 'Opțiuni afișare' }));
-  const showOutput = owner.own(new CheckBox(options, { label: 'Afișează rezultatul în pagină', className: 'vc-reports__check' })).input;
+  const options = el('section', { className: 'vc-reports__options', hidden: true }, el('h4', { textContent: 'Opțiuni afișare' }));
   const balanceOptions = el('div', { hidden: true }); options.append(balanceOptions);
   const pageBreakAccounts = owner.own(new CheckBox(balanceOptions, { label: 'Grupează pe cont, cu pagină nouă',
     checked: false, className: 'vc-reports__check', onChange: invalidate })).input;
@@ -50,6 +50,12 @@ export function mountReports(host, { api, sel }) {
       if (!state.report?.receiver_options) return;
       state.checked = []; state.documents = []; invalidate(); void lookups();
     } })).input;
+  const depreciationOptions = el('div', { hidden: true }); options.append(depreciationOptions);
+  const groupByReceivers = owner.own(new CheckBox(depreciationOptions, { label: 'Grupează după Primitori',
+    checked: false, className: 'vc-reports__check', onChange: () => {
+      if (state.report?.mf_selection !== 'depreciation') return;
+      state.checked = []; state.documents = []; invalidate(); void lookups();
+    } })).input;
   left.append(periods.node, begin.node, end.node, options);
   const center = el('section', { className: 'vc-reports__types' });
   const right = el('section', { className: 'vc-reports__selection' }, selectionHeader(selectionOwner).node,
@@ -57,10 +63,10 @@ export function mountReports(host, { api, sel }) {
   const excel = el('button', { type: 'button', textContent: 'Export Excel', disabled: true });
   const list = el('button', { type: 'button', textContent: 'Listare', disabled: true, className: 'is-primary' });
   const actions = el('div', { className: 'vc-actions vc-reports__actions' }, excel, list);
-  const output = el('section', { className: 'vc-reports__output', hidden: true });
-  root.append(left, center, right, actions, output); host.replaceChildren(root);
+  root.append(left, center, right, actions); host.replaceChildren(root);
 
   const selectionKind = report => {
+    if (report.mf_selection) return 'mf-' + report.mf_selection;
     if (report.outgoing_selection) {
       if (report.receiver_options) return showReceivers.checked ? 'outgoing-receivers' : 'outgoing-accounts-documents';
       return showDocuments.checked ? 'outgoing-documents-products' : 'outgoing-accounts-documents-products';
@@ -70,6 +76,7 @@ export function mountReports(host, { api, sel }) {
     return report.incoming_selection ? 'incoming-products' : 'products';
   };
   const query = (withFilters = true) => new URLSearchParams({ ...sel(), start: dateOnly ? state.end : state.start, end: state.end,
+    ...(state.report?.mf_selection === 'depreciation' ? { group_by_receivers: groupByReceivers.checked ? '1' : '0' } : {}),
     ...(withFilters && state.spec?.kind === 'balance' ? {
       page_break_accounts: pageBreakAccounts.checked ? '1' : '0',
       show_without_movements: showWithoutMovements.checked ? '1' : '0',
@@ -94,17 +101,8 @@ export function mountReports(host, { api, sel }) {
   }
   function invalidate() {
     ++state.seq; state.model = null;
-    tablesOwner.clear(); output.replaceChildren();
     available();
   }
-  function paintOutput() {
-    tablesOwner.clear(); output.replaceChildren(); output.hidden = !showOutput.checked;
-    if (showOutput.checked && state.model) {
-      paintReportLetterhead(state.model, output);
-      state.model.blocks.forEach(block => paintReportBlock(block, output, tablesOwner));
-    }
-  }
-  showOutput.addEventListener('change', paintOutput);
   async function lookups() {
     if (!state.name || state.destroyed) return;
     const name = state.name, seq = ++state.lookupSeq;
@@ -153,14 +151,14 @@ export function mountReports(host, { api, sel }) {
     if (state.model) return state.model;
     const model = await api(`/api/vercon/reports/${encodeURIComponent(state.name)}/generate?${query()}`);
     if (state.destroyed || seq !== state.seq) return null;
-    state.model = model; paintOutput();
+    state.model = model;
     return model;
   }
   function previewDetails() {
     const period = { start: state.spec?.kind === 'depreciation' ? state.end : state.start, end: state.end };
     if (!state.spec.filters.includes('document')) return { period };
     const selected = [...new Set(state.checked.flatMap(id => id.startsWith('document:') ? [id.slice('document:'.length)]
-      : id.startsWith('outgoing-item:') ? [id.split(':')[3]] : []))];
+      : id.startsWith('outgoing-item:') ? [id.split(':')[3]] : id.startsWith('mf-item:bons:') ? [id.split(':')[4]] : []))];
     const documents = state.documents.filter(item => selected.includes(String(item.id)));
     if (documents.length === 1) return { documentLabel: documents[0].label.replace(/\b\d{4}-\d{2}-\d{2}\b/g, date => formatField(date, { type: 'date' })) };
     return { documentLabel: selected.length ? `${selected.length} documente` : '', period };
@@ -194,6 +192,7 @@ export function mountReports(host, { api, sel }) {
           return { data, filename: filename + '.xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
         };
         return { data, title: model.title, filename: filename + '.' + format, exportExcel,
+          toolbarActions: [reportPeriodAction({ api, name: state.name, params: query(), catalog: periodCatalog, dateOnly, isCurrent: current })],
           downloadOnly: format === 'xlsx', mime: format === 'xlsx'
             ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf' };
       }, owner, current, details);
@@ -207,6 +206,7 @@ export function mountReports(host, { api, sel }) {
     try {
       const data = await api(`/api/vercon/reports/catalog?${new URLSearchParams(sel())}`);
       if (state.destroyed) return;
+      periodCatalog = data;
       periods.configure(data, begin, end);
       const reports = data.reports;
       const nodes = reportNodes(reports), categories = new Map();
@@ -221,10 +221,13 @@ export function mountReports(host, { api, sel }) {
         const report = reports.find(item => item.id === name);
         if (!report || (name === state.name && (selectionTree || state.loading))) return;
         const category = categories.get(name);
-        const sameCategory = category != null && category === state.category;
+        const sameCategory = category != null && category === state.category
+          && !report.mf_selection && !state.report?.mf_selection;
         balanceOptions.hidden = report?.kind !== 'balance';
         documentOptions.hidden = !report.document_options;
         receiverOptions.hidden = !report.receiver_options;
+        depreciationOptions.hidden = report.mf_selection !== 'depreciation';
+        options.hidden = balanceOptions.hidden && documentOptions.hidden && receiverOptions.hidden && depreciationOptions.hidden;
         dateOnly = report?.kind === 'depreciation';
         periodTitle.textContent = dateOnly ? 'Selectează data' : 'Selectează perioada';
         periods.node.hidden = begin.node.hidden = dateOnly;
@@ -233,8 +236,8 @@ export function mountReports(host, { api, sel }) {
         end.input.setAttribute('aria-label', dateOnly ? 'La data' : 'Dată sfârșit');
         end.input._picker.field.setAttribute('aria-label', dateOnly ? 'La data' : 'Dată sfârșit');
         state.name = name; state.label = report.label; state.report = report; state.category = category;
-        // Only the category below the root decides whether report navigation reloads
-        // the selection tree. Display options reload it only when explicitly toggled.
+        // MF reports have distinct trees and reload on report changes. The other
+        // reports retain the existing category-based selection reuse.
         if (sameCategory && (selectionTree || state.loading)) {
           state.spec = state.loading ? null : report; invalidate();
           return;

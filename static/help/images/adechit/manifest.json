@@ -1,0 +1,170 @@
+{
+  "application": "ADECHIT",
+  "environment": "DEMO",
+  "capturedOn": "2026-10-21",
+  "sourceUrl": "https://k-bot.ro/adechit",
+  "redaction": "Blur puternic în trei treceri pentru date personale, financiare, de prezență și conținutul discuțiilor; sunt păstrate lizibile etichetele și comenzile.",
+  "images": [
+    {
+      "file": "01-panouri-luna-grupa.jpg",
+      "caption": "Alegerea lunii și grupei în stânga, tabelul de prezență și rapoartele în dreapta.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 111
+    },
+    {
+      "file": "02-tabel-complet.jpg",
+      "caption": "Tabelul de prezență cu panourile laterale restrânse, pentru vizibilitatea coloanelor.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 144
+    },
+    {
+      "file": "04-meniu-principal.jpg",
+      "caption": "Meniul de sus: Plătitori, asocierea extraselor, Taxe, Zile lucrătoare, textul situației de plată și tema.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 186
+    },
+    {
+      "file": "05-platitori-liste.jpg",
+      "caption": "Fereastra Plătitori: grupe, copii și plătitorii copilului selectat.",
+      "width": 1278,
+      "height": 720,
+      "blurredRegions": 63
+    },
+    {
+      "file": "06-platitor-formular.jpg",
+      "caption": "Datele plătitorului și comanda de trimitere a codului de acces în portal.",
+      "width": 460,
+      "height": 592,
+      "blurredRegions": 2
+    },
+    {
+      "file": "07-copil-formular.jpg",
+      "caption": "Formularul copilului: identitate, grupă, data intrării și starea Plecat.",
+      "width": 460,
+      "height": 403,
+      "blurredRegions": 4
+    },
+    {
+      "file": "08-grupa-educatori.jpg",
+      "caption": "Grupa și istoricul educatorilor, cu perioade, email și CNP.",
+      "width": 1120,
+      "height": 523,
+      "blurredRegions": 19
+    },
+    {
+      "file": "09-adauga-copil.jpg",
+      "caption": "Adăugarea copilului și a părintelui în același formular, cu o singură salvare.",
+      "width": 920,
+      "height": 802,
+      "blurredRegions": 1
+    },
+    {
+      "file": "10-taxe.jpg",
+      "caption": "Taxele zilnice, perioadele de aplicare și starea activă.",
+      "width": 744,
+      "height": 459,
+      "blurredRegions": 13
+    },
+    {
+      "file": "11-zile-lucratoare.jpg",
+      "caption": "Configurarea anuală a zilelor de prezență; lunile închise sunt protejate.",
+      "width": 960,
+      "height": 719,
+      "blurredRegions": 25
+    },
+    {
+      "file": "12-text-situatie-plata.jpg",
+      "caption": "Editorul textului situației de plată, cu variabile și comenzi de formatare.",
+      "width": 1000,
+      "height": 676,
+      "blurredRegions": 0
+    },
+    {
+      "file": "13-extrase-asociere-manuala.jpg",
+      "caption": "Asocierea manuală: încasări neasociate, grupa, copilul, istoricul plătitorilor și luna înregistrării.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 99
+    },
+    {
+      "file": "14-extrase-previzualizare.jpg",
+      "caption": "Previzualizare automată: starea potrivirii și alegerea explicită a copilului înaintea generării.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 24
+    },
+    {
+      "file": "15-extrase-date-document.jpg",
+      "caption": "Coloanele editabile ale documentului propus: plătitor, identificatori, dată, număr, sumă și explicație.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 29
+    },
+    {
+      "file": "16-alte-plati.jpg",
+      "caption": "Fila Alte plăți: documentele existente, anularea și rândul de adăugare.",
+      "width": 1099,
+      "height": 140,
+      "blurredRegions": 4
+    },
+    {
+      "file": "17-chitante.jpg",
+      "caption": "Fila Chitanțe și rândul pentru data, valoarea și explicația unui document nou.",
+      "width": 1099,
+      "height": 140,
+      "blurredRegions": 0
+    },
+    {
+      "file": "18-restituiri.jpg",
+      "caption": "Fila Restituiri și câmpurile pentru documentul de restituire.",
+      "width": 1099,
+      "height": 140,
+      "blurredRegions": 0
+    },
+    {
+      "file": "19-panou-rapoarte.jpg",
+      "caption": "Panoul Rapoarte: situații lunare, situații de plată, casă, bancă, fișă cont și documente anulate.",
+      "width": 320,
+      "height": 773,
+      "blurredRegions": 0
+    },
+    {
+      "file": "20-vizualizator-pdf.jpg",
+      "caption": "Vizualizatorul PDF: imprimare, export, zoom și navigare; conținutul raportului este blurat.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 1
+    },
+    {
+      "file": "21-export-raport.jpg",
+      "caption": "Meniul Export Raport oferă descărcarea PDF și exportul Excel.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 1
+    },
+    {
+      "file": "22-discutii.jpg",
+      "caption": "DISCUȚII: filtre pe aplicații, identitate, răspuns și caseta de mesaj.",
+      "width": 440,
+      "height": 680,
+      "blurredRegions": 4
+    },
+    {
+      "file": "23-timer-sesiune.jpg",
+      "caption": "Timerul din antet arată timpul rămas până la deconectare.",
+      "width": 1331,
+      "height": 871,
+      "blurredRegions": 128
+    },
+    {
+      "file": "24-avertizare-sesiune.jpg",
+      "caption": "Avertizarea reală de la pragul de 15 minute; Am înțeles închide mesajul fără prelungirea sesiunii.",
+      "width": 420,
+      "height": 257,
+      "blurredRegions": 0
+    }
+  ]
+}

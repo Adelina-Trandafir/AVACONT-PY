@@ -42,9 +42,12 @@ Commands (all read-only unless marked WRITE):
     request-reject --id N --motiv T    WRITE  reject, with the reason the applicant receives
     request-link --id N                WRITE  a fresh password link for an approved request
     once-history                       the one-time queries that ran (template ledger): text, date, databases done / to do
-    backups [--db D]                   the dump files and schema plans (of one database when D is given)
+    backups [--db D]                   the dump files and schema plans (of one database when D is given), with the reason of each dump
     backup-text --path P               the text of one dump / plan file (first 2 MB)
-    backup --db D                      WRITE  dump one database to backup/
+    backup --db D|ALL --reason T       WRITE  dump one database, or every unit database but 000_DEMO, to backup/ (admin_backup.py)
+    snap-run --db D [--state-file P] [--mode fast|full]   read one database inside one consistent snapshot as a stream of JSON page records (admin_snapshot.py, ME02-04)
+    demo-clone-plan --from DB          what emptying 000_DEMO and cloning DB into it would do (nothing is written)
+    demo-clone --from DB               WRITE  dump 000_DEMO, empty it, clone DB into it keeping 000_DEMO's tax code and DC
     visits [--days N] [--bots]
 
 The schema SYNC itself is not here: KBotAdmin runs routes.schema_sync.schema_sync directly, as
@@ -53,6 +56,10 @@ AvacontPush does (it streams its progress line by line).
 Nothing prints secrets. Identifiers coming from the command line are checked against the server
 before they reach SQL, and quoted.
 """
+from utils.clock import configure_utc_process
+
+configure_utc_process()
+
 import argparse
 import glob
 import json
@@ -64,6 +71,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime
+from utils.clock import utc_from_timestamp, utc_now
 
 import mysql.connector
 
@@ -71,7 +79,7 @@ from routes.admin_cli import admin_logs, admin_logs_clear
 from routes.schema_sync.schema_common import (COMMON_DB, FORBIDDEN_TARGETS, SOURCE_DB, SchemaSyncError, connect,
                                               list_unit_databases)
 
-BACKUP_DIR = "backup"
+from routes.admin_cli.admin_backup import BACKUP_DIR      # the dump verbs live in admin_backup.py (ME02-02)
 JOURNAL_ACTOR_DEFAULT = "scavatarsoft@gmail.com"
 
 from routes.admin_cli.admin_common import (
@@ -148,7 +156,7 @@ def cmd_databases(args):
                 "err24": int(hits.get("err", 0)), "warn24": int(hits.get("warn", 0)),
             })
         return {"databases": out, "errors_without_db": int(counts.get("", {}).get("err", 0)),
-                "pending_requests": _pending_requests(), "server_time": _iso(datetime.now())}
+                "pending_requests": _pending_requests(), "server_time": _iso(utc_now())}
     finally:
         conn.close()
 
@@ -453,7 +461,7 @@ def _cert_expiry():
             try:
                 end = datetime.strptime(text[len("notAfter="):].replace("  ", " "), "%b %d %H:%M:%S %Y %Z")
                 out.append({"name": os.path.basename(os.path.dirname(path)), "until": end.strftime("%Y-%m-%d"),
-                            "days": (end - datetime.utcnow()).days})
+                            "days": (end - utc_now()).days})
             except ValueError:
                 out.append({"name": os.path.basename(os.path.dirname(path)), "until": text, "days": None})
     return out
@@ -489,7 +497,7 @@ def cmd_status(args):
         redis_state = "sesiuni in memorie/Redis: %s" % STORE.size()
     except Exception as err:  # the store may be absent in a bare shell; the answer is the message itself
         redis_state = "indisponibil: %s" % err
-    return {"time": _iso(datetime.now()), "uptime_s": float(uptime[0]) if uptime else None,
+    return {"time": _iso(utc_now()), "uptime_s": float(uptime[0]) if uptime else None,
             "load": load[:3], "mem_total": mem.get("MemTotal"), "mem_free": mem.get("MemAvailable"),
             "swap_total": mem.get("SwapTotal"), "swap_free": mem.get("SwapFree"), "disks": disks,
             "processes": procs, "mariadb": db, "redis": redis_state, "certificates": _cert_expiry(),
@@ -500,7 +508,7 @@ def cmd_status(args):
 # Audit, visits, logs, backups
 # ---------------------------------------------------------------------------
 def cmd_audit(args):
-    since = datetime.fromtimestamp(time.time() - 3600 * max(1, min(args.hours, 24 * 90)))
+    since = utc_from_timestamp(time.time() - 3600 * max(1, min(args.hours, 24 * 90)))
     where, params = ["Moment >= %s"], [since]
     if args.db:
         where.append("DC = %s")
@@ -529,7 +537,7 @@ def cmd_audit(args):
 def cmd_visits(args):
     conn = connect()
     try:
-        since = datetime.fromtimestamp(time.time() - 86400 * max(1, min(args.days, 365)))
+        since = utc_from_timestamp(time.time() - 86400 * max(1, min(args.days, 365)))
         bots = "" if args.bots else "AND Bot = 0"
         rows = _rows(conn, "SELECT Prima, Ultima, IP, Tara, Mobil, Bot, Pagina, Referrer, DurataSec, Sectiuni "
                            "FROM `%s`.`Vizite_Site` WHERE Prima >= %%s %s ORDER BY Prima DESC LIMIT 2000"
@@ -543,7 +551,7 @@ def cmd_visits(args):
 
 
 def cmd_logs_meta(args):
-    return {"files": admin_logs.file_info(), "server_time": _iso(datetime.now())}
+    return {"files": admin_logs.file_info(), "server_time": _iso(utc_now())}
 
 
 def cmd_logs(args):
@@ -552,7 +560,7 @@ def cmd_logs(args):
     total = len(entries)
     limit = max(1, min(args.limit, 5000))
     return {"rows": entries[-limit:], "total": total, "truncated": total > limit, "unreadable": unreadable,
-            "server_time": _iso(datetime.now())}
+            "server_time": _iso(utc_now())}
 
 
 def cmd_logs_clear(args):
@@ -562,61 +570,6 @@ def cmd_logs_clear(args):
         raise AdminError(str(err))
     except OSError as err:
         raise AdminError("Jurnalele nu au putut fi golite: %s" % err)
-
-
-BACKUP_PLAN_DIR = "schema_diff"
-PLAN_SCAN_BYTES = 8 * 1024 * 1024      # how much of a schema plan is searched for the database name
-TEXT_MAX_BYTES = 2 * 1024 * 1024       # how much of a file the text view returns
-
-
-def _plan_mentions(path, db):
-    """True when a schema plan file names the database (plans cover several databases at once)."""
-    needle = db.casefold()
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as handle:
-            return needle in handle.read(PLAN_SCAN_BYTES).casefold()
-    except OSError:
-        return False
-
-
-def cmd_backups(args):
-    """The dump files and schema plans. With --db (not ALL) only those of that database remain:
-    dumps are named <db>_<stamp>.sql, plans are kept when their text names the database."""
-    wanted = "" if args.db in ("", "ALL") else args.db
-    out = []
-    for pattern in (os.path.join(BACKUP_DIR, "*.sql*"), os.path.join(BACKUP_PLAN_DIR, "*.sql")):
-        for path in glob.glob(pattern):
-            is_dump = path.startswith(BACKUP_DIR)
-            name = os.path.basename(path)
-            if wanted:
-                if is_dump:
-                    if not name.casefold().startswith(wanted.casefold() + "_"):
-                        continue
-                elif not _plan_mentions(path, wanted):
-                    continue
-            stat = os.stat(path)
-            out.append({"path": os.path.abspath(path), "name": name, "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%dT%H:%M:%S"),
-                        "kind": "copie" if is_dump else "plan schema"})
-    out.sort(key=lambda r: r["modified"], reverse=True)
-    return {"files": out[:300]}
-
-
-def cmd_backup_text(args):
-    """The text of one dump or plan file (the first TEXT_MAX_BYTES). The path must be one the listing returned."""
-    import gzip
-    real = os.path.realpath(args.path)
-    allowed = [os.path.realpath(BACKUP_DIR), os.path.realpath(BACKUP_PLAN_DIR)]
-    if not any(real.startswith(folder + os.sep) for folder in allowed) or not os.path.isfile(real):
-        raise AdminError("Fisierul nu este o copie sau un plan de pe server.")
-    size = os.path.getsize(real)
-    opener = gzip.open if real.endswith(".gz") else open
-    with opener(real, "rb") as handle:
-        raw = handle.read(TEXT_MAX_BYTES + 1)
-    truncated = len(raw) > TEXT_MAX_BYTES
-    text = raw[:TEXT_MAX_BYTES].decode("utf-8", errors="replace")
-    return {"name": os.path.basename(real), "size": size, "text": text, "truncated": truncated,
-            "shown_bytes": min(len(raw), TEXT_MAX_BYTES)}
 
 
 ONCE_LEDGER = "Interogari_Unice"
@@ -652,19 +605,6 @@ def cmd_once_history(args):
                       "ran_by": row["RulatDe"] or "", "rows": row["Randuri"], "text": text,
                       "done": len(reached), "total": len(units), "missing": missing})
     return {"items": items, "units": len(units)}
-
-
-def cmd_backup(args):
-    from routes.schema_sync.schema_execute import dump_database
-    conn = connect()
-    try:
-        dbs = _resolve_db(conn, args.db)
-    finally:
-        conn.close()
-    if len(dbs) != 1:
-        raise AdminError("Copia se face pe o singura baza.")
-    path = dump_database(dbs[0], BACKUP_DIR, _quiet_logger())
-    return {"db": dbs[0], "path": os.path.abspath(path), "size": os.path.getsize(path)}
 
 
 # ---------------------------------------------------------------------------
@@ -818,17 +758,10 @@ def _parser():
 
     sub.add_parser("once-history").set_defaults(fn=cmd_once_history)
 
-    p = sub.add_parser("backups")
-    p.add_argument("--db", default="ALL")
-    p.set_defaults(fn=cmd_backups)
-
-    p = sub.add_parser("backup-text")
-    p.add_argument("--path", required=True)
-    p.set_defaults(fn=cmd_backup_text)
-
-    p = sub.add_parser("backup")
-    p.add_argument("--db", required=True)
-    p.set_defaults(fn=cmd_backup)
+    from routes.admin_cli import admin_backup
+    admin_backup.register(sub)
+    from routes.admin_cli import admin_snapshot
+    admin_snapshot.register(sub)
 
     p = sub.add_parser("requests")
     p.add_argument("--state", default="InAsteptare")
@@ -865,6 +798,8 @@ def _parser():
     p.set_defaults(fn=cmd_visits)
     from routes.admin_cli import vercon_reports
     vercon_reports.register(sub)
+    from routes.admin_cli import admin_demo
+    admin_demo.register(sub)
     return parser
 
 

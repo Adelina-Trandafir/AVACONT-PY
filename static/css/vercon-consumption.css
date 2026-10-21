@@ -39,6 +39,23 @@
 .vc-doc--bc .vc-doc__save { grid-area: save; justify-self: end; }
 .vc-doc--bc .vc-doc__messages { grid-area: messages; min-width: 0; align-self: center; overflow-wrap: anywhere; }
 .vc-doc--bc .vc-doc__messages .vc-save-status { min-width: 0; margin: 0; align-self: center; overflow-wrap: anywhere; }
+.vc-doc--bc .vc-bc-stock-summary {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) max-content;
+  gap: 10px 12px;
+  margin: 12px 8px;
+  flex: 1 1 0;
+  align-content: start;
+  overflow-y: auto;
+}
+.vc-doc--bc .vc-bc-stock-summary dt, .vc-doc--bc .vc-bc-stock-summary dd { margin: 0; }
+.vc-doc--bc .vc-bc-stock-summary dd { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vc-page .vc-bc-products { overflow-x: hidden; }
+.vc-page .vc-bc-products .treeview-tree-container { width: 100%; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; }
+.vc-page .vc-bc-products .treeview-item-wrapper,
+.vc-page .vc-bc-products .treeview-children { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.vc-page .vc-bc-products .treeview-item { min-width: 0; }
+.vc-page .vc-bc-products .treeview-label { min-width: 0; flex: 1 1 0; white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 800px) {
   .vc-page .vc-doc--bc .vc-doc__header { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; }
   .vc-doc--bc .vc-doc__header .vc-field[data-field] { grid-column: auto; grid-row: auto; }

@@ -12,6 +12,8 @@ import { installLayouts } from './layouts.js';
 import { createCertificate } from './certificat.js';
 import eventBus, { EVENTS } from '../event-bus/event-bus.js';
 import { Combobox } from '../components/combobox/combobox.js';
+import { showMessage } from './messages.js';
+import '../components/tooltip/tooltip-titles.js';
 
 const TOKEN_KEY = 'kbot-portal-token';
 const PORTAL_URL = '/portal';
@@ -102,10 +104,8 @@ async function callBytes(path) {
   }
 }
 
-function say(id, text) {
-  const el = $(id);
-  el.textContent = text || '';
-  el.hidden = !text;
+function say(id, text, level = 'error') {
+  showMessage($(id), text, level);
 }
 
 function show(which) {
@@ -126,7 +126,7 @@ const menu = createMenu($('pmenu'), (key, label) => {
     return;
   }
   app.closePage();
-  say('msg-app', 'Secțiunea «' + label + '» va fi disponibilă în curând.');
+  say('msg-app', 'Secțiunea «' + label + '» va fi disponibilă în curând.', 'info');
   window.clearTimeout(noticeTimer);
   noticeTimer = window.setTimeout(() => say('msg-app', ''), 3500);
 });

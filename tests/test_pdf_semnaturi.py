@@ -33,7 +33,7 @@ class TestParseAudit:
         assert records[0]["rol"] == "A"
         assert records[0]["semnatar"] == "Ștefan AD.CREDIT"
         expected = datetime(2026, 9, 23, 16, 0, tzinfo=timezone(timedelta(hours=3))) \
-            .astimezone().replace(tzinfo=None)
+            .astimezone(timezone.utc).replace(tzinfo=None)
         assert records[0]["data"] == expected
         assert st["ip_local"] == "192.168.1.20" and st["calculator"] == "PC-01"
         assert "extra" not in st

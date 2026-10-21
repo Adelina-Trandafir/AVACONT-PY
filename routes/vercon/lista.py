@@ -12,10 +12,10 @@ gestiune's ZEC, stored directly as DECIMAL(20,4)); the value of the list is the 
 list minus the sum of the bons; a recipe changed later does not rewrite a saved list (the list keeps its own text and
 values). Cancelling a list frees its bons.
 """
-from datetime import datetime
+from utils.clock import bucharest_today, utc_now
 from decimal import Decimal
 
-from . import lista_bc, numeric, protocol
+from . import document_order, lista_bc, numeric, protocol
 from .documents import _all, _dec, _exists, _fail, _int, _money, _one, _scope, _text, _iso
 from .nomenclatoare import NomError
 
@@ -78,7 +78,7 @@ def lookups(cursor, ctx, family):
     return {'dishes': [{'id': r['IDFel'], 'label': r['DenFel'] or ''} for r in _all(
         cursor, 'SELECT IDFel, DenFel FROM VC_FeluriMancare WHERE SubunitId=%s AND GestiuneId=%s AND Activ=1 ORDER BY DenFel', (s, g))],
         'explanations': explanations,
-        'today': datetime.now().strftime('%Y-%m-%d')}
+        'today': bucharest_today().isoformat()}
 
 
 def eligible_bons(cursor, ctx, exclude_list=None):
@@ -202,7 +202,7 @@ def create(cursor, repo, ctx, exercise, body, request_key, request_id):
     number = _number(cursor, ctx, (body.get('header') or {}).get('Numar'), errors)
     _fail(errors)
     list_id = repo.insert('VC_LABC', {'NumarLA': number, 'DATALA': parsed['date'], 'ValoareBon': 0, 'DEP': 0, 'ValoareLista': 0})
-    total = _write_meals(repo, ctx, list_id, parsed, datetime.now())
+    total = _write_meals(repo, ctx, list_id, parsed, utc_now())
     _link_bons(repo, list_id, parsed['bons'])
     bons_total = _bons_total(cursor, ctx, list_id)
     repo.update('VC_LABC', {'ValoareBon': bons_total, 'ValoareLista': total, 'DEP': total - bons_total}, {'IdLista': list_id})
@@ -221,7 +221,9 @@ def edit(cursor, repo, ctx, exercise, doc_id, body, request_id):
     version = _int(body.get('version'))
     if version is None or before['Version'] != version:
         raise NomError('CONFLICT', 'Lista a fost modificată de altcineva. Reîncărcați lista.', 409, {'version': before['Version']})
+    document_order.require_latest(cursor, ctx, 'lista', doc_id)
     parsed = _clean(cursor, repo, ctx, exercise, body)
+    document_order.require_position(cursor, ctx, 'lista', doc_id, parsed['date'])
     errors = {}
     number = before['NumarLA']
     manual = (body.get('header') or {}).get('Numar')
@@ -230,7 +232,7 @@ def edit(cursor, repo, ctx, exercise, doc_id, body, request_id):
     _fail(errors)
     for table in [m[0] for m in MEALS.values()] + ['VC_ListaAlimente']:
         repo.delete(table, {'IDLISTA' if table == 'VC_ListaAlimente' else 'IdLista': doc_id})
-    total = _write_meals(repo, ctx, doc_id, parsed, datetime.now())
+    total = _write_meals(repo, ctx, doc_id, parsed, utc_now())
     result = _link_bons(repo, doc_id, parsed['bons'])
     bons_total = _bons_total(cursor, ctx, doc_id)
     if repo.update('VC_LABC', {'NumarLA': number, 'DATALA': parsed['date'], 'ValoareBon': bons_total, 'ValoareLista': total, 'DEP': total - bons_total},
@@ -253,6 +255,7 @@ def cancel(cursor, repo, ctx, family, doc_id, body, request_id):
     version = _int(body.get('version'))
     if version is None or before['Version'] != version:
         raise NomError('CONFLICT', 'Lista a fost modificată de altcineva. Reîncărcați lista.', 409)
+    document_order.require_latest(cursor, ctx, 'lista', doc_id)
     freed = lista_bc.current(repo, doc_id)
     repo.delete('VC_LegBCLA', {'IdLista': doc_id})   # the bons are free again; they are not touched
     cursor.execute('UPDATE VC_LABC SET Anulat=1, MotivAnulare=%s, AnulatDe=%s, AnulatLa=NOW(), Version=Version+1 WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdLista=%s',

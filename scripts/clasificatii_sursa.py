@@ -63,7 +63,7 @@ import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 import mysql.connector
 
@@ -124,7 +124,7 @@ def connect():
     cfg.setdefault("charset", "utf8mb4")
     cfg["autocommit"] = True
     try:
-        return mysql.connector.connect(**cfg)
+        return mysql.connector.connect(**{**cfg, "time_zone": "+00:00"})
     except mysql.connector.Error as exc:
         raise MigrationError(
             f"Conectare eșuată la {cfg.get('host')}:{cfg.get('port')} — {exc}") from exc
@@ -306,7 +306,7 @@ def dump_table(db: str, backup_dir: str, say) -> str:
         raise MigrationError(
             "mysqldump / mariadb-dump nu a fost găsit. Fără copie de siguranță nu se modifică nimic.")
     os.makedirs(backup_dir, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_path = os.path.join(backup_dir, f"{db}_{TABLE}_{stamp}.sql")
     cmd = [tool] + _client_args() + ["--single-transaction",
                                      "--default-character-set=utf8mb4", db, TABLE]

@@ -34,7 +34,7 @@ than found in the plan -- it is one constant, and the operator can move it.
 """
 import json
 import logging
-from datetime import date
+from utils.clock import bucharest_today
 
 from utils.database import COMMON_DB, get_kbot_connection
 
@@ -74,7 +74,7 @@ def allowed_years(today=None):
     Never the future -- a unit cannot budget for a year the dictionaries do not cover
     yet, and `Unitati_Ani` would carry a row nothing can be entered against.
     """
-    current = (today or date.today()).year
+    current = (today or bucharest_today()).year
     return (current - 1, current)
 
 

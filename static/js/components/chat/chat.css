@@ -1,0 +1,131 @@
+@import url("../action-add-button/action-add-button.css");
+@import url("../../../css/textbox.css");
+@import url("../../../css/checkbox.css");
+
+.kchat {
+  --action-add-button-height: 32px;
+  --action-add-button-min-width: 32px;
+  --action-add-button-icon-size: 18px;
+  --action-add-button-font-size: 13px;
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1000;
+  color: var(--ink, #172b4d);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.kchat *, .kchat *::before, .kchat *::after { box-sizing: border-box; }
+.kchat [hidden] { display: none !important; }
+.kchat.kchat--positioned {
+  left: var(--kchat-left);
+  top: var(--kchat-top);
+  right: auto;
+  bottom: auto;
+}
+.kchat .kchat__launcher {
+  --action-add-button-height: 42px;
+  --action-add-button-back: var(--blue, #1687ed);
+  --action-add-button-color: #fff;
+  --action-add-button-hover-back: #197ed1;
+  --action-add-button-border: transparent;
+  --action-add-button-radius: 22px;
+  box-shadow: 0 3px 16px #0003;
+  margin-left: auto;
+  display: flex;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.kchat.kchat--dragging .kchat__launcher { cursor: grabbing; }
+.kchat__panel {
+  position: absolute;
+  bottom: 52px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, calc(100vw - 24px));
+  height: min(680px, calc(100dvh - 96px));
+  max-height: calc(100vh - 96px);
+  min-height: 220px;
+  overflow: hidden;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #cdd5e0);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px #0004;
+}
+.kchat.kchat--panel-placed .kchat__panel {
+  left: var(--kchat-panel-left);
+  top: var(--kchat-panel-top);
+  right: auto;
+  bottom: auto;
+  width: var(--kchat-panel-width);
+  height: var(--kchat-panel-height);
+  max-height: var(--kchat-panel-height);
+  min-height: 0;
+}
+.kchat__header {
+  --action-add-button-back: transparent;
+  --action-add-button-color: #fff;
+  --action-add-button-border: rgb(255 255 255 / .45);
+  --action-add-button-hover-back: rgb(255 255 255 / .16);
+  --action-add-button-hover-border: #fff;
+  --action-add-button-active-back: rgb(255 255 255 / .24);
+  --action-add-button-focus-color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  background: var(--avacont-blue, #3b5a85);
+  color: #fff;
+  border-bottom: 1px solid var(--avacont-blue, #3b5a85);
+}
+.kchat__heading { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.kchat__title-icon { flex: 0 0 auto; font-size: 22px; line-height: 1; }
+.kchat__app-icon { display: inline-block; width: 24px; height: 24px; flex: 0 0 24px; object-fit: contain; vertical-align: middle; }
+.kchat__filters { display: flex; align-items: center; gap: 16px; padding: 9px 12px; border-bottom: 1px solid var(--line, #cdd5e0); }
+.kchat__filter-caption { font-size: 12px; }
+.kchat__filters .cb { gap: 5px; }
+.kchat__filters .kchat__app-icon { width: 22px; height: 22px; }
+.kchat__messages { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 8px; scrollbar-gutter: stable; }
+.kchat__empty { margin: 20px 8px; text-align: center; color: var(--muted, #6b7280); }
+.kchat__message { margin: 0 18px 6px 0; padding: 5px 8px; background: var(--bg, #f3f6fa); border: 1px solid var(--line, #cdd5e0); border-radius: 8px; }
+.kchat__message--mine { margin: 0 0 6px 18px; background: color-mix(in srgb, var(--blue, #309eff) 9%, var(--card, #fff)); }
+.kchat__message-header { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.kchat__message-header > .kchat__app-icon { width: 20px; height: 20px; flex-basis: 20px; }
+.kchat__author { font-size: 12px; overflow-wrap: anywhere; }
+.kchat__time { margin-left: auto; font-size: 10px; color: var(--muted, #6b7280); white-space: nowrap; }
+.kchat__body { margin: 3px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.kchat__quote { display: flex; align-items: flex-start; gap: 6px; padding: 4px 6px; margin: 4px 0 0; border-left: 3px solid var(--blue, #309eff); font-size: 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.kchat__quote .kchat__app-icon { width: 18px; height: 18px; flex-basis: 18px; }
+.kchat__quote > span { min-width: 0; }
+.kchat__message-actions { display: flex; flex: 0 0 auto; --action-add-button-height: 22px; --action-add-button-min-width: 24px; --action-add-button-icon-size: 15px; --action-add-button-padding-x: 0; --action-add-button-radius: 5px; }
+.kchat__composer { flex: 0 0 auto; padding: 8px 10px; border-top: 1px solid var(--line, #cdd5e0); }
+.kchat__identity { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; margin-bottom: 7px; font-size: 12px; }
+.kchat__identity .cb { flex: 0 0 auto; white-space: nowrap; }
+.kchat__pseudonym { min-width: 0; color: var(--muted, #6b7280); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kchat__name { flex: 1 1 0; min-width: 0; margin: 0; }
+.kchat__entry { min-width: 0; }
+.kchat .tb__input { min-height: 32px; font: inherit; }
+.kchat .tb--multiline .tb__input { min-height: 72px; max-height: 160px; }
+.kchat__composer-footer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; margin-top: 6px; }
+.kchat__length, .kchat__hint { font-size: 11px; color: var(--muted, #6b7280); }
+.kchat__hint { min-width: 0; margin: 0; text-align: center; }
+.kchat__reply-draft { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 8px; border-left: 3px solid var(--blue, #309eff); background: var(--bg, #f3f6fa); }
+.kchat__reply-draft > span { flex: 1; min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.kchat__status { margin: 0; padding: 6px 12px; font-size: 12px; overflow-wrap: anywhere; }
+.kchat__status--error { color: var(--err-control-bordercolor, #c0392b); }
+.kchat .kchat__older, .kchat .kchat__jump { flex: 0 0 auto; margin: 6px 12px; }
+@media (max-width: 520px) {
+  .kchat { right: 12px; bottom: 12px; }
+  .kchat__panel { height: min(680px, calc(100dvh - 82px)); max-height: calc(100vh - 82px); }
+  .kchat__filters { gap: 12px; }
+  .kchat__messages { padding: 8px; }
+  .kchat__composer { padding: 8px; }
+}
+@media (max-height: 500px) {
+  .kchat__panel { height: calc(100dvh - 70px); max-height: calc(100vh - 70px); bottom: 48px; }
+  .kchat .tb--multiline .tb__input { min-height: 40px; max-height: 64px; }
+  .kchat__header, .kchat__filters, .kchat__composer { padding: 5px 8px; }
+}

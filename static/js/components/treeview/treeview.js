@@ -23,6 +23,7 @@ import { treeViewNodesMixin } from './treeview-nodes.js';
 import { treeviewInteractionsMixin } from './treeview-interactions.js';
 import { treeViewBreadcrumbMixin } from './treeview-breadcrumb.js';
 import { treeViewCheckableMixin } from './treeview-checkable.js';
+import '../tooltip/tooltip-titles.js';
 
 export class TreeView {
   static instanceCounter = 0;

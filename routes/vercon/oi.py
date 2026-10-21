@@ -20,7 +20,7 @@ Model (the Access one, kept so the migrated history works unchanged):
     columns, so a batch id never collides with another kind of document.
 Everything here runs inside the transaction of the route.
 """
-from datetime import datetime
+from utils.clock import bucharest_today, utc_now
 from decimal import Decimal
 
 from . import numeric, protocol, oi_custody
@@ -141,7 +141,7 @@ def lookups(cursor, ctx, family):
     out['warehouse_accounts'] = [item for item in out['categories'] if item['id'] in source_ids
                                  and types.get(item['id']) in (None, '', warehouse_type)]
     out['use_accounts'] = [item for item in out['categories'] if types.get(item['id']) in (None, '', use_type)]
-    out['today'] = datetime.now().strftime('%Y-%m-%d')
+    out['today'] = bucharest_today().isoformat()
     return out
 
 
@@ -323,7 +323,7 @@ def create_bp(cursor, repo, ctx, exercise, body, request_key, request_id):
     number = _number(cursor, ctx, 'bp', (body.get('header') or {}).get('Numar'), errors)
     _fail(errors)
     doc_id = _next_id(cursor, ctx)
-    now = datetime.now()
+    now = utc_now()
     _write_bp(cursor, repo, ctx, doc_id, number, header, lines, None, now)
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in lines})
     oi_custody.check_timeline(cursor, ctx)
@@ -366,7 +366,7 @@ def edit_bp(cursor, repo, ctx, exercise, doc_id, body, request_id):
     bc_id = rows[0]['IdBonConsum']
     _forget(repo, 'bp', doc_id)
     repo.delete('VC_OI_Predare', {'IDBP': doc_id})
-    _write_bp(cursor, repo, ctx, doc_id, number, header, lines, bc_id, datetime.now())
+    _write_bp(cursor, repo, ctx, doc_id, number, header, lines, bc_id, utc_now())
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in lines} | old_products)
     oi_custody.check_timeline(cursor, ctx)
     protocol.audit(cursor, ctx, 'bp.update', 'VC_OI_Predare', doc_id, {'number': rows[0]['NRBP'], 'lines': len(rows)}, {'number': number, 'lines': len(lines)}, None, request_id)
@@ -453,7 +453,7 @@ def create_out(family, cursor, repo, ctx, exercise, body, request_key, request_i
     number = _number(cursor, ctx, family, (body.get('header') or {}).get('Numar'), errors)
     _fail(errors)
     doc_id = _next_id(cursor, ctx)
-    (_write_bt if family == 'bt' else _write_bs)(repo, ctx, doc_id, number, header, lines, datetime.now())
+    (_write_bt if family == 'bt' else _write_bs)(repo, ctx, doc_id, number, header, lines, utc_now())
     oi_custody.check_timeline(cursor, ctx)
     protocol.freeze(cursor, ctx)
     protocol.audit(cursor, ctx, family + '.create', SPEC[family]['table'], doc_id, None, {'number': number, 'lines': len(lines), 'total': sum(l['ValoareCUTVA'] for l in lines)}, request_key, request_id)
@@ -476,7 +476,7 @@ def edit_out(family, cursor, repo, ctx, exercise, doc_id, body, request_id):
     _fail(errors)
     _forget(repo, family, doc_id)
     repo.delete(spec['table'], {spec['key']: doc_id})
-    (_write_bt if family == 'bt' else _write_bs)(repo, ctx, doc_id, number, header, lines, datetime.now())
+    (_write_bt if family == 'bt' else _write_bs)(repo, ctx, doc_id, number, header, lines, utc_now())
     oi_custody.check_timeline(cursor, ctx)
     protocol.audit(cursor, ctx, family + '.update', spec['table'], doc_id, {'number': rows[0][spec['num']], 'lines': len(rows)}, {'number': number, 'lines': len(lines)}, None, request_id)
     return {'id': doc_id, 'number': number}

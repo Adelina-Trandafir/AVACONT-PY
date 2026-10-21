@@ -31,7 +31,7 @@ Three ways to run it:
 import argparse
 import os
 import sys
-from datetime import datetime
+from utils.clock import utc_now
 
 import mysql.connector
 
@@ -128,7 +128,7 @@ def main(argv=None) -> int:
             return 0
 
         out_path = args.out or os.path.join(
-            OUT_DIR, f"schema_diff_{datetime.now():%Y%m%d_%H%M%S}.sql")
+            OUT_DIR, f"schema_diff_{utc_now():%Y%m%d_%H%M%S}.sql")
         os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as fh:
             fh.write(render_sql(rows))

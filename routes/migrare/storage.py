@@ -134,7 +134,7 @@ def list_pushed():
         out.append({
             "nume": name,
             "octeti": st.st_size,
-            "modificat": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime)),
+            "modificat": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(st.st_mtime)),
         })
     return out
 

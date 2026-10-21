@@ -1,6 +1,7 @@
 // Saved documents use the official report layout; an unsaved draft stays local.
 import { pdfPreview } from './ui.js';
 import { snapshotPdf } from './snapshot-pdf.js';
+import { reportPeriodAction } from './report-period-action.js';
 
 const names = { nir: 'NIR', storno: 'NIR_Storno', bc: 'Bon_Consum', br: 'BonRetur', lista: 'ListaAlimente2015',
   bp: 'OI_Bon_BP', bt: 'OI_Bon_BT', bs: 'OI_Bon_BS' };
@@ -26,7 +27,8 @@ export async function documentReport({ api, selection, family, document, title, 
         const model = await api(`/api/vercon/reports/${encodeURIComponent(names[family])}/generate?${params}`);
         if (!current()) return null;
         const data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${new URLSearchParams(selection)}`, { responseType: 'arrayBuffer' });
-        return current() ? data : null;
+        return current() ? { data, title: model.title, filename: model.filename + '.pdf',
+          toolbarActions: [reportPeriodAction({ api, name: names[family], params, isCurrent: current })] } : null;
       } catch (error) {
         // A reader without the report right may still print the document already loaded.
         if (error.status !== 403) throw error;

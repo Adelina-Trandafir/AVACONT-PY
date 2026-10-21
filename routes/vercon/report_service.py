@@ -1,5 +1,6 @@
 """Build once; screen and exports share a short-lived, user-scoped snapshot."""
 from datetime import date, datetime
+from utils.clock import utc_now
 from decimal import Decimal
 import hashlib
 import json
@@ -22,6 +23,8 @@ def primitive(value):
 
 def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None, issuer=None):
     spec = report_catalog.spec_of(name, ctx['type'])
+    if params.get('mf_selection') and any(item[0] != spec.get('mf_selection') for item in params['mf_selection']):
+        raise NomError('REPORT_FILTER', 'Selecția MF nu corespunde raportului ales.', 422)
     if params.get('receipt_selection') and not spec.get('incoming_selection'):
         raise NomError('REPORT_FILTER', 'Raportul nu folosește selecția produselor pe furnizori.', 422)
     if params.get('outgoing_selection') and not (spec.get('outgoing_selection') or spec.get('outgoing_filters')):
@@ -91,7 +94,7 @@ def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None, issuer
              'blocks': heading + band('before') + blocks + band('after'),
              'notes': notes, 'context': {key: ctx[key] for key in ('subunit', 'gestiune', 'exercitiu', 'type', 'scale', 'zec')},
              'versions': {'layout': layout['version'], 'unit': identity['version'], 'queries': source.versions},
-             'generated_at': datetime.now().isoformat(timespec='seconds')}
+             'generated_at': utc_now().isoformat(timespec='seconds')}
     if receptions:
         model['receptions'] = receptions
     model = primitive(model)

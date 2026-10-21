@@ -13,20 +13,29 @@ primite_access.py, the link to receptions in primite_access_legare.py. Only a cl
                                                              note: [ { Nota, DataAdaugare } ],
                                                              mesaje: [ { IdSol, IdMesajAnaf, Mesaj, DataMesaj, DataAdaugare } ],
                                                              operatii: [ { IdOperatiePrimita, IdOperatie, IdClsfAcc, IdUnitate, Sursa, Suma,
-                                                                           DataAdaugare } ] } ] } ] }
+                                                                           DataAdaugare } ] } ] } ],
+                                                           context: { an, fisier, cui, lot, loturi, cerute, citite_lot, citite }  (optional) }
         -> 200 { mesaje_noi, mesaje_sarite, facturi_noi, facturi_sarite, linii, note, mesaje_factura, operatii, operatii_sarite,
                  id_primite: [..the invoices ADDED..], probleme: [text], erori: [{ id_sol, motiv }] }
-  POST /api/efactura/primite/access/finalizeaza        body { id_primite: [..], referinte: [ { IdSol, NrFact, RefIdSol, RefNrFact } ] }
+  POST /api/efactura/primite/access/finalizeaza        body { id_primite: [..], referinte: [ { IdSol, NrFact, RefIdSol, RefNrFact } ],
+                                                           context: { an, fisier, cui, acces_total, citite, necitite_total, necitite: [id] }  (optional) }
         -> 200 { referinte_setate, legare: { citite, legate, fara_furnizor, fara_receptie, nesigure, mai_multe_clasificatii, conflicte, omisa } }
   POST /api/efactura/primite/access/exporta            body { an, deja: [IdSol, ..], limita }
         -> 200 { mesaje: [ the same shape as `preia` takes, plus IdPrimitaRef info as RefIdSol / RefNrFact ], ramase, total_lipsa }
 
-Errors are `{ "error": "<text>", "reason": "<CODE>" }`. Audit journal: EF_PRIMITE_ACCESS_PREIA, EF_PRIMITE_ACCESS_EXPORTA.
+Errors are `{ "error": "<text>", "reason": "<CODE>" }`. Audit journal (AVACONT_COMUN.Jurnal): EF_PRIMITE_ACCESS_PREIA (one row per batch, always), EF_PRIMITE_ACCESS_FINAL (end of a run, always),
+EF_PRIMITE_ACCESS_EXPORTA. What the rows hold: primite_access_jurnal.py.
 """
-from . import efactura_bp, primite_access
+import time
+
+from . import efactura_bp, primite_access, primite_access_jurnal as jurnal
 from .factura_routes import _audit, _body, _guarded, _json
 from routes.auth.guard import require_session
 from flask import g
+
+
+def _ms(start):
+    return int((time.monotonic() - start) * 1000)
 
 
 @efactura_bp.route("/api/efactura/primite/access/stare", methods=["GET"])
@@ -41,10 +50,14 @@ def primite_access_stare():
 @_guarded("primite/access/preia")
 def primite_access_preia():
     body = _body()
-    answer = primite_access.preia(g.session.db_name, body.get("mesaje"))
-    if answer["mesaje_noi"] or answer["facturi_noi"] or answer["operatii"]:
-        _audit("EF_PRIMITE_ACCESS_PREIA", None, "mesaje=%d facturi=%d operatii=%d erori=%d" % (
-            answer["mesaje_noi"], answer["facturi_noi"], answer["operatii"], len(answer["erori"])))
+    mesaje, ctx, start = body.get("mesaje"), jurnal.context(body.get("context")), time.monotonic()
+    try:
+        answer = primite_access.preia(g.session.db_name, mesaje)
+    except Exception as err:
+        _audit("EF_PRIMITE_ACCESS_PREIA", None, jurnal.detalii_eroare(mesaje, ctx, err, _ms(start)), "EROARE")
+        raise
+    # one row per batch, also when nothing new was added (slice 00EF-44): see primite_access_jurnal.py
+    _audit("EF_PRIMITE_ACCESS_PREIA", None, jurnal.detalii_preia(answer, mesaje, ctx, _ms(start)), jurnal.rezultat_preia(answer))
     return _json(answer)
 
 
@@ -53,9 +66,16 @@ def primite_access_preia():
 @_guarded("primite/access/finalizeaza")
 def primite_access_finalizeaza():
     body = _body()
-    answer = primite_access.finalizeaza(g.session.db_name, body.get("id_primite", []), body.get("referinte", []))
-    if answer["legare"]["legate"]:
-        _audit("EF_PRIMITE_ACCESS_PREIA", None, "legate automat=%d" % answer["legare"]["legate"])
+    ids, referinte = body.get("id_primite", []), body.get("referinte", [])
+    ctx, start = jurnal.context(body.get("context")), time.monotonic()
+    try:
+        answer = primite_access.finalizeaza(g.session.db_name, ids, referinte)
+    except Exception as err:
+        _audit("EF_PRIMITE_ACCESS_FINAL", None, jurnal.detalii_eroare(None, ctx, err, _ms(start)), "EROARE")
+        raise
+    _audit("EF_PRIMITE_ACCESS_FINAL", None,
+           jurnal.detalii_final(answer, len(ids) if isinstance(ids, list) else 0, len(referinte) if isinstance(referinte, list) else 0,
+                                ctx, _ms(start)))
     return _json(answer)
 
 

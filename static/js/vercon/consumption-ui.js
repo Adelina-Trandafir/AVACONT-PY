@@ -1,6 +1,18 @@
 import { ComboTree } from '../components/combotree/combotree.js';
 import { el, docNode } from './ui.js';
 import { format, formatMoney } from './fields.js';
+import { decimalText } from './decimal-text.js';
+
+export function renderConsumptionStock(panel, data) {
+  const quantity = value => `${decimalText(value, data.zec)} ${data.um || ''}`.trim();
+  panel.replaceChildren(el('h4', { textContent: 'Stoc produs' }),
+    el('p', { className: 'vc-receipt-card__identity', textContent: data.name, title: data.name }),
+    el('p', { className: 'vc-receipt-card__note', textContent: `La data ${format(data.date, { type: 'date' })} • Preț cu TVA: ${decimalText(data.price, data.zec)} lei` }),
+    el('dl', { className: 'vc-bc-stock-summary' },
+      el('dt', { textContent: 'Total intrări' }), el('dd', { textContent: quantity(data.incoming) }),
+      el('dt', { textContent: 'Total ieșiri' }), el('dd', { textContent: quantity(data.outgoing) })),
+    el('footer', { className: 'vc-receipt-card__total', textContent: `Stoc disponibil: ${quantity(data.closing)}` }));
+}
 
 const MONTHS = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
 

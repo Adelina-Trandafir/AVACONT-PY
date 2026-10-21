@@ -62,6 +62,7 @@ Rows already present (same unit, capitol, subcapitol, articol, alineat) are skip
 import json
 import logging
 from datetime import date
+from utils.clock import bucharest_today
 
 import mysql.connector
 from flask import g, current_app, request
@@ -702,7 +703,7 @@ def get_verificare_buget():
     conn = None
     try:
         raw_day = request.args.get("data")
-        day = as_day(raw_day) if raw_day else date.today()
+        day = as_day(raw_day) if raw_day else bucharest_today()
         if day is None:
             raise _Refused("Data nu este o dată (aaaa-ll-zz).")
         conn = get_kbot_connection(db_name)

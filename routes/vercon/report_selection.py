@@ -1,6 +1,6 @@
 """Lazy report filter branches, read through the existing scoped SELECT sources."""
 from decimal import Decimal
-from . import stock, report_incoming_selection, report_outgoing_selection
+from . import stock, report_incoming_selection, report_outgoing_selection, report_mf_selection
 from .nomenclatoare import NomError
 
 
@@ -106,6 +106,8 @@ def document_suppliers(source, node_id):
 
 
 def selection_branch(source, spec, node_id, *, recursive=False, documents=False, receivers=False):
+    if spec.get('mf_selection'):
+        return report_mf_selection.read(source, spec, node_id, recursive=recursive)
     if spec.get('outgoing_selection'):
         mode = 'receivers' if receivers else 'documents' if documents else 'accounts'
         return report_outgoing_selection.read(source, spec, node_id, recursive=recursive, mode=mode)

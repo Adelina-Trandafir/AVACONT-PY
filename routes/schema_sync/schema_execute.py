@@ -35,7 +35,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime
+from utils.clock import utc_now
 
 import mysql.connector
 
@@ -74,7 +74,7 @@ def dump_database(db_name: str, backup_dir: str, logger) -> str:
             "rulați cu --skip-backup, pe răspunderea dumneavoastră.")
 
     os.makedirs(backup_dir, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = utc_now().strftime("%Y%m%d_%H%M%S")
     out_path = os.path.join(backup_dir, f"{db_name}_{stamp}.sql")
 
     cmd = [tool,
@@ -136,7 +136,7 @@ def render_sql(rows: list) -> str:
     """The pending batch as a readable .sql file, in execution order."""
     out = ["-- " + "-" * 60,
            f"-- schema_diff — {len(rows)} instrucțiuni, în ordinea execuției",
-           f"-- generat: {datetime.now().isoformat(timespec='seconds')}",
+           f"-- generat: {utc_now().isoformat(timespec='seconds')}",
            "-- " + "-" * 60, ""]
     current = None
     for r in rows:

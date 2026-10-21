@@ -5,5 +5,5 @@ export { downloadFile } from '../reporting/pdf-preview.js';
 
 export function openPdfReport(title, data, owner, details = {}) {
   return openSharedPdfReport(title, data, owner, { ...details,
-    heading: reportHeading(title, details), headingFor: value => reportHeading(value, details), createHeader: createReportHeader });
+    heading: reportHeading(title, details), headingFor: (value, metadata) => reportHeading(value, { ...details, ...metadata }), createHeader: createReportHeader });
 }

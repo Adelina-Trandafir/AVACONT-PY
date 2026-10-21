@@ -178,6 +178,7 @@ export const editing = {
             if (next) this.beginEdit(state.row, next);
           }
         } });
+      if (column.dropDownClassName) state.combo.treeElement.classList.add(column.dropDownClassName);
       state.combo.setValue(row[key], column.formatter?.(row[key], row) || '');
       state.input = state.combo.input;
       state.combo.dropdown.addEventListener('focusout', event => this._onFocusOut(event), { signal: state.abort.signal });

@@ -188,9 +188,10 @@ def descarca(token, download_id):
             text = clean(json.loads(data.decode("utf-8", errors="replace")).get("eroare", ""))
         except (ValueError, AttributeError):
             text = ""
-        raise EfEroare("ANAF nu a dat fișierul" + (f": {text}" if text else "."), "ANAF_EROARE", 502)
+        # The id asked for is named in the text (slice 0114-24): the operator can tell an upload id (5xxx) from a download id (4xxx).
+        raise EfEroare("ANAF nu a dat fișierul" + (f": {text}" if text else ".") + f" (id descărcare folosit: {download_id})", "ANAF_EROARE", 502)
     if not data:
-        raise EfEroare("ANAF a răspuns fără fișier.", "ANAF_RASPUNS", 502)
+        raise EfEroare(f"ANAF a răspuns fără fișier (id descărcare folosit: {download_id}).", "ANAF_RASPUNS", 502)
     return data
 
 

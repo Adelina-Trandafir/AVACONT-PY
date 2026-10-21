@@ -127,7 +127,7 @@ export const treeViewRenderMixin = {
            data-has-children="${hasChildren}"
            data-path='${this.escapeHtml(pathString)}'
            data-index="${itemIndex}"
-           ${node.tooltip ? `title="${this.escapeHtml(node.tooltip)}"` : ''}
+           ${node.tooltip ? `data-tree-tooltip="${this.escapeHtml(node.tooltip)}"` : ''}
            data-text-width="${Math.ceil(totalWidth)}">
         ${
           hasChildren
@@ -140,9 +140,7 @@ export const treeViewRenderMixin = {
             : '<span class="treeview-spacer"></span>'
         }
         ${this.options.checkable ? this.renderCheckbox(node) : ''}
-        <span class="treeview-label"${
-          this.options.checkable ? ` title="${this.escapeHtml(nodeLabel)}"` : ''
-        }>
+        <span class="treeview-label">
           ${!asParent ? this.highlightText(nodeLabel, query, this.localSearchQuery) : nodeLabel}
         </span>${node.rightText ? `<span class="treeview-righttext">${this.escapeHtml(node.rightText)}</span>` : ''}${node.badge ? `<span class="treeview-badge">${this.escapeHtml(node.badge)}</span>` : ''}${
           node.rightIcon

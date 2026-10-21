@@ -1,0 +1,98 @@
+.kbot-tooltip-host {
+  position: fixed; inset: auto; display: flex; flex-direction: column; gap: 12px;
+  width: max-content; max-width: calc(100 * var(--application-vw, 1vw) - 32px);
+  max-height: calc(100 * var(--application-vh, 1vh) - 32px); overflow-y: auto;
+  margin: 0; padding: 0; border: 0; background: transparent; color: var(--ink, #1f2937);
+  font-family: var(--font-ui, system-ui, sans-serif); font-size: var(--fs-2xs, 12px);
+  pointer-events: none;
+}
+.kbot-tooltip-host::backdrop { background: transparent; pointer-events: none; }
+.kbot-tooltip-host--top-right { top: 16px; right: 16px; }
+.kbot-tooltip-host--top-left { top: 16px; left: 16px; }
+.kbot-tooltip-host--bottom-right { bottom: 16px; right: 16px; }
+.kbot-tooltip-host--bottom-left { bottom: 16px; left: 16px; }
+.kbot-tooltip-host--center { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.kbot-tooltip-host--anchored { overflow: visible; }
+.kbot-tooltip {
+  --kbot-tooltip-color: #947421; --kbot-tooltip-tint: #fff2b5;
+  position: relative; box-sizing: border-box; flex-shrink: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px;
+  width: max-content; max-width: min(var(--kbot-tooltip-width, 320px), calc(100 * var(--application-vw, 1vw) - 32px));
+  padding: 2px; color: #302600; background: var(--kbot-tooltip-tint);
+  border: 1px solid var(--kbot-tooltip-color); border-radius: 4px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / .22);
+  font-family: var(--font-ui, system-ui, sans-serif); font-size: var(--fs-2xs, 12px);
+  font-weight: var(--fw-strong, 700); font-style: italic; line-height: 1.2;
+  overflow: visible; pointer-events: auto;
+  animation: kbot-tooltip-enter var(--kbot-tooltip-animation, 180ms) ease-out both;
+}
+.kbot-tooltip > div { min-width: 0; }
+.kbot-tooltip--anchored { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.kbot-tooltip--teal { --kbot-tooltip-color: #08776a; --kbot-tooltip-tint: #c9f4df; }
+.kbot-tooltip--purple { --kbot-tooltip-color: #7341a4; --kbot-tooltip-tint: #ead7ff; }
+.kbot-tooltip--warning { --kbot-tooltip-color: #906000; --kbot-tooltip-tint: #ffe49a; }
+.kbot-tooltip--error { --kbot-tooltip-color: #b52d36; --kbot-tooltip-tint: #ffd3d9; }
+.kbot-tooltip--success { --kbot-tooltip-color: #167047; --kbot-tooltip-tint: #c9f4d9; }
+.kbot-tooltip .kbot-tooltip__header {
+  display: block; min-height: 0; margin: 0; padding: 0; border: 0;
+  color: inherit; background: transparent; font: inherit;
+}
+.kbot-tooltip .kbot-tooltip__header strong { font: inherit; overflow-wrap: anywhere; }
+.kbot-tooltip .kbot-tooltip__text {
+  margin: 0; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+  color: inherit; font: inherit;
+}
+.kbot-tooltip--solid { color: #fff; background: var(--kbot-tooltip-color); }
+.kbot-tooltip--minimal { box-shadow: 0 1px 3px rgb(0 0 0 / .18); }
+.kbot-tooltip--anchored::before {
+  content: ''; position: absolute; left: calc(var(--kbot-tooltip-arrow-left, 12px) - 4px);
+  width: 8px; height: 8px; background: inherit; transform: rotate(45deg); pointer-events: none;
+}
+.kbot-tooltip-host[data-placement="below"] .kbot-tooltip--anchored::before {
+  top: -5px; border-top: 1px solid var(--kbot-tooltip-color); border-left: 1px solid var(--kbot-tooltip-color);
+}
+.kbot-tooltip-host[data-placement="above"] .kbot-tooltip--anchored::before {
+  bottom: -5px; border-bottom: 1px solid var(--kbot-tooltip-color); border-right: 1px solid var(--kbot-tooltip-color);
+}
+.kbot-tooltip .kbot-tooltip__close {
+  position: static; display: grid; place-items: center; align-self: start;
+  min-width: 14px; min-height: 14px; width: 14px; height: 14px; margin: 0; padding: 0;
+  border: 0; border-radius: 2px; background: transparent; color: inherit;
+  font: inherit; font-size: var(--fs-2xs, 12px); line-height: 1; cursor: pointer;
+}
+.kbot-tooltip--solid .kbot-tooltip__close { color: #fff; }
+.kbot-tooltip .kbot-tooltip__close:hover { background: rgb(127 127 127 / .2); }
+.kbot-tooltip .kbot-tooltip__close:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
+.kbot-tooltip--closing { animation: kbot-tooltip-exit var(--kbot-tooltip-animation, 180ms) ease-in both; pointer-events: none; }
+[data-theme="dark"] .kbot-tooltip { color: #fff2bc; background: #4a3d12; }
+@keyframes kbot-tooltip-enter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes kbot-tooltip-exit { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .kbot-tooltip { animation-duration: 0ms; } }
+@media (max-width: 900px), (hover: none), (pointer: coarse) { .kbot-tooltip-host { display: none !important; } }
+
+.kbot-tooltip-settings {
+  box-sizing: border-box; width: min(520px, calc(100 * var(--application-vw, 1vw) - 32px));
+  max-height: calc(100 * var(--application-vh, 1vh) - 32px); padding: 0; overflow-y: auto;
+  border: 1px solid var(--line, #cdd5e0); border-radius: 10px;
+  color: var(--ink, #1f2937); background: var(--card, #fff); font: inherit;
+  box-shadow: 0 12px 40px rgb(0 0 0 / .3);
+}
+.kbot-tooltip-settings::backdrop { background: rgb(0 0 0 / .25); backdrop-filter: blur(4px); }
+.kbot-tooltip-settings__header { margin: 0; padding: 16px 20px; background: var(--sky-2, #eaf2fb); font-size: var(--fs-lg, 18px); font-weight: 750; }
+.kbot-tooltip-settings__body { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 20px; }
+.kbot-tooltip-settings__field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.kbot-tooltip-settings__field input, .kbot-tooltip-settings__field select {
+  box-sizing: border-box; width: 100%; min-width: 0; min-height: 36px; padding: 6px 8px;
+  border: 1px solid var(--line, #cdd5e0); border-radius: 5px;
+  color: inherit; background: var(--card, #fff); font: inherit; font-weight: 400;
+}
+.kbot-tooltip-settings__field input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; margin: 0; }
+.kbot-tooltip-settings__note { grid-column: 1 / -1; margin: 0; font-size: var(--fs-sm, 13px); line-height: 1.5; }
+.kbot-tooltip-settings__footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line, #cdd5e0); }
+.kbot-tooltip-settings__footer button {
+  min-height: 36px; padding: 6px 12px; border: 1px solid var(--line, #cdd5e0); border-radius: 5px;
+  background: var(--sky-2, #eaf2fb); color: inherit; font: inherit; cursor: pointer;
+}
+.kbot-tooltip-settings__footer button[type="submit"] { color: #fff; background: #1761aa; border-color: #1761aa; }
+.kbot-tooltip-settings :is(input, select, button):focus-visible { outline: 2px solid var(--blue, #309eff); outline-offset: 2px; }
+@media (max-width: 480px) { .kbot-tooltip-settings__body { grid-template-columns: 1fr; } }

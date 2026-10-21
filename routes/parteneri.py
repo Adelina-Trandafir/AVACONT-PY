@@ -4,18 +4,15 @@ from flask import Blueprint, request, jsonify
 from mysql.connector import Error
 from utils.security import require_access_sync
 from utils.access_limits import access_sync_limits
-from config import DB_CONFIG  # Importam configurarea
+from utils.database import get_db_connection as _shared_connection
 
 parteneri_bp = Blueprint('parteneri', __name__)
 logger = logging.getLogger(__name__)
 
 # --- ACEASTA FUNCTIE LIPSEA ---
 def get_db_connection(target_db_name):
-    """Conectare dinamica la baza specificata, folosind user/pass din config."""
-    return mysql.connector.connect(
-        **DB_CONFIG,            # Despachetam host, user, password din config
-        database=target_db_name # Suprascriem baza de date
-    )
+    """Legacy connection with the shared UTC session policy."""
+    return _shared_connection(target_db_name)
 # ------------------------------
 
 # Parteneri.Provenienta: rows written by these two routes (the Access sync) are marked 'avacont' on INSERT.

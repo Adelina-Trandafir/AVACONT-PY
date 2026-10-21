@@ -25,6 +25,7 @@ import json
 import logging
 import re
 from datetime import datetime
+from utils.clock import UtcFormatter
 from logging.handlers import RotatingFileHandler
 
 import mysql.connector
@@ -70,7 +71,7 @@ def _make_logger():
     if not log.handlers:
         handler = RotatingFileHandler(LOG_PATH, maxBytes=2 * 1024 * 1024, backupCount=3,
                                       encoding="utf-8")
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        handler.setFormatter(UtcFormatter("%(asctime)s - %(levelname)s - %(message)s"))
         log.addHandler(handler)
         log.setLevel(logging.INFO)
     return log

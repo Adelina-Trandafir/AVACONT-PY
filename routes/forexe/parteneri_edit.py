@@ -32,8 +32,8 @@ MAPPING (MariaDB_Schema/AVACONT_SURSA.sql)
     unit of the sector-source the window was opened on (the session's SS, sent as "ss").
   * «Coduri angajament» (slice 0121-03): the rows belong to the SUPPLIER's normalized CodFiscal, not to this unit's partner
     row -- one row per indicator (CodAng + CodInd = CodAI, ContBancar), or a link with no indicator (cod_ind empty, "id"
-    null, "id_leg" set). The classification is only shown: it comes from FX_Indicatori.IdClsf by CodAI (null when the
-    indicator is unknown to FX_Indicatori). Parteneri_Coduri is no longer read or written. A partner whose CodFiscal
+    null, "id_leg" set). The classification is only shown: it comes from FX_Indicatori.IdClsf by CodAI (0 when the
+    indicator is unknown to FX_Indicatori or the link has none). Parteneri_Coduri is no longer read or written. A partner whose CodFiscal
     normalizes to nothing has no codes (the window disables the grid; a save with codes is refused). Deleting a partner
     leaves the links: they belong to the CodFiscal, other units' partner rows may share it.
   * Slice 0093 (operator, 29.09.2026) -- the list shows ONLY partners with Tip = '1', a

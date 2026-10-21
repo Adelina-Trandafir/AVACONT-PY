@@ -16,7 +16,7 @@ Pure rules + statements over a ScopedRepository; no connection is opened here.
 import hashlib
 import json
 import re
-from datetime import datetime
+from utils.clock import utc_now
 from decimal import Decimal, InvalidOperation
 
 from . import numeric
@@ -61,8 +61,7 @@ SPECS = {
     },
     'clienti': {
         'label': 'Clienți / Gestionari', 'table': 'VC_Clienti', 'pk': 'IDC', 'title': 'Denumire', 'stamp': False,
-        'fields': [_text('Denumire', 'Denumire', 50, True), _text('Adresa', 'Adresă', 50), _text('CF', 'CF', 10),
-                   _text('J', 'Nr. reg. com.', 20), _text('CNP', 'CNP', 13), _text('Cont', 'Cont', 50)],
+        'fields': [_text('Denumire', 'Denumire', 50, True), _text('Adresa', 'Locatie', 50)],
     },
     'tva': {
         'label': 'Cote TVA', 'table': 'VC_TVA', 'pk': 'IdTVA', 'title': 'Explicatie', 'stamp': False,
@@ -288,7 +287,7 @@ def _fetch(repo, spec, row_id):
 
 
 def _stamped(spec, values):
-    return {**values, 'DataSalvare': datetime.now()} if spec['stamp'] else values
+    return {**values, 'DataSalvare': utc_now()} if spec['stamp'] else values
 
 
 def _has_money(spec):

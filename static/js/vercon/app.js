@@ -4,6 +4,7 @@
 // (type + rights + occupation); retired navigation entries are hidden locally. Cleanup: one AbortController tied to `pagehide`.
 import { openMenu, Menu } from '../components/menu/menu.js';
 import { bindMenuZoom } from '../components/menu/menu-zoom.js';
+import '../components/tooltip/tooltip-titles.js';
 import { startSessionTimer } from '../adechit/session.js';
 import { beginSessionExit } from '../utils/session-exit.js';
 import { Combobox } from '../components/combobox/combobox.js';
@@ -25,6 +26,7 @@ import { writePreference } from './documents.js';
 import { el, preview, scope } from './ui.js';
 import { bindApplicationMenu } from './application-menu.js';
 import { bindReportIdentity } from './report-identity.js';
+import { bindHelp } from './help.js';
 
 const $ = (k_id) => document.getElementById(k_id);
 const lifetime = new AbortController();   // everything below is bound to this signal
@@ -39,7 +41,7 @@ lock = createLock({ api, signal: lifetime.signal, getUnit: () => state.unit,
   onLost: (k_message) => { showMessage($('vc-message'), `${k_message} Datele dvs. au rămas în formular, dar nu mai pot fi salvate fără o nouă ocupare.`, 'error'); } });
 const combos = {};
 const pageUi = scope();
-let formSequence = 0, formLoading = false, contextChanging = false;
+let formSequence = 0, formLoading = false, contextChanging = false, efacturaOpening = false;
 installLayouts();
 
 const paint = (k_kind, k_text) => {
@@ -89,7 +91,7 @@ function applyContext(k_ctx) {
   k_set('gestiune', k_opt.gestiuni.map((k_g) => ({ value: String(k_g.id), label: k_g.name })), k_sel.gestiune);
   k_set('year', k_opt.years.map((k_y) => ({ value: String(k_y), label: String(k_y) })), k_sel.year);
   const k_showGestiune = k_sel.subunit != null && k_opt.gestiuni.length > 1;
-  const k_showYear = k_sel.gestiune != null && k_opt.years.length > 0;
+  const k_showYear = k_sel.gestiune != null && k_opt.years.length > 0 && !['MF', 'OI'].includes(k_sel.type);
   $('vc-gestiune-combo').hidden = !k_showGestiune;
   $('vc-year-combo').hidden = !k_showYear;
   combos.gestiune.setEnabled(k_showGestiune);
@@ -135,6 +137,9 @@ function paintMenu(k_ctx) {
         return [{ ...k_spec, icon: MENU_ICONS[k_item.key], enabled: k_item.enabled, reason: k_item.reason || '',
           run: () => openForm(k_item.key).catch(report) }];
       });
+      const k_nir = k_incoming && !IS_PREVIEW ? k_list.find(k_item => k_item.key === 'nir') : null;
+      if (k_nir) k_children.push({ key: 'nir_efactura', label: 'NIR din e-Factura…', icon: '📥', rule: true,
+        enabled: k_nir.enabled, reason: k_nir.reason || '', run: () => openEfactura().catch(report) });
       if (k_children.length) k_items.push({ key: k_incoming ? '_intrari' : k_movements ? '_fluxuri' : '_iesiri',
         label: k_incoming ? 'Intrări' : k_movements ? 'Fluxuri / Mișcări' : 'Ieșiri', icon: k_incoming ? '📥' : k_movements ? '🔀' : '📤', group: k_group,
         dropdownMinWidth: k_incoming ? 260 : 224, enabled: k_children.some((k_child) => k_child.enabled !== false),
@@ -184,6 +189,21 @@ async function change(k_wanted) {
 }
 
 // ---- forms ------------------------------------------------------------------------------------------------------
+async function openEfactura() {
+  if (IS_PREVIEW || efacturaOpening || formLoading || contextChanging) return;
+  const version = state.ctx.version;
+  efacturaOpening = true;
+  try {
+    await openForm('nir');
+    if (state.form !== 'nir' || state.ctx.version !== version || contextChanging || formLoading) return;
+    mainMenu?.setBusy(true);
+    await state.editor?.startEfactura?.();
+  } finally {
+    efacturaOpening = false;
+    mainMenu?.setBusy(formLoading || contextChanging);
+  }
+}
+
 async function openForm(k_key, { reload = false } = {}) {
   if (contextChanging && !reload) return;
   if (formLoading) return;
@@ -297,18 +317,7 @@ function bind() {
     try { localStorage.setItem('kbot-portal-theme', theme); } catch (_) { /* The theme still applies to this visit. */ }
     document.querySelectorAll('.vc-dgv > .dgv').forEach((node) => { node.dataset.theme = theme === 'dark' ? 'dark' : 'modern'; });
   }, { signal: lifetime.signal });
-  // <!-- slice: VC06-04 --> Missing-source recovery in the operator help.
-  const help = () => preview('Ajutor VERCON', [{ title: 'Lucrul cu documente', columns: [{ key: 'step', title: 'Acțiune', width: 200 }, { key: 'text', title: 'Descriere', width: 580 }], rows: [
-    { step: 'Context', text: 'Alegeți mai întâi subunitatea. Gestiunea se selectează automat dacă este una singură; selectorul apare numai dacă există mai multe. Anul și operațiile apar după alegerea gestiunii.' },
-    { step: 'Consultare', text: 'Alegeți documentul din arborele din dreapta. ⋮ deschide opțiunile documentului.' },
-    { step: 'Adaugă / Modifică', text: 'Arborele se ascunde. Click sau Enter editează o celulă; Tab confirmă și trece la următoarea.' },
-    { step: 'Salvează', text: 'Salvează întregul document. Valorile și disponibilul se validează pe server.' },
-    { step: 'Renunță', text: 'Abandonează modificările nesalvate și revine la consultare.' },
-    { step: 'Lista de alimente', text: 'Adaugă rând în secțiunea BC asociază un bon existent, fără să repete consumul.' },
-    { step: 'Retur fără bon sursă', text: 'Returul migrat este marcat Fără bon sursă. Alegeți Bonul returnat și apăsați Asociază cu un bon de consum. Asocierea reușește numai dacă toate produsele și cantitățile se încadrează în bon; apoi puteți folosi Modifică. Anularea este disponibilă și înainte de asociere.' },
-    { step: 'Storno fără recepție', text: 'În Factură storno, deschideți Linii de storno fără recepție. Selectați o linie și o factură storno, apoi Leagă de o factură storno. Cantitatea se validează față de recepția stornată și stoc. Puteți anula separat linia cu motiv. Nicio asociere nu se face automat.' },
-    { step: 'Migrare OI/MF', text: 'Pentru prima migrare cu baze OI/MF, nu vă bazați pe loturile OI migrate până când operatorul decide numerotarea unică a identificatorilor BP, BT și BC în migrator. Numere identice din familii diferite se pot confunda.' },
-  ] }], pageUi);
+  const help = bindHelp({ api, report, signal: lifetime.signal });
   $('vc-help').addEventListener('click', () => openMenu($('vc-help'), [
     { icon: 'ⓘ', label: 'Cum lucrez cu VERCON', run: help },
     { icon: '◷', label: 'Mesaje din sesiune', run: () => preview('Mesaje VERCON', [{ title: 'Mesaje', columns: [

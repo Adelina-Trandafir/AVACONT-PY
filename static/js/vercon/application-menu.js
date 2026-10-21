@@ -1,4 +1,5 @@
 import { openMenu } from '../components/menu/menu.js';
+import { tooltipSettingsMenuEntry } from '../components/tooltip/tooltip-settings.js';
 
 let applicationMenu;
 
@@ -10,6 +11,7 @@ function openApplications(anchor) {
     { icon: '🤖', label: 'K-BOT', rule: true, run: () => navigate('/portal') },
     { icon: '📋', label: 'ADECHIT', run: () => navigate('/adechit') },
     { icon: '📒', label: 'Avacont · în curând', disabled: true },
+    tooltipSettingsMenuEntry(),
   ], { label: 'Aplicații', below: anchor.closest('header') });
 }
 

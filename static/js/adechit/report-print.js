@@ -1,4 +1,5 @@
 // SLICE-ADE9-01: the report page toolbar. Nothing prints by itself: the report opens on the screen only.
+import '../components/tooltip/tooltip-titles.js';
 const $ = (id) => document.getElementById(id);
 $('report-print').addEventListener('click', () => window.print());
 $('report-printer').addEventListener('click', () => window.print());   // the browser cannot pick a printer silently: its dialog is where it is chosen

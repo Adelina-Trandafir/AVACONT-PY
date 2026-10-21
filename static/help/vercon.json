@@ -1,0 +1,346 @@
+{
+  "title": "VERCON — Ajutor",
+  "subtitle": "Gestiunea materialelor, alimentelor, obiectelor de inventar și mijloacelor fixe",
+  "sections": [
+    {
+      "id": "start",
+      "title": "Primii pași",
+      "blocks": [
+        {"p":"VERCON ține evidența **intrărilor**, **ieșirilor**, **stocurilor**, **bunurilor în folosință** și **rapoartelor**. Operațiile disponibile depind de tipul gestiunii și de drepturile contului dumneavoastră."},
+        {"h":"Cum lucrați de obicei","id":"start-flux"},
+        {"ol":["Intrați în aplicație din K-BOT, cu unitatea dorită deschisă.","Alegeți **subunitatea**, **gestiunea** și, unde apare, **anul** ([vezi Contextul de lucru](#context)).","Completați nomenclatoarele necesare: conturi, produse, gestionari și comisii ([vezi Configurări](#nomenclatoare)).","Înregistrați intrările prin **Factură cumpărare (NIR)**, apoi consumurile sau mișcările specifice gestiunii ([vezi Recepții](#nir)).","Consultați stocurile și pregătiți documentele de listat din **Rapoarte** ([vezi Rapoarte](#rapoarte)).","Pentru discuții cu ceilalți utilizatori, deschideți **DISCUȚII** ([vezi Chat](#chat))."]},
+        {"h":"Acest ajutor","id":"start-ajutor"},
+        {"p":"Apăsați **?**, apoi **Cum lucrez cu VERCON**. Cuprinsul din stânga vă duce direct la un capitol sau subcapitol. Legăturile din text fac același lucru. **Imprimă** pregătește întregul ghid pentru imprimare; **Export PDF** descarcă ghidul. Ambele folosesc același conținut ca fereastra de ajutor."},
+        {"note":"Un meniu dezactivat poate indica lipsa unui drept sau o gestiune ocupată. O secțiune care afișează „în pregătire” nu are încă un flux de lucru utilizabil; [vezi Perioade și funcții în pregătire](#perioade)."}
+      ]
+    },
+    {
+      "id": "ecran",
+      "title": "Ecranul principal",
+      "blocks": [
+        {"ul":["**Bara de sus**: sigla V, selectoarele contextului, contul conectat, timpul sesiunii când este afișat, **?** și butonul de temă.","**Bara de operații**: Intrări, Ieșiri sau Fluxuri / Mișcări, Rapoarte și Configurări. Conținutul se adaptează gestiunii.","**Zona de lucru**: formularul sau raportul ales. La documente, arborele documentelor salvate se află în dreapta; la editare, locul lui poate fi folosit de fișele contextuale.","**Banda de mesaje**: rezultatul operației sau explicația unei erori.","**Butonul DISCUȚII**: deschide chatul comun fără să schimbați documentul curent."]},
+        {"p":"În copacul documentelor, suma afișată în dreapta unui grup lunar OI/MF reprezintă totalul documentelor neanulate din acel grup. Este afișată numeric, fără prefixul TOTAL."},
+        {"h":"Aplicații, temă și dimensiunea interfeței","id":"ecran-aspect"},
+        {"p":"Sigla **V** deschide meniul aplicațiilor: puteți reveni la **K-BOT** sau trece la **ADECHIT**. Intrările marcate „în curând” nu sunt disponibile. Dacă aveți date nesalvate, confirmați renunțarea numai dacă doriți să le abandonați."},
+        {"p":"Butonul cu soare comută între tema luminoasă și cea întunecată. Preferința se păstrează în browser. Butonul cu lupă și procent, de lângă **?**, deschide **Zoom aplicație**, pentru mărirea sau micșorarea interfeței între 75% și 150%. Preferința este comună aplicațiilor din browser. Acest zoom este distinct de zoomul paginii din vizualizatorul PDF."},
+        {"h":"Setări tooltip","id":"ecran-tooltip"},
+        {"p":"Din sigla **V → Setări tooltip** adaptați indicațiile explicative: aspectul, paleta informărilor, poziția, lățimea, întârzierea, animația, durata de afișare și antetul. **Previzualizare** arată rezultatul, **Implicit** reface valorile propuse în formular, **Salvează** aplică alegerile, iar **Renunță** închide fără salvare. Setările sunt comune aplicațiilor în acest browser. Durata 0 înseamnă închidere manuală; erorile și avertizările își păstrează culorile distincte."},
+        {"h":"Mesaje din sesiune","id":"ecran-mesaje"},
+        {"p":"Din **? → Mesaje din sesiune** consultați mesajele aplicației, cu data, tipul și explicația. Acest jurnal este diferit de [chatul DISCUȚII](#chat). Dacă o eroare conține un cod de cerere, păstrați-l împreună cu operația și contextul în care a apărut."},
+        {"image":{"src":"/static/help/images/vercon/01-ecran-nir.jpg","alt":"Ecranul VERCON cu un NIR deschis și arborele documentelor salvate.","caption":"Ecranul VERCON cu un NIR deschis și arborele documentelor salvate."}},
+        {"p":"Capturile din acest ghid provin din mediul **DEMO**. Valorile de identificare și numele persoanelor sunt mascate. Apăsați o captură pentru a o vedea la dimensiunea originală."}
+      ]
+    },
+    {
+      "id": "context",
+      "title": "Contextul de lucru și drepturile",
+      "blocks": [
+        {"h":"Subunitate, gestiune și an","id":"context-alegere"},
+        {"ol":["Alegeți **Subunitate** în bara de sus.","Dacă există o singură gestiune eligibilă, se selectează automat. Dacă sunt mai multe, apare selectorul **Gestiune**.","Pentru **Materiale** și **Alimente**, alegeți **Anul**. La **OI** și **MF**, selectorul anual nu apare; perioada rapoartelor se stabilește în pagina Rapoarte.","Alegeți operația din bara de meniu. Când schimbați contextul, formularul se reîncarcă pentru selecția nouă, dacă operația este disponibilă."]},
+        {"note":"La schimbarea contextului, aplicația cere confirmare dacă există modificări nesalvate. „Rămân aici” păstrează contextul și ciorna. Dacă apare mesajul că nu există gestiuni de lucru, este necesară pregătirea unității de către administrator."},
+        {"image":{"src":"/static/help/images/vercon/19-context-subunitate.jpg","alt":"Schimbarea contextului din selectorul superior: materiale, alimente, OI și mijloace fixe.","caption":"Schimbarea contextului din selectorul superior: materiale, alimente, OI și mijloace fixe."}},
+        {"h":"Ce operații are fiecare tip","id":"context-tipuri"},
+        {"table":{"head":["Tip de gestiune","Operații specifice"],"rows":[["Materiale","NIR, factură storno, bon de consum, bon retur, nomenclatoare și rapoarte de magazie."],["Alimente","Operațiile pentru materiale, plus lista de alimente și felurile de mâncare."],["Obiecte de inventar (OI)","NIR, storno, bonuri de predare, transfer și casare; evidență în magazie și în folosință."],["Mijloace fixe (MF)","NIR cu numere de inventar, storno, predare, transfer, casare, registru MF și amortizare."]]}},
+        {"h":"Gestiune ocupată și preluarea unei file","id":"context-ocupare"},
+        {"p":"Formularele care modifică date ocupă gestiunea pentru sesiunea de lucru. Dacă o folosește alt utilizator, operația de scriere este refuzată. Dacă ocuparea aparține altei file a aceluiași cont, aplicația poate propune **Preiau**. Confirmați doar dacă doriți să continuați în fila curentă; cealaltă filă pierde posibilitatea de salvare."},
+        {"p":"Dacă pierdeți ocuparea în timpul editării, datele rămân pe ecran, iar aplicația vă anunță că nu le mai poate salva fără o nouă ocupare. Păstrați informațiile necesare înainte de a reîncărca pagina. Lipsa unui drept se rezolvă prin administrator; schimbarea gestiunii nu acordă drepturi suplimentare."}
+      ]
+    },
+    {
+      "id": "documente",
+      "title": "Lucrul cu documente",
+      "blocks": [
+        {"h":"Căutarea și consultarea documentelor salvate","id":"documente-arbore"},
+        {"p":"Deschideți o familie de documente, extindeți ramura din dreapta și selectați documentul. Unde există **Grupeaza pe luni**, bifați pentru grupare calendaristică sau debifați pentru grupare după furnizor, primitor ori deținător. Ramurile NIR se încarcă pe măsură ce le deschideți. Documentele anulate sunt marcate în listă."},
+        {"p":"Butonul **⋮** al documentului oferă, după caz, **Modifică**, **Previzualizează**, **Istoric** și **Anulează**. Opțiunile care schimbă date sunt dezactivate dacă documentul sau perioada nu permite operația."},
+        {"h":"Adăugare, editare și salvare","id":"documente-editare"},
+        {"ol":["Apăsați **+** din zona documentelor salvate sau **Adaugă**, după formular. Pentru un document existent, selectați-l și folosiți **Modifică**.","Completați antetul și produsele. Clicul sau Enter deschide editarea unei celule; Tab confirmă valoarea și continuă navigarea.","În selectorul de produs alegeți înregistrarea potrivită, inclusiv varianta de preț. Introduceți cantitatea și celelalte valori editabile.","Folosiți **⋮ → Scoate rândul** pentru o linie introdusă greșit în ciornă. Unele linii provenite din documente sursă au restricții proprii.","Apăsați **Salvează NIR**, **Salvează FCS** sau **Salvează bonul**. Se salvează întregul document; închiderea editării unei celule nu salvează singură documentul.","Corectați câmpurile semnalate și reluați salvarea. **Renunță** abandonează modificările nesalvate și revine la consultare."]},
+        {"h":"Numere, subnumere și ordine cronologică","id":"documente-numere"},
+        {"p":"La adăugare, aplicația propune numerotarea în funcție de document și de context. Păstrați numărul propus sau introduceți un număr acceptat de formular. Unde este disponibil, subnumărul permite inserarea unui document, de exemplu **707,1** sau **707,01**. Sunt cel mult două cifre după virgulă. Numărul și data sunt verificate împreună cu documentele deja salvate."},
+        {"p":"Dacă apare o restricție de ordine, citiți mesajul documentului înainte de modificare sau anulare. Nu toate documentele istorice pot fi schimbate independent de cele care le urmează."},
+        {"h":"Istoric și anulare","id":"documente-istoric"},
+        {"p":"**Istoric** afișează operațiile înregistrate pentru document: moment, utilizator, operație și valori. **Anulează** cere un motiv și poate fi refuzat dacă există consumuri, transferuri sau alte dependențe. Anularea unui document salvat este diferită de scoaterea unui rând din ciornă."},
+        {"h":"Previzualizare și rezultat neconfirmat","id":"documente-previzualizare"},
+        {"p":"**Previzualizează** deschide documentul în vizualizator. O ciornă poate fi previzualizată acolo unde formularul oferă această comandă; ea rămâne nesalvată. Pentru documentele salvate se folosește raportul disponibil sau reprezentarea datelor încărcate. [Vezi Listare și export](#rapoarte-export)."},
+        {"note":"Dacă se întrerupe conexiunea și aplicația spune că rezultatul nu este confirmat, reluați aceeași operație din butonul indicat. Nu recreați documentul într-o filă nouă. Pentru asocieri și anulări pot apărea „Reia aceeași asociere” și „Reia aceeași anulare”."}
+      ]
+    },
+    {
+      "id": "nir",
+      "title": "Factură cumpărare și recepție NIR",
+      "blocks": [
+        {"h":"Înregistrarea unei intrări","id":"nir-adaugare"},
+        {"ol":["Deschideți **Intrări → Factură cumpărare (NIR)** și adăugați un document.","Alegeți **Furnizorul** și bifați conturile din **Categorie / cont**. Completați comisia de recepție, dacă este disponibilă și cerută.","Introduceți **Număr factură**, **Data facturii**, **Număr NIR** și **Data NIR**.","Completați produsele: denumire, UM, cantitate, preț și TVA. Valoarea, TVA și totalul sunt calculate din datele liniei.","Dacă aveți o valoare declarată pentru întreaga factură, introduceți-o în **Valoare Reală Factură (lei)** și egalizați totalul produselor cu aceasta.","Salvați NIR-ul și consultați-l din arborele documentelor salvate."]},
+        {"image":{"src":"/static/help/images/vercon/02-nir-editare.jpg","alt":"Editarea unui NIR: antetul, produsele și fișele contextuale.","caption":"Editarea unui NIR: antetul, produsele și fișele contextuale."}},
+        {"h":"NIR dintr-o factură trimisă de contabil","id":"nir-efactura"},
+        {"p":"Facturile primite prin e-Factura pe care contabilul le-a trimis din K-BOT apar în lista **NIR din e-Factura…** (butonul de lângă **Adaugă NIR**, și **Din e-Factura…** cât un NIR nou este în lucru). Alegeți factura și apăsați **Folosește factura**: se completează furnizorul, numărul și data facturii, valoarea ei, conturile propuse de contabil (bifate în **Categorie / cont**) și liniile, fără produs. Alegeți **produsul** fiecărei linii și, dacă e cazul, cantitatea, apoi salvați NIR-ul ca de obicei."},
+        {"ul":["Contul propus de contabil este o **propunere**: îl puteți schimba. O linie fără cont propus se alege de dumneavoastră. Conturile din alte gestiuni se bifează dacă contextul curent le oferă.","Dacă factura nu trebuie recepționată, apăsați **Returnează…** și scrieți motivul: contabilul îl vede și poate trimite factura din nou.","După salvare, factura iese din listă și contabilul vede în K-BOT numărul NIR-ului. Dacă NIR-ul este anulat ulterior, factura revine în listă.","Dacă lista nu apare ori este goală, contabilul nu a trimis nimic încă sau baza de date nu are încă tabelele facturilor din e-Factura."]},
+        {"h":"Conturi și repartizare pe gestiuni","id":"nir-repartizare"},
+        {"p":"Selectorul **Categorie / cont** prezintă conturile grupate pe destinațiile disponibile. Bifați unul sau mai multe conturi; lista produselor se limitează la conturile selectate. La adăugare, o factură poate repartiza produse către mai multe destinații permise. Aplicația gestionează recepțiile rezultate și totalul comun al facturii."},
+        {"p":"La consultare puteți vedea și liniile facturii din celelalte destinații. Acestea nu se editează din gestiunea curentă. La modificare, lucrați pe partea locală a recepției; nu puteți muta astfel linii între gestiuni."},
+        {"h":"Produs nou și cod CPV","id":"nir-produs-nou"},
+        {"p":"Dacă produsul nu există, fluxul de introducere permite completarea unei denumiri noi și a UM. Când sunt mai multe conturi selectate, alegeți contul produsului. Selectați **CPV** din catalogul oferit; continuarea fără CPV cere confirmare. Pentru MF se alege și clasificarea corespunzătoare ([vezi CPV](#cpv), [Clasificări MF](#clasificari-mf)). Produsul nou se creează odată cu salvarea NIR-ului; renunțarea la ciornă nu îl adaugă în nomenclator."},
+        {"h":"Stoc inițial","id":"nir-stoc-initial"},
+        {"p":"La adăugare, bifați **Stoc inițial (fără furnizor)** pentru o intrare de stoc inițial. Câmpurile furnizorului și facturii se ascund conform acestui tip de document. Completați data, conturile și produsele, apoi salvați. Nu folosiți această opțiune pentru o cumpărare curentă."},
+        {"h":"Diferențe față de valoarea facturii","id":"nir-ajustare"},
+        {"p":"Dacă valoarea reală este necompletată, se folosește suma produselor. Dacă o completați, totalul trebuie egalat exact. Butonul **Corectează la valoarea facturii**, de lângă valoare, poate ajusta o diferență nenulă de **cel mult 1 leu**, păstrând cota reală de TVA."},
+        {"ul":["Trebuie să existe cel puțin o unitate eligibilă rămasă în magazie, fără consum sau predare, iar datele produselor să fie complete.","Selectați o linie eligibilă dacă doriți să fie preferată pentru ajustare, apoi confirmați corecția.","O linie de corecție existentă trebuie scoasă cu revenire în grup înaintea unei noi ajustări.","Pentru diferențe peste 1 leu, corectați produsele, repartizarea sau valoarea declarată. Explicația butonului arată și motivele pentru care ajustarea nu este disponibilă.","Corecția modifică ciorna; apăsați apoi **Salvează NIR**."]},
+        {"h":"Fișe contextuale și recepții MF","id":"nir-fise"},
+        {"p":"În timpul editării, fișele din dreapta arată **Fișă furnizor** și **Fișă de magazie** pentru selecția curentă și data documentului. Ele vă ajută să consultați facturile și mișcările deja salvate; nu înlocuiesc salvarea ciornei."},
+        {"p":"Pentru o destinație MF completați **Nr. Inv.**, **Data MF**, **DNF** în luni și **DF** în luni. Fiecare rând reprezintă un bun, cu cantitate 1 și număr de inventar unic. Data MF nu poate depăși data NIR. Durata trebuie să respecte clasificarea. **V. Luna** se calculează din datele bunului."},
+        {"p":"Din **⋮ → Multiplică rând** puteți introduce mai multe bunuri similare pe rânduri distincte, cu numere de inventar proprii. Verificați valorile și salvați întregul NIR. [Vezi Registru MF și amortizare](#mf)."}
+      ]
+    },
+    {
+      "id": "storno",
+      "title": "Factură storno",
+      "blocks": [
+        {"ol":["Deschideți **Intrări → Factură Stornare** și adăugați un FCS.","Completați data și selectați **Recepția stornată**. Lista surselor se adaptează datei și disponibilului.","Completați numărul facturii storno, data facturii, numărul documentului și comisia, dacă este cazul.","Selectați produsele din recepția aleasă și introduceți cantitățile de stornat. Urmăriți cantitatea sursă și disponibilul.","Salvați FCS-ul. Stornarea este verificată față de recepția inițială și de stocul disponibil."]},
+        {"p":"Introduceți cantitățile în câmpurile oferite de formular; raportul prezintă efectul storno cu semn negativ. Schimbarea recepției sursă elimină produsele deja alese din ciornă după confirmare. Dacă recepția nu mai are disponibil la noua dată, alegeți din nou o sursă eligibilă."},
+        {"note":"O factură storno este un document nou cu efect asupra recepției. Anularea din meniul unui document are propriile reguli și cere un motiv. Pentru liniile istorice fără recepție, [vezi Recuperarea după migrare](#migrare-storno)."}
+      ]
+    },
+    {
+      "id": "bc",
+      "title": "Bon de consum",
+      "blocks": [
+        {"ol":["Într-o gestiune Materiale sau Alimente, deschideți **Ieșiri → Bon Consum** și adăugați un bon.","Stabiliți **Data**, **Primitor / gestionar** și **Categorie / cont** înainte de alegerea produselor.","Așteptați încărcarea stocului la data bonului. Selectați produsul și varianta de preț din arborele produselor disponibile.","Introduceți cantitatea; prețul cu TVA și valoarea se preiau sau se calculează din varianta aleasă.","Completați explicațiile, verificați totalul și apăsați **Salvează bonul**."]},
+        {"image":{"src":"/static/help/images/vercon/11-bon-consum.jpg","alt":"Bonul de consum: cont, primitor, disponibil și produse.","caption":"Bonul de consum: cont, primitor, disponibil și produse."}},
+        {"h":"Disponibil și data bonului","id":"bc-stoc"},
+        {"p":"Disponibilul se calculează la data bonului și ține cont de celelalte linii ale aceleiași ciorne. Nu puteți depăși cantitatea disponibilă prin repetarea produsului pe mai multe rânduri. După alegerea primului produs, data este blocată; pentru altă dată, eliminați produsele sau reluați documentul."},
+        {"p":"Dacă apare „Nu există produse cu stoc la data bonului”, verificați data, contul și intrările salvate. Nu este suficient ca produsul să existe în nomenclator; trebuie să aibă disponibil eligibil."},
+        {"h":"Fișa gestionarului și stocul produsului","id":"bc-fise"},
+        {"p":"În dreapta puteți consulta **Fișă de cont gestionar**, cu consumul net, și **Stoc produs**, pentru produsul selectat. Fișele folosesc documentele salvate și vă ajută să înțelegeți disponibilul înainte de salvare."},
+        {"p":"Pentru revenirea bunurilor din consum folosiți [Bon Retur](#br). Pentru includerea unui BC într-o listă de alimente, asociați bonul existent în [Lista de alimente](#lista); nu îl introduceți încă o dată."}
+      ]
+    },
+    {
+      "id": "br",
+      "title": "Bon retur din consum",
+      "blocks": [
+        {"ol":["Deschideți **Ieșiri → Bon Retur** într-o gestiune Materiale sau Alimente și adăugați un retur.","Selectați **Bonul returnat**. Produsele eligibile provin din acel bon de consum.","Completați data, numărul și explicațiile. Introduceți cantitățile returnate pe liniile sursei.","Urmăriți coloanele **Cantitate sursă**, **Deja** și **Rămas**. Retururile anterioare reduc cantitatea ce mai poate fi returnată.","Salvați bonul. Aplicația verifică încadrarea în bonul sursă și actualizează evidența stocului."]},
+        {"p":"Un retur nu este o recepție nouă de la furnizor. Pentru retururile migrate marcate **Fără bon sursă**, este necesară asocierea explicită înainte de modificare. [Vezi Retur fără bon sursă](#migrare-retur)."}
+      ]
+    },
+    {
+      "id": "lista",
+      "title": "Lista de alimente",
+      "blocks": [
+        {"p":"Pagina **Ieșiri → Lista Alimente** este disponibilă numai în gestiunile Alimente. Lista reunește mesele zilei și bonurile de consum asociate."},
+        {"ol":["Adăugați o listă și completați **Număr listă**, **Data** și **Comentarii**.","Pentru **Mic dejun**, **Dejun** și **Cină**, completați numărul de **Porții** și **Prețul**. Valoarea mesei se calculează din acestea.","Completați **FELUL** și **Explicații** pentru meniurile meselor. Puteți selecta felurile din nomenclator și explicațiile propuse; eliminați liniile greșite prin **⋮ → Elimină rândul**.","În **Bonuri de consum asociate**, folosiți **+ Adaugă rând**, selectați un bon disponibil și apăsați **Adaugă BC**.","Salvați lista și folosiți **Previzualizare** pentru documentul de listat."]},
+        {"image":{"src":"/static/help/images/vercon/20-lista-alimente.jpg","alt":"Lista de alimente: mesele, porțiile, meniurile și bonurile de consum asociate.","caption":"Lista de alimente: mesele, porțiile, meniurile și bonurile de consum asociate."}},
+        {"h":"Asocierea și scoaterea bonurilor","id":"lista-bonuri"},
+        {"p":"Asocierea folosește un **bon de consum deja salvat**; nu înregistrează încă o dată consumul. **⋮ → Scoate BC din listă** elimină asocierea din ciornă, nu anulează bonul. Dacă salvați fără bonuri, aplicația cere confirmare."},
+        {"h":"Modificare și anulare","id":"lista-anulare"},
+        {"p":"Selectați lista din arborele **Liste salvate**, grupat pe luni. Meniul **⋮** oferă **Deschide**, **Modifică**, **Previzualizare** și **Anulează lista**. Anularea cere un motiv și permite asocierea bonurilor unei alte liste. Într-o perioadă închisă sau pentru o listă protejată de ordinea documentelor, modificarea și anularea sunt restricționate."}
+      ]
+    },
+    {
+      "id": "bp",
+      "title": "Bon de predare — OI și MF",
+      "blocks": [
+        {"p":"**Fluxuri / Mișcări → Bon Predare** mută bunurile din magazie în folosința unui primitor, în gestiunile OI și MF."},
+        {"ol":["Adăugați un bon de predare și stabiliți data și numărul.","Alegeți **Cont OI în magazie**, **Primitor** și contul de destinație **în folosință**, conform etichetelor formularului.","Selectați bunurile și variantele eligibile din stocul magaziei, apoi introduceți cantitățile.","Verificați prețurile, valorile și explicațiile. Salvați bonul și consultați evidența în folosință din rapoarte."]},
+        {"image":{"src":"/static/help/images/vercon/22-bon-predare-oi.jpg","alt":"Bonul de predare OI: conturile, produsele predate și sumele grupurilor lunare fără prefixul TOTAL.","caption":"Bonul de predare OI: conturile, produsele predate și sumele grupurilor lunare fără prefixul TOTAL."}},
+        {"note":"Conturile trebuie să aibă rolul corect pentru magazie și folosință. Predarea folosește stoc existent; introducerea produsului numai în nomenclator nu creează stoc. [Vezi Conturi și gestionari](#nomenclatoare-baza)."},
+        {"h":"Reglare registru OI","id":"bp-registru"},
+        {"p":"Dacă o listă (de exemplu Balanța obiectelor de inventar) nu se deschide și mesajul spune că nu se poate stabili contul sau că o poziție nu are produs, deschideți din bara paginii **Bon de predare** (sau Bon de transfer, Bon de casare) butonul **Reglare registru OI**."},
+        {"ol":["Fereastra arată pozițiile de primire fără produs, cu bonul, cantitatea și prețul.","**Sigur** înseamnă că bonul are o singură variantă potrivită. **Aplică propunerile sigure** le completează pe toate.","**De verificat** și **De ales** cer decizia dumneavoastră: selectați poziția, alegeți produsul și apăsați **Aplică produsul ales**.","**Fără linie potrivită** înseamnă că bonul nu are nicio linie liberă cu aceeași cantitate și același preț; verificați bonul."]},
+        {"note":"Se completează numai produsul. La final, fereastra spune dacă mai există alte probleme în registru. Într-o perioadă închisă este doar pentru consultare."}
+      ]
+    },
+    {
+      "id": "bt",
+      "title": "Bon de transfer — OI și MF",
+      "blocks": [
+        {"p":"**Fluxuri / Mișcări → Bon Transfer** schimbă deținătorul bunurilor aflate în folosință."},
+        {"ol":["Adăugați bonul, completați data și numărul și alegeți predătorul și primitorul.","Selectați bunurile eligibile ale predătorului și completați cantitățile de transferat.","Consultați **Fișă predător**, **Fișă primitor** și **Mișcări produs** pentru situația la data documentului.","Completați explicațiile și salvați bonul. Verificați noua repartizare prin rapoartele deținătorilor."]},
+        {"p":"Dacă schimbați predătorul după alegerea produselor, aplicația cere confirmarea eliminării lor din ciornă. Disponibilul și succesiunea mișcărilor sunt verificate la salvare; nu puteți transfera bunuri care nu se mai află la predător."}
+      ]
+    },
+    {
+      "id": "bs",
+      "title": "Bon de casare — OI și MF",
+      "blocks": [
+        {"ol":["Deschideți **Fluxuri / Mișcări → Bon Casare** și adăugați un bon.","Alegeți deținătorul și data, apoi bunurile disponibile la acesta.","Introduceți cantitățile de casat și explicațiile. Consultați fișa deținătorului și mișcările produsului.","Salvați bonul. Bunurile casate sunt reflectate în evidență și în rapoarte."]},
+        {"p":"La mijloacele fixe, casarea influențează și oprirea amortizării, conform datelor bunului și datei calculului. Pentru corectarea unui bon salvat folosiți opțiunile documentului; anularea poate fi refuzată când există mișcări ulterioare dependente."}
+      ]
+    },
+    {
+      "id": "mf",
+      "title": "Registru MF și amortizare",
+      "blocks": [
+        {"h":"Consultarea registrului","id":"mf-registru"},
+        {"p":"Într-o gestiune MF, deschideți **Fluxuri / Mișcări → Registru MF**. Tabelul arată bunul, numărul de inventar, data intrării, valoarea, duratele, valoarea lunară, deținătorul și situația casării. Bunurile provin din recepții; [vezi Recepții MF](#nir-fise)."},
+        {"table":{"head":["Câmp","Semnificație"],"rows":[["DNF · luni","Durata normală de funcționare, exprimată în luni."],["DF · luni","Durata deja folosită la intrarea bunului, exprimată în luni."],["Valoare lunară","Valoarea folosită pentru calculul amortizării, împreună cu datele și duratele bunului."],["Deținător / Casat","Situația rezultată din mișcările înregistrate."]]}},
+        {"image":{"src":"/static/help/images/vercon/17-registru-mf.jpg","alt":"Registrul mijloacelor fixe: inventar, date, durate și valori.","caption":"Registrul mijloacelor fixe: inventar, date, durate și valori."}},
+        {"h":"Modificarea datelor de amortizare","id":"mf-editare"},
+        {"p":"Din **⋮ → Modifică datele de amortizare**, editați **Data intrării**, **DNF** și **DF**, apoi salvați. **Renunță** abandonează modificările. Nu puteți modifica direct toate coloanele registrului: valoarea și situația deținătorilor se bazează pe documentele bunului."},
+        {"h":"Calcul la o dată","id":"mf-calcul"},
+        {"ol":["Selectați bunul și folosiți **⋮ → Amortizare la dată**.","Completați **La data** și apăsați **Calculează**.","Consultați lunile folosite, lunile rămase, valorile calculate, starea și observațiile.","Folosiți **Previzualizare** pentru calculul bunului și explicațiile surselor utilizate."]},
+        {"p":"Calculul arată sursa valorii lunare, prima predare și eventual oprirea prin casare. Lipsa datelor sau o situație inconsistentă apare în observații. Calcularea și previzualizarea nu înregistrează singure note contabile. Pentru o situație pe mai multe bunuri folosiți **Rapoarte → Mijloace fixe → Amortizare**, cu opțiunea de grupare după primitori când este disponibilă."},
+        {"image":{"src":"/static/help/images/vercon/18-amortizare-mf.jpg","alt":"Detaliu din fereastra Amortizare la dată: calculul și explicațiile surselor.","caption":"Detaliu din fereastra Amortizare la dată: calculul și explicațiile surselor."}}
+      ]
+    },
+    {
+      "id": "nomenclatoare",
+      "title": "Configurări și nomenclatoare",
+      "blocks": [
+        {"image":{"src":"/static/help/images/vercon/03-meniu-configurari.jpg","alt":"Operațiile disponibile în meniul Configurări.","caption":"Operațiile disponibile în meniul Configurări."}},
+        {"h":"Reguli comune","id":"nomenclatoare-editare"},
+        {"p":"Din **Configurări** deschideți nomenclatorul dorit. Completați rândul nou sau editați celulele existente. Respectați câmpurile obligatorii și urmăriți mesajul de salvare. Nomenclatoarele salvează înregistrările prin propriul flux de rând/celulă; documentele NIR și bonurile se salvează separat, prin butonul documentului."},
+        {"p":"Din **⋮** puteți salva/reîncerca salvarea rândului, **Activa / Dezactiva** înregistrarea și **Reîncărca lista**, în funcție de stare și drepturi. **Afișare** schimbă filtrul între înregistrări active, inactive, toate sau, la produse, cele folosite în anul curent. Dezactivarea poate fi blocată de utilizarea înregistrării. Schimbarea nomenclatorului nu rescrie valorile documentelor deja salvate."},
+        {"h":"Produse, CPV și stocul produsului","id":"nomenclatoare-produse"},
+        {"ol":["Deschideți **Configurări → Produse**. Dacă nu găsiți produsul, verificați **Afișare** și filtrele coloanelor, inclusiv contul, denumirea și CPV.","Folosiți **+** pentru un produs nou și completați contul, denumirea și UM.","În celula **CPV**, butonul **...** deschide catalogul. Căutați și alegeți codul; salvarea fără CPV cere confirmare.","La MF, folosiți și catalogul **Clasificare M.F.** și completați durata normală.","Finalizați rândul și urmăriți confirmarea salvării. Un cont deja protejat de utilizarea produsului nu se schimbă direct."]},
+        {"p":"În gestiunile pentru care este afișat panoul de stoc, selectarea produsului încarcă variantele și situația sa. Alegeți un preț din arborele **Prețuri** pentru a vedea fișa acelei variante. La Materiale și Alimente apar cantitățile, soldurile și stocul din anul ales; la OI, fișa mișcărilor pe prețuri arată traseul bunurilor și deținătorii actuali, pe toate datele salvate. Variantele cu prețuri diferite reprezintă poziții distincte. În pagina de produse MF se folosesc coloanele specifice clasificării și duratei."},
+        {"p":"Catalogul CPV și catalogul clasificărilor MF oferă căutare după **denumire** și după **cod**, precum și navigare prin ramurile arborelui. Consultați descrierea înainte de alegere; la clasificările MF sunt indicate și limitele duratei de funcționare."},
+        {"image":{"src":"/static/help/images/vercon/04-configurari-produse.jpg","alt":"Nomenclatorul de produse și fișa de magazie a variantei de preț.","caption":"Nomenclatorul de produse și fișa de magazie a variantei de preț."}},
+        {"h":"Baza de date, conturi, TVA și feluri","id":"nomenclatoare-baza"},
+        {"ul":["**Baza de date → Categorii / Conturi**: definiți conturile și tipul lor. Pentru OI/MF, alegeți rolul **MAGAZIE** sau **FOLOSINȚĂ** corespunzător. Selectarea unui cont afișează fișa sa valorică: SI, Intrări, Ieșiri și SF.","**Cote TVA**: completați procentul și explicația. Cota este între 0 și 100%.","**Feluri de mâncare**: în gestiunile Alimente, definiți denumirea și explicația folosite în listele de alimente.","**Gestionari**: întrețineți clienții/primitorii folosind **Denumire** și **Locatie**. Completați locul de lucru în coloana Locatie, după caz.","**Comisii**: completați comisia de recepție și comisia de inventariere, cu membrii acestora."]},
+        {"image":{"src":"/static/help/images/vercon/05-configurari-conturi-tva.jpg","alt":"Categorii/conturi, fișa contului și cotele TVA.","caption":"Categorii/conturi, fișa contului și cotele TVA."}},
+        {"image":{"src":"/static/help/images/vercon/06-configurari-comisii.jpg","alt":"Comisiile de recepție și inventariere; numele membrilor sunt mascate.","caption":"Comisiile de recepție și inventariere; numele membrilor sunt mascate."}},
+        {"image":{"src":"/static/help/images/vercon/07-configurari-gestionari.jpg","alt":"Gestionari: Denumire și Locatie; datele personale sunt mascate.","caption":"Gestionari: Denumire și Locatie; datele personale sunt mascate."}},
+        {"h":"Unitate / setări","id":"nomenclatoare-setari"},
+        {"p":"În **Unitate / setări** puteți schimba **zecimalele afișate și de calcul**, între 0 și 4. Precizia de stocare este fixă la 4 și nu se editează. Setările și contoarele afișate în tabel sunt pentru consultare. După salvare, reîncărcați pagina pentru aplicarea preciziei. Valorile documentelor deja salvate nu sunt rescrise prin această schimbare."},
+        {"note":"Intrarea „Baza de date” reprezintă nomenclatoarele aplicației. Pentru starea paginilor „Furnizori (Parteneri)” și „Închidere an”, [vezi Funcții în pregătire](#perioade-pregatire)."},
+        {"image":{"src":"/static/help/images/vercon/08-configurari-setari.jpg","alt":"Setările de precizie ale gestiunii.","caption":"Setările de precizie ale gestiunii."}}
+      ]
+    },
+    {
+      "id": "cpv",
+      "title": "Catalogul CPV",
+      "blocks": [
+        {"p":"Catalogul CPV ajută la alegerea codului produsului. Îl deschideți din **Configurări → Produse**, selectând celula **CPV**, apoi butonul **... — Alege codul CPV**. Este folosit și la introducerea unui produs nou din NIR. În partea de sus apare produsul pentru care alegeți codul."},
+        {"image":{"src":"/static/help/images/vercon/15-catalog-cpv.jpg","alt":"Fereastra CPV: produsul curent, cele două căutări și arborele codurilor.","caption":"Fereastra CPV: produsul curent, cele două căutări și arborele codurilor."}},
+        {"h":"Căutarea și navigarea","id":"cpv-cautare"},
+        {"ol":["În **Căutare după denumire**, scrieți un termen din descriere; în **Căutare după cod**, scrieți codul sau o parte din el. Puteți folosi și ambele câmpuri. Lista se actualizează după tastare.","Cu câmpurile de căutare goale, navigați prin arbore. Apăsați triunghiul unei ramuri pentru a-i încărca și afișa subcodurile.","Citiți descrierea rezultatului. Dacă apar prea multe rezultate și un mesaj cu alte înregistrări, restrângeți căutarea.","Apăsați **+ — Folosește acest cod** de lângă înregistrarea dorită. Selectarea simplă a rândului nu preia codul; plusul este comanda de alegere. Fereastra se închide și codul revine în produs."]},
+        {"image":{"src":"/static/help/images/vercon/16-cpv-cautare.jpg","alt":"Exemplu de căutare după denumire. Rezultatele se aleg după descriere, prin plusul din dreptul codului.","caption":"Exemplu de căutare după denumire. Rezultatele se aleg după descriere, prin plusul din dreptul codului."}},
+        {"h":"Revenirea în formular","id":"cpv-revenire"},
+        {"p":"Închideți fereastra din **×** dacă doriți să reveniți fără alegerea unui cod nou. În nomenclator, finalizați apoi salvarea rândului produsului. Într-un NIR, produsul nou și CPV-ul se salvează împreună cu documentul."},
+        {"note":"La un produs nou introdus din NIR, închiderea catalogului fără alegere poate cere confirmarea continuării fără CPV. Citiți întrebarea înainte de confirmare. Catalogul CPV și clasificările MF sunt două câmpuri distincte; alegerea unuia nu completează automat celălalt."}
+      ]
+    },
+    {
+      "id": "clasificari-mf",
+      "title": "Catalogul clasificărilor MF",
+      "blocks": [
+        {"ol":["Alegeți **Mijloace Fixe** din selectorul superior al subunității.","Deschideți **Configurări → Produse**. Selectați celula **Clasificare M.F.**, apoi **... — Alege clasificarea MF**.","Consultați produsul și, dacă există, descrierea codului curent, afișate deasupra căutărilor."]},
+        {"image":{"src":"/static/help/images/vercon/12-produse-mijloace-fixe.jpg","alt":"Produsele MF au coloane distincte pentru CPV, clasificare și durata normală în luni.","caption":"Produsele MF au coloane distincte pentru CPV, clasificare și durata normală în luni."}},
+        {"image":{"src":"/static/help/images/vercon/13-clasificari-mf.jpg","alt":"Fereastra Clasificare MF arată descrierea și intervalul duratei normale al codului curent.","caption":"Fereastra Clasificare MF arată descrierea și intervalul duratei normale al codului curent."}},
+        {"h":"Cod, descriere și durată normală","id":"clasificari-mf-durata"},
+        {"p":"Căutați după **denumire** sau după **cod**, ori extindeți ramurile arborelui. Rezultatele arată codul, descrierea și, când sunt disponibile, limitele duratei normale. **+ — Folosește acest cod** apare la clasificările cu limite de durată valide. Ramurile de grupare se pot deschide pentru a găsi o clasificare eligibilă."},
+        {"image":{"src":"/static/help/images/vercon/14-clasificari-mf-cautare.jpg","alt":"Căutarea după cod poate întoarce mai multe clasificări care conțin textul introdus. Verificați descrierea și durata fiecăreia.","caption":"Căutarea după cod poate întoarce mai multe clasificări care conțin textul introdus. Verificați descrierea și durata fiecăreia."}},
+        {"note":"În catalog, intervalele sunt afișate în **ani**. Câmpurile **DNF** din produs, NIR și registru folosesc **luni**. De exemplu, intervalul 8–12 ani corespunde la 96–144 luni. Nu introduceți 8 sau 12 într-un câmp exprimat în luni dacă doriți acele durate în ani."},
+        {"h":"Preluarea codului și utilizarea la recepție","id":"clasificari-mf-alegere"},
+        {"p":"Apăsați plusul codului potrivit pentru a-l prelua și a reveni în produs. Verificați și completați durata normală, apoi finalizați salvarea rândului. **×** revine fără alegerea unui cod nou. Simpla consultare a unei descrieri nu schimbă clasificarea."},
+        {"p":"La introducerea unui produs MF nou din NIR, clasificarea cu limite valide este obligatorie, iar durata se verifică față de limitele sale. Clasificarea descrie tipul produsului; **numărul de inventar** identifică fiecare bun. Recepția, datele bunului și mișcările lui alimentează [registrul MF și calculul amortizării](#mf)."}
+      ]
+    },
+    {
+      "id": "stocuri",
+      "title": "Consultarea stocurilor și a fișelor",
+      "blocks": [
+        {"p":"Stocurile se consultă din **Rapoarte**, din pagina **Produse** unde există panoul de stoc și din fișele contextuale ale documentelor. Bara curentă de operații nu afișează o pagină separată „Stocuri”."},
+        {"table":{"head":["Ce doriți să aflați","Unde consultați"],"rows":[["Intrări, ieșiri și sold pe produs","Rapoarte → Magazie → Produse: Balanță produse, Fișa produsului sau Fișa de magazie."],["Cantități la sfârșitul perioadei","Stoc Final și Lista Inventar, cu perioada și filtrele dorite."],["Situația unui cont","Centralizator Conturi sau fișa contului din Configurări → Baza de date."],["Disponibil pentru consum sau predare","Selectorul produselor și coloana Disponibil din bon, calculate la data documentului."],["Bunuri în folosință și deținători","Rapoartele OI/MF, fișele predătorului/primitorului și mișcările produsului."],["Facturile unui furnizor","Fișa furnizorului din recepție sau rapoartele de intrări și furnizori."]]}},
+        {"note":"Comparați aceeași subunitate, gestiune, perioadă și variantă de preț. Un stoc existent astăzi nu înseamnă automat disponibil la data unui document mai vechi. O ciornă nesalvată nu este o mișcare înregistrată în rapoarte."}
+      ]
+    },
+    {
+      "id": "rapoarte",
+      "title": "Rapoarte, listare și export",
+      "blocks": [
+        {"h":"Pregătirea unui raport","id":"rapoarte-selectie"},
+        {"ol":["Deschideți **Rapoarte** și alegeți tipul raportului din arbore.","Alegeți **Perioada**: o lună, **Tot anul**, un interval personalizat sau **TOȚI anii**, dacă opțiunea este disponibilă. Puteți completa direct data de început și data de sfârșit.","La rapoartele care cer o singură dată, completați **La data** în locul unui interval.","În **Selectare date**, deschideți ramurile și bifați conturile, produsele/variantele, furnizorii, primitorii sau documentele dorite. **Selectează TOATE** lucrează asupra selecției oferite de raport.","Dacă raportul oferă **Opțiuni afișare**, alegeți opțiunile dorite, apoi apăsați **Listare** sau **Export Excel**."]},
+        {"p":"Ramurile selecției se încarcă la deschidere. Fără bife într-o categorie de filtre se folosesc toate datele acelei categorii. Unele rapoarte cer însă alegerea explicită a unui document sau a unei variante; motivul apare lângă comenzile indisponibile. Când schimbați raportul, perioada sau filtrele, generați din nou rezultatul."},
+        {"image":{"src":"/static/help/images/vercon/09-rapoarte-selectie.jpg","alt":"Configurarea unui raport: perioadă, tip, opțiuni și selecția datelor.","caption":"Configurarea unui raport: perioadă, tip, opțiuni și selecția datelor."}},
+        {"image":{"src":"/static/help/images/vercon/10-rapoarte-perioada.jpg","alt":"Selectorul de perioadă oferă anul întreg și lunile disponibile.","caption":"Selectorul de perioadă oferă anul întreg și lunile disponibile."}},
+        {"h":"Ce rapoarte puteți obține","id":"rapoarte-tipuri"},
+        {"table":{"head":["Grup","Conținut"],"rows":[["Magazie → Produse","Fișa de magazie, balanța produselor, centralizatorul conturilor, fișa produsului, stocul final și lista de inventar."],["Magazie → Intrări","Recepții NIR și storno incluse conform raportului, situații și centralizatoare de furnizori, notă de comandă și referate periodice pentru intrări."],["Magazie → Ieșiri","Bonuri de consum și retururi conform raportului, centralizatorul bonurilor, consumuri pe produs sau pe unități și fișa de evidență."],["Achiziții / Produse","Plan de achiziții, situația intrărilor și referat periodic pe produs, după tipul gestiunii."],["Liste de alimente","Listele salvate, cu mesele și bonurile de consum asociate."],["Obiecte de inventar în folosință","Balanță, inventar pe deținător sau total produse, stoc final pe deținător/produs, fișe de evidență și situații pe deținător/produs; bonuri și centralizatoare de predare, transfer și casare."],["Mijloace fixe","Bonuri de predare, transfer și casare, balanță, listă inventar și amortizare."]]}},
+        {"p":"Arborele arată numai rapoartele disponibile pentru tipul gestiunii. Variantele de formulare folosite direct de documente și componentele interne ale rapoartelor nu apar toate ca intrări separate în arbore."},
+        {"h":"Opțiunile raportului","id":"rapoarte-optiuni"},
+        {"p":"Secțiunea **Opțiuni afișare** apare numai pentru rapoartele care au opțiuni specifice. **Listare** deschide rezultatul în vizualizatorul PDF, iar **Export Excel** descarcă fișierul."},
+        {"ul":["**Grupează pe cont, cu pagină nouă**: separă conturile la rapoartele de balanță care oferă opțiunea.","**Afișează FĂRĂ mișcări**: include și pozițiile fără mișcări, unde este disponibil.","**Afișează Documente**: schimbă selecția pentru rapoartele care permit alegerea documentelor.","**Afișează Primitori**: permite selecția după primitori în centralizatorul care oferă această opțiune.","**Grupează după Primitori**: grupează amortizarea MF atunci când raportul permite aceasta."]},
+        {"h":"Vizualizator, imprimare, PDF și Excel","id":"rapoarte-export"},
+        {"p":"**Listare** deschide raportul în vizualizatorul PDF. Folosiți navigarea între pagini, căutarea, zoomul, imprimarea și salvarea disponibile în bara vizualizatorului. **Export Excel** descarcă datele raportului; raportul de ajutor are export PDF și imprimare, fără export Excel."},
+        {"p":"Dacă vizualizatorul oferă **Schimbă perioada**, alegeți noua perioadă sau dată și confirmați. Se regenerează raportul păstrând celelalte selecții. Închiderea ferestrei de alegere fără confirmare păstrează raportul afișat."},
+        {"p":"Un raport deja generat folosește datele și selecția de la generarea sa. Pentru a include documente salvate ulterior, generați-l din nou. Dacă rezultatul temporar a expirat, reluați generarea din pagină. Dacă browserul blochează o fereastră de imprimare, permiteți ferestrele popup pentru aplicație."}
+      ]
+    },
+    {
+      "id": "perioade",
+      "title": "Perioade închise și funcții în pregătire",
+      "blocks": [
+        {"h":"Consultarea unei perioade închise","id":"perioade-inchise"},
+        {"p":"Într-un an/perioadă marcată ca închisă, documentele se pot consulta, dar modificările sunt blocate. Mesajul „Perioadă închisă: numai consultare” explică această stare. Schimbarea datei din formular nu redeschide perioada."},
+        {"h":"Ce este încă în pregătire","id":"perioade-pregatire"},
+        {"ul":["**Configurări → Închidere an** apare pentru Materiale și Alimente, însă pagina curentă afișează că secțiunea este în pregătire. Nu există încă un flux de închidere anuală utilizabil din această pagină.","**Configurări → Furnizori (Parteneri)** are încă pagina dedicată în pregătire. În recepții puteți selecta furnizorii disponibili, dar această intrare nu oferă încă administrarea lor completă.","La **OI** și **MF** nu există în meniul curent o comandă de închidere anuală."]},
+        {"p":"Dacă aveți nevoie de o operație care nu este disponibilă, transmiteți administratorului contextul și scopul. Nu considerați o pagină „în pregătire” drept confirmare că operația a fost executată."}
+      ]
+    },
+    {
+      "id": "migrare",
+      "title": "Date migrate și asocieri lipsă",
+      "blocks": [
+        {"h":"Retur fără bon sursă","id":"migrare-retur"},
+        {"ol":["Deschideți returul marcat **Fără bon sursă**.","Alegeți **Bonul returnat** și folosiți **Asociază cu un bon de consum**.","Asocierea reușește numai dacă toate produsele și cantitățile se încadrează în bonul ales.","După asociere, puteți folosi **Modifică**. Anularea cu motiv este disponibilă și înaintea asocierii, în limitele drepturilor și perioadei."]},
+        {"h":"Linii storno fără recepție","id":"migrare-storno"},
+        {"ol":["În **Factură storno**, apăsați **Linii de storno fără recepție**.","Selectați linia și o factură storno, apoi **Leagă de o factură storno**.","Aplicația verifică cantitatea față de recepția stornată și de stoc. Nicio asociere nu se face automat.","Dacă linia trebuie anulată separat, folosiți comanda disponibilă și completați motivul."]},
+        {"h":"Loturi OI/MF migrate","id":"migrare-oi"},
+        {"note":"La prima migrare cu baze OI/MF, loturile istorice trebuie clarificate cu operatorul migrării înainte de utilizare. Identificatori identici din familiile BP, BT și BC se pot confunda dacă nu s-a stabilit numerotarea lor unică în migrator. Raportați sursa și documentele afectate; nu încercați să refaceți legăturile prin introducerea unor documente curente fictive."}
+      ]
+    },
+    {
+      "id": "sesiune",
+      "title": "Timerul și expirarea sesiunii",
+      "blocks": [
+        {"p":"Timerul cu simbolul de ceas din bara de sus arată timpul rămas până la deconectarea automată, în format **minute:secunde**. Termenul este stabilit de server. În versiunea curentă, timerul devine vizibil când rămân cel mult **15 minute**."},
+        {"image":{"src":"/static/help/images/vercon/23-timer-sesiune.jpg","alt":"Timerul real din antetul VERCON. Închiderea mesajului de avertizare nu oprește numărătoarea.","caption":"Timerul real din antetul VERCON. Închiderea mesajului de avertizare nu oprește numărătoarea."}},
+        {"h":"Cele două avertizări","id":"sesiune-avertizari"},
+        {"table":{"head":["Când apare","Ce înseamnă"],"rows":[["15 minute rămase","„Sesiunea se apropie de încheiere”. Salvați modificările și pregătiți încheierea lucrului."],["5 minute rămase","„Deconectare iminentă — salvați acum”. Timerul și antetul intră în starea urgentă."],["Timp expirat","Aplicația încheie sesiunea și revine la autentificare; ferestrele și formularele se închid, iar modificările nesalvate se pierd."]]}},
+        {"p":"**Am înțeles** sau **Escape** închide avertizarea afișată. Nu confirmă salvarea documentului, nu oprește timerul și nu reînnoiește sesiunea. După închiderea primei avertizări, timerul rămâne în antet; avertizarea critică poate apărea ulterior, la pragul de 5 minute."},
+        {"image":{"src":"/static/help/images/vercon/24-avertizare-sesiune.jpg","alt":"Avertizarea reală de deconectare iminentă, la 5 minute rămase.","caption":"Avertizarea critică cere salvarea imediată. Am înțeles închide mesajul, fără a salva documentul sau a prelungi sesiunea."}},
+        {"h":"Cum continuați lucrul","id":"sesiune-continuare"},
+        {"ol":["Salvați documentul, rândul sau formularul aflat în lucru și așteptați confirmarea salvării.","Pentru a continua, reîmprospătați pagina. Încărcarea paginii reînnoiește sesiunea dacă aceasta este încă valabilă. Refreshul poate pierde ciornele nesalvate.","Dacă timpul a expirat deja, autentificați-vă din nou în portal și redeschideți aplicația."]},
+        {"note":"Clicurile, tastarea, navigarea între operațiile aceleiași pagini și actualizările automate ale chatului nu prelungesc singure termenul. O altă pagină cu aceeași sesiune îl poate reînnoi, iar timerul se sincronizează periodic; de aceea timpul afișat poate crește după o reîmprospătare în altă filă."}
+      ]
+    },
+    {
+      "id": "probleme",
+      "title": "Situații frecvente și sesiunea de lucru",
+      "blocks": [
+        {"table":{"head":["Situație","Ce faceți"],"rows":[["Nu apar operațiile sau documentele așteptate","Verificați subunitatea, gestiunea, tipul și anul; extindeți ramura potrivită. Pentru lipsa drepturilor contactați administratorul."],["Produsul nu apare","Verificați contul, filtrul activ/inactiv/folosit și varianta. La ieșiri este necesar stoc eligibil la data documentului."],["Salvarea este refuzată","Finalizați celula activă și corectați câmpurile semnalate. Verificați totalul facturii, disponibilul, numărul și data."],["Documentul este protejat de ordine sau dependențe","Citiți explicația afișată și identificați documentele ulterioare. Nu ocoliți restricția prin copierea documentului."],["Datele au fost schimbate între timp","Păstrați informațiile necesare și reîncărcați documentul/lista. Refaceți modificarea pornind de la versiunea actuală."],["Rezultatul salvării/anulării nu este confirmat","Folosiți reluarea aceleiași operații din formular, fără crearea unei operații noi."],["Raport gol sau incomplet","Verificați perioada, selecțiile și documentele salvate, apoi generați din nou."],["Chatul nu este disponibil","Folosiți Actualizează discuțiile și păstrați textul netrimis. Pentru o eroare persistentă contactați administratorul."]]}},
+        {"h":"Expirarea sesiunii","id":"probleme-sesiune"},
+        {"p":"Când sesiunea expiră, autentificați-vă din nou din portal. Salvați documentele înainte să părăsiți pagina. Reîncărcarea sau închiderea filei poate pierde o ciornă nesalvată; confirmările de renunțare sunt oferite la navigarea din aplicație, nu la toate comenzile browserului. Chatul și actualizările lui automate nu prelungesc sesiunea."},
+        {"h":"Taste utile","id":"probleme-taste"},
+        {"table":{"head":["Unde","Tastă / acțiune"],"rows":[["Tabel editabil","Enter sau clic pentru editare; Tab pentru confirmare și navigare."],["Chat","Enter trimite; Ctrl+Enter inserează un rând; pe macOS, Cmd+Enter inserează un rând."],["Ajutor și ferestre modale","Escape închide fereastra când nu există o operație care împiedică închiderea."],["Cuprinsul ajutorului","Clic pe capitol/subcapitol sau pe o legătură din text pentru a merge la explicație."]]}}
+      ]
+    },
+    {
+      "id": "chat",
+      "title": "Chat — DISCUȚII",
+      "blocks": [
+        {"p":"DISCUȚII este conversația comună a utilizatorilor autentificați din VERCON, ADECHIT și K-BOT. Puteți citi mesaje, publica un mesaj și răspunde unui mesaj existent. Conversația este comună și independentă de unitatea, subunitatea, gestiunea, luna sau grupa selectată."},
+        {"h":"Deschiderea și închiderea panoului","id":"chat-panou"},
+        {"p":"Apăsați butonul plutitor **DISCUȚII**, cu simbolul de conversație. Panoul se deschide peste pagina curentă. Îl închideți din **×**, apăsând din nou butonul, prin **Escape** sau printr-un clic în exterior. Clicul din exterior continuă și acțiunea controlului apăsat."},
+        {"p":"Închiderea panoului păstrează textul netrimis și răspunsul pregătit cât timp rămâneți în aceeași pagină. Schimbarea aplicației, reîncărcarea paginii sau expirarea sesiunii poate pierde ciorna. Chatul este disponibil în paginile autentificate; previzualizările demonstrative pot să nu îl includă."},
+        {"image":{"src":"/static/help/images/vercon/21-discutii.jpg","alt":"Panoul DISCUȚII, cu mesajele și identitatea anonimizate.","caption":"Panoul DISCUȚII, cu mesajele și identitatea anonimizate."}},
+        {"h":"Filtrele VERCON, ADECHIT și K-BOT","id":"chat-filtre"},
+        {"p":"În zona **Afișează**, bifați aplicațiile ale căror mesaje doriți să le vedeți: **V — VERCON**, **A — ADECHIT**, **K — K-BOT**. Păstrați cel puțin o aplicație bifată. Filtrul se salvează pentru cont și se sincronizează între file la actualizarea următoare; schimbarea lui păstrează textul netrimis."},
+        {"note":"Filtrul schimbă afișarea, nu destinatarii sau accesul la conversație. Mesajul trimis primește marcajul aplicației din care scrieți: V din VERCON, A din ADECHIT sau K din K-BOT. Dacă ați ascuns acea aplicație prin filtru, mesajul este trimis, dar nu apare în lista curentă; panoul vă anunță acest lucru."},
+        {"h":"Trimiterea unui mesaj","id":"chat-trimitere"},
+        {"ol":["Deschideți DISCUȚII și alegeți cum doriți să apăreți: cu pseudonim sau cu nume.","Scrieți textul în caseta mesajului. Limita este de **4.000 de caractere**, indicată de contor; un mesaj gol nu poate fi trimis.","Apăsați **Trimite** sau **Enter**. Pentru un rând nou folosiți **Ctrl+Enter**; pe macOS puteți folosi **Cmd+Enter**.","După confirmarea trimiterii, caseta se golește și răspunsul pregătit se încheie. Dacă trimiterea eșuează, textul rămâne pentru reluare."]},
+        {"p":"Puteți scrie text, diacritice și emoji. Fiecare mesaj arată aplicația, autorul afișat și data/ora. Ora este prezentată în fusul folosit de browser."},
+        {"h":"Cu pseudonim sau cu nume","id":"chat-identitate"},
+        {"ul":["**Cu pseudonim** bifat: mesajul se publică folosind pseudonimul atribuit contului, afișat lângă opțiune.","**Cu pseudonim** debifat: apare câmpul pentru numele afișat. Completați-l înainte de trimitere; are maximum **80 de caractere**.","Numele afișat este declarat de dumneavoastră, fără verificarea identității. Adresa de e-mail a contului nu este introdusă automat ca nume public.","Modul ales se păstrează ca preferință, iar numele se salvează la trimiterea unui mesaj cu nume. Schimbarea numelui nu redenumește mesajele publicate anterior.","Pentru ceilalți participanți, mesajul și citatul unui răspuns arată identitatea folosită la publicare: numele sau pseudonimul. Legătura cu contul rămâne în evidența internă a serviciului."]},
+        {"h":"Răspuns la un mesaj","id":"chat-raspuns"},
+        {"ol":["Apăsați **Răspunde** sub mesajul ales.","Deasupra casetei de scriere apare destinatarul răspunsului și un fragment din textul sursă.","Scrieți răspunsul și trimiteți-l. Pentru a reveni la un mesaj independent, apăsați **× — Renunță la răspuns** înainte de trimitere."]},
+        {"p":"Răspunsul rămâne vizibil în conversația comună și include un scurt citat. Citatul poate proveni din altă aplicație decât cele bifate în filtrul curent. Comanda Răspunde nu deschide o conversație privată."},
+        {"h":"Mesaje necitite, istoric și actualizare","id":"chat-necitite"},
+        {"ul":["Butonul DISCUȚII arată numărul mesajelor necitite pentru aplicațiile filtrate; peste 99 apare **99+**. Mesajele proprii nu se numără ca necitite.","Mesajele sunt considerate citite când panoul este deschis, fila este vizibilă și focalizată, mesajele noi sunt încărcate și vă aflați la sfârșitul listei. Citirea unei aplicații nu marchează citite aplicațiile ascunse de filtru.","La deschidere se încarcă mesajele recente. **Mesaje mai vechi** aduce treptat istoricul anterior.","Dacă citiți mai sus și sosesc mesaje, folosiți **Mesaje noi** pentru a coborî la sfârșit.","Lista se actualizează automat periodic cât timp pagina este vizibilă. **↻ — Actualizează discuțiile** cere imediat actualizarea. Revenirea în filă reia actualizările."]},
+        {"h":"Conținut comun și probleme de conectare","id":"chat-probleme"},
+        {"p":"Mesajele se adresează participanților conversației comune, inclusiv din alte unități; nu sunt mesaje private și nu sunt întrebări către un asistent AI. Alegeți conținutul ținând cont de această audiență. Versiunea curentă oferă mesaje text și răspunsuri; nu are comenzi pentru atașamente, editarea sau ștergerea mesajelor publicate."},
+        {"p":"Dacă apare o eroare, păstrați textul și folosiți Actualizează discuțiile sau reluați trimiterea. Pentru o eroare persistentă, transmiteți administratorului mesajul afișat. La expirarea sesiunii, autentificați-vă din nou. Actualizările automate ale chatului nu prelungesc sesiunea aplicației."}
+      ]
+    }
+  ]
+}

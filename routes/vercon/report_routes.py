@@ -4,6 +4,7 @@ from flask import Response, current_app, g, request
 from . import report_catalog, report_data, report_output, report_service, report_excel, report_period, report_selection, protocol, stock
 from .nomenclatoare import NomError
 from . import report_identity
+from . import report_mf
 from .stock_routes import optional_id
 
 
@@ -86,6 +87,7 @@ def register(bp, guard, scoped, session, build):
             raise NomError('REPORT_PERIOD', 'Data de început trebuie să fie înaintea datei de sfârșit.', 422)
         params['receipt_selection'] = selected_receipts()
         params['outgoing_selection'] = selected_outgoing()
+        params['mf_selection'] = report_mf.parse_selection(request.args.get('mf_selection'))
         for key in ('document', 'variant', 'category', 'supplier', 'receiver'):
             params[key] = optional_id(key)
             values = selected_ids(key)
@@ -96,7 +98,7 @@ def register(bp, guard, scoped, session, build):
                     params[key] = values[0]
                 else:
                     params[key + '_ids'] = values
-        for key in ('show_without_movements', 'page_break_accounts'):
+        for key in ('show_without_movements', 'page_break_accounts', 'group_by_receivers'):
             value = request.args.get(key, '0')
             if value not in ('0', '1'):
                 raise NomError('REPORT_OPTION', 'Opțiunea de afișare este invalidă: ' + key + '.', 422)
@@ -137,8 +139,8 @@ def register(bp, guard, scoped, session, build):
             ctx, _ = build(cursor, vctx, None, False)
             source = report_data.Source(cursor, g.portal['db_name'], ctx, params)
             branch = request.args.get('branch')
-            if branch is not None:
-                return report_selection.selection_branch(source, spec, branch, recursive=request.args.get('recursive') == '1',
+            if branch is not None or spec.get('mf_selection'):
+                return report_selection.selection_branch(source, spec, branch or 'root', recursive=request.args.get('recursive') == '1',
                                                          documents=request.args.get('selection_mode') == 'documents',
                                                          receivers=request.args.get('selection_mode') == 'receivers')
             variants = list(source.metadata().values())

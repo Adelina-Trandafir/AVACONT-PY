@@ -4,7 +4,7 @@ The route owns the transaction and the gestiune lock. Linking a BR changes only
 its source; linking a storno line introduces a stock movement and checks history.
 """
 from collections import defaultdict
-from datetime import datetime
+from utils.clock import utc_now
 from decimal import Decimal
 
 from . import documents as docs, protocol
@@ -129,7 +129,7 @@ def link_storno(cursor, repo, ctx, line_id, body, request_id):
 def cancel_storno(cursor, repo, ctx, line_id, body, request_id):
     before = _orphan(repo, line_id, body)
     reason = docs._check_cancel_input(body)
-    values = {'Anulat': 1, 'MotivAnulare': reason, 'AnulatDe': ctx['email'], 'AnulatLa': datetime.now()}
+    values = {'Anulat': 1, 'MotivAnulare': reason, 'AnulatDe': ctx['email'], 'AnulatLa': utc_now()}
     if repo.update('VC_IntrariStorno', values, {'ID': line_id, 'Version': before['Version']}, bump_version=True) != 1:
         reject('Linia a fost modificată de altcineva. Reîncărcați lista.', 'CONFLICT', 409)
     protocol.audit(cursor, ctx, 'storno.orphan.cancel', 'VC_IntrariStorno', line_id,

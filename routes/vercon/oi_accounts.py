@@ -24,7 +24,7 @@ class Accounts:
         if position in self.cache:
             return self.cache[position]
         if position in self.active:
-            self.fail(raw, 'proveniența conține un ciclu')
+            self.fail(raw, 'bonurile de origine se învârt în cerc')
         self.active.add(position)
         try:
             row = self.parse(raw)
@@ -33,13 +33,15 @@ class Accounts:
             else:
                 sources = self.receipts.get((row['IDBO'], row['IdProdus'], row['PUTVA']), [])
                 if not sources:
-                    self.fail(raw, 'nu există primirea BP/BT de proveniență pentru același produs și preț')
+                    self.fail(raw, 'bonul de origine nu are în registru o linie de primire cu același produs și același preț '
+                                   '(dacă la liniile de primire lipsește produsul, completați-l din «Reglare registru OI», '
+                                   'butonul din pagina bonurilor de predare)')
                 identities = {(self.parse(source)['family'], self.parse(source)['document']) for source in sources}
                 if len(identities) != 1:
-                    self.fail(raw, 'proveniența indică mai multe familii de bonuri')
+                    self.fail(raw, 'numărul bonului de origine există și ca bon de predare, și ca bon de transfer')
                 accounts = {self.account(source) for source in sources}
                 if len(accounts) != 1:
-                    self.fail(raw, 'proveniența conține conturi de predare diferite; lotul nu poate fi ales fără ambiguitate')
+                    self.fail(raw, 'bonul de origine a primit același produs în conturi diferite, deci nu se poate alege contul fără să ghicim')
                 account = accounts.pop()
             self.cache[position] = account
             return account
@@ -48,8 +50,8 @@ class Accounts:
 
     @staticmethod
     def fail(row, reason):
-        raise NomError('OI_ACCOUNT_ORIGIN', 'Contul poziției OI %s (produs %s, IDBO=%s) nu poate fi stabilit: %s.' %
-                       (row['IDOI'], row['IdProdus'], row['IDBO'], reason), 409)
+        raise NomError('OI_ACCOUNT_ORIGIN', 'Nu se poate stabili contul obiectului din poziția %s (produsul %s, plecat din bonul %s): %s.' %
+                       (row['IDOI'], row['IdProdus'] or 'necompletat', row['IDBO'] or 'necompletat', reason), 409)
 
     def normalized(self, row):
         return {**self.parse(row), 'stored_IDM': row['IDM'], 'IDM': self.account(row)}

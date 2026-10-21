@@ -1,5 +1,5 @@
 """Read-only PTC history for the transfer and write-off editors."""
-from datetime import datetime
+from utils.clock import bucharest_today
 from decimal import Decimal
 
 from flask import request
@@ -72,7 +72,7 @@ def register(bp, guard, scoped, session, build, need):
         holder, variant = _int(request.args.get('holder')), _int(request.args.get('variant'))
         if (holder is None) == (variant is None) or (holder or variant) <= 0:
             raise NomError('INVALID', 'Alegeți un deținător sau un produs valid.', 422)
-        on = protocol.to_date(request.args.get('date') or datetime.now().strftime('%Y-%m-%d'), 'Data bonului')
+        on = protocol.to_date(request.args.get('date') or bucharest_today().isoformat(), 'Data bonului')
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, family, False)
             return statement(cursor, ctx, on, holder, variant)

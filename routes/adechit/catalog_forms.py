@@ -1,5 +1,5 @@
 """SLICE-ADE6-06: atomic group histories and audited child form commands."""
-from datetime import date, datetime
+from utils.clock import bucharest_today
 from .domain import require, validate_cnp, group_educators
 from .service import validate_values, validate_educator, prepare_attendance, month_order
 
@@ -16,7 +16,7 @@ def catalog_data(repo, include_hidden=False, month_id=None):
         groups = repo.rows('Grupe') if include_hidden else repo.rows('Grupe', Ascunsa=0)
     history = repo.rows('Grupe_Educator')
     for group in groups:
-        group['Educators'] = group_educators(group, history, date.today().isoformat()) or ''
+        group['Educators'] = group_educators(group, history, bucharest_today().isoformat()) or ''
     return {'groups': groups}
 
 
@@ -141,7 +141,7 @@ def save_child(repo, body, username, may_transfer):
     elif existing and iso_day(existing.get('DataIesire')) != iso_day(merged.get('DataIesire')):
         events.append(('IESIRE_DEFINITIVA', leaving))
     for kind, day in events:
-        repo.insert('Platitori_Istoric', {'IDP': saved['IDP'], 'Data': day or datetime.now().isoformat(timespec='seconds'),
+        repo.insert('Platitori_Istoric', {'IDP': saved['IDP'], 'Data': day or bucharest_today().isoformat(),
                     'Tip': kind, 'IDG_Vechi': existing.get('IDG') if existing else None, 'IDG_Nou': saved['IDG'],
                     'Dedus': False, 'Utilizator': username})
     return saved

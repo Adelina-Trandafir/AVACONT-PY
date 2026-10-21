@@ -4,13 +4,15 @@ import { layoutRect } from '../utils/layout-geometry.js';
 import { parse, format } from './fields.js';
 import { decimalText } from './decimal-text.js';
 import { statementCache } from './statement-cache.js';
+import { renderConsumptionStock } from './consumption-ui.js';
 
 const kinds = { nir: 'NIR', storno: 'Storno', bc: 'BC', br: 'Retur', bp: 'Predare' };
 
 export function receiptContext(host, { root, main, headerHost, linesHost, treeHost, api, selection, lineSelection, context, validLine, blankLine, family = 'nir' }) {
   const consumption = family === 'bc', partyTitle = consumption ? 'Fișă de cont gestionar' : 'Fișă furnizor';
+  const productTitle = consumption ? 'Stoc produs' : 'Fișă de magazie';
   const supplier = el('section', { className: 'vc-receipt-card', 'aria-label': partyTitle });
-  const product = el('section', { className: 'vc-receipt-card', 'aria-label': 'Fișa de magazie' });
+  const product = el('section', { className: 'vc-receipt-card', 'aria-label': productTitle });
   const panels = el('div', { className: 'vc-receipt-context', hidden: true }, supplier, product);
   host.append(panels);
   let visible = false, destroyed = false, draft = null, selected = null, remembered = null, layoutFrame = 0;
@@ -79,6 +81,7 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
     supplier.append(el('footer', { className: 'vc-receipt-card__total', textContent: `Consum net: ${money(data.total)} lei` }));
   }
   function renderProduct(data) {
+    if (consumption) { renderConsumptionStock(product, data); return; }
     product.replaceChildren(el('h4', { textContent: 'Fișă de magazie' }), el('p', { className: 'vc-receipt-card__identity', textContent: data.name }),
       el('p', { className: 'vc-receipt-card__note', textContent: `Preț cu TVA: ${money(data.price)} lei • ${data.um}` }));
     if (data.rows.length) table(product, [
@@ -122,13 +125,14 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
       load('supplier', supplier, 'Fișă furnizor', params, renderSupplier);
     }
     if (!line || !validLine(line) || !date.ok) {
-      stop('product'); message(product, 'Fișă de magazie', !date.ok ? `Completați data ${consumption ? 'bonului' : family === 'storno' ? 'FCS' : 'facturii'}.` : consumption ? 'Selectați produsul de pe rândul curent.' : family === 'storno' ? 'Selectați un produs din recepția stornată.' : 'Selectați un rând validat, cu produs, cantitate, preț și TVA.');
+      stop('product'); message(product, productTitle, !date.ok ? `Completați data ${consumption ? 'bonului' : family === 'storno' ? 'FCS' : 'facturii'}.` : consumption ? 'Selectați produsul de pe rândul curent.' : family === 'storno' ? 'Selectați un produs din recepția stornată.' : 'Selectați un rând validat, cu produs, cantitate, preț și TVA.');
     } else {
       const params = new URLSearchParams(lineSelection ? Object.entries(lineSelection(line)).filter(([, value]) => value != null && value !== '') : base);
       if (date.ok) params.set('date', date.value);
       if (family === 'nir') { params.set('product', line.product); params.set('price', line.Pret); params.set('vat', line.IDTVA); }
       if (line.variant) params.set('variant', line.variant);
-      load('product', product, 'Fișă de magazie', params, renderProduct);
+      if (consumption && current.excludeBC) params.set('exclude', current.excludeBC);
+      load('product', product, productTitle, params, renderProduct);
     }
     scheduleLayout();
   }

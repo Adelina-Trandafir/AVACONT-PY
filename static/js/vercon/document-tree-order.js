@@ -35,7 +35,7 @@ export function documentTreeOrder({ party = 'party', rootTotals = false } = {}) 
       }
       return [...groups.values()].sort((a, b) => byDate ? b.id.localeCompare(a.id) : alphabet.compare(a.label, b.label))
         .map(({ documents: docs, ...node }) => ({ ...node,
-          ...(rootTotals && byDate ? { rightText: `TOTAL ${formatMoney(receiptTotal(docs.filter(doc => !doc.annulled), 'total', 4))}` } : {}),
+          ...(rootTotals && byDate ? { rightText: formatMoney(receiptTotal(docs.filter(doc => !doc.annulled), 'total', 4)) } : {}),
           children: [...docs].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))
             || Number(b.number) - Number(a.number) || Number(b.sub_number || 0) - Number(a.sub_number || 0)
             || Number(b.id) - Number(a.id)).map(documentLeaf) }));

@@ -5,3 +5,23 @@
 .p-app { display: flex; align-items: center; gap: 12px; font-size: var(--fs-xl); }
 .p-app::before { content: attr(data-letter); flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; color: #fff; background: #309eff; border-radius: 7px; font-size: var(--fs-lg); font-weight: 800; }
 .combobox-option:has(.p-app) { padding: 7px 12px; }
+
+/* Keep both sign-in choices on the same row, aligned with the application selector. */
+.portal__login-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.portal__login-actions .btn { width: 100%; min-width: 0; padding-inline: 14px; justify-content: center; white-space: normal; overflow-wrap: anywhere; }
+.portal__login-actions #btn-login { grid-column: 2; }
+.portal__login-actions:not(:has(#cert-login:not([hidden]))) #btn-login { grid-column: 1 / -1; }
+
+/* A small desktop window still needs access to the whole sign-in form. */
+@media (max-width: 900px) {
+  html:has(body.portal #card-login:not([hidden]), body.portal #card-code:not([hidden])) {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+  body.portal:has(#card-login:not([hidden]), #card-code:not([hidden])) {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+}

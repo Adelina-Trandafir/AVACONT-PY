@@ -8,6 +8,7 @@
 .tb--cursor-ibeam .tb__input { cursor: text; }
 .tb--cursor-arrow .tb__input { cursor: default; }
 .tb__input:disabled { opacity: .6; }
+.tb--multiline .tb__input { resize: vertical; min-height: 64px; font: inherit; }
 .tb .tb__input:disabled { cursor: default; }   /* a disabled field is the arrow, whatever mouseCursor says */
 /* the error state: set by validate() / setError(), left again when the field is left with a valid text */
 .tb.is-invalid .tb__input { border-color: var(--tb-error-color, var(--err-control-bordercolor, #c0392b)); background: var(--tb-error-back, var(--err-control-backcolor, #fbe4e2)); }

@@ -128,6 +128,16 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
                 filters[key] = int(request.args[key])
         return {'rows': repo.rows(table, **filters)}
 
+    @bp.get('/api/adechit/child-search')
+    @guard('read')
+    def child_search(repo):
+        from .child_search import search
+        month_id = request.args.get('IDL', '')
+        require(month_id.isdigit(), 'FILTER', 'Selectați luna în care căutați copilul.', 400)
+        response = jsonify(search(repo, int(month_id), request.args.get('q', '')))
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
     def command(repo, operation, function):
         body = request.get_json(silent=True)
         require(isinstance(body, dict), 'JSON', 'Este necesară o cerere JSON.', 400)
@@ -326,6 +336,8 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
 
     from . import report_routes
     report_routes.register(bp, guard)
+    from . import working_days_routes
+    working_days_routes.register(bp, guard, command)
 
     @bp.post('/api/adechit/cancel')
     @guard('cancel')

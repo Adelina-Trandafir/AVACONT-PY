@@ -47,7 +47,7 @@ import json
 import logging
 import urllib.error
 import urllib.request
-from datetime import date
+from utils.clock import bucharest_today
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def lookup(cf, when=None, url=None, timeout=None) -> dict:
     """
     target = url or _configured("ANAF_TVA_URL", DEFAULT_URL)
     seconds = int(timeout or _configured("ANAF_TIMEOUT", DEFAULT_TIMEOUT))
-    asked_on = (when or date.today()).strftime("%Y-%m-%d")
+    asked_on = (when or bucharest_today()).strftime("%Y-%m-%d")
 
     # `cui` unquoted, exactly as the Access function builds it.
     body = json.dumps([{"cui": int(cf), "data": asked_on}]).encode("utf-8")

@@ -24,7 +24,7 @@ import logging
 import re
 import urllib.error
 import urllib.request
-from datetime import date
+from utils.clock import bucharest_today
 from decimal import Decimal, ROUND_HALF_UP
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ def verifica(furnizor, client, invoice, lines, known_units, bank_name):
     # ----- header
     if invoice.get("DataFactura") is None:
         err("DATA_LIPSA", "Factura nu are dată.")
-    elif invoice["DataFactura"] > date.today():
+    elif invoice["DataFactura"] > bucharest_today():
         warn("DATA_VIITOR", "Data facturii este în viitor.")
     if int(invoice.get("NumarFactura") or 0) <= 0:
         err("NUMAR_INVALID", "Numărul facturii trebuie să fie pozitiv.")

@@ -16,6 +16,7 @@ rotated copies are read besides the live file.
 import os
 import re
 from datetime import datetime, timedelta
+from utils.clock import parse_access_time, utc_from_timestamp, utc_now
 
 MAX_DETAIL = 4000
 ACCESS_TAIL_BYTES = 6 * 1024 * 1024   # the access log is huge: only its end is read
@@ -206,7 +207,7 @@ def _parse_raw(label, path):
     and take the time of the first stamped line after them (the traceback is printed just before the
     line that says what happened), else of the one before, else the file's own time."""
     out = []
-    stamp = datetime.fromtimestamp(os.stat(path).st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    stamp = utc_from_timestamp(os.stat(path).st_mtime).strftime("%Y-%m-%d %H:%M:%S")
     last = ""
     pending = []     # untimed lines waiting for the next stamp
 
@@ -242,7 +243,7 @@ def _parse_access(label, path):
         if found is None:
             continue
         try:
-            stamp = datetime.strptime(found.group("ts").split()[0], "%d/%b/%Y:%H:%M:%S").strftime("%Y-%m-%d %H:%M:%S")
+            stamp = parse_access_time(found.group("ts")).strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             continue
         status = int(found.group("status"))
@@ -264,7 +265,7 @@ def file_info():
         out.append({
             "key": key, "label": label, "exists": exists,
             "size": stat.st_size if stat else 0,
-            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%dT%H:%M:%S") if stat else None,
+            "modified": utc_from_timestamp(stat.st_mtime).strftime("%Y-%m-%dT%H:%M:%S") if stat else None,
             "rotated": sum(1 for i in range(1, backups + 1) if os.path.isfile("%s.%d" % (path, i))),
         })
     return out
@@ -294,7 +295,7 @@ def read_entries(file_key="", db="", gens=1, since=None):
 
 def level_counts(hours=24, gens=1):
     """{db casefolded: {"err", "warn"}} over the last `hours` hours, all files ('' = no database)."""
-    cut = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")
+    cut = (utc_now() - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")
     entries, _bad = read_entries("", "", gens, since=cut)
     counts = {}
     for entry in entries:

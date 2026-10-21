@@ -32,7 +32,7 @@ summary of the sessions it covers.
 import logging
 import os
 import re
-from datetime import datetime
+from utils.clock import utc_now
 
 from flask import Blueprint, request, g
 
@@ -100,7 +100,7 @@ def _answer(kind, path, backups, parser):
             "truncated": truncated,
             "sessions": sessions,
             "sessions_requested": wanted,
-            "server_time": datetime.now().astimezone().isoformat(),
+            "server_time": utc_now().isoformat() + 'Z',
         }, 200)
     except Exception as ex:
         logger.exception("[logs] %s: %s", kind, ex)

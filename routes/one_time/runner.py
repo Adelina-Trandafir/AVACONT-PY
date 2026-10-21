@@ -45,6 +45,7 @@ import argparse
 import base64
 import hashlib
 import logging
+from utils.clock import UtcFormatter
 import os
 import re
 import sys
@@ -106,7 +107,7 @@ def _setup_logging() -> None:
     logger.setLevel(logging.INFO)
     logger.propagate = False
     handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    handler.setFormatter(UtcFormatter("%(asctime)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 
 

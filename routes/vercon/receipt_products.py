@@ -1,5 +1,5 @@
 """Products drafted inside a receipt. Validation is read-only; inserts share its transaction."""
-from datetime import datetime
+from utils.clock import utc_now
 from decimal import Decimal
 
 from . import nomenclatoare as nom, numeric, protocol
@@ -69,6 +69,6 @@ def materialize(cursor, repo, ctx, line, created):
         return
     identity = line['product']
     if identity not in created:
-        created[identity] = repo.insert('VC_Produse', {**values, 'DataSalvare': datetime.now(), 'Activ': 1})
+        created[identity] = repo.insert('VC_Produse', {**values, 'DataSalvare': utc_now(), 'Activ': 1})
         protocol.audit(cursor, ctx, 'nom.create', 'VC_Produse', created[identity], None, values, None, None)
     line['product'] = created[identity]

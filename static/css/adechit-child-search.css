@@ -1,0 +1,4 @@
+/* The header lookup uses the shared Combobox; app-specific sizing only. */
+.ade-page #ade-child-search.combobox-container { max-width: none; display: block; }
+.ade-page #ade-child-search .combobox-input { padding-right: 30px; }
+.ade-page #ade-child-search .combobox-input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 15%, transparent); }

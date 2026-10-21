@@ -106,7 +106,7 @@ def html_page(model):
     footer = f'<footer class="rpt-footer">{escape(model["footer"])}</footer>' if model.get('footer') else ''
     links = ''.join(f'<link rel="stylesheet" href="{escape(href)}">' for href in css)
     return (f'<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{escape(model["title"])}</title>{links}<script src="{escape(excel_script)}" defer></script><script src="{escape(script)}" defer></script></head>'
+            f'<title>{escape(model["title"])}</title>{links}<script src="{escape(excel_script)}" defer></script><script type="module" src="{escape(script)}"></script></head>'
             f'<body class="rpt{" rpt-wide" if landscape else ""}{" rpt-payment-notice" if model.get("payment_notice") else ""}"><nav class="rpt-bar">'
             f'<button id="report-print" type="button" title="Listare la imprimanta implicită">🖨️ Listare</button>'
             f'<button id="report-printer" type="button" title="Alegeți imprimanta">🖨️ Selecție imprimantă</button>'

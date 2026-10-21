@@ -178,7 +178,7 @@ def changing(app_conn, username):
     cfg = _config()
     if username.casefold() in _protected_names(cfg):
         raise AdminError('Cont protejat: %s. Drepturile sale se administreaza separat de conturile de lucru.' % username)
-    conn = mysql.connector.connect(**cfg)
+    conn = mysql.connector.connect(**{**cfg, "time_zone": "+00:00"})
     locked = False
     change = None
     try:

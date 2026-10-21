@@ -454,7 +454,7 @@ def _write(run, status):
 
     out = []
     out.append("=" * _WIDTH)
-    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(run.wall))
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(run.wall))
     out.append("%s.%03d  rulare %d  [%s]  status %s"
                % (stamp, int((run.wall % 1) * 1000), run.id, run.label, status))
 

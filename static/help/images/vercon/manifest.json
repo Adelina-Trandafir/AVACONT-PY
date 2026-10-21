@@ -1,0 +1,181 @@
+{
+  "application": "VERCON",
+  "environment": "DEMO",
+  "capturedOn": "2026-10-21",
+  "sourceUrl": "https://k-bot.ro/vercon",
+  "redaction": "Măști opace pentru identificatori și date personale; cataloagele sunt decupate pentru lizibilitate.",
+  "images": [
+    {
+      "file": "01-ecran-nir.jpg",
+      "caption": "Consultarea unei recepții NIR și arborele documentelor salvate.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 3
+    },
+    {
+      "file": "02-nir-editare.jpg",
+      "caption": "Modificarea NIR: antet, produse, ajustarea facturii și salvarea documentului.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 3
+    },
+    {
+      "file": "03-meniu-configurari.jpg",
+      "caption": "Meniul Configurări: produse, nomenclatoare, comisii, gestionari și setări.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 3
+    },
+    {
+      "file": "04-configurari-produse.jpg",
+      "caption": "Produse: filtrare, încadrare pe cont și fișe de magazie pe variante de preț.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 2
+    },
+    {
+      "file": "05-configurari-conturi-tva.jpg",
+      "caption": "Baza de date: categorii și conturi, fișa valorică a contului și cotele TVA.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 2
+    },
+    {
+      "file": "06-configurari-comisii.jpg",
+      "caption": "Comisiile de recepție și inventariere; numele membrilor sunt mascate.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 8
+    },
+    {
+      "file": "07-configurari-gestionari.jpg",
+      "caption": "Gestionari: Denumire și Locatie, cu datele personale mascate.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 24,
+      "refreshedOn": "2026-10-21"
+    },
+    {
+      "file": "08-configurari-setari.jpg",
+      "caption": "Setările gestiunii: precizia de afișare și calcul, precizia fixă de stocare și salvarea.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 2
+    },
+    {
+      "file": "09-rapoarte-selectie.jpg",
+      "caption": "Rapoarte: perioada, tipul raportului, opțiunile specifice și selecția datelor pentru Listare sau Export Excel.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 1,
+      "refreshedOn": "2026-10-21"
+    },
+    {
+      "file": "10-rapoarte-perioada.jpg",
+      "caption": "Selectorul perioadei raportului: anul întreg sau o lună.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 1,
+      "refreshedOn": "2026-10-21"
+    },
+    {
+      "file": "11-bon-consum.jpg",
+      "caption": "Bonul de consum: primitor, cont, produse, cantități și disponibil la data bonului.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 3
+    },
+    {
+      "file": "12-produse-mijloace-fixe.jpg",
+      "caption": "Nomenclatorul MF: cont, produs, CPV, clasificare și durata normală în luni.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 2
+    },
+    {
+      "file": "13-clasificari-mf.jpg",
+      "caption": "Catalogul clasificărilor MF: descrierea codului curent, căutare și limite ale duratei normale în ani.",
+      "width": 1000,
+      "height": 600,
+      "maskedRegions": 2
+    },
+    {
+      "file": "14-clasificari-mf-cautare.jpg",
+      "caption": "Căutare după cod în catalogul MF și limitele de durată ale rezultatelor.",
+      "width": 1000,
+      "height": 600,
+      "maskedRegions": 2
+    },
+    {
+      "file": "15-catalog-cpv.jpg",
+      "caption": "Catalogul CPV: arborele codurilor, căutarea după denumire sau cod și comanda de alegere.",
+      "width": 1000,
+      "height": 600,
+      "maskedRegions": 2
+    },
+    {
+      "file": "16-cpv-cautare.jpg",
+      "caption": "Exemplu de căutare după denumire în CPV; alegerea se face cu plusul de lângă codul potrivit.",
+      "width": 1000,
+      "height": 600,
+      "maskedRegions": 2
+    },
+    {
+      "file": "17-registru-mf.jpg",
+      "caption": "Registrul MF: numere de inventar, durate și valori de amortizare; deținătorii sunt mascați.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 10
+    },
+    {
+      "file": "18-amortizare-mf.jpg",
+      "caption": "Calculul amortizării unui bun la o dată aleasă, cu durate, valori și explicații ale surselor.",
+      "width": 422,
+      "height": 728,
+      "maskedRegions": 10
+    },
+    {
+      "file": "19-context-subunitate.jpg",
+      "caption": "Selectorul superior permite trecerea între gestiunile de materiale, alimente, OI și MF.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 10
+    },
+    {
+      "file": "20-lista-alimente.jpg",
+      "caption": "Lista de alimente: mese, porții, meniuri, bonuri asociate și situația diferențelor.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 5
+    },
+    {
+      "file": "21-discutii.jpg",
+      "caption": "Panoul DISCUȚII: filtrele pe aplicații, identitatea afișată, răspunsurile și caseta de mesaj.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 7
+    },
+    {
+      "file": "22-bon-predare-oi.jpg",
+      "caption": "Bonul de predare OI și sumele grupurilor lunare, afișate fără prefixul TOTAL.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 2,
+      "refreshedOn": "2026-10-21"
+    },
+    {
+      "file": "23-timer-sesiune.jpg",
+      "caption": "Timerul din antet arată minutele și secundele până la deconectare; închiderea avertizării nu îl oprește.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 3
+    },
+    {
+      "file": "24-avertizare-sesiune.jpg",
+      "caption": "Avertizarea reală de deconectare iminentă, la pragul de cinci minute.",
+      "width": 1224,
+      "height": 871,
+      "maskedRegions": 3
+    }
+  ]
+}

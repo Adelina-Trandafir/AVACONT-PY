@@ -1,5 +1,5 @@
 """Receipt writes. The caller owns the transaction and the verified context."""
-from datetime import datetime
+from utils.clock import utc_now
 from decimal import Decimal
 
 from . import numeric, protocol, receipt_choices, receipt_rules, receipt_number, receipt_auto, receipt_products
@@ -271,7 +271,7 @@ def create_nir(cursor, repo, ctx, exercise, body, request_key, request_id, parse
     total_int = _nir_total(ctx, parsed)
     invoice_id, current = invoices.prepare_receipt(cursor, ctx, None, header)
     receipt_rules.simulate(cursor, repo, ctx, parsed)
-    now = datetime.now()
+    now = utc_now()
     values = _nir_header_values(ctx, parsed, total_int, number)
     if _numarsub_column(cursor, ctx):
         values['NumarSub'] = sub
@@ -361,7 +361,7 @@ def edit_nir(cursor, repo, ctx, exercise, doc_id, body, request_id):
     stored = _all(cursor, 'SELECT ID, IdProdus FROM VC_Intrari WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdIntrare=%s', (*_scope(ctx), doc_id))
     by_id = {r['ID']: r for r in stored}
     touched = {r['IdProdus'] for r in stored}
-    now = datetime.now()
+    now = utc_now()
     kept = set()
     created_products = {}
     for line in parsed['lines']:

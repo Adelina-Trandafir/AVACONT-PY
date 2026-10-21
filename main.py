@@ -1,5 +1,9 @@
 import json
 
+from utils.clock import configure_utc_process
+
+configure_utc_process()
+
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 from utils.logger import setup_logger
@@ -49,6 +53,7 @@ from routes.adechit import adechit_bp
 from routes.adechit.parent_portal import parent_portal_bp
 from routes import actiuni  # recent actions of the operator (Jurnal writes + read route)
 from routes.vercon import vercon_bp  # slice VC01-01: VERCON skeleton, section VR
+from routes.chat import chat_bp  # SLICE-CHAT-02: shared web chat, existing portal identity
 
 # 1. Initializam logger-ul global (ca sa scrie in fisierul .log)
 logger = setup_logger()
@@ -122,6 +127,7 @@ app.register_blueprint(efactura_bp)  # slice 00EF-04: /api/efactura/token/start,
 app.register_blueprint(adechit_bp)
 app.register_blueprint(parent_portal_bp)
 app.register_blueprint(vercon_bp)  # slice VC01-01/02: /api/vercon/context, /vercon
+app.register_blueprint(chat_bp)
 
 actiuni.init_app(app)  # recent actions: Jurnal rows for data writes + GET /api/actiuni
 

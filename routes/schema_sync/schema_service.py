@@ -38,7 +38,7 @@ can forget it.
 import logging
 import os
 import threading
-from datetime import datetime
+from utils.clock import utc_now
 
 from .schema_common import (OUT_DIR, SchemaSyncError, check_prerequisites,
                             connect, ensure_control_table, parse_targets,
@@ -150,7 +150,7 @@ def run_sync(targets, mode="SAFE", allow_destructive=False, view_only=False,
         # the only record of what the run INTENDED, readable next to what
         # schema_diff_log says actually happened.
         sql_path = os.path.join(
-            OUT_DIR, "schema_diff_%s.sql" % datetime.now().strftime(
+            OUT_DIR, "schema_diff_%s.sql" % utc_now().strftime(
                 "%Y%m%d_%H%M%S"))
         os.makedirs(os.path.dirname(os.path.abspath(sql_path)), exist_ok=True)
         with open(sql_path, "w", encoding="utf-8") as fh:

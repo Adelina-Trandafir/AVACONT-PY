@@ -27,6 +27,7 @@
 <script type="module" src="/static/js/portal/portal.js"></script>
 <script type="module" src="/static/js/portal/nozoom.js"></script>
 <script type="module" src="/static/js/portal/apps-menu.js"></script>
+<script type="module" src="/static/js/chat/bootstrap.js"></script>
 </head>
 <body class="portal">
 
@@ -69,13 +70,14 @@
         <div id="p-app-combo"></div>
       </div>
       <p class="msg" id="msg-login" role="alert" hidden></p>
-      <div class="actions"><button class="btn btn--primary btn--lg" type="submit" id="btn-login">Continuă</button></div>
+      <div class="actions portal__login-actions">
+        <!-- Certificate sign-in: computers only. certificat.js removes this block on a phone/tablet. -->
+        <div class="portal__cert" id="cert-login" hidden>
+          <button class="btn btn--ghost btn--lg portal__cert-btn" type="button" id="btn-cert-login">🔐 Certificat Digital</button>
+        </div>
+        <button class="btn btn--primary btn--lg" type="submit" id="btn-login">Continuă</button>
+      </div>
     </form>
-    <!-- certificate sign-in: computers only. certificat.js removes this block on a phone/tablet. -->
-    <div class="portal__cert" id="cert-login" hidden>
-      <div class="portal__or"><span>sau</span></div>
-      <button class="btn btn--ghost btn--lg portal__cert-btn" type="button" id="btn-cert-login">🔐 Intră cu certificat digital</button>
-    </div>
     <p class="portal__note">Nu ai cont? <a href="/inregistrare">Înregistrează unitatea</a> sau <a href="/detalii">cere mai multe detalii</a>.</p>
   </section>
 

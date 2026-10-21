@@ -1,0 +1,25 @@
+/* VERCON, VC06-07 (EV04): the list of invoices the accountant sent from K-BOT, opened from «Adaugare NIR» (js/vercon/efactura-intake.js). Same box look as confirm-box.css. */
+.vc-efi { box-sizing: border-box; width: min(980px, calc(94 * var(--application-vw, 1vw))); max-height: 80vh; padding: 0; color: var(--ink, #1f2937); background: var(--card, #fff); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); box-shadow: 0 10px 30px rgb(0 0 0 / .25); font-family: inherit; }
+.vc-efi[open] { display: flex; flex-direction: column; }
+.vc-efi::backdrop { background: rgb(0 0 0 / .25); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+.vc-efi header { padding: 4px 16px; background: var(--sky-2, #eaf2fb); border-bottom: 1px solid var(--line, #cdd5e0); }
+.vc-efi h2 { margin: 0; font-size: var(--fs-xl); }
+.vc-efi__body { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 16px; }
+.vc-efi__hint { margin: 0; line-height: 1.35; }
+.vc-efi__scroll { min-height: 120px; max-height: 46vh; overflow: auto; border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); }
+.vc-efi__table { width: 100%; border-collapse: collapse; font-size: var(--fs-md, inherit); }
+.vc-efi__table th { position: sticky; top: 0; padding: 6px 8px; text-align: left; background: var(--sky-2, #eaf2fb); border-bottom: 1px solid var(--line, #cdd5e0); white-space: nowrap; }
+.vc-efi__table td { max-width: 260px; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-bottom: 1px solid var(--line, #cdd5e0); }
+.vc-efi__table td.is-number { text-align: right; font-variant-numeric: tabular-nums; }
+.vc-efi__table tbody tr { cursor: pointer; }
+.vc-efi__table tbody tr:hover { background: var(--sky-1, #f3f8fe); }
+.vc-efi__table tbody tr.is-selected { background: var(--sky-2, #eaf2fb); outline: 1px solid var(--blue, #309eff); outline-offset: -1px; }
+.vc-efi__status { min-height: 1.3em; margin: 0; }
+.vc-efi__status[data-state="error"] { color: #c0392b; }
+.vc-efi footer { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line, #cdd5e0); }
+.vc-efi__spacer { flex: 1 1 auto; }
+.vc-efi button { min-width: 120px; min-height: 34px; padding: 6px 16px; color: inherit; background: var(--sky-2, #eaf2fb); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); font: inherit; font-weight: 650; cursor: pointer; }
+.vc-efi button:hover:not(:disabled) { background: var(--sky-1, #f3f8fe); }
+.vc-efi button.is-primary { color: #fff; background: var(--blue, #309eff); border-color: var(--blue, #309eff); }
+.vc-efi button:disabled { opacity: .5; cursor: default; }
+.vc-efi button:focus-visible, .vc-efi__table tbody tr:focus-visible { outline: 2px solid var(--blue, #309eff); outline-offset: 1px; }

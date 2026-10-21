@@ -39,7 +39,10 @@ COMMON_DB = "AVACONT_COMUN"
 
 
 def _timeouts(cfg):
-    """The same three timeouts on every connection, set on a COPY of the config."""
+    """UTC session and timeouts on every connection, on a COPY of the config."""
+    # Session only: NOW(), defaults and TIMESTAMP conversions share Python's UTC.
+    # An offset needs no MariaDB timezone tables; no global setting or DDL changes.
+    cfg["time_zone"] = "+00:00"
     cfg.setdefault("connection_timeout", 10)   # seconds: connect
     cfg.setdefault("read_timeout",        30)   # seconds: asteptare raspuns query
     cfg.setdefault("write_timeout",       30)   # seconds: asteptare write
