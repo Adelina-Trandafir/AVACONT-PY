@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 TIP_REZERVARE = "rezervare"
 TIP_RECEPTIE = "receptie"
+# Slice 0114-26: not a marker. The FOREXE page asks it when the operator starts a reservation (the "Adauga"
+# button or the eye of a row): the answer is 200 when the reservation may begin, 409 + the reason when it may not.
+TIP_VERIFICA = "verifica-rezervare"
 
 LOCK_IDREV = "IDREV"
 LOCK_IDRH = "IDRH"
@@ -71,6 +74,17 @@ _CONTOARE = {
                "INSERT INTO FX_Receptii (Descriere) VALUES ('K-BOT marcaj')"),
 }
 
+# Slice 0114-26: reservations of the angajament that still wait for their revision -- they have no revision
+# yet and they put a value into one. The ones of the edit session in progress are not counted: their history
+# rows carry the number held for the session (%s), the revision that will cover them.
+_SQL_FARA_REVIZIE = (
+    "SELECT R.DataRezervare, R.CodIndicator FROM FX_Rezervari R "
+    " WHERE R.CodAngajament = %s AND R.AreDDF = 0 "
+    "   AND (CASE WHEN R.EInitiala THEN R.R_Initiala ELSE R.R_Valoare END) <> 0 "
+    "   AND NOT EXISTS (SELECT 1 FROM FX_Istoric H WHERE H.ID = R.IDH AND H.IDREV = %s) "
+    " ORDER BY R.DataRezervare, R.IDRZ"
+)
+
 _SQL_SWEEP = "DELETE FROM FX_NumberLock WHERE ExpiraLa < NOW()"
 _SQL_LOCK_VIU = (
     "SELECT IdLock, Valoare, ExpiraLa FROM FX_NumberLock "
@@ -91,6 +105,30 @@ def _json_utf8(payload, status):
     """A JSON response with LITERAL diacritics (ensure_ascii=False)."""
     body = json.dumps(payload, ensure_ascii=False, default=str)
     return current_app.response_class(body, status=status, mimetype="application/json")
+
+
+def mesaj_blocaj_rezervari(cursor, dc: str, cod: str):
+    """
+    The rule of slice 0114-26 (operator, 23.10.2026): no reservation is started in the FOREXE page while the
+    angajament has reservations without a revision -- each of them needs its revision (the «+» of the
+    Rezervari tree) before the next change is made, otherwise the revisions get mixed up. Returns the text for
+    the operator, or None when the reservation may begin. The cursor is a DICTIONARY one.
+    """
+    tinut = idrev_tinut(cursor, dc, cod)
+    cursor.execute(_SQL_FARA_REVIZIE, (cod, tinut if tinut is not None else -1))
+    randuri = cursor.fetchall() or []
+    if not randuri:
+        return None
+    zile = []
+    for r in randuri:
+        zi = r["DataRezervare"]
+        text = zi.strftime("%d.%m.%Y") if hasattr(zi, "strftime") else str(zi)
+        if text not in zile:
+            zile.append(text)
+    lista = ", ".join(zile[:4]) + (f" și încă {len(zile) - 4}" if len(zile) > 4 else "")
+    return (f"Angajamentul «{cod}» are rezervări fără revizie de fundamentare (din {lista}). "
+            "Nu se pot face rezervări noi până nu primesc revizie: deschide vederea «Rezervări» "
+            "a angajamentului și apasă «+» pe fiecare.")
 
 
 def _avanseaza_contorul(cursor, tip: str, cod: str) -> int:
@@ -120,17 +158,20 @@ def _tine(cursor, tip: str, dc: str, cod: str, valoare: int, token: str,
 def post_marcaj_rezerva():
     """Reserve the ids of the marker the page is about to write.
 
-    Body:   {"tip": "rezervare" | "receptie", "cod": "<CodAngajament>"}
+    Body:   {"tip": "rezervare" | "receptie" | "verifica-rezervare", "cod": "<CodAngajament>"}
     Answer: rezervare -> {"tip", "cod", "idrev", "marcaj", "expira_la", "refolosit"}
             receptie  -> {"tip", "cod", "idrh", "idr", "marcaj", "expira_la"}
+            verifica-rezervare -> 200 {"tip", "cod", "blocat": false}, or 409 {"error": <reason>, "blocat": true}
+                                  (slice 0114-26; reserves nothing)
     """
     sarcina = request.get_json(silent=True)
     if not isinstance(sarcina, dict):
         return _json_utf8({"error": "Corp JSON lipsă sau nevalid."}, 400)
     tip = str(sarcina.get("tip") or "").strip().lower()
-    if tip not in (TIP_REZERVARE, TIP_RECEPTIE):
+    if tip not in (TIP_REZERVARE, TIP_RECEPTIE, TIP_VERIFICA):
         return _json_utf8(
-            {"error": f"Tipul de marcaj «{tip}» nu este cunoscut (rezervare sau receptie)."}, 400)
+            {"error": f"Tipul de marcaj «{tip}» nu este cunoscut (rezervare, receptie sau verifica-rezervare)."},
+            400)
     cod = str(sarcina.get("cod") or "").strip()
     if not cod:
         return _json_utf8({"error": "Câmpul «cod» lipsește."}, 400)
@@ -150,6 +191,15 @@ def post_marcaj_rezerva():
             conn.start_transaction()
 
         cursor.execute(_SQL_SWEEP)
+
+        if tip == TIP_VERIFICA:
+            # Read-only: nothing is reserved, nothing is kept.
+            mesaj = mesaj_blocaj_rezervari(cursor, dc, cod)
+            conn.rollback()
+            if mesaj:
+                logger.info("[forexe.marcaj] %s: rezervare oprita pe %s (rezervari fara revizie)", db_name, cod)
+                return _json_utf8({"tip": tip, "cod": cod, "blocat": True, "error": mesaj}, 409)
+            return _json_utf8({"tip": tip, "cod": cod, "blocat": False}, 200)
 
         if tip == TIP_REZERVARE:
             cursor.execute(_SQL_LOCK_VIU, (LOCK_IDREV, dc, cod))

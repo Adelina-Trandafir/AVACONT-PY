@@ -68,7 +68,9 @@ export function mountProductStock(host, opts) {
     if (!data.variants.length) { message('Produsul nu are prețuri salvate.'); return; }
     root.classList.remove('is-empty');
     nodes = data.variants.map((variant) => ({ id: 'doc:' + variant.id,
-      label: price(variant.price) + ' · ' + (variant.first_date ? format(variant.first_date, { type: 'date' }) : 'fără dată'),
+      sortType: 'number', sortValue: variant.price,
+      label: price(variant.price) + ' · ' + (variant.first_date ? format(variant.first_date, { type: 'date' }) : 'fără dată')
+        + ` · ID ${variant.id}` + (variant.code ? ` · ${variant.code}` : ''),
       tooltip: 'Varianta ' + variant.id,
     }));
     tree = paintTree(treeHost, nodes, { title: 'Prețuri', showSearchBox: false,

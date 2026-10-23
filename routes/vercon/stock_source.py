@@ -5,24 +5,28 @@ All quantities remain direct decimals. OI custody is a separate ledger from ware
 stock: a BP creates one warehouse BC, never a second consumption here.
 """
 from decimal import Decimal
+from utils import vercon_suppliers as suppliers
 from . import oi_accounts
+from .nomenclatoare import NomError
 
 WAREHOUSE = (
     ('nir', 'VC_Intrari', 'i', 'VC_NIR', 'n', 'IdIntrare',
-     'DATE(COALESCE(n.DataFc,n.Data))', 'n.NrFact', 'n.IdPartener',
+     'DATE(COALESCE(n.DataFc,n.Data))', 'n.NrFact', suppliers.sql('n.CodPartener'),
      'n.Anulat=0 AND COALESCE(n.Storno,0)=0', 1),
     ('br', 'VC_IesiriRetur', 'r', 'VC_Iesiri_H', 'h', 'IdBonConsum',
      'DATE(h.DataBC)', 'h.NumarBC', 'NULL', 'h.Anulat=0', 1),
     ('bc', 'VC_Iesiri', 'o', 'VC_Iesiri_H', 'h', 'IdBonConsum',
      'DATE(h.DataBC)', 'h.NumarBC', 'NULL', 'h.Anulat=0', -1),
     ('storno', 'VC_IntrariStorno', 's', 'VC_NIR', 'n', 'IdIntrare',
-     'DATE(COALESCE(n.DataFc,n.Data))', 'n.NrFact', 'n.IdPartener',
+     'DATE(COALESCE(n.DataFc,n.Data))', 'n.NrFact', suppliers.sql('n.CodPartener'),
      'n.Anulat=0 AND s.Anulat=0', -1),
 )
 
 
 def warehouse(cursor, ctx, products=None, exclude=None):
     """Signed movements; products=None means all, an explicit empty set means none."""
+    from . import supplier_identity
+    supplier_identity.require(cursor)
     products = None if products is None else sorted({int(p) for p in products})
     if products == []:
         return []
@@ -49,7 +53,12 @@ def warehouse(cursor, ctx, products=None, exclude=None):
                 a=a, h=h, day=day, sign=sign, kind=kind, key=key, number=number,
                 supplier=supplier, lines=lines, header=header, valid=valid, extra=extra))
     cursor.execute(' UNION ALL '.join(parts), params)
-    return [{**row, 'q': Decimal(row['q'] or 0)} for row in cursor.fetchall()]
+    rows = cursor.fetchall()
+    for row in rows:
+        if row['d'] is None or row['q'] is None:
+            raise NomError('STOCK_SOURCE_MISSING',
+                           'O mișcare de stoc a produsului %s nu are data sau cantitatea. Corectați documentul sursă.' % row['p'], 409)
+    return [{**row, 'q': Decimal(row['q'])} for row in rows]
 
 
 def custody(cursor, ctx):

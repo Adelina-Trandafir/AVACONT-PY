@@ -11,7 +11,9 @@ Those clients (the old updater and the file uploader) can only talk to:
 until they have updated themselves. Once every client runs the new updater (it asks
 /api/update/* first and falls back here only when that fails), set LEGACY_UPDATER_ENABLED = False in the server's config.py -- every route below then answers 404 again, as if it was never registered.
 
-Only these routes come back (the three above, GET /api/ftp/get_avacont_version and /api/ftp/download_avacont for the old updater, and POST /api/ftp/init_upload, upload_chunk and finalize_upload for the old backup uploader).
+POST /api/tools/upload needs its own key (X-Upload-Key, LEGACY_UPLOAD_KEY in config.py; see _guard_upload), not the shared API_KEY.
+
+Only these routes come back (the three above, GET /api/mfp/get_ef_token for the old EF.EXE, GET /api/ftp/get_avacont_version and /api/ftp/download_avacont for the old updater, and POST /api/ftp/init_upload, upload_chunk and finalize_upload for the old backup uploader).
 
 The key is read from the server's config.py (`API_KEY`) at request time and NEVER imported at module
 load, so a server whose config.py no longer defines it simply refuses (503) instead of failing to start.
@@ -67,6 +69,27 @@ def _guard():
     if given and hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
         return None
     logger.warning(f"LEGACY UPDATER: access refused, IP {request.remote_addr}, {request.path}")
+    return jsonify({"error": "Unauthorized"}), 401
+
+
+def _guard_upload():
+    """Guard of POST /api/tools/upload, the only route that PUBLISHES update files (every old client installs them).
+    It needs its own key, LEGACY_UPLOAD_KEY in the server's config.py, sent as X-Upload-Key. There is NO fallback to
+    API_KEY: that key is compiled into every client, so accepting it here would change nothing. A missing key = 503."""
+    if not _enabled():
+        return jsonify({"error": "Not found"}), 404
+    try:
+        import config
+        expected = str(getattr(config, "LEGACY_UPLOAD_KEY", "") or "")
+    except Exception:
+        expected = ""
+    if not expected:
+        logger.error("LEGACY_UPLOAD_KEY is not set in config.py: POST /api/tools/upload refuses everything")
+        return jsonify({"error": "Unavailable"}), 503
+    given = request.headers.get("X-Upload-Key", "")
+    if given and hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
+        return None
+    logger.warning(f"LEGACY UPDATER: upload refused, IP {request.remote_addr}")
     return jsonify({"error": "Unauthorized"}), 401
 
 
@@ -175,7 +198,7 @@ def check_updates():
 
 @legacy_updater_bp.route("/api/tools/upload", methods=["POST"])
 def upload_file():
-    denied = _guard()
+    denied = _guard_upload()
     if denied:
         return denied
 
@@ -543,3 +566,27 @@ def finalize_upload():
         # ── Cleanup temp dir întotdeauna ────────────────────────────────────
         _cleanup_temp_dir(temp_dir)
         _upload_sessions.pop(upload_id, None)
+
+
+# ---------------------------------------------------------------------------
+# EF.EXE (the old e-invoice token tool of the Access side, source in the EF2 project) still downloads its
+# client data as a password-protected zip. The file lives in the server's project root and is only SENT,
+# never read or opened here. Same guard and same LEGACY_UPDATER_ENABLED switch as the rest of the bridge.
+# ---------------------------------------------------------------------------
+@legacy_updater_bp.route("/api/mfp/get_ef_token", methods=["GET"])
+def get_ef_token():
+    denied = _guard()
+    if denied:
+        return denied
+
+    token_path = os.path.abspath("token.zip")
+    if not os.path.isfile(token_path):
+        logger.error("LEGACY EF: token.zip is missing from the server project root")
+        return jsonify({"error": "Fisierul token.zip nu exista pe server"}), 404
+
+    try:
+        logger.info(f"LEGACY EF: token.zip sent to {request.remote_addr}")
+        return send_file(token_path, mimetype="application/zip", as_attachment=True, download_name="token.zip")
+    except Exception as e:
+        logger.error(f"Error sending token.zip: {e}", exc_info=True)
+        return jsonify({"error": "Eroare la trimiterea fisierului"}), 500

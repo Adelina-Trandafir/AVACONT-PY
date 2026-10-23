@@ -6,6 +6,7 @@ import { reportNodes } from './report-result.js';
 import { format as formatField } from './fields.js';
 import { reportPeriod } from './report-period.js';
 import { reportPeriodAction } from './report-period-action.js';
+import { generateReport } from './report-request.js';
 
 export function mountReports(host, { api, sel }) {
   const owner = scope(), selectionOwner = scope();
@@ -149,7 +150,7 @@ export function mountReports(host, { api, sel }) {
   }
   async function generate(seq) {
     if (state.model) return state.model;
-    const model = await api(`/api/vercon/reports/${encodeURIComponent(state.name)}/generate?${query()}`);
+    const model = await generateReport(api, state.name, query());
     if (state.destroyed || seq !== state.seq) return null;
     state.model = model;
     return model;
@@ -236,7 +237,7 @@ export function mountReports(host, { api, sel }) {
         end.input.setAttribute('aria-label', dateOnly ? 'La data' : 'Dată sfârșit');
         end.input._picker.field.setAttribute('aria-label', dateOnly ? 'La data' : 'Dată sfârșit');
         state.name = name; state.label = report.label; state.report = report; state.category = category;
-        // MF reports have distinct trees and reload on report changes. The other
+        // OI/MF reports have distinct trees and reload on report changes. The other
         // reports retain the existing category-based selection reuse.
         if (sameCategory && (selectionTree || state.loading)) {
           state.spec = state.loading ? null : report; invalidate();

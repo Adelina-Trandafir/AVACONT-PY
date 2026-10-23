@@ -1,0 +1,44 @@
+/* Debug-only panel for the text-follows-the-window test (js/utils/font-fit-panel.js). Loaded only in test mode.
+   It uses fixed sizes on purpose: the panel must not move while the text it measures is being changed. */
+.fsfit, .fsfit__open {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2147483000;
+  font: 13px/1.3 system-ui, sans-serif;
+  color: var(--ink, #1f2937);
+}
+.fsfit__open {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-weight: 700;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #cdd5e0);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgb(0 0 0 / .25);
+  cursor: pointer;
+}
+.fsfit__open[hidden], .fsfit[hidden] { display: none; }
+.fsfit {
+  box-sizing: border-box;
+  width: 300px;
+  padding: 10px 12px 12px;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #cdd5e0);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / .28);
+}
+.fsfit__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.fsfit__head button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.fsfit__row { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; margin: 6px 0; }
+.fsfit__row input[type="range"] { grid-column: 1 / -1; width: 100%; margin: 2px 0 0; accent-color: var(--blue, #309eff); }
+.fsfit__row output { font-variant-numeric: tabular-nums; }
+.fsfit__row--check { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.fsfit--off .fsfit__row:not(.fsfit__row--check) { opacity: .5; }
+.fsfit__readout { margin: 8px 0; font-size: 12px; font-variant-numeric: tabular-nums; opacity: .8; }
+.fsfit__actions { display: flex; gap: 6px; }
+.fsfit__actions button { flex: 1; padding: 4px 0; font: inherit; color: inherit; background: var(--sky-1, #edf5fc); border: 1px solid var(--line, #cdd5e0); border-radius: 4px; cursor: pointer; }
+.fsfit__actions button:hover { border-color: var(--blue, #309eff); }
+.fsfit__probe { position: absolute; visibility: hidden; font-size: var(--fs-md); }
+@media print { .fsfit, .fsfit__open { display: none; } }

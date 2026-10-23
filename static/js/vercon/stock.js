@@ -114,7 +114,9 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
   }
   function paintTrees() {
     trees.clear();
-    paintTree(period, [{ id: `year:${year}`, label: `Anul ${year}`, children: months.map((label, index) => ({ id: `doc:${index}`, label })) }],
+    paintTree(period, [{ id: `year:${year}`, label: `Anul ${year}`, children: months.map((label, index) => ({
+      id: `doc:${index}`, label, sortType: 'date', sortValue: `${year}-${String(index + 1).padStart(2, '0')}-01`, sortDirection: 'asc',
+    })) }],
       { title: 'Perioada', selected: Number(state.start.slice(5, 7)) - 1, onSelect: (value) => {
         const index = Number(value); state.start = `${year}-${String(index + 1).padStart(2, '0')}-01`; state.end = endOfMonth(year, index);
         begin.input._picker.setValue(new Date(year, index, 1), false); end.input._picker.setValue(new Date(year, index + 1, 0), false); void load();

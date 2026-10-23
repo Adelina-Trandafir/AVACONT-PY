@@ -19,6 +19,7 @@ AMOUNTS. The value of a line WITH VAT comes from primite_ke.valori_cu_tva (the s
 NOT IN THIS SLICE: the invoices of kind credit note («NC», Semn -1) cannot be sent (decision D3); the VERCON side (list, return, take over) is EV04 / EV05.
 """
 import logging
+from utils import vercon_efactura as associations
 
 from . import facturi as F
 from . import primite, primite_ke
@@ -81,11 +82,12 @@ _SQL_TRIMITERI = ("SELECT IdTrimitere, IdPrimita, Stare, Observatie, UnTrimis, D
                   "FROM EF_PrimiteVercon WHERE IdPrimita = %s ORDER BY IdTrimitere DESC")
 
 _SQL_NIR = ("SELECT n.IdTrimitere, n.SubunitId, n.GestiuneId, n.ExercitiuId, n.IdIntrare, v.Numar, v.NumarSub, v.Data, "
-            "(v.IdIntrare IS NOT NULL) AS Exista, COALESCE(v.Anulat, 0) AS Anulat, g.Name AS Gestiune "
+            "(v.IdIntrare IS NOT NULL) AS Exista, COALESCE(v.Anulat, 0) AS Anulat, CONCAT(s.Name,' / ',g.Name) AS Gestiune "
             "FROM EF_PrimiteVerconNir n "
             "LEFT JOIN VC_NIR v ON v.SubunitId = n.SubunitId AND v.GestiuneId = n.GestiuneId AND v.ExercitiuId = n.ExercitiuId AND v.IdIntrare = n.IdIntrare "
             "LEFT JOIN VC_Gestiuni g ON g.SubunitId = n.SubunitId AND g.GestiuneId = n.GestiuneId "
-            "WHERE n.IdTrimitere IN ({marks}) ORDER BY n.IdTrimitere, n.SubunitId, n.GestiuneId, n.IdIntrare")
+            "LEFT JOIN VC_Subunitati s ON s.SubunitId=n.SubunitId "
+            "WHERE n.IdTrimitere IN ({marks}) ORDER BY s.Name,g.Name,v.Data,v.Numar,v.NumarSub")
 
 
 def _nir_ale(cursor, ids):
@@ -100,11 +102,21 @@ def _nir_ale(cursor, ids):
             "IdIntrare": row["IdIntrare"], "Numar": row["Numar"], "NumarSub": row["NumarSub"],
             "Data": row["Data"].isoformat() if row["Data"] is not None else None,
             "Anulat": bool(row["Anulat"]), "Valid": bool(row["Exista"]) and not row["Anulat"]})
+    for identity in ids:
+        progress = associations.progress(cursor, identity)
+        if progress is not None:
+            valid = {(l['SUBUNIT_ID'], l['GESTIUNE_ID'], l['EXERCITIU_ID'], l['NIR_ID']) for l in progress['links'] if l['VALID']}
+            for nir in out[identity]:
+                nir['Valid'] = (nir['SubunitId'], nir['GestiuneId'], nir['ExercitiuId'], nir['IdIntrare']) in valid
+                nir['EffectiveState'] = progress['state']
     return out
 
 
 def stare_efectiva(stored, nirs):
     """(state, returned). A PRELUATA sending with no valid NIR left is TRIMISA again (decision D5)."""
+    if stored in STARI_ACTIVE and nirs and nirs[0].get('EffectiveState'):
+        state = nirs[0]['EffectiveState']
+        return state, stored == 'PRELUATA' and state == 'TRIMISA'
     if stored == "PRELUATA" and not any(nir["Valid"] for nir in nirs):
         return "TRIMISA", True
     return stored, False

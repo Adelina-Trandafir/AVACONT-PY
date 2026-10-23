@@ -3,6 +3,7 @@
 All mutations run in the caller's transaction. No DDL, implicit merging or historical recalculation.
 """
 from decimal import Decimal
+from utils import vercon_suppliers as suppliers
 import json
 
 from . import numeric, protocol
@@ -21,6 +22,8 @@ def ready(cursor):
 def require(cursor):
     if not ready(cursor):
         raise NomError('INVOICE_SCHEMA_REQUIRED', 'Aplicați manual sql/VC_FACTURI_NIR_20261016.sql și sincronizați schema în DC.', 503)
+    from . import supplier_identity
+    supplier_identity.require(cursor)
 
 
 def load(cursor, invoice_id, version=None, lock=False):
@@ -88,7 +91,7 @@ def read(cursor, invoice_id):
                    'WHERE f.FACTURA_ID=%s ORDER BY f.SUBUNIT_ID,f.GESTIUNE_ID,n.Data,n.Numar', (invoice_id,))
     def plain(value):
         return None if value is None else format(Decimal(value), 'f')
-    return {'id': row['ID'], 'version': row['VERSION'], 'partner': row['PARTENER_ID'], 'number': row['NUMAR'],
+    return {'id': row['ID'], 'version': row['VERSION'], 'fiscal_code': suppliers.code(row['CodPartener']), 'number': row['NUMAR'],
             'date': _iso(row['DATA']), 'currency': row['MONEDA'], 'total': plain(row['TOTAL']),
             'confirmed': bool(row['TOTAL_CONFIRMAT']), 'state': row['STARE'], 'migrated': bool(row['MIGRATA']), 'local': bool(row['LOCALA']),
             'received': plain(sum((r['amount'] or Decimal(0) for r in got.values()), Decimal(0))),
@@ -99,23 +102,23 @@ def read(cursor, invoice_id):
             'receipts': [{**r, 'day': _iso(r['day']), 'total': plain(r['total']), 'source_total': plain(r['source_total'])} for r in receipts]}
 
 
-def candidates(cursor, partner=None, number=None, day=None):
+def candidates(cursor, fiscal_code=None, number=None, day=None):
     clauses, params = ['f.REUNITA_IN IS NULL'], []
-    for value, clause in ((partner, 'f.PARTENER_ID=%s'), (number, 'f.NUMAR=%s'), (day, 'f.DATA=%s')):
+    for value, clause in ((suppliers.code(fiscal_code), 'f.CodPartener=%s'), (number, 'f.NUMAR=%s'), (day, 'f.DATA=%s')):
         if value not in (None, ''):
             clauses.append(clause)
             params.append(value)
     return _all(cursor, 'SELECT f.ID AS id, f.NUMAR AS number, f.DATA AS date, f.TOTAL AS total, '
                 'f.TOTAL_CONFIRMAT AS confirmed, f.STARE AS state, f.VERSION AS version, '
-                'p.DenumirePartener AS partner FROM VC_FACTURI f LEFT JOIN Parteneri p ON p.IdPartener=f.PARTENER_ID '
+                'p.DenumirePartener AS partner FROM VC_FACTURI f LEFT JOIN ' + suppliers.relation() + ' p ON p.CodFiscal=f.CodPartener '
                 'WHERE ' + ' AND '.join(clauses) + ' ORDER BY f.DATA DESC,f.ID DESC LIMIT 200', params)
 
 
 def clean_header(cursor, raw):
     errors = {}
-    partner = _int(raw.get('partner'))
-    if partner is None or not _one(cursor, 'SELECT 1 FROM Parteneri WHERE IdPartener=%s', (partner,)):
-        errors['partner'] = 'Alegeți furnizorul.'
+    partner = suppliers.code(raw.get('fiscal_code'))
+    if not suppliers.find(cursor, partner, active_only=True):
+        errors['fiscal_code'] = 'Alegeți furnizorul după codul fiscal.'
     number = _text(raw.get('number'), 'number', errors, True)
     day = protocol.to_date(raw.get('date'), 'Data facturii', errors=errors, key='date')
     currency = str(raw.get('currency') or 'RON').strip().upper()
@@ -140,11 +143,11 @@ def save(cursor, ctx, raw, request_id=None):
     partner, number, day, currency, total = clean_header(cursor, raw)
     if before:
         linked = _one(cursor, 'SELECT 1 FROM VC_NIR_FACTURI WHERE FACTURA_ID=%s LIMIT 1', (invoice_id,))
-        if linked and (partner != before['PARTENER_ID'] or number != before['NUMAR'] or day != before['DATA'] or currency != before['MONEDA']):
+        if linked and (partner != before['CodPartener'] or number != before['NUMAR'] or day != before['DATA'] or currency != before['MONEDA']):
             raise NomError('INVOICE_LINKED', 'Factura are recepții. Furnizorul, numărul, data și moneda nu se modifică printr-o singură recepție.', 409)
         cursor.execute('UPDATE VC_FACTURI SET TOTAL=%s,TOTAL_CONFIRMAT=1,LOCALA=0,VERSION=VERSION+1 WHERE ID=%s', (total, invoice_id))
     else:
-        cursor.execute('INSERT INTO VC_FACTURI (PARTENER_ID,NUMAR,DATA,MONEDA,TOTAL,TOTAL_CONFIRMAT,CREAT_DE) '
+        cursor.execute('INSERT INTO VC_FACTURI (CodPartener,NUMAR,DATA,MONEDA,TOTAL,TOTAL_CONFIRMAT,CREAT_DE) '
                        'VALUES (%s,%s,%s,%s,%s,1,%s)', (partner, number, day, currency, total, ctx['email']))
         invoice_id = cursor.lastrowid
     raw_lines = raw.get('lines')
@@ -220,11 +223,11 @@ def prepare_receipt(cursor, ctx, nir_id, header):
         invoice = load(cursor, wanted)
         if invoice['LOCALA'] and (not current or current['FACTURA_ID'] != wanted):
             cursor.execute('UPDATE VC_FACTURI SET LOCALA=0,VERSION=VERSION+1 WHERE ID=%s', (wanted,))
-        if (_int(header.get('IdPartener')), str(header.get('NrFact') or '').strip(), str(header.get('DataFc') or '')[:10]) != (
-                invoice['PARTENER_ID'], invoice['NUMAR'], _iso(invoice['DATA'])):
+        if (suppliers.code(header.get('CodFiscal')), str(header.get('NrFact') or '').strip(), str(header.get('DataFc') or '')[:10]) != (
+                invoice['CodPartener'], invoice['NUMAR'], _iso(invoice['DATA'])):
             if invoice['LOCALA'] and current and current['FACTURA_ID'] == wanted:
-                cursor.execute('UPDATE VC_FACTURI SET PARTENER_ID=%s,NUMAR=%s,DATA=%s,VERSION=VERSION+1 WHERE ID=%s',
-                               (_int(header.get('IdPartener')), str(header.get('NrFact') or '').strip(), header.get('DataFc'), wanted))
+                cursor.execute('UPDATE VC_FACTURI SET CodPartener=%s,NUMAR=%s,DATA=%s,VERSION=VERSION+1 WHERE ID=%s',
+                               (suppliers.code(header.get('CodFiscal')), str(header.get('NrFact') or '').strip(), header.get('DataFc'), wanted))
             else:
                 raise NomError('INVOICE_HEADER', 'Furnizorul, numărul și data trebuie să corespundă facturii comune.', 422)
     return wanted, current
@@ -275,8 +278,8 @@ def receipt_saved(cursor, ctx, nir_id, parsed, invoice_id, current, request_id=N
             raise NomError('INVOICE_LINE_SHARED', 'O linie a facturii este împărțită cu altă recepție. Repartizarea trebuie corectată împreună.', 409)
     if new_invoice:
         cols = parsed['cols']
-        cursor.execute('INSERT INTO VC_FACTURI (PARTENER_ID,NUMAR,DATA,TOTAL,TOTAL_CONFIRMAT,LOCALA,CREAT_DE) '
-                       'VALUES (%s,%s,%s,%s,%s,1,%s)', (cols['IdPartener'], cols['NrFact'], cols['DataFc'],
+        cursor.execute('INSERT INTO VC_FACTURI (CodPartener,NUMAR,DATA,TOTAL,TOTAL_CONFIRMAT,LOCALA,CREAT_DE) '
+                       'VALUES (%s,%s,%s,%s,%s,1,%s)', (cols['CodPartener'], cols['NrFact'], cols['DataFc'],
                                                      parsed['declared'], int(parsed['declared'] is not None), ctx['email']))
         invoice_id = cursor.lastrowid
     if current:
@@ -330,6 +333,8 @@ def receipt_saved(cursor, ctx, nir_id, parsed, invoice_id, current, request_id=N
 
 
 def enrich(cursor, ctx, doc):
+    from .efactura_receipts import annotate
+    annotate(cursor, ctx, [doc])
     if not ready(cursor):
         doc['invoice_schema'] = False
         return doc
@@ -367,8 +372,8 @@ def backfill(cursor, ctx, request_id=None, nir_id=None):
                 'AND f.EXERCITIU_ID=n.ExercitiuId AND f.NIR_ID=n.IdIntrare) ORDER BY n.IdIntrare FOR UPDATE',
                 (ctx['subunit'], ctx['gestiune'], nir_id, nir_id))
     for row in rows:
-        cursor.execute("INSERT INTO VC_FACTURI (PARTENER_ID,NUMAR,DATA,TOTAL_CONFIRMAT,MIGRATA,STARE,CREAT_DE) VALUES (%s,%s,%s,0,1,'MIGRATA',%s)",
-                       (row['IdPartener'], row['NrFact'] or '', row['DataFc'], ctx['email']))
+        cursor.execute("INSERT INTO VC_FACTURI (CodPartener,NUMAR,DATA,TOTAL_CONFIRMAT,MIGRATA,STARE,CREAT_DE) VALUES (%s,%s,%s,0,1,'MIGRATA',%s)",
+                       (row['CodPartener'], row['NrFact'] or '', row['DataFc'], ctx['email']))
         invoice_id = cursor.lastrowid
         origin = _one(cursor, "SELECT m.SourceId,m.SourceKey FROM VC_IdMap m JOIN VC_ImportSources s ON s.SourceId=m.SourceId "
                       "WHERE s.SubunitId=%s AND s.GestiuneId=%s AND m.TableName='NIR' AND m.Kind='ROW' AND m.TargetId=%s LIMIT 1",
@@ -405,7 +410,7 @@ def merge(cursor, ctx, raw, request_id=None):
     for identity, row in rows.items():
         if identity == target:
             continue
-        if (row['PARTENER_ID'], row['NUMAR'], row['DATA'], row['MONEDA']) != (dest['PARTENER_ID'], dest['NUMAR'], dest['DATA'], dest['MONEDA']):
+        if (row['CodPartener'], row['NUMAR'], row['DATA'], row['MONEDA']) != (dest['CodPartener'], dest['NUMAR'], dest['DATA'], dest['MONEDA']):
             raise NomError('INVOICE_CANDIDATE', 'Fragmentele trebuie să aibă același furnizor, număr, dată și monedă.', 422)
         if row['TOTAL_CONFIRMAT'] and not row['LOCALA']:
             raise NomError('INVOICE_CONFIRMED', 'O factură globală confirmată nu se reunește automat ca fragment.', 409)

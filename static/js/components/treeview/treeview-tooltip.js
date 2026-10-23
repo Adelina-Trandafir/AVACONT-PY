@@ -25,11 +25,11 @@ function innerRect(element) {
 
 function textClipped(element) {
   if (!element.textContent.trim() || !element.getClientRects().length) return false;
-  if (element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1) return true;
   const doc = element.ownerDocument, win = doc.defaultView;
-  const visible = innerRect(element);
+  const box = innerRect(element);
+  const visible = { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight };
   // A row can be wider than its visible panel even though the label itself has no ellipsis.
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+  for (let parent = element; parent; parent = parent.parentElement) {
     const style = win.getComputedStyle(parent);
     const clipX = CLIPPING.test(style.overflowX), clipY = CLIPPING.test(style.overflowY);
     if (!clipX && !clipY) continue;
@@ -37,16 +37,25 @@ function textClipped(element) {
     if (clipX) { visible.left = Math.max(visible.left, rect.left); visible.right = Math.min(visible.right, rect.right); }
     if (clipY) { visible.top = Math.max(visible.top, rect.top); visible.bottom = Math.min(visible.bottom, rect.bottom); }
   }
-  visible.left = Math.max(visible.left, 0);
-  visible.right = Math.min(visible.right, win.innerWidth);
-  visible.top = Math.max(visible.top, 0);
-  visible.bottom = Math.min(visible.bottom, win.innerHeight);
+  // Measure text, excluding template indentation and whitespace-only nodes.
+  // Font rectangles can extend past their line box vertically even when the
+  // label fits; scrollHeight and raw font height are not truncation signals.
+  const walker = doc.createTreeWalker(element, win.NodeFilter.SHOW_TEXT);
   const range = doc.createRange();
-  range.selectNodeContents(element);
-  if (!range.getClientRects().length) return false;
-  const text = range.getBoundingClientRect(), tolerance = 1;
-  return text.left < visible.left - tolerance || text.right > visible.right + tolerance
-    || text.top < visible.top - tolerance || text.bottom > visible.bottom + tolerance;
+  const tolerance = 1;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const start = node.data.search(/\S/);
+    if (start < 0) continue;
+    const end = node.data.trimEnd().length;
+    range.setStart(node, start); range.setEnd(node, end);
+    for (const text of range.getClientRects()) {
+      if (!text.width || !text.height) continue;
+      const top = Math.max(text.top, box.top), bottom = Math.min(text.bottom, box.bottom);
+      if (text.left < visible.left - tolerance || text.right > visible.right + tolerance
+        || top < visible.top - tolerance || bottom > visible.bottom + tolerance) return true;
+    }
+  }
+  return false;
 }
 
 export function treeNodeClipped(scope) {

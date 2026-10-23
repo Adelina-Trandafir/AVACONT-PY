@@ -1,6 +1,8 @@
 """Lazy supplier trees used only by Magazie / Intrări reports."""
 from . import stock
+from utils import vercon_suppliers as fiscal_suppliers
 from .nomenclatoare import NomError
+from .report_order import document_order
 
 
 def key(value):
@@ -21,7 +23,8 @@ def read(source, spec, node_id, *, recursive=False):
             raise NomError('REPORT_BRANCH', 'Ramură de intrări invalidă.', 422)
         if parts[0] == ('receipt-account' if nir else 'receipt-document'):
             raise NomError('REPORT_BRANCH', 'Ramura nu este disponibilă pentru acest raport.', 422)
-        if any(part != 'none' and (not part.isdecimal() or int(part) <= 0) for part in parts[1:]):
+        if (parts[1] != 'none' and (fiscal_suppliers.code(parts[1]) != parts[1] or not 0 < len(parts[1]) <= 50)
+                or any(part != 'none' and (not part.isdecimal() or int(part) <= 0) for part in parts[2:])):
             raise NomError('REPORT_BRANCH', 'Identificator de intrări invalid.', 422)
     rows = []
     for row in source.rows('receipts'):
@@ -39,7 +42,7 @@ def read(source, spec, node_id, *, recursive=False):
             prefix = f'receipt-document-product:{supplier}:{document}' if document is not None else f'receipt-product:{supplier}:{category}'
             grouped.setdefault(identity, {'id': f'{prefix}:{identity}',
                                          'label': (row['name'] or '') + (' / ' + row['um'] if row['um'] else '')})
-        return sorted(grouped.values(), key=lambda node: (node['label'].casefold(), node['id']))
+        return sorted(grouped.values(), key=lambda node: (fiscal_suppliers.name_key(node['label']), node['id']))
 
     def children(items, supplier, recursive):
         if nir:
@@ -51,6 +54,7 @@ def read(source, spec, node_id, *, recursive=False):
                 row = lines[0]
                 label = f"{row['family'].upper()} {row['number']} / {row['date']}"
                 node = branch(f'receipt-document:{supplier}:{document}', label)
+                node.update(document_order(row['date'], row['number'], document))
                 if recursive:
                     node.pop('lazy')
                     node['children'] = products(lines, supplier, document=document)
@@ -66,15 +70,15 @@ def read(source, spec, node_id, *, recursive=False):
                 node.pop('lazy')
                 node['children'] = products(lines, supplier, category=key(category))
             nodes.append(node)
-        return sorted(nodes, key=lambda node: (node['label'].casefold(), node['id']))
+        return sorted(nodes, key=lambda node: (fiscal_suppliers.name_key(node['label']), node['id']))
 
     # Supplier roots need no product metadata or loaded descendants.
     if node_id == 'root':
         suppliers = {}
         for row in rows:
             supplier = key(row.get('supplier'))
-            suppliers.setdefault(supplier, branch(f'{supplier_prefix}:{supplier}', row.get('party') or 'Fără furnizor'))
-        return {'nodes': sorted(suppliers.values(), key=lambda node: (node['label'].casefold(), node['id'])), 'documents': []}
+            suppliers.setdefault(supplier, branch(f'{supplier_prefix}:{supplier}', row.get('party') or supplier if row.get('supplier') else 'Fără cod fiscal'))
+        return {'nodes': sorted(suppliers.values(), key=lambda node: (fiscal_suppliers.name_key(node['label']), node['id'])), 'documents': []}
     if nir and parts[0] == supplier_prefix and not recursive:
         return {'nodes': children(rows, parts[1], False)}
     metadata = source.metadata()

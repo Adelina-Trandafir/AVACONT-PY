@@ -1,6 +1,7 @@
 """Lazy account/document/product and receiver/document trees for Ieșiri."""
 from . import stock
 from .nomenclatoare import NomError
+from .report_order import document_order
 
 
 def key(value):
@@ -66,6 +67,7 @@ def read(source, spec, node_id, *, recursive=False, mode='accounts'):
                 if recursive:
                     node.pop('lazy')
                     node['children'] = products(lines, scope, scope_id, document)
+            node.update(document_order(lines[0]['date'], lines[0]['number'], document))
             nodes.append(node)
         return {'nodes': nodes, 'documents': details}
 

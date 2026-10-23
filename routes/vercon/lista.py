@@ -15,7 +15,7 @@ values). Cancelling a list frees its bons.
 from utils.clock import bucharest_today, utc_now
 from decimal import Decimal
 
-from . import document_order, lista_bc, numeric, protocol
+from . import document_order, food_list_portions, lista_bc, numeric, protocol
 from .documents import _all, _dec, _exists, _fail, _int, _money, _one, _scope, _text, _iso
 from .nomenclatoare import NomError
 
@@ -34,8 +34,9 @@ def list_documents(cursor, ctx, family):
     rows = _all(cursor, 'SELECT l.IdLista, l.NumarLA, l.DATALA, l.ValoareBon, l.ValoareLista, l.DEP, l.Anulat, l.Version, '
                         '(SELECT COUNT(*) FROM VC_LegBCLA x WHERE x.SubunitId=l.SubunitId AND x.GestiuneId=l.GestiuneId AND x.ExercitiuId=l.ExercitiuId AND x.IdLista=l.IdLista) AS Bonuri '
                         'FROM VC_LABC l WHERE l.SubunitId=%s AND l.GestiuneId=%s AND l.ExercitiuId=%s ORDER BY l.DATALA DESC, l.IdLista DESC', (s, g, e))
-    return [{'id': r['IdLista'], 'number': r['NumarLA'], 'date': _iso(r['DATALA']), 'total': _money(r['ValoareLista'], scale), 'bons_total': _money(r['ValoareBon'], scale),
-             'diff': _money(r['DEP'], scale), 'bons': r['Bonuri'], 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows]
+    return food_list_portions.annotate(cursor, ctx, [
+        {'id': r['IdLista'], 'number': r['NumarLA'], 'date': _iso(r['DATALA']), 'total': _money(r['ValoareLista'], scale), 'bons_total': _money(r['ValoareBon'], scale),
+         'diff': _money(r['DEP'], scale), 'bons': r['Bonuri'], 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows])
 
 
 def get_document(cursor, repo, ctx, family, doc_id):
@@ -55,11 +56,12 @@ def get_document(cursor, repo, ctx, family, doc_id):
     bons = _all(cursor, 'SELECT h.IdBonConsum, h.NumarBC, h.DataBC, h.ValoareBC, h.Anulat, c.Denumire FROM VC_LegBCLA l JOIN VC_Iesiri_H h ON h.SubunitId=l.SubunitId AND h.GestiuneId=l.GestiuneId '
                         'AND h.ExercitiuId=l.ExercitiuId AND h.IdBonConsum=l.IdBonConsum LEFT JOIN VC_Clienti c ON c.SubunitId=h.SubunitId AND c.GestiuneId=h.GestiuneId AND c.IDC=h.IDC '
                         'WHERE l.SubunitId=%s AND l.GestiuneId=%s AND l.ExercitiuId=%s AND l.IdLista=%s ORDER BY h.DataBC, h.IdBonConsum', (s, g, e, doc_id))
-    return {'family': 'lista', 'id': doc_id, 'version': head['Version'], 'annulled': bool(head['Anulat']), 'reason': head['MotivAnulare'], 'annulled_by': head['AnulatDe'],
+    doc = {'family': 'lista', 'id': doc_id, 'version': head['Version'], 'annulled': bool(head['Anulat']), 'reason': head['MotivAnulare'], 'annulled_by': head['AnulatDe'],
             'number': head['NumarLA'], 'header': {'Data': _iso(head['DATALA']), 'Comentarii': summary.get('Comentarii'), 'Valoare': _money(head['ValoareLista'], scale),
                                                     'bons_total': _money(head['ValoareBon'], scale), 'diff': _money(head['DEP'], scale)},
             'meals': meals, 'bons': [{'id': b['IdBonConsum'], 'number': b['NumarBC'], 'date': _iso(b['DataBC']), 'receiver': b['Denumire'] or '', 'total': _money(b['ValoareBC'], scale),
                                       'annulled': bool(b['Anulat'])} for b in bons]}
+    return food_list_portions.annotate(cursor, ctx, [doc])[0]
 
 
 def lookups(cursor, ctx, family):
@@ -212,6 +214,8 @@ def create(cursor, repo, ctx, exercise, body, request_key, request_id):
 
 
 def edit(cursor, repo, ctx, exercise, doc_id, body, request_id):
+    from . import recalculation_audit
+
     rows = repo.select('VC_LABC', {'IdLista': doc_id}, for_update=True)
     if not rows:
         raise NomError('NOT_FOUND', 'Lista nu mai există.', 404)
@@ -223,6 +227,9 @@ def edit(cursor, repo, ctx, exercise, doc_id, body, request_id):
         raise NomError('CONFLICT', 'Lista a fost modificată de altcineva. Reîncărcați lista.', 409, {'version': before['Version']})
     document_order.require_latest(cursor, ctx, 'lista', doc_id)
     parsed = _clean(cursor, repo, ctx, exercise, body)
+    summary = (repo.select('VC_ListaAlimente', {'IDLISTA': doc_id}) or [{}])[0]
+    if any(parsed['meals'][key]['P'] != (summary.get(meal[1]) or 0) for key, meal in MEALS.items()):
+        food_list_portions.require_month(cursor, ctx, before['DATALA'], parsed['date'])
     document_order.require_position(cursor, ctx, 'lista', doc_id, parsed['date'])
     errors = {}
     number = before['NumarLA']
@@ -230,6 +237,7 @@ def edit(cursor, repo, ctx, exercise, doc_id, body, request_id):
     if manual not in (None, '') and _int(manual) != number:
         number = _number(cursor, ctx, manual, errors, exclude=doc_id)
     _fail(errors)
+    prior_balances = recalculation_audit.food_snapshot(cursor, ctx)
     for table in [m[0] for m in MEALS.values()] + ['VC_ListaAlimente']:
         repo.delete(table, {'IDLISTA' if table == 'VC_ListaAlimente' else 'IdLista': doc_id})
     total = _write_meals(repo, ctx, doc_id, parsed, utc_now())
@@ -240,6 +248,9 @@ def edit(cursor, repo, ctx, exercise, doc_id, body, request_id):
         raise NomError('CONFLICT', 'Lista a fost modificată de altcineva. Reîncărcați lista.', 409)
     protocol.audit(cursor, ctx, 'lista.update', 'VC_LABC', doc_id, {'number': before['NumarLA'], 'total': before['ValoareLista']},
                    {'number': number, 'total': total, 'bons_added': result['added'], 'bons_removed': result['removed']}, None, request_id)
+    origin = recalculation_audit.cause('lista', doc_id, number, parsed['date'], before['Version'] + 1)
+    recalculation_audit.record(cursor, ctx, prior_balances, recalculation_audit.food_snapshot(cursor, ctx),
+                               origin, 'lista.balance_recalculated', 'VC_LABC', request_id)
     return {'id': doc_id, 'number': number}
 
 

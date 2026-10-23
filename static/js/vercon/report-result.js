@@ -8,7 +8,19 @@ export function paintReportLetterhead(model, target) {
 }
 
 export function paintReportBlock(block, target, owner) {
-  if (block.t === 'positioned') {
+  if (block.t === 'form_grid') {
+    const table = el('table', { className: 'vc-voucher-header' },
+      el('colgroup', {}, ...block.widths.map(() => el('col'))));
+    const body = el('tbody'); table.append(body);
+    block.heights.forEach((_, row) => {
+      body.append(el('tr', {}, ...block.cells.filter(cell => cell.row === row)
+        .sort((a, b) => a.column - b.column).map(cell => el(cell.bold ? 'th' : 'td', {
+          textContent: cell.text, colSpan: cell.colspan || 1, rowSpan: cell.rowspan || 1,
+          className: cell.column === 7 ? 'vc-voucher-header__title' : '',
+        }))));
+    });
+    target.append(table);
+  } else if (block.t === 'positioned') {
     block.elements.forEach(item => target.append(el('p', { textContent: item.text })));
   } else if (block.t === 'columns') {
     const row = el('div', { className: `vc-reports__columns vc-reports__columns--${block.children.length}` });
@@ -21,9 +33,13 @@ export function paintReportBlock(block, target, owner) {
   } else if (block.t === 'table') {
     const panel = el('div', { className: 'vc-reports__table' + (block.show_column_header === false ? ' vc-reports__table--no-header' : '') }); target.append(panel);
     const rows = block.rows.map((row, index) => ({ id: index, ...Object.fromEntries(row.cells.map((value, i) => [`c${i}`, typeof value === 'object' && value ? value.t : value])) }));
-    grid(panel, { rowKey: 'id', rows, footer: false, proportionalWidths: true,
+    grid(panel, { rowKey: 'id', rows, footer: false, proportionalWidths: true, defaultSort: false,
       ...(block.show_column_header === false ? { headerHeight: 0 } : {}),
-      columns: block.cols.map((c, i) => column({ key: `c${i}`, label: c.label }, { width: c.w, editable: false, align: c.align === 'r' ? 'right' : 'left' })) }, owner);
+      columns: block.cols.map((c, i) => column({ key: `c${i}`, label: c.label }, {
+        width: c.w, editable: false, align: c.align === 'r' ? 'right' : 'left',
+        sortType: ['decimal', 'int'].includes(c.type) ? 'number' : c.type === 'date' ? 'datetime' : 'text',
+        sortValue: (value, row) => block.raw?.[row.id]?.[c.key] ?? value,
+      })) }, owner);
   } else if (block.t === 'box') {
     const list = el('dl', { className: 'vc-reports__metadata' });
     block.rows.forEach(([label, value]) => list.append(el('dt', { textContent: label }), el('dd', { textContent: String(value ?? '') }))); target.append(list);
@@ -40,6 +56,17 @@ export function paintReportBlock(block, target, owner) {
 }
 
 function buildReportNodes(reports) {
+  if (reports.some(report => report.tree_group)) {
+    const warehouse = reports.filter(report => !report.tree_group);
+    const custody = reports.filter(report => report.tree_group);
+    const children = [...new Set(custody.map(report => report.tree_group))].map(group => ({
+      id: 'reports:' + group, label: group,
+      children: custody.filter(report => report.tree_group === group)
+        .map(report => ({ id: 'doc:' + report.id, label: report.label })),
+    }));
+    return [...(warehouse.length ? buildReportNodes(warehouse) : []),
+      { id: 'oi-reports', label: 'Obiecte de inventar', children }];
+  }
   reports = reports.filter(report => !['OI_Predare', 'OI_Transfer', 'OI_Casare', 'FM1-u', 'FM2', 'Fisa_Magazie_BF',
     'NIR_SFP', 'NIR_Storno', 'Centralizator_Conturi_Furnizori', 'BUConsum', 'BUConsum_F', 'BUConsum_F1', 'BonRetur',
     'MF_Balanta_Subinv'].includes(report.id));

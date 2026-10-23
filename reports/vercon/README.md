@@ -52,7 +52,19 @@ Nu sunt scripturi de instalare și nu se execută manual.
 Contul din nomenclatorul produsului reprezintă proveniența din magazie.
 Contul în folosință provine din fiecare linie BP/BT/BS; nu se deduce din
 contul produsului și nu există un singur cont implicit pentru gestiune.
-Rapoartele în folosință se filtrează separat după conturi și deținători.
+În pagina Rapoarte OI, MAGAZIE rămâne rădăcină separată, cu toate rapoartele
+și grupările existente, ca în celelalte gestiuni. Numai ramura OBIECTE DE
+INVENTAR cuprinde cele 11 rapoarte din referința Access, în ordinea dată.
+Cele două niveluri de grupare sunt Root (OBIECTE DE INVENTAR) și Niv1
+(BONURI, PRODUSE, PRIMITORI), urmate de frunzele rapoartelor.
+Selecția datelor reutilizează mecanismul MF: primitor → bon → produs pentru
+bonuri, cont → produs pentru PRODUSE și primitor → cont → produs pentru
+PRIMITORI. Nu apar ramurile independente „Conturi în folosință” și
+„Deținători”. Identitatea bifelor păstrează legătura cont–primitor–produs,
+respectiv primitor–bon–produs; nu combină independent filtrele bifate.
+Cheia internă `mf_selection` și identificatorii `mf-item`/`mf-branch` sunt
+protocolul comun reutilizat de OI și MF; sursele și calculele OI se păstrează.
+Aliasurile folosite direct de documente rămân disponibile prin API.
 Listele totale însumează deținătorii numai în aceeași pereche cont–variantă.
 Transferurile apar cu minus la predător și plus la primitor, pe același cont.
 
@@ -65,6 +77,93 @@ Ecranul, PDF-ul și Excel-ul folosesc același snapshot. Lățimile Excel
 continuă să fie citite de modulul comun din configurarea existentă.
 Machetele implicite OI sunt funcționale în surse, dar fidelitatea lor
 vizuală și integrarea pe date reale nu sunt încă validate.
+
+Corecții 2026-10-23: Balanța OI folosește aceeași machetă ca balanța de
+magazie (`Balanta_produse`), inclusiv configurarea existentă, cu titlul OI.
+Are un rând pe cont–variantă, fără grupare pe deținător. Soldul inițial
+include predările minus casările anterioare perioadei; Intrări reprezintă
+numai predările din perioada aleasă, Ieșiri numai casările din perioadă,
+iar soldul final este SI + Intrări − Ieșiri. Transferurile nu participă la
+calcul și nu au coloane în această balanță. Fișele pe primitor păstrează
+istoricul transferurilor necesar stabilirii deținerii.
+
+În PRIMITORI, primul nivel din Selectare date este primitorul, apoi contul
+și produsele sale. Rapoartele MF își păstrează gruparea existentă.
+
+Generarea rapoartelor din browser trimite acum filtrele prin POST cu corp
+form-url-encoded; URL-ul păstrează numai subunitatea, gestiunea și anul.
+Același contract este folosit la schimbarea perioadei în vizualizator.
+Exporturile snapshotului nu retrimit filtrele în URL. GET rămâne disponibil
+pentru clienții existenți. Schimbarea elimină cererile de generare cu URL-uri
+foarte lungi; eroarea HTTP 400 raportată nu a fost reprodusă și cauza exactă
+de pe server nu este confirmată fără jurnalul cererii.
+
+## Corecții BC în luna activă și istoricul recalculărilor (2026-10-23)
+
+BC-urile pot fi modificate în orice ordine în luna activă, cu exercițiul
+deschis, dreptul Consum, blocarea gestiunii și versiunea curentă. În Alimente
+se folosește ultima lună cu liste active, cu fallback la ultima lună cu BC
+active dacă nu există liste. În Materiale se folosește ultima lună cu BC
+active. Se caută pe toate exercițiile; documentele de stoc dintr-un exercițiu
+ulterior blochează modificarea anului anterior. Bonurile cu retur activ ori
+cu listă asociată din afara lunii active sunt protejate. Anularea păstrează
+regula ultimului BC și interdicția anulării BC asociat unei liste.
+
+La salvare se verifică toate datele din istoricul variantelor vechi și noi
+prin `protocol.check_timeline`, după înlocuirea provizorie a bonului în
+tranzacție. Intrările preced ieșirile aceleiași zile. Orice sold negativ
+respinge întreaga tranzacție, inclusiv recalcularea listei și auditul.
+Mișcările fără dată/cantitate produc eroare explicită, nu cantitate zero.
+
+Lista asociată se recalculează în aceeași tranzacție, chiar dacă nu este
+ultima din luna activă. Bonurile ulterioare își păstrează liniile și prețurile;
+recalcularea stocului lor la sfârșit de zi este consemnată în istoricul BC
+afectat cu înainte/după și cauza (BC sursă, număr, dată, ID și versiune).
+Soldurile DEP/EC și cumulative ale listelor afectate primesc înregistrări
+similare, inclusiv după modificarea porțiilor unei liste. Nu se rescriu
+artificial antetele sau meniurile listelor ulterioare.
+
+`recalculation_audit.py` citește soldurile înainte/după în tranzacția
+blocată, folosind aceleași surse și calcule ca rapoartele. Istoricul folosește
+VC_Audit existent; nu necesită DDL. Interfața comună de istoric arată motivul
+și valorile înainte/după în înregistrări expandabile, cu acces și din pagina
+listelor de alimente. Helpul descrie ambele reguli de modificare în ultima
+lună activă și protecția stocului.
+
+Schimbări scrise local, fără teste, verificări de execuție sau probe pe server.
+
+## Antetul bonurilor P/T/C și Consum (2026-10-23)
+
+Bonurile de predare, transfer și casare OI/MF și bonurile de consum folosesc
+același antet tabelar după referința furnizată. Retururile de consum folosesc
+aceeași structură, cu titlul propriu. Antetul cuprinde denumirea gestiunii
+în celula superioară stângă, numărul documentului, Data cu Ziua/Luna/Anul,
+tipul gestiunii, Predător, Primitor și Nr. comandă. Titlul bonului ocupă
+celula din dreapta, unită pe înălțimea celor patru rânduri.
+
+Datele provin din bonul și gestiunea curente. La predare/consum, predătorul
+este Magazie; la transfer/casare se folosește predătorul documentului. La
+casare, Primitor rămâne gol. La retur, primitorul este Magazie. Nr. comandă
+se afișează numai dacă sursa îl furnizează; nu se înlocuiește cu numărul
+bonului. Explicațiile se păstrează sub antet. Datele din imaginea de referință
+nu sunt introduse ca valori fixe.
+
+Structura se aplică la generare și machetelor personalizate existente,
+numai în memorie, păstrând configurația salvată. Fiecare bon primește propriul
+antet, iar titlul și perioada nu se mai repetă separat deasupra lui.
+Snapshot-urile deja generate rămân cu structura lor; generați din nou bonul
+după publicare.
+
+`routes/vercon/report_voucher.py` construiește antetul comun; banda
+`form_grid` din `reporting/form_grid.py` gestionează celulele unite în PDF
+și Excel. Excel păstrează contractul `reporting/excel_widths.py`, cu chei
+stabile `ANTET_BON_*`; înălțimile antetului sunt calculate după aplicarea
+lățimilor finale, inclusiv cele configurate. Previzualizările locale ale
+ciornelor și listarea fără dreptul de rapoarte folosesc aceeași structură
+prin `static/js/vercon/voucher-header.js`. Bonurile MF salvate folosesc
+rapoartele oficiale MF când utilizatorul are dreptul necesar.
+
+Implementare locală, fără teste, randări sau verificări de execuție.
 
 ## Macheta NIR
 
@@ -131,3 +230,18 @@ Snapshot-urile generate anterior schimbării cer regenerare la export.
 Publicați împreună modulele Python/JS/CSS modificate și reporniți serviciul.
 Schimbarea este scrisă local, fără teste, generări PDF/Excel sau verificări
 vizuale/automate, conform instrucțiunilor proiectului.
+
+La citirea rapoartelor de stoc se păstrează prețurile istorice cu semn,
+inclusiv cele negative, conform politicii importului. Prețul lipsă nu
+este convertit în zero: eroarea identifică produsul, varianta, codul și
+contul. Pentru corecție este necesar prețul real din datele sursă.
+Pozițiile deja excluse din raportul final/ balanță prin opțiunile de
+afișare sunt eliminate înaintea validării prețului de evaluare.
+Selecțiile se ordonează alfabetic pentru texte, cronologic pentru date
+și numeric pentru prețuri; etichetele compuse au chei separate după tip.
+
+Fișa de magazie acceptă mai multe produse și variante de preț în aceeași
+generare (Fisa_Magazie, FM1-u, FM2, Fisa_Magazie_BF). Fiecare variantă
+are o fișă proprie și începe pe pagină nouă în PDF și la imprimarea Excelului.
+Produsele sunt alfabetice, prețurile numerice, iar soldurile și totalurile
+rămân independente pe variante, inclusiv când două variante au același preț.

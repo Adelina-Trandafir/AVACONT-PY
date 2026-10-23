@@ -78,7 +78,7 @@ from flask import request, g, current_app
 from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 
-from . import forexe_bp
+from . import forexe_bp, partner_links
 
 logger = logging.getLogger(__name__)
 
@@ -149,10 +149,15 @@ _SQL = (
     "      AND aggPlati.CodIndicator  = I.CodIndicator "
     "LEFT JOIN (SELECT SA.CodAngajament, SA.CodIndicator, "
     "                  ROUND(SUM(SA.ValCur), 2) AS TotalRevizii, "
-    "                  MIN((SELECT P.DenumirePartener FROM Parteneri P "
-    "                        WHERE P.CodPartener = SA.CodPartener "
-    "                          AND P.IdUnitate   = SA.IdUnitate "
-    "                        LIMIT 1)) AS Partener "
+    # Slice 0122-03: the partner of a row is its CodFiscal (CodPartener holds it); the unit code stays as a fallback for
+    # rows the one-time query 0122_01 has not reached.
+    "                  MIN(COALESCE((SELECT P.DenumirePartener FROM Parteneri P "
+    "                        WHERE " + partner_links.fiscal_sql("P.CodFiscal") + " = SA.CodPartener "
+    "                        ORDER BY P.IdPartener LIMIT 1), "
+    "                       (SELECT P.DenumirePartener FROM Parteneri P "
+    "                         WHERE P.CodPartener = SA.CodPartener "
+    "                           AND P.IdUnitate   = SA.IdUnitate "
+    "                         LIMIT 1))) AS Partener "
     "           FROM FX_DDF_REV_SA SA "
     "           WHERE SA.CodAngajament = %s "
     "           GROUP BY SA.CodAngajament, SA.CodIndicator) aggRev "

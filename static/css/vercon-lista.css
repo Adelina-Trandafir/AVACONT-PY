@@ -40,3 +40,22 @@
   --action-add-button-font-size: var(--fs-ms);
   --action-add-button-icon-size: var(--fs-lg);
 }
+.vc-doc--lista .vc-lista__messages { min-width: 0; margin-inline-end: auto; overflow-wrap: anywhere; }
+.vc-doc--lista .vc-lista__messages .vc-save-status { display: block; margin: 0; }
+.vc-doc--lista .vc-lista__bar--editing {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  grid-template-areas: "cancel messages save";
+}
+.vc-doc--lista .vc-lista__bar--editing .vc-lista__messages { grid-area: messages; margin: 0; text-align: center; }
+.vc-doc--lista .vc-lista__cancel { grid-area: cancel; justify-self: start; }
+.vc-doc--lista .vc-lista__save { grid-area: save; justify-self: end; }
+@media (max-width: 480px) {
+  .vc-doc--lista .vc-lista__bar--editing {
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    grid-template-areas: "cancel save";
+  }
+  .vc-doc--lista .vc-lista__bar--editing:has(.vc-lista__messages) {
+    grid-template-areas: "cancel save" "messages messages";
+  }
+}

@@ -1,8 +1,9 @@
-"""Lazy MF trees, using the same scoped rows and identities as report generation."""
+"""Shared lazy OI/MF trees, with the same identities as report generation."""
 from urllib.parse import quote
 import re
 from . import report_mf, report_model, report_oi
 from .nomenclatoare import NomError
+from .report_order import document_order
 
 
 def read(source, spec, node_id, *, recursive=False):
@@ -10,11 +11,13 @@ def read(source, spec, node_id, *, recursive=False):
     dimensions = {'bons': ('receiver', 'document'), 'balance': ('category',),
                   'inventory': ('category', 'receiver'),
                   'depreciation': ('receiver' if source.params.get('group_by_receivers') else 'category', 'classification')}[mode]
+    if spec.get('tree_group') == 'PRIMITORI':
+        dimensions = ('receiver', 'category')
     path = []
     if node_id != 'root':
         parts = node_id.split(':')
         if len(parts) < 3 or parts[:2] != ['mf-branch', mode] or len(parts) - 2 > len(dimensions):
-            raise NomError('REPORT_BRANCH', 'Ramură MF invalidă.', 422)
+            raise NomError('REPORT_BRANCH', 'Ramură OI / MF invalidă.', 422)
         path = parts[2:]
 
     def token(value):
@@ -64,6 +67,8 @@ def read(source, spec, node_id, *, recursive=False):
                 label = (row.get('account') or 'Fără cont') if field == 'category' else row.get('party') or 'Fără primitor'
             current = [*parent, value]
             node = {'id': 'mf-branch:' + mode + ':' + ':'.join(current), 'label': label, 'lazy': True}
+            if field == 'document':
+                node.update(document_order(row['date'], row['number'], row['document']))
             if expand:
                 node.pop('lazy')
                 node['children'] = children(group, current, True)

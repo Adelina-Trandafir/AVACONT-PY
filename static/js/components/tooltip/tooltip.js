@@ -94,6 +94,9 @@ export function showTooltip(message, options = {}) {
     // Dynamic geometry/animation is controlled through this component's API.
     card.style.setProperty('--kbot-tooltip-width', `${config.width}px`);
     card.style.setProperty('--kbot-tooltip-animation', `${config.animation}ms`);
+    card.style.setProperty('--kbot-tooltip-font-size', `${config.fontSizePt}pt`);
+    if (config.fontFamily) card.style.setProperty('--kbot-tooltip-font-family', `"${config.fontFamily}", var(--font-ui, system-ui, sans-serif)`);
+    if (config.textColor) card.style.setProperty('--kbot-tooltip-text-color', config.textColor);
     const announcement = doc.createElement('div');
     announcement.setAttribute('role', anchor ? 'tooltip' : level === 'error' ? 'alert' : 'status');
     if (options.descriptionId) announcement.id = options.descriptionId;

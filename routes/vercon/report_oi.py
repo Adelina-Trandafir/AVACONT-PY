@@ -1,6 +1,6 @@
 """OI reports: use accounts belong to movements, warehouse accounts to products."""
 from decimal import Decimal
-from . import stock
+from . import stock, stock_valuation
 from .report_data import exact, selected, accepted, aggregate
 from .nomenclatoare import NomError
 
@@ -28,25 +28,27 @@ def documents(source, spec):
 
 def balances(source, spec):
     metadata, params, scale = source.metadata(), source.params, source.ctx['scale']
+    product_balance = spec['id'] == 'OI_Balanta'
     accounts = {row['category']: row['account'] for row in source.rows('oi_accounts')}
     holders = {row['receiver']: row['party'] for row in source.rows('oi_holders')}
     movements = [row for row in source.rows('custody_ledger')
-                 if selected(row['p'], params, 'variant') and selected(row['category'], params, 'category')
+                 if (not product_balance or row['kind'] in ('bp', 'bs'))
+                 and selected(row['p'], params, 'variant') and selected(row['category'], params, 'category')
                  and selected(row['holder'], params, 'receiver')]
     for row in movements:
         if row['p'] not in metadata or row['q'] is None:
             raise NomError('REPORT_SOURCE', 'O mișcare OI are produsul sau cantitatea lipsă.', 409)
-    grouped, statements = stock.balance(movements, params['start'], params['end'], ('holder', 'category', 'p'))
+    dimensions = ('category', 'p') if product_balance else ('holder', 'category', 'p')
+    grouped, statements = stock.balance(movements, params['start'], params['end'], dimensions)
 
     def identity(key):
-        holder, category, variant = key
+        holder, category, variant = (None, *key) if product_balance else key
         info = metadata[variant]
-        if info['price'] is None or info['price'] < 0:
-            raise NomError('STOCK_PRICE_INVALID', 'Prețul produsului nu permite evaluarea deținerii.', 409)
+        price = stock_valuation.price(info)
         return {**info, 'warehouse_category': info['category'], 'warehouse_account': info['account'],
                 'category': category, 'account': accounts.get(category) or 'Fără cont',
-                'receiver': holder, 'party': holders.get(holder) or str(holder), 'inventory': info['code'] or '',
-                'price': exact(info['price'], scale)}
+                'receiver': holder, 'party': '' if product_balance else holders.get(holder) or str(holder), 'inventory': info['code'] or '',
+                'price': exact(price, scale)}
 
     final = spec['kind'] in ('final', 'final_total', 'inventory', 'inventory_total')
     rows = []
@@ -54,8 +56,9 @@ def balances(source, spec):
         if final and quantities['closing'] == 0:
             continue
         info = identity(key)
-        amounts = {**quantities, 'incoming': sum(quantities[b] for b in stock.POSITIVE),
-                   'outgoing': sum(quantities[b] for b in stock.NEGATIVE)}
+        amounts = {**quantities,
+                   'incoming': quantities['entries'] if product_balance else sum(quantities[b] for b in stock.POSITIVE),
+                   'outgoing': quantities['scrapping'] if product_balance else sum(quantities[b] for b in stock.NEGATIVE)}
         rows.append({**info, **{k: exact(v, scale) for k, v in amounts.items()},
                      **{k + '_value': stock.value_text(v, metadata[key[-1]]['price'], scale) for k, v in amounts.items()}})
     if spec['kind'] in ('final_total', 'inventory_total'):

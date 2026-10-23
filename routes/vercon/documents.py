@@ -11,14 +11,15 @@ are committed together or not at all. Rules shared by the four families:
   * a saved document is edited only while its period is open, with the revision the page saw, and is never deleted: it is
     cancelled with a reason and stays visible as cancelled;
   * a document another one depends on (a receipt with a storno, a bon with a return, an asset already in
-    the OI/MF register) is not edited or cancelled until that dependency is cancelled first. Editing the latest BC
-    linked to the latest food list recalculates that list atomically; cancellation still requires unlinking it.
+    the OI/MF register) is not edited or cancelled until that dependency is cancelled first. Editing a BC in the active
+    month validates the full stock timeline and recalculates its food list atomically; cancellation still requires unlinking it.
 Numbers: automatic, unique per gestiune + kind + exercise; a manual number is accepted only when free.
 """
 from utils.clock import utc_now
+from utils import vercon_suppliers as suppliers
 from decimal import Decimal, InvalidOperation
 
-from . import document_order, numeric, protocol, receipt_choices
+from . import consumption_period, document_order, numeric, protocol, receipt_choices
 from .nomenclatoare import NomError
 
 FAMILIES = ('nir', 'storno', 'bc', 'br')
@@ -140,12 +141,12 @@ def list_documents(cursor, ctx, family):
     s, g, e = _scope(ctx)
     scale = ctx['scale']
     if family in ('nir', 'storno'):
-        rows = _all(cursor, 'SELECT n.IdIntrare, n.Numar, COALESCE(n.NumarSub,0) AS sub_number, n.Data, n.DataFc, n.NrFact, n.Valoare, n.IdPartener, n.IdStorno, n.TipDoc, n.Anulat, n.Version, '
-                            'COALESCE(p.DenumirePartener, n.FurnizorV) AS Partener FROM VC_NIR n LEFT JOIN Parteneri p ON p.IdPartener=n.IdPartener '
+        rows = _all(cursor, 'SELECT n.IdIntrare, n.Numar, COALESCE(n.NumarSub,0) AS sub_number, n.Data, n.DataFc, n.NrFact, n.Valoare, n.CodPartener, n.IdStorno, n.TipDoc, n.Anulat, n.Version, '
+                            'COALESCE(p.DenumirePartener, n.FurnizorV) AS Partener FROM VC_NIR n LEFT JOIN ' + suppliers.relation() + ' p ON p.CodFiscal=n.CodPartener '
                             'WHERE n.SubunitId=%s AND n.GestiuneId=%s AND n.ExercitiuId=%s AND COALESCE(n.Storno,0)=%s ORDER BY n.Data DESC, n.Numar DESC',
                     (s, g, e, 1 if family == 'storno' else 0))
         return [{'id': r['IdIntrare'], 'number': abs(r['Numar'] or 0), 'sub_number': r['sub_number'], 'date': _iso(r['Data']), 'invoice_date': _iso(r['DataFc']), 'invoice': r['NrFact'],
-                 'total': _money(r['Valoare'], scale), 'party_id': r['IdPartener'], 'party': r['Partener'] or '', 'doc_type': r['TipDoc'],
+                 'total': _money(r['Valoare'], scale), 'party_cf': r['CodPartener'], 'party': r['Partener'] or '', 'doc_type': r['TipDoc'],
                  'source': r['IdStorno'], 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows]
     rows = _all(cursor, 'SELECT h.IdBonConsum, h.NumarBC, h.DataBC, h.ValoareBC, h.IDC, h.IdMasina, h.IdRetur, h.Anulat, h.Version, c.Denumire AS Primitor, '
                         '(SELECT COUNT(*) FROM VC_LegBCLA l WHERE l.SubunitId=h.SubunitId AND l.GestiuneId=h.GestiuneId AND l.ExercitiuId=h.ExercitiuId AND l.IdBonConsum=h.IdBonConsum) AS Legaturi '
@@ -167,7 +168,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
         if not rows or bool(rows[0].get('Storno') or 0) != (family == 'storno'):
             raise NomError('NOT_FOUND', 'Documentul nu mai există.', 404)
         h = rows[0]
-        partner = _one(cursor, 'SELECT DenumirePartener, CodFiscal FROM Parteneri WHERE IdPartener=%s', (h['IdPartener'],)) if h['IdPartener'] else None
+        partner = suppliers.find(cursor, h['CodPartener'])
         if family == 'nir':
             lines = _all(cursor, 'SELECT i.ID, i.IdProdus, pp.ID AS Produs, pp.COD, pr.DenumireP, pr.UM, pr.IdMasina AS Category, i.Cant, i.Pret, i.IDTVA, i.PUTVA, i.Valoare, i.TVA, i.ValoareCUTVA, '
                                  'm.DataIntrare, m.DNF, m.DF, m.ValoareLuna FROM VC_Intrari i ' + _name_join('i') +
@@ -201,7 +202,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
                     source['Data'].strftime('%d.%m.%Y') if source['Data'] else '')
         return {'family': family, 'id': doc_id, 'version': h['Version'], 'annulled': bool(h['Anulat']), 'reason': h['MotivAnulare'],
                 'annulled_by': h['AnulatDe'], 'number': abs(h['Numar'] or 0), 'sub_number': h.get('NumarSub', 0), 'doc_type': h['TipDoc'],
-                'header': {'IdPartener': h['IdPartener'], 'party': partner['DenumirePartener'] if partner else h['FurnizorV'], 'NrFact': h['NrFact'],
+                'header': {'CodFiscal': suppliers.code(h['CodPartener']), 'party': partner['DenumirePartener'] if partner else h['FurnizorV'], 'NrFact': h['NrFact'],
                            'DataFc': _iso(h['DataFc']), 'Data': _iso(h['Data']), 'Valoare': _money(h['Valoare'], scale), 'IdMasina': h['IdMasina'],
                            'IdComisie': h['IdComisie'], 'source': h['IdStorno'], 'source_label': source_label},
                 'lines': out_lines}
@@ -354,6 +355,9 @@ def _load_for_write(repo, ctx, family, doc_id, base_version):
 
 
 def _guard_dependents(cursor, ctx, family, doc_id, action):
+    if family == 'nir' and action == 'edit':
+        from .efactura_receipts import require_editable
+        require_editable(cursor, ctx, doc_id)
     s, g, e = _scope(ctx)
     what = 'modificat' if action == 'edit' else 'anulat'
     if family == 'nir':
@@ -367,7 +371,10 @@ def _guard_dependents(cursor, ctx, family, doc_id, action):
                         'OR EXISTS (SELECT 1 FROM VC_OI_Casare x WHERE x.SubunitId=p.SubunitId AND x.GestiuneId=p.GestiuneId AND x.IdProdus=p.IdProdus AND x.Anulat=0)) LIMIT 1', (s, g, e, doc_id)):
             raise NomError('DOC_LINKED', 'Un produs al recepției apare deja în registrul OI/MF: documentul nu mai poate fi %s.' % what, 409)
     if family == 'bc':
-        document_order.require_latest(cursor, ctx, 'bc', doc_id)
+        if action == 'edit':
+            consumption_period.require_edit(cursor, ctx, doc_id)
+        else:
+            document_order.require_latest(cursor, ctx, 'bc', doc_id)
         if _one(cursor, 'SELECT 1 FROM VC_Iesiri_H WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdRetur=%s AND COALESCE(Retur,0)=1 AND Anulat=0 LIMIT 1', (s, g, e, doc_id)):
             raise NomError('HAS_RETUR', 'Bonul are retur: anulați mai întâi returul.', 409)
         if action != 'edit' and _one(cursor, 'SELECT 1 FROM VC_LegBCLA WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s LIMIT 1', (s, g, e, doc_id)):
@@ -472,7 +479,7 @@ def create_storno(cursor, repo, ctx, exercise, body, request_key, request_id):
     source = _source_nir(repo, _int(body.get('source')))
     header = body.get('header') if isinstance(body.get('header'), dict) else {}
     errors = {}
-    cols = {'TipDoc': 'NIR', 'Storno': 1, 'IdPartener': source['IdPartener'], 'FurnizorV': source['FurnizorV'], 'IdStorno': source['IdIntrare'],
+    cols = {'TipDoc': 'NIR', 'Storno': 1, 'CodPartener': suppliers.code(source['CodPartener']) or None, 'FurnizorV': source['FurnizorV'], 'IdStorno': source['IdIntrare'],
             'IdMasina': source['IdMasina'], 'IdComisie': _int(header.get('IdComisie')) if header.get('IdComisie') not in (None, '') else source['IdComisie']}
     cols['NrFact'] = _text(header.get('NrFact'), 'h.NrFact', errors, True)
     cols['DataFc'] = protocol.to_date(header.get('DataFc'), 'Data facturii storno', None, errors, 'h.DataFc')
@@ -507,7 +514,7 @@ def edit_storno(cursor, repo, ctx, exercise, doc_id, body, request_id):
     source = _source_nir(repo, _int(body.get('source')) if 'source' in body else before['IdStorno'])
     header = body.get('header') if isinstance(body.get('header'), dict) else {}
     errors = {}
-    cols = {'IdStorno': source['IdIntrare'], 'IdPartener': source['IdPartener'], 'FurnizorV': source['FurnizorV'], 'IdMasina': source['IdMasina'],
+    cols = {'IdStorno': source['IdIntrare'], 'CodPartener': suppliers.code(source['CodPartener']) or None, 'FurnizorV': source['FurnizorV'], 'IdMasina': source['IdMasina'],
             'IdComisie': _int(header.get('IdComisie')) if header.get('IdComisie') not in (None, '') else None,
             'NrFact': _text(header.get('NrFact'), 'h.NrFact', errors, True),
             'DataFc': protocol.to_date(header.get('DataFc'), 'Data facturii storno', None, errors, 'h.DataFc'),
@@ -623,6 +630,8 @@ def _clean_bon_lines(repo, ctx, raw_lines, errors, account=None):
 
 
 def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
+    from . import recalculation_audit
+
     table, pk, before = _load_for_write(repo, ctx, 'bc', doc_id, body.get('version'))
     _guard_dependents(cursor, ctx, 'bc', doc_id, 'edit')
     header = body.get('header') if isinstance(body.get('header'), dict) else {}
@@ -631,13 +640,17 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     old_lines = _all(cursor, 'SELECT ID, IdProdus, Cant, PUTVA FROM VC_Iesiri WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s', (*_scope(ctx), doc_id))
     lines = _clean_bon_lines(repo, ctx, body.get('lines'), errors, cols.get('IdMasina'))
     _fail(errors)
-    document_order.require_position(cursor, ctx, 'bc', doc_id, cols['DataBC'])
+    consumption_period.require_date(cursor, ctx, cols['DataBC'])
     text = before['NumarBC']
     manual = header.get('Numar')
     if manual not in (None, '') and str(_int(manual)) != str(text):
         _, text = _assign_number(cursor, ctx, 'bc', manual, errors, exclude=doc_id)
     _fail(errors)
     # a saved line keeps its price: a line of the same variant is re-priced only when the page changed its quantity
+    variants = {line['variant'] for line in lines} | {row['IdProdus'] for row in old_lines}
+    prior_stock = recalculation_audit.stock_snapshot(cursor, ctx, variants)
+    has_food_list = bool(repo.select('VC_LegBCLA', {'IdBonConsum': doc_id}, ('IdLista',)))
+    prior_food = recalculation_audit.food_snapshot(cursor, ctx) if has_food_list else {}
     old_price = {r['IdProdus']: r['PUTVA'] for r in old_lines}
     now = utc_now()
     repo.delete('VC_Iesiri', {'IdBonConsum': doc_id})
@@ -650,10 +663,19 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     total = numeric.to_stored(total_of(total_lines, ctx['scale']), ctx['scale'])
     if repo.update('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'DataSalvare': now}, {'IdBonConsum': doc_id, 'Version': before['Version']}, bump_version=True) != 1:
         raise NomError('CONFLICT', 'Documentul a fost modificat de altcineva. Reîncărcați documentul.', 409)
-    protocol.check_timeline(cursor, ctx, {l['variant'] for l in total_lines} | {r['IdProdus'] for r in old_lines})
+    protocol.check_timeline(cursor, ctx, variants)
     from .food_list_recalculation import refresh_for_bon
     recalculated = refresh_for_bon(cursor, repo, ctx, doc_id, request_id)
-    protocol.audit(cursor, ctx, 'bc.update', 'VC_Iesiri_H', doc_id, {'NumarBC': before['NumarBC'], 'ValoareBC': before['ValoareBC']}, {'header': cols, 'total': total, 'lines': len(total_lines)}, None, request_id)
+    origin = recalculation_audit.cause('bc', doc_id, text, cols['DataBC'], before['Version'] + 1)
+    origin['previous_number'], origin['previous_date'] = before['NumarBC'], str(before['DataBC'])[:10]
+    recalculation_audit.record(cursor, ctx, prior_stock, recalculation_audit.stock_snapshot(cursor, ctx, variants),
+                               origin, 'bc.stock_recalculated', 'VC_Iesiri_H', request_id)
+    if has_food_list:
+        recalculation_audit.record(cursor, ctx, prior_food, recalculation_audit.food_snapshot(cursor, ctx),
+                                   origin, 'lista.balance_recalculated', 'VC_LABC', request_id)
+    protocol.audit(cursor, ctx, 'bc.update', 'VC_Iesiri_H', doc_id,
+                   {'NumarBC': before['NumarBC'], 'ValoareBC': before['ValoareBC'], 'line_details': old_lines},
+                   {'header': cols, 'total': total, 'lines': len(total_lines), 'line_details': total_lines}, None, request_id)
     return {'id': doc_id, 'number': text, 'recalculated_lists': recalculated}
 
 

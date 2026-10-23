@@ -1,7 +1,7 @@
 // The asset identity and cost remain immutable in this register.
 import { confirmBox } from '../utils/confirm-box.js';
 import { parse } from './fields.js';
-import { el, scope, grid, column, rowMenu, preview, showMessage } from './ui.js';
+import { el, scope, grid, column, rowMenu, preview, showMessage, statusBar } from './ui.js';
 import { openDepreciation } from './depreciation.js';
 export function mountMf(host, opts) {
   const ui = scope(), dialogs = scope(), state = { assets: [], canWrite: false, canReport: false, draft: null, dirty: false, filter: '' };
@@ -37,12 +37,12 @@ export function mountMf(host, opts) {
         { label: 'Previzualizare', run: () => preview('Mijloc fix • ' + row.code, [{ title: row.name, columns: columns().map((col) => ({ ...col, editable: false })), rows: [row] }], dialogs, { date: row.entry_date }) },
       ]),
     }, ui);
-    bar.replaceChildren(); const button = (label, run) => { const b = el('button', { type: 'button', textContent: label }); b.addEventListener('click', () => Promise.resolve(run()).catch(report)); return b; };
-    if (state.draft) bar.append(button('Renunță', async () => {
+    const button = (label, run) => { const b = el('button', { type: 'button', textContent: label }); b.addEventListener('click', () => Promise.resolve(run()).catch(report)); return b; };
+    const cancel = state.draft ? button('Renunță', async () => {
       if (dirty() && !await confirmBox('Renunțați la datele nesalvate ale mijlocului fix?', { title: 'Renunțare', yes: 'Renunț', no: 'Rămân aici' })) return;
       state.draft = null; state.dirty = false; say(); paint();
-    }), button('Salvează', save));
-    bar.append(status);
+    }) : null;
+    statusBar(bar, { start: [cancel], status, end: state.draft ? [button('Salvează', save)] : [] });
   }
   async function load() { const data = await opts.api('/api/vercon/mf/assets?' + query()); if (disposed) return; state.assets = data.assets; state.canWrite = data.can_write; state.canReport = !!data.can_report; paint(); }
   async function save() {

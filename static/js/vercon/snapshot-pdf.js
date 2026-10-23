@@ -1,8 +1,9 @@
 // A local, paginated snapshot of the displayed values; official report APIs remain separate.
 // Canvas preserves Romanian glyphs without adding a font/PDF dependency to the application.
 import { readReportIdentity } from './report-identity.js';
+import { drawVoucherHeader } from './voucher-header.js';
 
-export async function snapshotPdf(title, sections) {
+export async function snapshotPdf(title, sections, { documentHeader = null } = {}) {
   const identity = await readReportIdentity();
   await document.fonts.ready;
   const width = 1684, height = 1190, margin = 48, bottom = height - 65, pages = [];
@@ -20,6 +21,12 @@ export async function snapshotPdf(title, sections) {
     right.forEach((line, index) => context.fillText(line, width - margin, 38 + index * 24));
     context.textAlign = 'left';
     y = 38 + Math.max(left.length, right.length) * 24 + 18;
+    if (documentHeader) {
+      y = drawVoucherHeader(context, y, margin, width - margin * 2,
+        { ...documentHeader, gestiuneName: identity.gestiune_name }, wrap);
+      if (y > bottom - 160) throw new Error('Antetul bonului este prea înalt. Scurtați denumirile pentru listare.');
+      return;
+    }
     context.fillStyle = '#17345a'; context.font = 'bold 26px Arial';
     context.fillText(title, margin, y, width - margin * 2); y += 35;
   }

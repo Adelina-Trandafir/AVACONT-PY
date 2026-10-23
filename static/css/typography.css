@@ -1,25 +1,33 @@
 /* TYPOGRAPHY - the one place where the fonts of the whole web application are decided (everything except the presentation site, static/site/).
-   Change --fs-base to resize all text at once; change a family to change the face everywhere. Every size below is the base plus or minus a
-   fixed step, so the proportions between the categories never change. Pages load this file FIRST. Documents meant for print (reports,
+   Change --fs-max to resize all text at once; change a family to change the face everywhere. Every size below is a proportion of the base,
+   so the proportions between the categories never change. Pages load this file FIRST. Documents meant for print (reports,
    receipts, statements, notices) keep their own point sizes and fonts on purpose.
-   Try values live (debug mode only): kbotDebug.fontBase(16), kbotDebug.fontFamily('ui', 'Arial, sans-serif'), kbotDebug.fontReset(). */
+   Try values live (debug mode only): kbotDebug.fontBase(16), kbotDebug.fontFamily('ui', 'Arial, sans-serif'), kbotDebug.fontFit(), kbotDebug.fontReset(). */
 :root {
   /* families */
   --font-ui: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;   /* text, controls, tables */
   --font-heading: var(--font-ui);                                    /* titles and headers */
   --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;   /* codes, numbers that must align */
 
-  /* size: THE base, and the steps from it */
-  --fs-base: 16px;
-  --fs-2xs: calc(var(--fs-base) - 4px);
-  --fs-xs: calc(var(--fs-base) - 3px);
-  --fs-sm: calc(var(--fs-base) - 2px);
-  --fs-ms: calc(var(--fs-base) - 1px);
+  /* size: --fs-max is the size at a wide window; --fs-base is what is in force NOW (it shrinks with the window, see FIT) */
+  --fs-max: 16px;
+  /* FIT: the text follows the width of the window, like the zoom of the menu but for fonts only. At or above --fs-fit-start the base is
+     --fs-max; narrower, it loses --fs-fit-rate px of text for every px of width, down to --fs-fit-min. Rate 0 = switched off.
+     Try values live (debug mode only): Ctrl+Alt+F or kbotDebug.fontFit(). --application-vw keeps it right under the zoom of the menu. */
+  --fs-fit-start: 1280px;
+  --fs-fit-min: 14px;
+  --fs-fit-rate: 2;
+  --fs-base: clamp(var(--fs-fit-min), calc(var(--fs-max) - (var(--fs-fit-start) - 100 * var(--application-vw, 1vw)) * var(--fs-fit-rate)), var(--fs-max));
+  /* the steps are proportions of the base (at 16px they are the old base -4 ... +6), so they keep their relation when the base shrinks */
+  --fs-2xs: calc(var(--fs-base) * .75);
+  --fs-xs: calc(var(--fs-base) * .8125);
+  --fs-sm: calc(var(--fs-base) * .875);
+  --fs-ms: calc(var(--fs-base) * .9375);
   --fs-md: var(--fs-base);
-  --fs-mp: calc(var(--fs-base) + 1px);
-  --fs-lg: calc(var(--fs-base) + 2px);
-  --fs-xl: calc(var(--fs-base) + 4px);
-  --fs-2xl: calc(var(--fs-base) + 6px);
+  --fs-mp: calc(var(--fs-base) * 1.0625);
+  --fs-lg: calc(var(--fs-base) * 1.125);
+  --fs-xl: calc(var(--fs-base) * 1.25);
+  --fs-2xl: calc(var(--fs-base) * 1.375);
 
   /* roles (add more as they are needed): what a piece of the interface is, mapped to a step */
   --fs-control: var(--fs-md);   /* inputs, lists, calendars */

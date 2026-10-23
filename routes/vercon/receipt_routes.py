@@ -1,5 +1,6 @@
 """Draft validation and common invoices. Read-only previews never reserve numbers or create variants."""
 from decimal import Decimal
+from utils import vercon_suppliers as suppliers
 
 from flask import request
 
@@ -66,7 +67,7 @@ def register(bp, guard, scoped, session, build, repo_of, need):
         scoped('read')
         with session(False) as cursor:
             invoices.require(cursor)
-            rows = invoices.candidates(cursor, d._int(request.args.get('partner')), request.args.get('number'), request.args.get('date'))
+            rows = invoices.candidates(cursor, suppliers.code(request.args.get('fiscal_code')), request.args.get('number'), request.args.get('date'))
             return {'invoices': [{**r, 'date': d._iso(r['date']), 'total': None if r['total'] is None else format(r['total'], 'f')} for r in rows]}
 
     @bp.get('/api/vercon/invoices/<int:identity>')

@@ -6,11 +6,12 @@ import { DatePicker } from '../components/datepicker/datepicker.js';
 import { TextBox } from '../components/textbox/textbox.js';
 import { CheckBox } from '../components/checkbox/checkbox.js';
 import { openMenu, closeMenu } from '../adechit/menu.js';
-import { showMessage } from '../portal/messages.js';
+import { showMessage } from './messages.js';
 import { snapshotPdf } from './snapshot-pdf.js';
 import { openPdfReport } from './pdf-preview.js';
 import { parse, format } from './fields.js';
 import { createReportHeader, reportHeading } from './report-header.js';
+export { statusBar } from './status-bar.js';
 
 export { DataGrid, ValueType, TreeView, Combobox, DatePicker, TextBox, CheckBox, openMenu, closeMenu, showMessage };
 export function el(tag, attrs = {}, ...children) {
@@ -20,6 +21,10 @@ export function el(tag, attrs = {}, ...children) {
     else node[key] = value;
   }
   node.append(...children.filter((child) => child != null));
+  if (node.classList.contains('vc-save-status')) {
+    node.setAttribute('data-kbot-tooltip-overflow', '');
+    node.tabIndex = 0;
+  }
   return node;
 }
 export function scope() {
@@ -100,9 +105,14 @@ export function field(column, value, editable, onChange, owner) {
 }
 export function column(spec, extras = {}) {
   const type = spec.type || 'text';
-  return { key: spec.key, title: spec.label, required: !!spec.required, valueType: type === 'date' ? ValueType.DateTime : ['decimal', 'int'].includes(type) ? ValueType.Number : ValueType.Text,
+  return { key: spec.key, title: spec.label, required: !!spec.required, valueType: type === 'date' ? ValueType.DateTime : ['decimal', 'int', 'money', 'percent'].includes(type) ? ValueType.Number : ValueType.Text,
     width: type === 'text' ? 180 : 120, editable: true, editor: type === 'date' ? 'date' : ['decimal', 'int'].includes(type) ? 'number' : type === 'ref' ? 'list' : 'text',
     formatter: (value) => format(value, { type }),
+    ...(type === 'ref' ? { sortValue: (value, row) => {
+      const source = spec.options || extras.options || [];
+      const items = typeof source === 'function' ? source(row) : source;
+      return items.find(item => String(item.value ?? item.id) === String(value))?.label || '';
+    }, sortType: ValueType.Text } : {}),
     parse: (raw) => { if (type === 'ref') return raw == null || raw === '' ? null : raw; const result = parse(raw, { ...spec, type }); if (!result.ok) throw new Error(result.message); return result.value; },
     align: ['decimal', 'int'].includes(type) ? 'right' : 'left', ...extras };
 }
@@ -128,7 +138,7 @@ export function paintTree(host, nodes, { selected, onSelect, onAction, onToggle,
   const action = (event) => {
     const target = event.target.closest('[data-action]'); if (!target || !body.contains(target)) return;
     if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
-    event.preventDefault(); event.stopPropagation(); onAction?.(target.dataset.nodeId.slice(4), target);
+    event.preventDefault(); event.stopPropagation(); onAction?.(target.dataset.nodeId.startsWith('doc:') ? target.dataset.nodeId.slice(4) : target.dataset.nodeId, target);
   };
   body.addEventListener('click', action, true); body.addEventListener('keydown', action, true);
   return tree;

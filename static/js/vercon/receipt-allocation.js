@@ -28,7 +28,7 @@ export function receiptAllocation({ api, selection, draft, mode }) {
   }
   function accountField(owner, editable, onChange, onTab) {
     ensure();
-    const node = el('label', { className: 'vc-field vc-receipt-accounts', 'data-field': 'Accounts' }, el('span', { textContent: 'Categorie / cont' + (editable ? ' *' : '') }));
+    const node = el('label', { className: 'vc-field vc-receipt-accounts', 'data-field': 'Accounts' }, el('span', {}, el('span', { className: 'vc-label-long', textContent: 'Categorie / cont' }), el('span', { className: 'vc-label-short', textContent: 'Cont' }), editable ? ' *' : null));
     const host = el('div'); node.append(host);
     const choices = accounts();
     const treeNodes = catalog.destinations.map(root => ({ id: `destination:${root.id}`, label: root.name,

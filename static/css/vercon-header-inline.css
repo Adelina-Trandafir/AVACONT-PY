@@ -1,0 +1,25 @@
+/* Labels beside the controls in the header of NIR and BC (js/vercon/header-fit.js puts `is-labels-inline` on the header when the lines grid
+   shows fewer than 10 rows). The header never gets wider than the grid under it: every cell may shrink and a long label is cut with an ellipsis. */
+.vc-doc__header.is-labels-inline { max-width: 100%; }
+.vc-doc__header.is-labels-inline .vc-field { flex-direction: row; align-items: center; gap: 6px; max-width: 100%; }
+.vc-doc__header.is-labels-inline .vc-field > :first-child { flex: 0 1 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-doc__header.is-labels-inline .vc-field > :not(:first-child):not([type="hidden"]) { flex: 1 1 0; min-width: 0; }
+/* NIR only, in this mode only, and only where the header has its four columns (wider than 800px). The last column is narrow: the width it gives
+   up goes to the first column, where Supplier and Account have the same label width and so the same control width, and Account is just «Cont».
+   The VAT rate sits in the first row with its label in that row and its list in the row below (display: contents hands both to the header
+   grid), so the list lines up with the other controls of the second row. */
+@media (min-width: 801px) {
+  .vc-page .vc-doc__header--nir.vc-doc__header--allocation.is-labels-inline { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, .55fr); }
+  .vc-doc__header--allocation.is-labels-inline .vc-field[data-field="_vat"] { display: contents; }
+  .vc-doc__header--allocation.is-labels-inline .vc-field[data-field="_vat"][hidden] { display: none; }
+  .vc-doc__header--allocation.is-labels-inline .vc-field[data-field="_vat"] > :first-child { grid-column: 4; grid-row: 1; align-self: center; max-width: 100%; }
+  .vc-doc__header--allocation.is-labels-inline .vc-field[data-field="_vat"] > .vc-field__combo { grid-column: 4; grid-row: 2; min-width: 0; }
+  .vc-doc__header--allocation.is-labels-inline .vc-field:is([data-field="CodFiscal"], [data-field="Accounts"]) > :first-child { flex: 0 0 5.2em; }
+}
+.vc-label-short { display: none; }
+.vc-doc__header.is-labels-inline .vc-label-long { display: none; }
+.vc-doc__header.is-labels-inline .vc-label-short { display: inline; }
+/* the three reserved field rows (vercon-documente-layout.css) lose their label line: 32px control per row */
+@media (min-width: 801px) {
+  .vc-page :is(.vc-doc--nir, .vc-doc--bc) .vc-doc__header.is-labels-inline:has(.vc-field) { min-height: calc(3 * 32px + 24px); }
+}

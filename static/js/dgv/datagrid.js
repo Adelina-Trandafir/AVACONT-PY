@@ -188,7 +188,8 @@ export class DataGrid {
     });
     this._columns = this._applyLayout(this._columns);
     this._filters = new Map();
-    this._sort = null;
+    const first = this._columns.find(col => col.visible && col.sortable && col.display !== 'button');
+    this._sort = this._opts.defaultSort === false ? null : this._opts.defaultSort || (first ? { key: first.key, dir: 'asc' } : null);
     this._sized = false;
     this._refresh({ rebuildHeader: true });
   }
@@ -402,7 +403,7 @@ export class DataGrid {
   _refresh({ rebuildHeader = false } = {}) {
     const engineColumns = this._columns.map((c) => ({
       key: c.key, valueType: c.valueType, format: c.format, formatString: c.formatString, decimals: c.decimals,
-      formatter: c.formatter, filterValue: c.filterValue,
+      formatter: c.formatter, filterValue: c.filterValue, sortValue: c.sortValue, sortType: c.sortType,
     }));
     const drafts = this._opts.newRowAlwaysVisible ? this._rows.filter((row) =>
       row === this._pendingRow?.row || this._opts.isBlankRow?.(row)) : [];

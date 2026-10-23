@@ -1,8 +1,9 @@
 // Lista de alimente: one draft, three meals and a set of existing BC links.
 import { confirmBox, reasonBox } from '../utils/confirm-box.js';
 import { format, formatMoney, parse } from './fields.js';
-import { el, scope, field, column, grid, paintTree, groupedNodes, docNode, modal, rowMenu, openMenu, showMessage } from './ui.js';
+import { el, scope, field, column, grid, paintTree, groupedNodes, docNode, modal, rowMenu, openMenu, showMessage, statusBar } from './ui.js';
 import { documentReport } from './document-report.js';
+import { showDocumentHistory } from './document-history.js';
 import { ActionAddButton } from '../components/action-add-button/action-add-button.js';
 import { receiptTotal } from './receipt-reconciliation.js';
 
@@ -28,12 +29,19 @@ export function mountLista(host, opts) {
   const overview = el('div', { className: 'vc-lista__overview' }, head, bons);
   const root = el('section', { className: 'vc-doc vc-doc--lista' }, el('div', { className: 'vc-doc__main' }, el('div', { className: 'vc-doc__titlebar' }, title, pill), overview, meals, bar), treeHost);
   host.replaceChildren(root);
-  const say = (text = '', bad = false) => { if (!disposed) showMessage(status, text, bad ? 'error' : 'info'); };
+  const say = (text = '', bad = false) => {
+    if (disposed) return;
+    status.textContent = text; paintBar();
+    showMessage(status, text, bad ? 'error' : 'info');
+  };
   const report = (error) => { if (!disposed && error.name !== 'AbortError') say(error.message || 'Operația a eșuat.', true); };
   const query = () => new URLSearchParams(Object.entries(opts.sel()).filter(([, v]) => v != null && v !== ''));
   const url = (path, extra = '') => '/api/vercon/doc/lista' + path + '?' + query() + extra;
   const write = (method, path, body) => opts.api('/api/vercon/doc/lista' + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...opts.sel(), ...body }) });
   const editing = () => state.mode !== 'view';
+  const fullEdit = () => editing() && state.mode !== 'portions';
+  const canModify = doc => !!doc && !doc.annulled && (!doc.order_locked || doc.portions_editable);
+  const editLabel = doc => doc?.order_locked && doc.portions_editable ? 'Modifică numărul copiilor' : 'Modifică';
   const dirty = () => state.dirty || headUi.dirty() || mealUi.dirty();
   const blankMeal = () => ({ P: '', VMD: '', D: '', items: [] });
   const fromDoc = (doc) => ({ header: { Numar: doc.number, Data: doc.header.Data, Comentarii: doc.header.Comentarii || '' },
@@ -45,21 +53,28 @@ export function mountLista(host, opts) {
   async function openDoc(id) {
     if (!await allowDiscard()) return; const token = ++generation;
     const doc = await opts.api(url('/' + id)); if (disposed || token !== generation) return;
-    state.doc = doc; rememberExplanations(doc); state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(doc.order_message || ''); paint();
+    state.doc = doc; rememberExplanations(doc); state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null;
+    say(); paint();
   }
   async function startAdd() {
     if (!await allowDiscard()) return; ++generation; state.mode = 'add'; state.dirty = false; state.request = null;
     state.draft = { header: { Numar: '', Data: state.lookups.today, Comentarii: '' }, meals: { md: blankMeal(), d: blankMeal(), c: blankMeal() }, bons: [] }; say(); paint();
   }
-  function startEdit() { if (!state.doc || !state.canWrite || state.doc.annulled) return; if (state.doc.order_locked) { say(state.doc.order_message, true); return; } ++generation; state.mode = 'edit'; state.draft = fromDoc(state.doc); state.dirty = false; state.request = null; say(); paint(); }
+  function startEdit() {
+    if (!state.doc || !state.canWrite || state.doc.annulled) return;
+    if (!canModify(state.doc)) { say(state.doc.portions_message || state.doc.order_message, true); return; }
+    ++generation; state.mode = state.doc.order_locked ? 'portions' : 'edit';
+    state.draft = fromDoc(state.doc); state.dirty = false; state.request = null;
+    say(state.mode === 'portions' ? 'Modificați numai numărul copiilor / porțiilor. La salvare se recalculează depășirile și economiile.' : ''); paint();
+  }
   async function discard() { if (!await allowDiscard()) return; ++generation; state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(); paint(); }
   function paint() {
-    const v = value(); title.textContent = editing() ? 'Listă de alimente • ' + (state.mode === 'add' ? 'listă nouă' : 'modificare') : state.doc ? 'Listă de alimente • nr. ' + state.doc.number : 'Liste de alimente';
+    const v = value(); title.textContent = editing() ? 'Listă de alimente • ' + (state.mode === 'add' ? 'listă nouă' : state.mode === 'portions' ? 'modificare număr copii' : 'modificare') : state.doc ? 'Listă de alimente • nr. ' + state.doc.number : 'Liste de alimente';
     pill.textContent = editing() ? 'Ciornă' : state.doc ? state.doc.annulled ? 'Anulată' : 'Salvată' : ''; pill.hidden = !pill.textContent;
     pill.dataset.state = editing() ? 'draft' : state.doc?.annulled ? 'annulled' : 'saved';
     headUi.clear(); inputs.clear(); head.replaceChildren(); totalsWrap.replaceChildren(); totalsWrap.hidden = !v; openingBalance = null;
     if (v) for (const spec of [{ key: 'Numar', label: 'Număr listă', type: 'int', min: 1 }, { key: 'Data', label: 'Data', type: 'date', required: true }, { key: 'Comentarii', label: 'Comentarii', type: 'text' }]) {
-      const f = field(spec, v.header[spec.key], editing(), (raw) => {
+      const f = field(spec, v.header[spec.key], fullEdit(), (raw) => {
         state.draft.header[spec.key] = raw; state.dirty = true;
         if (spec.key === 'Data') void refreshPriorTotals();
       }, headUi);
@@ -136,8 +151,8 @@ export function mountLista(host, opts) {
       let dishGrid;
       const summary = grid(summaryHost, { layoutId: 'vercon.lista.' + id + '.summary.v2', proportionalWidths: true, rowKey: 'key', rows: [summaryRow], editable: editing(), footer: false,
         columns: [
-          column({ key: 'P', label: 'Porții', type: 'int', min: 0 }, { width: 85, filter: false, sortable: false }),
-          column({ key: 'VMD', label: 'Preț', type: 'decimal', min: 0 }, { width: 100, filter: false, sortable: false }),
+          column({ key: 'P', label: 'Porții', type: 'int', min: 0 }, { width: 85, editable: state.mode === 'add' || !!state.doc?.portions_editable, filter: false, sortable: false }),
+          column({ key: 'VMD', label: 'Preț', type: 'decimal', min: 0 }, { width: 100, editable: fullEdit(), filter: false, sortable: false }),
           column({ key: 'V', label: 'Valoare', type: 'decimal' }, { width: 115, editable: false, filter: false, sortable: false })],
         onCellSave: ({ key: cell, value: raw }) => { meal[cell] = raw ?? ''; state.dirty = true; return { [cell]: raw, V: mealValue(meal) }; },
         onCellSaved: () => totals(),
@@ -146,8 +161,8 @@ export function mountLista(host, opts) {
         meal.items = meal.items.filter(item => item.key !== row.key);
         dishGrid.setRows(meal.items, { keepWidths: true });
       };
-      dishGrid = grid(dishesHost, { layoutId: 'vercon.lista.' + id + '.dishes.v2', layout: { fill: 'Explicatie' }, rowKey: 'key', rows: meal.items, editable: editing(), singleClickEdit: true,
-        newRowAlwaysVisible: editing(), isBlankRow: isBlankDish, onNewRow: () => { const row = blankDish(); meal.items.push(row); return row; }, onCancelNewRow: dropDish,
+      dishGrid = grid(dishesHost, { layoutId: 'vercon.lista.' + id + '.dishes.v2', layout: { fill: 'Explicatie' }, rowKey: 'key', rows: meal.items, editable: fullEdit(), singleClickEdit: true,
+        newRowAlwaysVisible: fullEdit(), isBlankRow: isBlankDish, onNewRow: () => { const row = blankDish(); meal.items.push(row); return row; }, onCancelNewRow: dropDish,
         columns: [
           column({ key: 'Tip', label: 'FELUL', type: 'text', max: 50 }, { width: 57, minWidth: 57, fixedWidth: true, editor: 'list', dropDownMinWidth: 120,
             dropDownOnEnter: row => !row.Tip && row.IdFel == null,
@@ -169,7 +184,7 @@ export function mountLista(host, opts) {
           Object.assign(item, patch); dishGrid.ensureNewRow(); state.dirty = true; return patch;
         },
         onEditError: ({ error }) => report(error),
-        onCellAction: ({ row }) => rowMenu(dishGrid, row, [{ label: 'Elimină rândul', disabled: !editing(), run: async () => {
+        onCellAction: ({ row }) => rowMenu(dishGrid, row, [{ label: 'Elimină rândul', disabled: !fullEdit(), run: async () => {
           if (!await commit()) return; dropDish(row); state.dirty = true;
         } }]),
       }, mealUi);
@@ -188,8 +203,8 @@ export function mountLista(host, opts) {
         column({ key: 'receiver', label: 'Primitor' }, { width: 240 }),
         column({ key: 'total', label: 'Valoare BC', type: 'decimal' }),
         { key: 'actions', title: '⋮', width: 36, display: 'button', actionText: '⋮' }],
-      footer: true, footerCaption: '', footerAction: { label: '+ Adaugă rând', span: 2, disabled: !editing() }, onFooterAction: () => chooseBon().catch(report),
-      onCellAction: ({ row }) => rowMenu(bonsGrid, row, [{ label: 'Scoate BC din listă', disabled: !editing(), run: async () => {
+      footer: true, footerCaption: '', footerAction: { label: '+ Adaugă rând', span: 2, disabled: !fullEdit() }, onFooterAction: () => chooseBon().catch(report),
+      onCellAction: ({ row }) => rowMenu(bonsGrid, row, [{ label: 'Scoate BC din listă', disabled: !fullEdit(), run: async () => {
         if (!await commit()) return; state.draft.bons = state.draft.bons.filter((item) => item.id !== row.id); state.dirty = true; paintBons();
       } }]),
     }, bonsUi);
@@ -208,7 +223,7 @@ export function mountLista(host, opts) {
     paintBalance('closing', closing);
   }
   async function chooseBon() {
-    if (!editing() || !await commit()) return; const token = generation, draft = state.draft;
+    if (!fullEdit() || !await commit()) return; const token = generation, draft = state.draft;
     const data = await opts.api(url('/bons', state.mode === 'edit' ? '&exclude=' + state.doc.id : '')); if (disposed || token !== generation || draft !== state.draft) return;
     const available = data.bons.filter((row) => !draft.bons.some((item) => String(item.id) === String(row.id)));
     const popup = modal('Alege B.C.', dialogs), tree = el('div', { className: 'vc-bon-picker' }), detail = el('p', { className: 'vc-hint' });
@@ -234,12 +249,14 @@ export function mountLista(host, opts) {
     const nodes = [...months].sort(([a], [b]) => b.localeCompare(a)).map(([month, rows]) => ({
       id: 'month:' + month,
       label: month ? MONTHS[Number(month.slice(5)) - 1] + '/' + month.slice(0, 4) : 'Fără dată',
+      sortType: 'date', sortValue: month ? `${month}-01` : null, sortDirection: 'desc',
       children: rows.map(row => docNode(row, 'Lista ' + row.number + ' • ' + dateText(row.date) + (row.annulled ? ' • anulată' : ''), formatMoney(row.total))),
     }));
     paintTree(treeHost, nodes, { title: 'Liste salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onSelect: (id) => openDoc(id).catch(report), onAction: (id, anchor) => openMenu(anchor, [
       { label: 'Deschide', run: () => openDoc(id) },
-      { label: 'Modifică', disabled: !state.canWrite || state.docs.some((row) => String(row.id) === id && (row.annulled || row.order_locked)), run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) startEdit(); } },
-      { label: 'Previzualizare', run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await showPreview(); } },
+      { label: editLabel(state.docs.find(row => String(row.id) === id)), disabled: !state.canWrite || !canModify(state.docs.find(row => String(row.id) === id)), run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) startEdit(); } },
+      { label: 'Vizualizare', run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await showPreview(); } },
+      { label: 'Istoric', run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await history(); } },
       { label: 'Anulează lista', disabled: !state.canWrite || state.docs.some((row) => String(row.id) === id && (row.annulled || row.order_locked)), run: async () => { await openDoc(id); if (!disposed && state.doc && String(state.doc.id) === id) await cancelList(); } },
     ]) }, treeUi);
     treeUi.own(new ActionAddButton(treeHost.querySelector(':scope > h4'), {
@@ -262,10 +279,16 @@ export function mountLista(host, opts) {
       sections, owner: dialogs, isCurrent: () => !disposed && token === generation && draft === state.draft });
   }
   function paintBar() {
-    bar.replaceChildren(); const button = (label, run, disabled = false) => { const b = el('button', { type: 'button', textContent: label, disabled }); b.addEventListener('click', () => Promise.resolve(run()).catch(report)); return b; };
-    if (editing()) bar.append(button('Renunță', discard), button('Salvează lista', save));
-    else if (state.doc) bar.append(button('Modifică', startEdit, !state.canWrite || state.doc.annulled || state.doc.order_locked), button('Previzualizare', showPreview));
-    bar.append(status); if (state.closed) bar.append(el('span', { className: 'vc-hint', textContent: 'Perioada este închisă.' }));
+    const button = (label, run, disabled = false, className = '') => { const b = el('button', { type: 'button', textContent: label, disabled, className }); b.addEventListener('click', () => Promise.resolve(run()).catch(report)); return b; };
+    bar.classList.toggle('vc-lista__bar--editing', editing());
+    const note = state.closed ? el('span', { className: 'vc-hint', textContent: 'Perioada este închisă.', 'data-kbot-tooltip-overflow': '', tabIndex: 0 }) : null;
+    if (editing()) {
+      statusBar(bar, { start: [button('Renunță', discard, false, 'vc-lista__cancel')], status, note,
+        end: [button('Salvează lista', save, false, 'is-primary vc-lista__save')] });
+    } else {
+      statusBar(bar, { start: state.doc ? [button('Vizualizare', showPreview)] : [], status, note,
+        end: state.doc ? [button('Modifică', startEdit, !state.canWrite || !canModify(state.doc))] : [] });
+    }
   }
   function collect() {
     const errors = [], header = {}, draft = state.draft, outputMeals = {};
@@ -280,15 +303,33 @@ export function mountLista(host, opts) {
     }
     return { errors, body: { header, meals: outputMeals, bons: draft.bons.map((row) => row.id) } };
   }
+  async function history() {
+    const doc = state.doc;
+    if (doc) await showDocumentHistory({ api: opts.api, url: url('/' + doc.id + '/history'),
+      title: 'Istoric • Lista de alimente nr. ' + doc.number, owner: dialogs, isCurrent: () => !disposed && state.doc === doc });
+  }
   function freezePending() { head.inert = meals.inert = bons.inert = !!state.request; }
+  function collectPortions() {
+    const portions = {}, errors = [];
+    for (const [id, label] of MEALS) {
+      const raw = state.draft.meals[id].P;
+      const result = parse(raw == null || raw === '' ? 0 : raw, { type: 'int', min: 0, required: true });
+      if (!result.ok) errors.push(label + ': ' + result.message);
+      else portions[id] = result.value;
+    }
+    return { errors, body: { portions } };
+  }
   async function save() {
-    if (!state.canWrite || !editing() || !await commit()) return; const collected = collect(); if (collected.errors.length) { say(collected.errors.join(' '), true); return; }
-    if (!collected.body.bons.length && !await confirmBox('Salvați lista fără bonuri de consum?', { title: 'Listă fără bonuri', yes: 'Salvează', no: 'Revin' })) return;
+    if (!state.canWrite || !editing() || !await commit()) return;
+    const portionsOnly = state.mode === 'portions', collected = portionsOnly ? collectPortions() : collect();
+    if (collected.errors.length) { say(collected.errors.join(' '), true); return; }
+    if (!portionsOnly && !collected.body.bons.length && !await confirmBox('Salvați lista fără bonuri de consum?', { title: 'Listă fără bonuri', yes: 'Salvează', no: 'Revin' })) return;
     // Retain the exact body after an uncertain POST response; retries must carry the same request.
     const adding = state.mode === 'add'; const request = state.request || { body: collected.body, key: key() };
     if (adding) state.request = request; root.inert = true; say('Se salvează…');
     try {
-      const result = adding ? await write('POST', '', { ...request.body, request_key: request.key }) : await write('PUT', '/' + state.doc.id, { ...collected.body, version: state.doc.version });
+      const result = adding ? await write('POST', '', { ...request.body, request_key: request.key })
+        : await write('PUT', '/' + state.doc.id + (portionsOnly ? '/portions' : ''), { ...collected.body, version: state.doc.version });
       if (disposed) return; ++generation; state.doc = result.document; rememberExplanations(state.doc); state.draft = null; state.mode = 'view'; state.dirty = false; state.request = null;
       paint(); say('Salvat.'); try { await refresh(); if (!disposed) paintSaved(); } catch (error) { report(error); }
     } catch (error) {

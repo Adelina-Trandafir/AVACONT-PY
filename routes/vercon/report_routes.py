@@ -1,5 +1,6 @@
 """Report catalog, filters, snapshots and exact exports for all VERCON types."""
 from decimal import Decimal
+from utils import vercon_suppliers as fiscal_suppliers
 from flask import Response, current_app, g, request
 from . import report_catalog, report_data, report_output, report_service, report_excel, report_period, report_selection, protocol, stock
 from .nomenclatoare import NomError
@@ -9,12 +10,19 @@ from .stock_routes import optional_id
 
 
 def selected_ids(key):
-    raw = request.args.get(key + '_ids')
+    raw = request.values.get(key + '_ids')
     if raw is None:
         return None
     try:
         parts = raw.split(',')
-        if not 1 <= len(parts) <= 1000 or any(not part.isdecimal() for part in parts):
+        if not 1 <= len(parts) <= 1000:
+            raise ValueError()
+        if key == 'supplier':
+            values = list(dict.fromkeys(fiscal_suppliers.code(part) for part in parts))
+            if any(not value or len(value) > 50 for value in values):
+                raise ValueError()
+            return values
+        if any(not part.isdecimal() for part in parts):
             raise ValueError()
         values = list(dict.fromkeys(int(part) for part in parts))
         if any(value <= 0 for value in values):
@@ -25,7 +33,7 @@ def selected_ids(key):
 
 
 def selected_receipts():
-    raw = request.args.get('receipt_selection')
+    raw = request.values.get('receipt_selection')
     if raw is None:
         return None
     try:
@@ -41,7 +49,9 @@ def selected_receipts():
             for index, value in enumerate(parts[1:]):
                 if value == 'none' and (index == 0 or index == 1 and parts[0] == 'receipt-product'):
                     values.append(None)
-                elif value.isdecimal() and int(value) > 0:
+                elif index == 0 and fiscal_suppliers.code(value) == value and 0 < len(value) <= 50:
+                    values.append(value)
+                elif index > 0 and value.isdecimal() and int(value) > 0:
                     values.append(int(value))
                 else:
                     raise ValueError()
@@ -52,7 +62,7 @@ def selected_receipts():
 
 
 def selected_outgoing():
-    raw = request.args.get('outgoing_selection')
+    raw = request.values.get('outgoing_selection')
     if raw is None:
         return None
     try:
@@ -81,25 +91,26 @@ def selected_outgoing():
 
 def register(bp, guard, scoped, session, build):
     def selection():
-        params = {'start': protocol.to_date(request.args.get('start'), 'De la'),
-                  'end': protocol.to_date(request.args.get('end'), 'Până la')}
+        request_values = request.values
+        params = {'start': protocol.to_date(request_values.get('start'), 'De la'),
+                  'end': protocol.to_date(request_values.get('end'), 'Până la')}
         if params['start'] > params['end']:
             raise NomError('REPORT_PERIOD', 'Data de început trebuie să fie înaintea datei de sfârșit.', 422)
         params['receipt_selection'] = selected_receipts()
         params['outgoing_selection'] = selected_outgoing()
-        params['mf_selection'] = report_mf.parse_selection(request.args.get('mf_selection'))
+        params['mf_selection'] = report_mf.parse_selection(request_values.get('mf_selection'))
         for key in ('document', 'variant', 'category', 'supplier', 'receiver'):
-            params[key] = optional_id(key)
-            values = selected_ids(key)
-            if values is not None:
+            params[key] = optional_id(key, request_values)
+            ids = selected_ids(key)
+            if ids is not None:
                 if params[key] is not None:
                     raise NomError('REPORT_FILTER', 'Folosiți o singură formă de selecție pentru ' + key + '.', 422)
-                if len(values) == 1:
-                    params[key] = values[0]
+                if len(ids) == 1:
+                    params[key] = ids[0]
                 else:
-                    params[key + '_ids'] = values
+                    params[key + '_ids'] = ids
         for key in ('show_without_movements', 'page_break_accounts', 'group_by_receivers'):
-            value = request.args.get(key, '0')
+            value = request_values.get(key, '0')
             if value not in ('0', '1'):
                 raise NomError('REPORT_OPTION', 'Opțiunea de afișare este invalidă: ' + key + '.', 422)
             params[key] = value == '1'
@@ -118,7 +129,8 @@ def register(bp, guard, scoped, session, build):
         vctx = scoped('read')
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, None, False)
-            return report_identity.read(cursor, g.portal['db_name'], ctx)
+            return {**report_identity.read(cursor, g.portal['db_name'], ctx),
+                    'gestiune_name': vctx['gestiune'].get('name', '')}
 
     @bp.get('/api/vercon/reports/catalog')
     @guard('raport')
@@ -177,7 +189,7 @@ def register(bp, guard, scoped, session, build):
                 'documents': options(documents), 'spec': spec,
                 'account_filter': bool(spec.get('ledger') == 'custody' or spec.get('family') in ('bp', 'bt', 'bs'))}
 
-    @bp.get('/api/vercon/reports/<name>/generate')
+    @bp.route('/api/vercon/reports/<name>/generate', methods=['GET', 'POST'])
     @guard('raport')
     def generate(name):
         vctx = scoped('raport')
@@ -186,6 +198,16 @@ def register(bp, guard, scoped, session, build):
             ctx, _ = build(cursor, vctx, None, False)
             model = report_service.build(cursor, g.portal['db_name'], ctx, name, params, vctx['gestiune'].get('name', ''))
         return {**model, 'snapshot': cache().put(owner(ctx), model)}
+
+    @bp.delete('/api/vercon/reports/export/<token>')
+    @guard('raport')
+    def release(token):
+        # The viewer was closed: the saved model is not needed any more, so nothing stays on the disk.
+        vctx = scoped('raport')
+        with session(False) as cursor:
+            ctx, _ = build(cursor, vctx, None, False)
+        cache().release(owner(ctx), token)
+        return Response(status=204)
 
     @bp.get('/api/vercon/reports/export/<token>/<format_name>')
     @guard('raport')

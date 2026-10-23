@@ -45,6 +45,13 @@ def register(bp, guard):
     def saved_output(repo, token, output):
         return export(repo, cache().get(owner(repo), token), output)
 
+    @bp.delete('/api/adechit/reports/export/<token>')
+    @guard('read')
+    def release(repo, token):
+        # The viewer was closed: the saved model is not needed any more, so nothing stays on the disk.
+        cache().release(owner(repo), token)
+        return Response(status=204)
+
     # Existing integrations can still request an output directly.
     @bp.get('/api/adechit/reports/<kind>/<output>')
     @guard('read')

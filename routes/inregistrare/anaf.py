@@ -98,7 +98,7 @@ def is_valid_cf(cf) -> bool:
     return bool(cf) and MIN_CF_DIGITS <= len(cf) <= MAX_CF_DIGITS
 
 
-def lookup(cf, when=None, url=None, timeout=None) -> dict:
+def lookup(cf, when=None, url=None, timeout=None, missing_is_404=False) -> dict:
     """
     Asks ANAF about one fiscal code and answers the fields the page shows.
 
@@ -107,7 +107,8 @@ def lookup(cf, when=None, url=None, timeout=None) -> dict:
 
     Raises AnafNotFound when ANAF does not know the code, AnafIncomplete when it
     knows it but names nothing, and AnafUnavailable for every transport failure, for
-    an `<html>` page and for a body that is not the JSON object v9 promises. Nothing
+    an `<html>` page and for a body that is not the JSON object v9 promises. With `missing_is_404` an HTTP 404 is read as
+    "ANAF does not know this code" (what v9 answers for some codes that do not exist) and is not logged as an error. Nothing
     is swallowed: each one keeps the original error chained to it and is logged here
     before it leaves.
     """
@@ -128,6 +129,9 @@ def lookup(cf, when=None, url=None, timeout=None) -> dict:
         with urllib.request.urlopen(request, timeout=seconds) as response:
             text = response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as err:
+        if err.code == 404 and missing_is_404:
+            logger.info("ANAF answered HTTP 404 for CF %s (read as not found)", cf)
+            raise AnafNotFound(cf) from err
         logger.error("ANAF %s answered HTTP %s for CF %s", target, err.code, cf)
         raise AnafUnavailable(f"ANAF HTTP {err.code}") from err
     except Exception as err:            # URLError, socket timeout, DNS, TLS

@@ -42,11 +42,19 @@ export function debugLog(...k_args) { if (testMode) console.log(...k_args); }
 
 // Typography (css/typography.css), debug only: try the base size and the families live, e.g. kbotDebug.fontBase(16).
 const k_root = typeof document !== 'undefined' ? document.documentElement : null;
-registerDebugTool('fontBase', (k_px) => { k_root.style.setProperty('--fs-base', `${Number(k_px)}px`); return `--fs-base = ${Number(k_px)}px`; },
-  'fontBase(px) sets the base text size of the whole application (default 14)');
+registerDebugTool('fontBase', (k_px) => { k_root.style.setProperty('--fs-max', `${Number(k_px)}px`); return `--fs-max = ${Number(k_px)}px`; },
+  'fontBase(px) sets the base text size of the whole application at a wide window (default 16)');
 registerDebugTool('fontFamily', (k_kind, k_stack) => {
   if (!['ui', 'heading', 'mono'].includes(k_kind)) return "the kinds are 'ui', 'heading', 'mono'";
   k_root.style.setProperty(`--font-${k_kind}`, k_stack); return `--font-${k_kind} = ${k_stack}`;
 }, "fontFamily('ui' | 'heading' | 'mono', 'Arial, sans-serif') changes a family everywhere");
-registerDebugTool('fontReset', () => { for (const k_name of ['--fs-base', '--font-ui', '--font-heading', '--font-mono']) k_root.style.removeProperty(k_name); return 'typography: the values of typography.css'; },
+registerDebugTool('fontReset', () => { for (const k_name of ['--fs-max', '--fs-fit-min', '--fs-fit-start', '--fs-fit-rate', '--font-ui', '--font-heading', '--font-mono']) k_root.style.removeProperty(k_name); return 'typography: the values of typography.css'; },
   'fontReset() puts the values of typography.css back');
+
+// The text follows the width of the window: a live panel (Ctrl+Alt+F or kbotDebug.fontFit()). Test mode only, and loaded only when asked for.
+if (testMode && k_root) {
+  let k_panel = null;
+  const k_toggle = () => (k_panel ||= import('./font-fit-panel.js').then((k_module) => { k_module.mount(); return k_module; })).then((k_module) => k_module.toggle());
+  registerDebugTool('fontFit', k_toggle, 'fontFit() opens or closes the panel that tries how the text follows the window width (Ctrl+Alt+F)');
+  document.addEventListener('keydown', (k_event) => { if (k_event.ctrlKey && k_event.altKey && k_event.code === 'KeyF') { k_event.preventDefault(); k_toggle(); } });
+}

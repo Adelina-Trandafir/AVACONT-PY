@@ -1,4 +1,5 @@
 """Receipt choices use product identities and one supplier per fiscal code."""
+from utils import vercon_suppliers as suppliers
 
 
 def products(cursor, subunit, gestiune):
@@ -11,16 +12,10 @@ def products(cursor, subunit, gestiune):
 
 
 def partners(cursor):
-    # FIRST(name) is the name on the first eligible IdPartener, not MIN(name).
-    cursor.execute(
-        'SELECT p.IdPartener, p.DenumirePartener, first_partner.CodFiscal '
-        'FROM Parteneri p JOIN ('
-        'SELECT TRIM(CodFiscal) AS CodFiscal, MIN(IdPartener) AS IdPartener '
-        "FROM Parteneri WHERE COALESCE(Ascuns,0)=0 AND NULLIF(TRIM(CodFiscal),'') IS NOT NULL "
-        'GROUP BY TRIM(CodFiscal)) first_partner ON first_partner.IdPartener=p.IdPartener '
-        'ORDER BY p.DenumirePartener, p.IdPartener')
-    return [{'id': row['IdPartener'], 'name': row['DenumirePartener'] or '',
-             'cf': row['CodFiscal']} for row in cursor.fetchall()]
+    cursor.execute('SELECT p.* FROM ' + suppliers.relation(True) + ' p ORDER BY p.DenumirePartener,p.CodFiscal')
+    items = [{'id': row['CodFiscal'], 'name': row['DenumirePartener'] or row['CodFiscal'],
+              'cf': row['CodFiscal']} for row in cursor.fetchall()]
+    return sorted(items, key=lambda item: (suppliers.name_key(item['name']), item['cf']))
 
 
 def price_variant(repo, product, price, now, existing=None):

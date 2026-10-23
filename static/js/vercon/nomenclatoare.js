@@ -1,13 +1,13 @@
 // Grid-only nomenclatures; settings retain their dedicated form.
 export { mountNomenclator } from './nomenclator-grid.js';
 import { parse } from './fields.js';
-import { el, scope, field, column, grid, showMessage } from './ui.js';
+import { el, scope, field, column, grid, showMessage, statusBar } from './ui.js';
 // Storage is always DECIMAL(20,4); ZEC controls calculation/display precision.
 export function mountSettings(host, opts) {
   const ui = scope(), inputs = new Map(); let disposed = false, data, dirty = false;
   const status = el('span', { className: 'vc-save-status', role: 'status' }), fields = el('div', { className: 'vc-grid' }), note = el('p', { className: 'vc-hint' }), counters = el('div');
   const saveButton = el('button', { type: 'submit', textContent: 'Salvează', className: 'is-primary' });
-  const form = el('form', { noValidate: true }, fields, note, el('div', { className: 'vc-actions' }, saveButton, status), counters);
+  const form = el('form', { noValidate: true }, fields, note, statusBar(el('div', { className: 'vc-actions' }), { status, end: [saveButton] }), counters);
   const root = el('section', { className: 'vc-nom' }, el('h3', { textContent: 'Setări gestiune' }), form); host.replaceChildren(root);
   const say = (text = '', bad = false) => { if (!disposed) showMessage(status, text, bad ? 'error' : 'info'); };
   const specs = [{ key: 'zec', label: 'Zecimale afișate și de calcul (0–4)', type: 'int', required: true, min: 0 }, { key: 'scara', label: 'Zecimale stocate (fix 4)', type: 'int', required: true, min: 4 }];

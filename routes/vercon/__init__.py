@@ -97,6 +97,9 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
                     return response
                 if authenticate:
                     return authenticate(run)()
+                from . import kbot_bridge
+                if kbot_bridge.wants(request):   # the K-BOT application (bearer), the Rapoarte page calls only
+                    return kbot_bridge.authenticate(run)()
                 from routes.portal.portal import require_portal_session
                 from utils.timing import timed
                 return require_portal_session(timed('vercon.' + operation)(run))()

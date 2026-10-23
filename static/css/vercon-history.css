@@ -1,3 +1,11 @@
 .vc-history { max-width: 900px; width: calc(92 * var(--application-vw, 1vw)); }
 .vc-history td { font-size: .85em; word-break: break-word; max-width: 420px; }
+.vc-history__records { display: grid; gap: 10px; }
+.vc-history__records details { padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.vc-history__records summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.vc-history__records p { overflow-wrap: anywhere; }
+.vc-history__values { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.vc-history__values h4 { margin: 12px 0 6px; }
+.vc-history__values pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+@media (max-width: 600px) { .vc-history__values { grid-template-columns: 1fr; } }
 

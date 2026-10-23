@@ -5,8 +5,9 @@ Opening stock includes every movement before start, even when the display is fil
 No float, no Forms/TempVars, no connection, commit or schema creation.
 """
 from decimal import Decimal, localcontext
+from utils import vercon_suppliers as suppliers
 
-from . import stock_source
+from . import stock_source, stock_valuation
 from .nomenclatoare import NomError
 
 BUCKETS = {'nir': 'entries', 'br': 'returns', 'bc': 'issues', 'storno': 'storno',
@@ -112,13 +113,17 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
         selected = {key: info for key, info in selected.items() if key in eligible}
     movements = [m for m in movements if m['p'] in selected and (holder is None or m['holder'] == holder)
                  and (ledger != 'custody' or category is None or m['category'] == (None if category == 0 else category))]
-    if any(selected[m['p']]['price'] is None or selected[m['p']]['price'] < 0 for m in movements):
-        raise NomError('STOCK_PRICE_INVALID', 'O variantă nu are un preț de evaluare valid.', 409)
     dimensions = ('holder', 'category', 'p') if ledger == 'custody' else ('supplier', 'p') if group == 'supplier' else ('p',)
     grouped, statements = balance(movements, start, end, dimensions)
+    for key in grouped:
+        stock_valuation.price(selected[key[-1]])
     scale = ctx['scale']
     holders = {}
     accounts = {}
+    supplier_names = {}
+    if group == 'supplier':
+        cursor.execute('SELECT CodFiscal,DenumirePartener FROM ' + suppliers.relation() + ' p')
+        supplier_names = {row['CodFiscal']: row['DenumirePartener'] or row['CodFiscal'] for row in cursor.fetchall()}
     if ledger == 'custody':
         cursor.execute('SELECT IDC,Denumire FROM VC_Clienti WHERE SubunitId=%s AND GestiuneId=%s',
                        (ctx['subunit'], ctx['gestiune']))
@@ -134,12 +139,21 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
                 'category_name': accounts.get(key[1]) if ledger == 'custody' else info['category_name'],
                 'holder': key[0] if ledger == 'custody' else None,
                 'holder_name': holders.get(key[0], str(key[0])) if ledger == 'custody' else '',
-                'supplier': key[0] if group == 'supplier' else None}
+                'supplier': key[0] if group == 'supplier' else None,
+                'supplier_name': supplier_names.get(key[0], str(key[0] or '')) if group == 'supplier' else ''}
+
+    def row_order(pair):
+        key = pair[0]
+        info = selected[key[-1]]
+        prefix = ((suppliers.name_key(holders.get(key[0], '')), suppliers.name_key(accounts.get(key[1], '')))
+                  if ledger == 'custody' else (suppliers.name_key(supplier_names.get(key[0], key[0])),)
+                  if group == 'supplier' else ())
+        return (*prefix, suppliers.name_key(info['name']), info['price'] or Decimal(0), suppliers.name_key(info['code']))
 
     rows = []
     totals = {bucket: 0 for bucket in ('opening', *dict.fromkeys(BUCKETS.values()), 'closing')}
     # Totals use direct decimal products, without per-variant display rounding.
-    for key, quantities in sorted(grouped.items(), key=lambda pair: tuple(-1 if v is None else v for v in pair[0])):
+    for key, quantities in sorted(grouped.items(), key=row_order):
         info = identity(key)
         price = selected[key[-1]]['price'] or 0
         rows.append({**info, 'quantities': {k: quantity_text(v, scale) for k, v in quantities.items()},

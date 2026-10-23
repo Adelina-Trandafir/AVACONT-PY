@@ -1,7 +1,7 @@
 """Grouped report bands, headers and signatures from editable layout data."""
 from collections import OrderedDict
 from decimal import Decimal, ROUND_CEILING, localcontext
-from . import report_model
+from . import report_model, report_voucher
 
 
 def date(value):
@@ -33,18 +33,12 @@ def table(layout, rows, zec, totals=None):
     return block
 
 
-def doc_heading(spec, row, unit, committees):
-    if spec['family'] in ('bp', 'bt', 'bs'):
-        fields = [('Număr document / Dată', str(row['number']) + ' / ' + date(row['date']))]
-        if spec['family'] == 'bp':
-            fields += [('Cont magazie', row.get('warehouse_account') or ''), ('Cont în folosință', row.get('account') or ''),
-                       ('Predător', unit.get('manager') or ''), ('Primitor', row.get('party') or '')]
-        else:
-            fields.append(('Predător', row.get('giver_name') or ''))
-            if spec['family'] == 'bt':
-                fields.append(('Primitor', row.get('party') or ''))
-        fields.append(('Explicații', row.get('explanation') or ''))
-        return [{'t': 'box', 'rows': fields}]
+def doc_heading(spec, row, unit, committees, ctx, gestiune_name):
+    if report_voucher.applies(spec):
+        blocks = [report_voucher.header(spec, row, ctx, gestiune_name)]
+        if row.get('explanation'):
+            blocks.append({'t': 'text', 'text': 'Explicații: ' + str(row['explanation']), 'keep_with_next': True})
+        return blocks
     if spec['family'] in ('nir', 'storno'):
         committee = committees.get(row.get('committee'), {})
         header = report_model.table([('fiscal_code', 'Cod furnizor', 'text', 1000), ('invoice', 'Nr. factură /\nAviz expediere', 'text', 1700),
@@ -103,7 +97,7 @@ def statement_table(layout, rows, zec):
     return block
 
 
-def build(spec, layout, rows, ctx, unit, committees=None, *, page_break_accounts=False):
+def build(spec, layout, rows, ctx, unit, committees=None, *, page_break_accounts=False, gestiune_name=''):
     zec, blocks = ctx['zec'], []
     outer_group_count = 0
     rows = [{**row, 'ordinal': index + 1} for index, row in enumerate(rows)]
@@ -135,9 +129,9 @@ def build(spec, layout, rows, ctx, unit, committees=None, *, page_break_accounts
                 if any(b['t'] == 'table' for b in blocks):
                     blocks.append({'t': 'break'})
                 document_spec = {**spec, 'family': row['family']} if spec.get('include_returns') else spec
-                if spec.get('include_returns'):
+                if spec.get('include_returns') and not report_voucher.applies(document_spec):
                     blocks.append({'t': 'group', 'text': 'BON DE RETUR' if row['family'] == 'br' else 'BON DE CONSUM'})
-                blocks.extend(doc_heading(document_spec, row, unit, committees or {}))
+                blocks.extend(doc_heading(document_spec, row, unit, committees or {}, ctx, gestiune_name))
             elif key == 'variant':
                 blocks.append({'t': 'box', 'rows': [('Categoria', row.get('account') or ''), ('Materialul (produsul)', row.get('name') or ''),
                     ('Codul produsului', row.get('code') or row['variant']), ('UM', row.get('um') or ''),

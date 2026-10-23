@@ -168,6 +168,9 @@ def default(spec):
             totals = ['opening_value', 'entries_value', 'transfers_in_value', 'transfers_out_value', 'scrapping_value', 'closing_value']
         if kind == 'statement':
             columns = STATEMENT + [money('closing_value', 'Valoare sold')]
+        if name == 'OI_Balanta':
+            columns, groups, headers = BALANCE, ['account'], []
+            totals = ['opening_value', 'incoming_value', 'outgoing_value', 'closing_value']
     if spec.get('family') in ('bp', 'bt', 'bs'):
         family = spec['family']
         if kind == 'documents':

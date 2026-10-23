@@ -56,6 +56,8 @@ def read(unit, part, key=''):
     path = _path(unit, part, key)
     raw = path.read_bytes() if path.exists() else b''
     data = json.loads(raw)['value'] if raw else _default(unit, part, key)
+    if part == 'query':
+        data = report_query.fiscal_sources(data)
     version_source = raw or json.dumps(data, ensure_ascii=False, sort_keys=True).encode('utf-8')
     return {'value': data, 'version': hashlib.sha256(version_source).hexdigest(), 'custom': bool(raw)}
 

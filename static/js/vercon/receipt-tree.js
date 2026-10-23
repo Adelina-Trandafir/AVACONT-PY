@@ -39,8 +39,10 @@ export function receiptTree(fetchLevel, byDate = () => true) {
 
   function nodes() {
     return (roots.get(mode()) || []).map(item => {
-      const id = byDate() ? documentMonthId(item.month) : documentPartyId(item.party);
+      const id = byDate() ? documentMonthId(item.month) : documentPartyId(item.cf);
       return { id, label: byDate() ? documentMonthLabel(item.month) : item.party || '—',
+        ...(byDate() ? { sortType: 'date', sortValue: item.month === 'undated' ? null : item.month + '-01', sortDirection: 'desc' }
+          : item.cf ? { rightIcon: { icon: '⋮', action: 'options', title: 'Opțiuni furnizor' } } : {}),
         children: docs.has(id) ? docs.get(id).map(documentLeaf) : [waiting(id)] };
     }).sort((a, b) => byDate() ? b.id.localeCompare(a.id) : a.label.localeCompare(b.label, 'ro', { sensitivity: 'base' }));
   }
@@ -56,9 +58,9 @@ export function receiptTree(fetchLevel, byDate = () => true) {
   async function reveal(target) {
     if (!target) return [];
     const item = byDate() ? (roots.get('months') || []).find(item => item.month === target.month)
-      : (roots.get('parties') || []).find(item => item.party.localeCompare(target.party, 'ro', { sensitivity: 'base' }) === 0);
+      : (roots.get('parties') || []).find(item => item.cf === target.cf);
     if (!item) return [];
-    const id = byDate() ? documentMonthId(item.month) : documentPartyId(item.party);
+    const id = byDate() ? documentMonthId(item.month) : documentPartyId(item.cf);
     await expand(id);
     return [id];
   }

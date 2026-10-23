@@ -35,6 +35,7 @@ export function consumptionNodes(documents) {
     children: [...months].sort(([a], [b]) => b.localeCompare(a)).map(([month, docs]) => ({
       id: `receiver-month:${encodeURIComponent(receiver)}|${month}`,
       label: month ? `${MONTHS[Number(month.slice(5)) - 1]}/${month.slice(0, 4)}` : 'Fără dată',
+      sortType: 'date', sortValue: month ? `${month}-01` : null, sortDirection: 'desc',
       children: docs.map(doc => docNode(doc,
         [format(doc.date, { type: 'date' }), doc.number, doc.annulled ? 'anulat' : ''].filter(value => value !== '' && value != null).join(' • '),
         formatMoney(doc.total))),

@@ -16,8 +16,10 @@ export function installTitleTooltips(doc = document) {
     if (tooltipsAllowed(win)) ensureTooltipStyle(doc);
   }, opts);
   let current = null, hideTimer, suppressed = null, hoverFrame = 0, hoverTarget = null;
+  const overflowAllowed = node => !node.hasAttribute('data-kbot-tooltip-overflow') ||
+    !!node.textContent.trim() && node.scrollWidth > node.clientWidth;
   const sizeObserver = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => {
-    if (current && !treeTooltipAllowed(current.source)) hide(true);
+    if (current && (!treeTooltipAllowed(current.source) || !overflowAllowed(current.source))) hide(true);
   }) : null;
   const contains = target => target && current &&
     (current.source.contains(target) || current.notice.element?.contains(target));
@@ -85,13 +87,14 @@ export function installTitleTooltips(doc = document) {
     }
     for (let node = element; node; node = node.parentElement) {
       collect(node);
+      if (node.hasAttribute('data-kbot-tooltip-overflow')) return overflowAllowed(node) ? node : null;
       if (texts.has(node)) return node;
     }
     return null;
   }
   function show(node) {
     clearTimeout(hideTimer);
-    if (node && !treeTooltipAllowed(node)) { hide(true); return; }
+    if (node && (!treeTooltipAllowed(node) || !overflowAllowed(node))) { hide(true); return; }
     if (current?.source === node) return;
     hide();
     if (!node || node.disabled || !tooltipsAllowed(win) ||
@@ -101,10 +104,11 @@ export function installTitleTooltips(doc = document) {
     described.add(descriptionId); node.setAttribute('aria-describedby', [...described].join(' '));
     // Report buttons use the requested trial values, regardless of saved defaults.
     const reportButton = node.matches('button') && node.closest('.report-view, .rpt-bar');
-    const notice = showTooltip(treeTexts.get(node) || texts.get(node), { source: node, anchor: node, descriptionId,
+    const text = node.hasAttribute('data-kbot-tooltip-overflow') ? node.textContent.trim() : treeTexts.get(node) || texts.get(node);
+    const notice = showTooltip(text, { source: node, anchor: node, descriptionId,
       ...(reportButton ? { delay: 100, duration: 20000 } : {}) });
     const entry = { source: node, notice }; current = entry;
-    if (treeTooltipTarget(node) && sizeObserver) {
+    if ((treeTooltipTarget(node) || node.hasAttribute('data-kbot-tooltip-overflow')) && sizeObserver) {
       for (let parent = node; parent; parent = parent.parentElement) sizeObserver.observe(parent);
     }
     notice.closed.then(() => {
@@ -124,13 +128,15 @@ export function installTitleTooltips(doc = document) {
   scan(doc);
   const observer = new win.MutationObserver(records => {
     for (const record of records) {
+      if (current?.source.hasAttribute('data-kbot-tooltip-overflow') && record.type !== 'attributes' &&
+        current.source.contains(record.target)) hide(true);
       if (record.type === 'attributes') collect(record.target);
-      else record.addedNodes.forEach(scan);
+      else if (record.type === 'childList') record.addedNodes.forEach(scan);
     }
     if (current && (!current.source.isConnected || current.source.disabled ||
-      current.source.closest('[data-kbot-tooltip="off"]') || !treeTooltipAllowed(current.source))) hide(true);
+      current.source.closest('[data-kbot-tooltip="off"]') || !treeTooltipAllowed(current.source) || !overflowAllowed(current.source))) hide(true);
   });
-  observer.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['title', 'disabled', 'data-kbot-tooltip'] });
+  observer.observe(doc.documentElement, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['title', 'disabled', 'data-kbot-tooltip', 'data-kbot-tooltip-overflow'] });
   doc.addEventListener('pointerover', event => {
     if (event.pointerType === 'touch' || !tooltipsAllowed(win)) return;
     if (current?.notice.element?.contains(event.target)) { clearTimeout(hideTimer); return; }
@@ -181,7 +187,7 @@ export function installTitleTooltips(doc = document) {
     }
   }, { capture: true, ...opts });
   doc.addEventListener('visibilitychange', () => { if (doc.hidden) hide(); }, opts);
-  const recheckTree = () => { if (current && !treeTooltipAllowed(current.source)) hide(true); };
+  const recheckTree = () => { if (current && (!treeTooltipAllowed(current.source) || !overflowAllowed(current.source))) hide(true); };
   win.addEventListener('resize', recheckTree, opts);
   doc.addEventListener('scroll', recheckTree, { capture: true, ...opts });
   const stop = () => {

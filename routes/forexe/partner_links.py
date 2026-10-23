@@ -64,6 +64,12 @@ def normalize_cui(value) -> str:
     return cleaned
 
 
+def fiscal_sql(expression: str) -> str:
+    """The SQL form of `normalize_cui` for a column or expression (slice 0122-03): letters and digits, upper case, a leading RO before a digit dropped."""
+    clean = "UPPER(REGEXP_REPLACE(COALESCE(" + expression + ", ''), '[^A-Za-z0-9]', ''))"
+    return "(CASE WHEN " + clean + " REGEXP '^RO[0-9]' THEN SUBSTRING(" + clean + ", 3) ELSE " + clean + " END)"
+
+
 def cod_ai(cod_ang: str, cod_ind: str) -> str:
     return f"{cod_ang}-{cod_ind}"
 

@@ -1,14 +1,15 @@
 // Existing preview protocol, with the same shared controls as the real document screens.
 import { confirmBox } from '../utils/confirm-box.js';
 import { format, parse } from './fields.js';
-import { el, scope, field, column, grid, rowMenu, snapshotPreview, showMessage } from './ui.js';
+import { el, scope, field, column, grid, rowMenu, snapshotPreview, showMessage, statusBar } from './ui.js';
 export function mountEditor(host, opts) {
   const { draft, columns, saver } = opts, headerUi = scope(), linesUi = scope(), dialogs = scope(), inputs = new Map();
   let disposed = false, linesGrid, baseline = snapshot();
   const status = el('span', { className: 'vc-save-status', role: 'status' }), header = el('div', { className: 'vc-grid vc-doc__header' }), linesHost = el('div', { className: 'vc-doc__lines' });
   const saveButton = el('button', { type: 'submit', textContent: 'Salvează', className: 'is-primary' });
   const reconcileButton = el('button', { type: 'button', textContent: 'Verifică salvarea', hidden: true }), cancelButton = el('button', { type: 'button', textContent: 'Renunță' }), previewButton = el('button', { type: 'button', textContent: 'Previzualizare' });
-  const form = el('form', { noValidate: true, className: 'vc-doc__main' }, el('h3', { textContent: 'Document • previzualizare' }), header, linesHost, el('div', { className: 'vc-actions vc-doc__bar' }, cancelButton, previewButton, reconcileButton, saveButton, status)); host.replaceChildren(form);
+  const bar = statusBar(el('div', { className: 'vc-actions vc-doc__bar' }), { start: [cancelButton, previewButton], status, end: [reconcileButton, saveButton] });
+  const form = el('form', { noValidate: true, className: 'vc-doc__main' }, el('h3', { textContent: 'Document • previzualizare' }), header, linesHost, bar); host.replaceChildren(form);
   const say = (text, bad = false) => { if (!disposed) showMessage(status, text, bad ? 'error' : 'info'); };
   const report = (error) => { if (!disposed && error.name !== 'AbortError') say(error.message || 'Operația a eșuat.', true); };
   const dirty = () => draft.dirty || headerUi.dirty() || linesUi.dirty();

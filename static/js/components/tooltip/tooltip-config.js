@@ -2,13 +2,18 @@ const KEY = 'kbot-tooltip-settings-v1';
 export const TOOLTIP_DEFAULTS = Object.freeze({
   appearance: 'soft', position: 'top-right', accent: 'blue', width: 320,
   delay: 0, duration: 6000, animation: 180, showHeader: false, title: '', icon: 'ℹ️',
+  fontFamily: '', fontSizePt: 9, textColor: '',
 });
 export const TOOLTIP_CHOICES = {
   appearance: { soft: 'Pastel', solid: 'Colorat', minimal: 'Simplu' },
   position: { 'top-right': 'Dreapta sus', 'top-left': 'Stânga sus',
     'bottom-right': 'Dreapta jos', 'bottom-left': 'Stânga jos', center: 'Centru' },
   accent: { blue: 'Galben pal', teal: 'Verde', purple: 'Violet' },
+  fontFamily: { '': 'Implicit aplicație', Calibri: 'Calibri', Carlito: 'Carlito', 'Segoe UI': 'Segoe UI',
+    Arial: 'Arial', Tahoma: 'Tahoma', Verdana: 'Verdana', 'Times New Roman': 'Times New Roman',
+    Georgia: 'Georgia', Consolas: 'Consolas' },
 };
+export const TOOLTIP_FONT_SIZE = Object.freeze({ min: 6, max: 48 });
 let current;
 export function normalizeTooltipSettings(value = {}) {
   const result = { ...TOOLTIP_DEFAULTS };
@@ -23,6 +28,15 @@ export function normalizeTooltipSettings(value = {}) {
   if (typeof value?.title === 'string') result.title = value.title.trim().slice(0, 80);
   if (typeof value?.icon === 'string') result.icon = value.icon.trim().slice(0, 16);
   if (typeof value?.showHeader === 'boolean') result.showHeader = value.showHeader;
+  const size = Number(value?.fontSizePt);
+  if (value?.fontSizePt != null && value.fontSizePt !== '' && Number.isFinite(size)) {
+    result.fontSizePt = Math.round(Math.max(TOOLTIP_FONT_SIZE.min, Math.min(TOOLTIP_FONT_SIZE.max, size)) * 10) / 10;
+  }
+  if (typeof value?.textColor === 'string') {
+    const color = value.textColor.trim().toLowerCase();
+    if (/^#[0-9a-f]{6}$/.test(color)) result.textColor = color;
+    else if (/^#[0-9a-f]{3}$/.test(color)) result.textColor = '#' + [...color.slice(1)].map(char => char + char).join('');
+  }
   return result;
 }
 export function getTooltipSettings() {

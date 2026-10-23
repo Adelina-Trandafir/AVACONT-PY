@@ -93,9 +93,9 @@ def write(cursor, anchor, groups, header, data, key, request_id):
     invoice_id = None
     if header.get('TipDoc') != 'STOC_INITIAL':
         cols = active[0]['parsed']['cols']
-        cursor.execute('INSERT INTO VC_FACTURI (PARTENER_ID,NUMAR,DATA,TOTAL,TOTAL_CONFIRMAT,LOCALA,CREAT_DE) '
+        cursor.execute('INSERT INTO VC_FACTURI (CodPartener,NUMAR,DATA,TOTAL,TOTAL_CONFIRMAT,LOCALA,CREAT_DE) '
                        'VALUES (%s,%s,%s,%s,%s,%s,%s)',
-                       (cols['IdPartener'], cols['NrFact'], cols['DataFc'], declared, int(declared is not None), int(len(active) == 1), anchor['email']))
+                       (cols['CodPartener'], cols['NrFact'], cols['DataFc'], declared, int(declared is not None), int(len(active) == 1), anchor['email']))
         invoice_id = cursor.lastrowid
         protocol.audit(cursor, anchor, 'invoice.distribution', 'VC_FACTURI', invoice_id, None,
                        {'receipts': len(active)}, key, request_id)
@@ -173,5 +173,8 @@ def register(bp, guard, scoped, session, build, repo_of, need):
                 result = write(cursor, anchor, groups, header, data, key, request.headers.get('X-Request-Id'))
                 if data.get('efactura'):   # VC06-08: the NIR(s) made from an invoice K-BOT sent close its sending, in this same transaction
                     efactura_queue.close(cursor, anchor, _int(data['efactura']), result['receipts'], request.headers.get('X-Request-Id'))
+                    if result.get('document'):
+                        from .efactura_receipts import annotate
+                        annotate(cursor, anchor, [result['document']])
                 protocol.remember(cursor, anchor, key, fingerprint, result)
                 return result

@@ -2,6 +2,8 @@
  * COMBOBOX STATE MIXIN
  * Gestionează starea internă a combobox-ului
  */
+import { orderItems } from '../../utils/typed-order.js';
+
 export const comboboxStateMixin = {
   /**
    * Inițializează starea
@@ -23,7 +25,10 @@ export const comboboxStateMixin = {
    * Actualizează rezultatele
    */
   updateResults(results, query) {
-    this.results = results || [];
+    const ordering = this.options.allowHtml && !this.options.sortValue
+      ? { ...this.options, sortValue: item => Object.hasOwn(item, 'sortValue') ? item.sortValue : this.stripHtml(item.label || item.text || '') }
+      : this.options;
+    this.results = orderItems(results || [], ordering);
     this.selectedIndex = -1;
   },
 

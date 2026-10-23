@@ -1,4 +1,5 @@
 import { patchTree } from './treeview-patch.js';
+import { orderItems } from '../../utils/typed-order.js';
 
 export const treeViewRenderMixin = {
   renderTreeWithData(data, asParent = false) {
@@ -73,7 +74,7 @@ export const treeViewRenderMixin = {
   renderNodes(nodes, query, level, parentPath, asParent = false) {
     let html = '';
 
-    nodes.forEach((node) => {
+    orderItems(nodes, this.options).forEach((node) => {
       const nodeLabel = node.label || node.name || node.text || `Item ${node.id}`;
       const nodeIdStr = String(node.id);
       const hasChildren = node.children && node.children.length > 0;
@@ -115,6 +116,7 @@ export const treeViewRenderMixin = {
       if (isParentOfMatched) itemClasses += ' parent-matched';
       if (nodeIdStr === String(this.selectedValue)) itemClasses += ' selected';
       if (node.bold) itemClasses += ' is-bold';
+      if (node.italic) itemClasses += ' is-italic';
       if (node.error) itemClasses += ' is-error';
 
       html += `

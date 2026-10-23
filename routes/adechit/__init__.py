@@ -66,6 +66,9 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
                         return jsonify(error=message, reason='SERVER'), 500
                 if authenticate:
                     return authenticate(run)()
+                from . import kbot_bridge
+                if kbot_bridge.wants(request):   # the K-BOT application (bearer), read calls of the Rapoarte page only
+                    return kbot_bridge.authenticate(run)()
                 from routes.portal.portal import require_portal_session
                 from utils.timing import timed
                 return require_portal_session(timed('ade.' + operation)(run))()

@@ -18,10 +18,10 @@ from utils.clock import bucharest_today
 
 from flask import g, request
 
-from . import depreciation_read, documents, lista, mf, oi, protocol, stock_routes, report_routes, receipt_number, receipt_choices, receipt_tree, receipt_context, receipt_routes, receipt_distribution, invoices, efactura_queue
+from . import depreciation_read, documents, lista, mf, oi, protocol, stock_routes, report_routes, receipt_number, receipt_choices, receipt_tree, receipt_context, receipt_routes, receipt_distribution, invoices, efactura_queue, supplier_merge, supplier_lookup
 from .capabilities import FormUnavailable
 from .nomenclatoare import NomError
-from . import document_order, migration_links, oi_context, oi_register_repair
+from . import document_order, food_list_portions, migration_links, oi_context, oi_register_repair, efactura_association, efactura_receipts, efactura_visibility
 
 RIGHT = {'nir': 'receptie', 'storno': 'storno', 'bc': 'consum', 'br': 'retur', 'bp': 'oi_predare', 'bt': 'oi_transfer', 'bs': 'oi_casare', 'lista': 'alimente'}
 FORM_OF = {'lista': 'lista_alimente'}   # the menu key of a family whose name differs
@@ -81,6 +81,9 @@ def register(bp, guard, scoped, open_db):
 
     def build(cursor, vctx, family, write):
         """The verified facts every statement uses: the ids come from the server-resolved context, never from the page."""
+        if family in ('nir', 'storno'):
+            from . import supplier_identity
+            supplier_identity.require(cursor)
         gest = vctx['gestiune']
         if family is not None and gest['type'] not in _types_of(family):
             raise FormUnavailable('FORM_NOT_AVAILABLE', 'Documentul nu este disponibil pentru acest tip de gestiune.', 403)
@@ -91,7 +94,7 @@ def register(bp, guard, scoped, open_db):
             cursor.execute('SELECT GestiuneId FROM VC_Gestiuni WHERE SubunitId=%s AND GestiuneId=%s FOR UPDATE',
                            (sel['subunit'], sel['gestiune']))
             cursor.fetchone()
-        return {'subunit': sel['subunit'], 'gestiune': sel['gestiune'], 'exercitiu': exercise['id'], 'email': g.portal['email'], 'type': gest['type'],
+        return {'unit': g.portal['db_name'], 'subunit': sel['subunit'], 'gestiune': sel['gestiune'], 'exercitiu': exercise['id'], 'email': g.portal['email'], 'type': gest['type'],
                 'zec': int(gest.get('zec', _DEFAULT_ZEC)), 'scale': int(gest.get('scara', _DEFAULT_SCARA)), 'year': sel['year'], 'an': exercise['an'],
                 'closed': exercise['closed']}, exercise
 
@@ -131,6 +134,8 @@ def register(bp, guard, scoped, open_db):
             ctx, _ = build(cursor, vctx, family, False)
             rows = backend(family).list_documents(cursor, ctx, family)
             document_order.annotate_rows(cursor, ctx, family, rows)
+            if family == 'nir':
+                efactura_receipts.annotate(cursor, ctx, rows)
         return {'family': family, 'documents': rows, 'year': ctx['an'], 'closed': ctx['closed'], 'scale': ctx['scale'], 'zec': ctx['zec'],
                 'can_write': RIGHT[family] in g.vercon_operations}
 
@@ -144,6 +149,11 @@ def register(bp, guard, scoped, open_db):
     receipt_routes.register(bp, guard, scoped, session, build, repo_of, _need)
     receipt_distribution.register(bp, guard, scoped, session, build, repo_of, _need)
     efactura_queue.register(bp, guard, scoped, session, build, _need)   # VC06-07: invoices sent from K-BOT
+    efactura_visibility.register(bp, guard, scoped, session, build, _need)
+    efactura_association.register(bp, guard, scoped, session, build, _need)
+    efactura_receipts.register(bp, guard, scoped, session, build, _need)
+    supplier_merge.register(bp, guard, scoped, session, build)   # duplicate suppliers and their merge
+    supplier_lookup.register(bp, guard, scoped, session, build)   # supplier info card and the ANAF check
 
     @bp.get('/api/vercon/doc/<family>/lookups')
     @guard('read')
@@ -426,6 +436,18 @@ def register(bp, guard, scoped, open_db):
             fn = migration_links.link_storno if action == 'link' else migration_links.cancel_storno
             result = recover(cursor, ctx, 'storno.orphan.' + action, line_id, data, fn)
         return {'result': result}
+
+    @bp.put('/api/vercon/doc/lista/<int:doc_id>/portions')
+    @guard('read')
+    def lista_portions(doc_id):
+        data = body()
+        _need_write('lista')
+        vctx = scoped(RIGHT['lista'], data)
+        with session(True) as cursor:
+            ctx, _ = build(cursor, vctx, 'lista', True)
+            result = food_list_portions.update(cursor, repo_of(cursor, ctx), ctx, doc_id, data, request_id())
+            doc = read_document(cursor, ctx, 'lista', doc_id)
+        return {'result': result, 'document': doc}
 
     @bp.put('/api/vercon/doc/<family>/<int:doc_id>')
     @guard('read')

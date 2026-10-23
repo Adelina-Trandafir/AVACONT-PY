@@ -9,7 +9,7 @@ import { startSessionTimer } from '../adechit/session.js';
 import { beginSessionExit } from '../utils/session-exit.js';
 import { Combobox } from '../components/combobox/combobox.js';
 import { confirmBox } from '../utils/confirm-box.js';
-import { showMessage, messageHistory } from '../portal/messages.js';
+import { notify, messageHistory } from './messages.js';
 import { installLayouts } from '../portal/layouts.js';
 import { createApi, portalToken, toPortal } from './api.js';
 import { createDraft } from './draft.js';
@@ -27,6 +27,8 @@ import { el, preview, scope } from './ui.js';
 import { bindApplicationMenu } from './application-menu.js';
 import { bindReportIdentity } from './report-identity.js';
 import { bindHelp } from './help.js';
+import { efacturaNotice } from './efactura-notice.js';
+import { showSupplierDuplicates } from './supplier-duplicates.js';
 
 const $ = (k_id) => document.getElementById(k_id);
 const lifetime = new AbortController();   // everything below is bound to this signal
@@ -38,10 +40,11 @@ const api = createApi({
   extraHeaders: () => ({ ...(lock?.token ? { 'X-Vercon-Lock': lock.token } : {}), ...(state.ctx ? { 'X-Vercon-Version': state.ctx.version } : {}) }),
 });
 lock = createLock({ api, signal: lifetime.signal, getUnit: () => state.unit,
-  onLost: (k_message) => { showMessage($('vc-message'), `${k_message} Datele dvs. au rămas în formular, dar nu mai pot fi salvate fără o nouă ocupare.`, 'error'); } });
+  onLost: (k_message) => { notify(`${k_message} Datele dvs. au rămas în formular, dar nu mai pot fi salvate fără o nouă ocupare.`, 'error'); } });
 const combos = {};
 const pageUi = scope();
-let formSequence = 0, formLoading = false, contextChanging = false, efacturaOpening = false;
+let formSequence = 0, formLoading = false, contextChanging = false, efacturaOpening = false, suppliersOffered = false;
+let supplierDuplicates = 0, supplierDuplicatesKnown = false;   // groups of duplicate suppliers: the menu entry exists only when there is something to resolve
 installLayouts();
 
 const paint = (k_kind, k_text) => {
@@ -52,8 +55,9 @@ const paint = (k_kind, k_text) => {
 const report = (k_error) => {
   if (k_error?.name === 'AbortError') return;
   console.error('[vercon]', k_error);
-  showMessage($('vc-message'), k_error.requestId ? `${k_error.message} (cod ${k_error.requestId})` : (k_error.message || 'Eroare necunoscută.'), 'error');
+  notify(k_error.requestId ? `${k_error.message} (cod ${k_error.requestId})` : (k_error.message || 'Eroare necunoscută.'), 'error');
 };
+const invoiceNotice = efacturaNotice({ api, context: () => state.ctx, onError: report });
 const query = (k_sel) => new URLSearchParams(Object.entries(k_sel).filter(([, k_v]) => k_v != null && k_v !== '').map(([k_k, k_v]) => [k_k, String(k_v)]));
 
 function logoutNow() {
@@ -70,11 +74,12 @@ async function loadContext(k_wanted) {
   try { k_ctx = await api(`/api/vercon/context?${query(k_wanted)}`); }
   catch (k_error) {
     if (k_seq !== state.seq) return false;                     // a newer request is already running
-    if (k_error.reason === 'SELECTION_CHANGED') { showMessage($('vc-message'), k_error.message, 'info'); return loadContext({}); }
+    if (k_error.reason === 'SELECTION_CHANGED') { notify(k_error.message, 'info'); return loadContext({}); }
     throw k_error;
   }
   if (k_seq !== state.seq) return false;                       // an old answer never enters a newer context
   applyContext(k_ctx);
+  if (!IS_PREVIEW) void invoiceNotice.enter(k_ctx);
   return true;
 }
 
@@ -99,6 +104,7 @@ function applyContext(k_ctx) {
   if (!k_ctx.ready) { paint('empty', 'VERCON este în pregătire pentru această unitate. Nu există încă gestiuni de lucru.'); mainMenu?.setItems([]); $('vc-menu').hidden = true; return; }
   paint('', '');
   paintMenu(k_ctx);
+  if (!supplierDuplicatesKnown) void refreshSupplierDuplicates();
 }
 
 // one emoji per operation (the key comes from the server menu)
@@ -140,6 +146,8 @@ function paintMenu(k_ctx) {
       const k_nir = k_incoming && !IS_PREVIEW ? k_list.find(k_item => k_item.key === 'nir') : null;
       if (k_nir) k_children.push({ key: 'nir_efactura', label: 'NIR din e-Factura…', icon: '📥', rule: true,
         enabled: k_nir.enabled, reason: k_nir.reason || '', run: () => openEfactura().catch(report) });
+      if (k_incoming && !IS_PREVIEW && k_nir && supplierDuplicates > 0) k_children.push({ key: 'parteneri_dublati', label: 'Parteneri dublați…', icon: '👯', rule: true,
+        enabled: k_nir.enabled, reason: k_nir.reason || '', run: () => offerSupplierMerge(false).catch(report) });
       if (k_children.length) k_items.push({ key: k_incoming ? '_intrari' : k_movements ? '_fluxuri' : '_iesiri',
         label: k_incoming ? 'Intrări' : k_movements ? 'Fluxuri / Mișcări' : 'Ieșiri', icon: k_incoming ? '📥' : k_movements ? '🔀' : '📤', group: k_group,
         dropdownMinWidth: k_incoming ? 260 : 224, enabled: k_children.some((k_child) => k_child.enabled !== false),
@@ -188,6 +196,29 @@ async function change(k_wanted) {
   finally { contextChanging = false; $('vc-work').inert = false; mainMenu?.setBusy(false); }
 }
 
+// How many groups of duplicate suppliers wait to be resolved (the same list the window shows); repaints the menu when it changes.
+async function refreshSupplierDuplicates() {
+  if (IS_PREVIEW || !state.ctx?.ready) return;
+  let k_count = 0;
+  try {
+    const k_answer = await api(`/api/vercon/suppliers/duplicates?${query(state.ctx.selection)}`);
+    k_count = k_answer.can_merge ? k_answer.groups.length : 0;
+    supplierDuplicatesKnown = true;
+  } catch (k_error) { if (k_error?.name !== 'AbortError') console.error('[vercon] supplier duplicates', k_error); return; }
+  if (k_count !== supplierDuplicates) { supplierDuplicates = k_count; if (state.ctx) paintMenu(state.ctx); }
+}
+
+// Duplicate suppliers: offered once per page when Intrari opens, and always from the Intrari menu. A merge reloads the open form.
+async function offerSupplierMerge(k_auto) {
+  if (IS_PREVIEW || contextChanging || formLoading) return;
+  if (k_auto) { if (suppliersOffered) return; suppliersOffered = true; }
+  const k_form = state.form;
+  const k_version = state.ctx.version;
+  const k_merged = await showSupplierDuplicates({ api, sel: () => state.ctx.selection, auto: k_auto });
+  if (k_merged) await refreshSupplierDuplicates();
+  if (k_merged && k_form && state.form === k_form && state.ctx.version === k_version) await openForm(k_form, { reload: true });
+}
+
 // ---- forms ------------------------------------------------------------------------------------------------------
 async function openEfactura() {
   if (IS_PREVIEW || efacturaOpening || formLoading || contextChanging) return;
@@ -211,6 +242,7 @@ async function openForm(k_key, { reload = false } = {}) {
   if (!reload && !(await allowLeave())) return;
   if (formLoading) return;
   formLoading = true; mainMenu?.setBusy(true);
+  let k_offerSuppliers = false;
   try {
   const opening = ++formSequence;
   const k_version = state.ctx.version; const k_sel = state.ctx.selection;
@@ -263,6 +295,7 @@ async function openForm(k_key, { reload = false } = {}) {
   }
   if (!IS_PREVIEW && ['nir', 'storno', 'bc', 'br', 'bp', 'bt', 'bs'].includes(k_key)) {   // documents (VC06-02..05); the preview keeps the stand-in editor
     state.editor = mountDocuments(k_work, { api, sel: () => state.ctx.selection, family: k_key, signal: lifetime.signal });
+    k_offerSuppliers = ['nir', 'storno'].includes(k_key);
     return;
   }
   if (!k_open.columns.lines.length) {
@@ -278,7 +311,10 @@ async function openForm(k_key, { reload = false } = {}) {
     onSaved: (k_revision) => { if (k_revision != null) state.revision = k_revision; },
     simulate: () => new URLSearchParams(location.search).get('simulate') || '',
   });
-  } finally { formLoading = false; mainMenu?.setBusy(false); }
+  } finally {
+    formLoading = false; mainMenu?.setBusy(false);
+    if (k_offerSuppliers) queueMicrotask(() => offerSupplierMerge(true).catch(report));
+  }
 }
 
 // ---- start ------------------------------------------------------------------------------------------------------
@@ -332,7 +368,7 @@ function bind() {
   const stopTimer = portalToken() ? startSessionTimer({ token: portalToken, host: $('vc-session-timer'), onExpired: logoutNow }) : null;
   // Native tab-exit prompts are intentionally absent; in-app navigation uses confirmBox.
   addEventListener('app:session-expired', () => { lifetime.abort(); lock.release(true); }, { once: true });
-  addEventListener('pagehide', () => { stopTimer?.(); pageUi.clear(); lock.release(true); state.editor?.destroy(); Object.values(combos).forEach((k_c) => k_c.destroy?.()); lifetime.abort(); }, { once: true });
+  addEventListener('pagehide', () => { stopTimer?.(); invoiceNotice.destroy(); pageUi.clear(); lock.release(true); state.editor?.destroy(); Object.values(combos).forEach((k_c) => k_c.destroy?.()); lifetime.abort(); }, { once: true });
 }
 
 bindReportIdentity(api, () => state.ctx?.selection);

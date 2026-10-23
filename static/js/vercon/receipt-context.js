@@ -118,10 +118,10 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
         const params = new URLSearchParams(base); params.set('receiver', draft.header.IDC);
         load('supplier', supplier, partyTitle, params, renderReceiver);
       }
-    } else if (draft.tip === 'STOC_INITIAL' || !draft.header.IdPartener || !date.ok) {
+    } else if (draft.tip === 'STOC_INITIAL' || !draft.header.CodFiscal || !date.ok) {
       stop('supplier'); message(supplier, 'Fișă furnizor', draft.tip === 'STOC_INITIAL' ? 'Stoc inițial • fără furnizor.' : !date.ok ? `Completați data ${family === 'storno' ? 'FCS' : 'facturii'}.` : family === 'storno' ? 'Alegeți recepția stornată.' : 'Alegeți furnizorul.');
     } else {
-      const params = new URLSearchParams(base); params.set('supplier', draft.header.IdPartener);
+      const params = new URLSearchParams(base); params.set('supplier', draft.header.CodFiscal);
       load('supplier', supplier, 'Fișă furnizor', params, renderSupplier);
     }
     if (!line || !validLine(line) || !date.ok) {

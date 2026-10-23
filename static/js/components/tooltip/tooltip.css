@@ -1,3 +1,7 @@
+@import url("../../../css/combobox.css");
+@import url("../../../css/textbox.css");
+@import url("../colorpicker/colorpicker.css");
+
 .kbot-tooltip-host {
   position: fixed; inset: auto; display: flex; flex-direction: column; gap: 12px;
   width: max-content; max-width: calc(100 * var(--application-vw, 1vw) - 32px);
@@ -18,15 +22,18 @@
   position: relative; box-sizing: border-box; flex-shrink: 0;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px;
   width: max-content; max-width: min(var(--kbot-tooltip-width, 320px), calc(100 * var(--application-vw, 1vw) - 32px));
-  padding: 2px; color: #302600; background: var(--kbot-tooltip-tint);
+  padding: 2px; color: var(--kbot-tooltip-text-color, #302600); background: var(--kbot-tooltip-tint);
   border: 1px solid var(--kbot-tooltip-color); border-radius: 4px;
   box-shadow: 0 2px 6px rgb(0 0 0 / .22);
-  font-family: var(--font-ui, system-ui, sans-serif); font-size: var(--fs-2xs, 12px);
+  font-family: var(--kbot-tooltip-font-family, var(--font-ui, system-ui, sans-serif)); font-size: var(--kbot-tooltip-font-size, var(--fs-2xs, 12px));
   font-weight: var(--fw-strong, 700); font-style: italic; line-height: 1.2;
   overflow: visible; pointer-events: auto;
   animation: kbot-tooltip-enter var(--kbot-tooltip-animation, 180ms) ease-out both;
 }
 .kbot-tooltip > div { min-width: 0; }
+/* The application's global font rule is important; selected tooltip fonts must also reach its children. */
+.kbot-tooltip-host[popover] .kbot-tooltip,
+.kbot-tooltip-host[popover] .kbot-tooltip * { font-family: var(--kbot-tooltip-font-family, var(--font-ui, system-ui, sans-serif)) !important; }
 .kbot-tooltip--anchored { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .kbot-tooltip--teal { --kbot-tooltip-color: #08776a; --kbot-tooltip-tint: #c9f4df; }
 .kbot-tooltip--purple { --kbot-tooltip-color: #7341a4; --kbot-tooltip-tint: #ead7ff; }
@@ -42,7 +49,7 @@
   margin: 0; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere;
   color: inherit; font: inherit;
 }
-.kbot-tooltip--solid { color: #fff; background: var(--kbot-tooltip-color); }
+.kbot-tooltip--solid { color: var(--kbot-tooltip-text-color, #fff); background: var(--kbot-tooltip-color); }
 .kbot-tooltip--minimal { box-shadow: 0 1px 3px rgb(0 0 0 / .18); }
 .kbot-tooltip--anchored::before {
   content: ''; position: absolute; left: calc(var(--kbot-tooltip-arrow-left, 12px) - 4px);
@@ -60,11 +67,11 @@
   border: 0; border-radius: 2px; background: transparent; color: inherit;
   font: inherit; font-size: var(--fs-2xs, 12px); line-height: 1; cursor: pointer;
 }
-.kbot-tooltip--solid .kbot-tooltip__close { color: #fff; }
+.kbot-tooltip--solid .kbot-tooltip__close { color: inherit; }
 .kbot-tooltip .kbot-tooltip__close:hover { background: rgb(127 127 127 / .2); }
 .kbot-tooltip .kbot-tooltip__close:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
 .kbot-tooltip--closing { animation: kbot-tooltip-exit var(--kbot-tooltip-animation, 180ms) ease-in both; pointer-events: none; }
-[data-theme="dark"] .kbot-tooltip { color: #fff2bc; background: #4a3d12; }
+[data-theme="dark"] .kbot-tooltip { color: var(--kbot-tooltip-text-color, #fff2bc); background: #4a3d12; }
 @keyframes kbot-tooltip-enter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes kbot-tooltip-exit { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .kbot-tooltip { animation-duration: 0ms; } }
@@ -87,6 +94,8 @@
   color: inherit; background: var(--card, #fff); font: inherit; font-weight: 400;
 }
 .kbot-tooltip-settings__field input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; margin: 0; }
+.kbot-tooltip-settings__font-family.combobox-container { max-width: none; display: block; }
+.kbot-tooltip-settings__font-family .combobox-input { padding-right: 28px; }
 .kbot-tooltip-settings__note { grid-column: 1 / -1; margin: 0; font-size: var(--fs-sm, 13px); line-height: 1.5; }
 .kbot-tooltip-settings__footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line, #cdd5e0); }
 .kbot-tooltip-settings__footer button {

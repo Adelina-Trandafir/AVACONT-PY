@@ -73,6 +73,12 @@ from . import tree  # noqa: E402,F401
 from . import sumar  # noqa: E402,F401
 from . import rezervari  # noqa: E402,F401
 from . import rezervari_reanaliza  # noqa: E402,F401
+# rezervari_legaturi.py -> POST /api/forexe/rezervari/repara-legaturi + the finder the tree route
+# uses (slice 0114-26): reservations linked to a revision that does not cover them.
+from . import rezervari_legaturi  # noqa: E402,F401
+# ddf_program.py -> POST /api/forexe/ddf/repara-program + the rule «SS 01A -> 0000002510, otherwise
+# 0000000000» and the finder the tree route uses (slice 0114-27): a document with the wrong program.
+from . import ddf_program  # noqa: E402,F401
 from . import istoric_luni  # noqa: E402,F401
 from . import receptii  # noqa: E402,F401
 from . import receptii_refacere  # noqa: E402,F401

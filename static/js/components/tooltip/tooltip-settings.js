@@ -1,5 +1,8 @@
-import { TOOLTIP_DEFAULTS, TOOLTIP_CHOICES, getTooltipSettings, saveTooltipSettings } from './tooltip-config.js';
+import { TOOLTIP_DEFAULTS, TOOLTIP_CHOICES, TOOLTIP_FONT_SIZE, getTooltipSettings, saveTooltipSettings } from './tooltip-config.js';
 import { ensureTooltipStyle, showTooltip } from './tooltip.js';
+import { Combobox } from '../combobox/combobox.js';
+import { TextBox } from '../textbox/textbox.js';
+import { ColorPicker } from '../colorpicker/colorpicker.js';
 
 let opened;
 export function openTooltipSettings() {
@@ -36,6 +39,23 @@ export function openTooltipSettings() {
   field('duration', 'Durată pe ecran (ms; 0 = manual)', 'number', 0, 120000);
   field('showHeader', 'Afișează antetul', 'checkbox');
   field('icon', 'Emoticon antet'); field('title', 'Antet (gol = după tipul mesajului)');
+  function fontField(caption, className = '') {
+    const holder = document.createElement('div'); holder.className = 'kbot-tooltip-settings__field';
+    const name = document.createElement('span'); name.textContent = caption;
+    const host = document.createElement('div'); host.className = className;
+    holder.append(name, host); body.append(holder);
+    return host;
+  }
+  const fontFamily = new Combobox(fontField('Familia fontului', 'kbot-tooltip-settings__font-family'), {
+    readonly: true, dropDownStyle: 'simple', placeholder: 'Implicit aplicație',
+    staticData: Object.entries(TOOLTIP_CHOICES.fontFamily).map(([value, label]) => ({ value, label })),
+  });
+  fontFamily.input.setAttribute('aria-label', 'Familia fontului');
+  const fontSize = new TextBox(fontField('Înălțimea fontului (PT)'), {
+    type: 'decimal', required: true, min: TOOLTIP_FONT_SIZE.min, maxLength: 5, allowCopyPaste: true,
+    ariaLabel: 'Înălțimea fontului în puncte, între 6 și 48',
+  });
+  const textColor = new ColorPicker(fontField('Culoarea textului'), { ariaLabel: 'Culoarea textului tooltipului' });
   const note = document.createElement('p'); note.className = 'kbot-tooltip-settings__note';
   note.textContent = 'Setări comune pentru ADECHIT, K-BOT și VERCON, în acest browser. 1000 ms = 1 secundă. Durata se suspendă cât timp cursorul sau focusul este pe tooltip și cât timp fila este ascunsă. Erorile și avertizările păstrează culori distincte. Tooltipurile sunt dezactivate în modul mobil și pe dispozitive cu interacțiune tactilă principală.';
   body.append(note);
@@ -46,9 +66,22 @@ export function openTooltipSettings() {
       if (control.type === 'checkbox') control.checked = Boolean(value[key]);
       else control.value = String(value[key]);
     }
+    fontFamily.setValue(value.fontFamily, TOOLTIP_CHOICES.fontFamily[value.fontFamily]);
+    fontSize.setValue(value.fontSizePt);
+    fontSize.clearError();
+    textColor.setValue(value.textColor);
   };
-  const read = () => Object.fromEntries([...fields].map(([key, control]) => [key,
-    control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value]));
+  const read = () => {
+    if (!form.reportValidity()) return null;
+    const size = fontSize.validate();
+    if (!size.ok) { fontSize.focus(); return null; }
+    if (Number(size.value) > TOOLTIP_FONT_SIZE.max) {
+      fontSize.setError('Înălțimea fontului poate fi de maximum 48 PT.'); fontSize.focus(); return null;
+    }
+    return { ...Object.fromEntries([...fields].map(([key, control]) => [key,
+      control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value])),
+      fontFamily: fontFamily.getSelectedValue() || '', fontSizePt: Number(size.value), textColor: textColor.getValue() };
+  };
   const footer = document.createElement('footer'); footer.className = 'kbot-tooltip-settings__footer';
   let preview;
   function button(text, run, type = 'button') {
@@ -58,14 +91,17 @@ export function openTooltipSettings() {
   }
   button('Implicit', () => { preview?.close(); fill(TOOLTIP_DEFAULTS); feedback.textContent = ''; });
   button('Previzualizare', () => {
-    if (!form.reportValidity()) return;
+    const settings = read();
+    if (!settings) return;
     preview?.close();
-    preview = showTooltip('Așa vor arăta notificările aplicațiilor. Puteți închide acest tooltip cu ×.', { ...read(), source: dialog });
+    preview = showTooltip('Așa vor arăta notificările aplicațiilor. Puteți închide acest tooltip cu ×.', { ...settings, source: dialog });
   });
   button('Renunță', () => dialog.close()); button('Salvează', null, 'submit');
   form.addEventListener('submit', event => {
     event.preventDefault();
-    const { persisted } = saveTooltipSettings(read());
+    const settings = read();
+    if (!settings) return;
+    const { persisted } = saveTooltipSettings(settings);
     preview?.close();
     if (!persisted) {
       feedback.textContent = 'Setările sunt aplicate pentru această pagină. Browserul nu permite memorarea lor; nu vor fi păstrate după reîncărcare.';
@@ -74,6 +110,7 @@ export function openTooltipSettings() {
     dialog.close();
   });
   dialog.addEventListener('close', () => {
+    fontFamily.destroy(); fontSize.destroy(); textColor.destroy();
     preview?.close(); dialog.remove(); opened = null;
     if (origin?.isConnected) origin.focus({ preventScroll: true });
   }, { once: true });

@@ -14,7 +14,10 @@ Route:
 Scope: the connected database IS the unit (g.session.db_name), like every /api/forexe/* route --
 never a parameter of the request.
 
-A database the DDL has not reached (no `Setari` table) answers 200 with NO rows, not an error:
+Slice 0123-05: two COMPUTED rows are added to the answer (never read from `Setari`): `AdechitDate` and `VerconDate`, 1 when the
+unit database holds data in the AD_ / VC_ tables, else 0. K-BOT shows the ADECHIT / VERCON tabs of its ribbon only for 1.
+
+A database the DDL has not reached (no `Setari` table) answers 200 with NO rows of its own, not an error:
 K-BOT reads «no row» as «setting off», so a unit that was never given the table simply keeps
 every server-controlled feature off.
 """
@@ -35,11 +38,38 @@ _SQL_TABLE = ("SELECT COUNT(*) FROM information_schema.TABLES "
               "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'Setari'")
 _SQL_ROWS = "SELECT Cheie, TextVizibil, Valoare, Tip FROM Setari ORDER BY Cheie"
 
+# Slice 0123-05: the unit has data of an application when ANY of these tables holds a row (a table that does not exist counts as empty).
+# Names are constants of this file, never request input.
+_DATA_TABLES = (
+    ("AdechitDate", "ADECHIT: unitatea are date in tabelele AD_", ("AD_Subunits", "AD_LunaD", "AD_Platitori")),
+    ("VerconDate", "VERCON: unitatea are date in tabelele VC_", ("VC_Gestiuni", "VC_Produse", "VC_Intrari", "VC_NIR")),
+)
+
 
 def _json_utf8(payload, status):
     """JSON answer with LITERAL diacritics (ensure_ascii=False): TextVizibil is Romanian."""
     body = json.dumps(payload, ensure_ascii=False)
     return current_app.response_class(body, status=status, mimetype="application/json")
+
+
+def _data_rows(cursor, db_name):
+    """The computed rows AdechitDate / VerconDate (Valoare 1 or 0, Tip int). A read error is raised, not turned into 0."""
+    names = [name for _, _, tables in _DATA_TABLES for name in tables]
+    cursor.execute("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN ("
+                   + ", ".join(["%s"] * len(names)) + ")", (db_name, *names))
+    existing = {row[0] for row in cursor.fetchall()}
+    rows = []
+    for key, text, tables in _DATA_TABLES:
+        has = False
+        for table in tables:
+            if table not in existing:
+                continue
+            cursor.execute(f"SELECT 1 FROM `{table}` LIMIT 1")
+            if cursor.fetchone() is not None:
+                has = True
+                break
+        rows.append({"Cheie": key, "TextVizibil": text, "Valoare": 1 if has else 0, "Tip": "int"})
+    return rows
 
 
 def _typed(cheie, valoare, tip):
@@ -69,15 +99,18 @@ def get_setari():
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
         cursor.execute(_SQL_TABLE, (db_name,))
-        if int(cursor.fetchone()[0] or 0) == 0:
-            logger.info("[setari] %s: tabelul Setari nu exista (sql/0100_02_setari.sql) -> 0 randuri", db_name)
-            return _json_utf8({"db_name": db_name, "count": 0, "rows": []}, 200)
+        no_table = int(cursor.fetchone()[0] or 0) == 0
+        computed = _data_rows(cursor, db_name)
+        if no_table:
+            logger.info("[setari] %s: tabelul Setari nu exista (sql/0100_02_setari.sql) -> doar randurile calculate", db_name)
+            return _json_utf8({"db_name": db_name, "count": len(computed), "rows": computed}, 200)
         cursor.execute(_SQL_ROWS)
         rows = [{"Cheie": cheie,
                  "TextVizibil": text,
                  "Valoare": _typed(cheie, valoare, tip),
                  "Tip": tip}
                 for (cheie, text, valoare, tip) in cursor.fetchall()]
+        rows = [r for r in rows if r["Cheie"] not in ("AdechitDate", "VerconDate")] + computed
         return _json_utf8({"db_name": db_name, "count": len(rows), "rows": rows}, 200)
     except Exception as e:
         # No swallowing: a read error says why, it does not pretend the settings are all off.

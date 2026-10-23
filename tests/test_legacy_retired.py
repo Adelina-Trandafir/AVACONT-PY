@@ -57,8 +57,8 @@ def app():
 
 RETIRED_PATHS = [
     ("POST", "/api/tools/say_hello"), ("GET", "/api/tools/pdfium_dll"), 
-    # check_update / check_updates / upload are back on purpose (routes/legacy_updater.py, temporary bridge)
-    ("GET", "/api/mfp/template_ddf"), ("GET", "/api/mfp/template_ord"), ("GET", "/api/mfp/get_ef_token"),
+    # check_update / check_updates / upload / get_ef_token are back on purpose (routes/legacy_updater.py, temporary bridge)
+    ("GET", "/api/mfp/template_ddf"), ("GET", "/api/mfp/template_ord"),
     ("GET", "/api/admin/download_baza"), ("GET", "/api/admin/download_ef"), ("GET", "/api/admin/download_forexe"),
     ("POST", "/api/admin/check_db"), ("POST", "/api/admin/setup_db"), ("POST", "/api/admin/ping_db"),
     ("POST", "/api/clasificatii/get_clasificatii_ids"), ("POST", "/api/clasificatii/mapping_clasificatii"),

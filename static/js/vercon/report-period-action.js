@@ -1,6 +1,7 @@
 // VERCON-only period editor over a PDF; the report's other query parameters stay frozen.
 import { el, field, modal, showMessage } from './ui.js';
 import { reportPeriod } from './report-period.js';
+import { generateReport, reportContext } from './report-request.js';
 
 export function reportPeriodAction({ api, name, params, catalog, dateOnly = false, isCurrent = () => true }) {
   let activeParams = new URLSearchParams(params), popup = null;
@@ -60,7 +61,7 @@ export function reportPeriodAction({ api, name, params, catalog, dateOnly = fals
       });
       try {
         showMessage(status, 'Se încarcă perioadele…', 'info');
-        const data = catalog || await api(`/api/vercon/reports/catalog?${activeParams}`);
+        const data = catalog || await api(`/api/vercon/reports/catalog?${reportContext(activeParams)}`);
         if (!alive()) return;
         const initialStart = start, initialEnd = end;
         periods.configure(data, begin, finish);
@@ -76,20 +77,21 @@ export function reportPeriodAction({ api, name, params, catalog, dateOnly = fals
   };
 
   async function regenerate(changed, alive) {
-    const generate = () => api(`/api/vercon/reports/${encodeURIComponent(name)}/generate?${changed}`);
+    const generate = () => generateReport(api, name, changed);
+    const context = reportContext(changed).toString();
     let model = await generate();
     if (!alive()) return null;
     let data;
     try {
-      data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${changed}`, { responseType: 'arrayBuffer' });
+      data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${context}`, { responseType: 'arrayBuffer' });
     } catch (error) {
       if (error.reason !== 'REPORT_EXPIRED' || !alive()) throw error;
       model = await generate();
       if (!alive()) return null;
-      data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${changed}`, { responseType: 'arrayBuffer' });
+      data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${context}`, { responseType: 'arrayBuffer' });
     }
     if (!alive()) return null;
-    const snapshot = model.snapshot, filename = model.filename, selection = changed.toString();
+    const snapshot = model.snapshot, filename = model.filename, selection = context;
     return { data, title: model.title, filename: filename + '.pdf',
       date: dateOnly ? changed.get('end') : null,
       period: { start: changed.get('start'), end: changed.get('end') },

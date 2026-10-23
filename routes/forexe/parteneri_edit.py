@@ -47,13 +47,15 @@ MAPPING (MariaDB_Schema/AVACONT_SURSA.sql)
     refused. Checked here, NOT as a MariaDB constraint -- the Access data carries duplicates.
     An existing partner whose code did not change is not re-checked, so the legacy
     duplicates stay editable.
-  * "activ" (a partner WITH activity): its IdPartener is on a DDF section A / B row or on an ORD
-    table row, or its CodFiscal is on a DDF header. That is every place the schema links a
-    partner to a document; the Access form's own rule was not in the export.
+  * "activ" (a partner WITH activity): since slice 0122-03 by its CodFiscal -- it is the CodPartener of a DDF
+    section A / B row or of an ORD table row (they hold the normalized CodFiscal), or its CodFiscal is on a DDF
+    header. The old test by IdPartener stays as well, for the databases the one-time query 0122_01 has not reached.
 
 WHY DELETE REFUSES A PARTNER WITH ACTIVITY. FX_DDF_REV_SA, FX_DDF_REV_SB and FX_ORD_TBL point at
-Parteneri with ON DELETE CASCADE: deleting a used partner would silently delete document rows.
-Such a partner can only be hidden («Ascuns»).
+Parteneri with ON DELETE CASCADE (until slice 0122-04 drops those keys): deleting a partner that rows still
+name by IdPartener would silently delete document rows, so that is always refused. A partner used only through
+its CodFiscal (slice 0122) may be deleted while ANOTHER Parteneri row has the same CodFiscal (the supplier
+stays); the LAST row of a CodFiscal with activity can only be hidden («Ascuns»).
 """
 import json
 import logging
@@ -69,13 +71,22 @@ from . import forexe_bp, partner_links
 
 logger = logging.getLogger(__name__)
 
-_ACTIVE = (
+# Slice 0122-03. Two kinds of activity: by the row id (legacy rows of Access, removed by the one-time query 0122_01) and by the
+# CodFiscal (the supplier is the normalized CodFiscal in CodPartener of the document rows).
+_ACTIVE_BY_ID = (
     "(EXISTS (SELECT 1 FROM FX_DDF_REV_SA A WHERE A.IdPartener = P.IdPartener) "
     " OR EXISTS (SELECT 1 FROM FX_DDF_REV_SB B WHERE B.IdPartener = P.IdPartener) "
-    " OR EXISTS (SELECT 1 FROM FX_ORD_TBL T WHERE T.IdPartener = P.IdPartener) "
-    " OR (COALESCE(P.CodFiscal, '') <> '' "
-    "     AND EXISTS (SELECT 1 FROM FX_DDF D WHERE D.CodFiscal = P.CodFiscal)))"
+    " OR EXISTS (SELECT 1 FROM FX_ORD_TBL T WHERE T.IdPartener = P.IdPartener))"
 )
+_ACTIVE_BY_CF = (
+    "(COALESCE(P.CodFiscal, '') <> '' "
+    " AND (" + partner_links.fiscal_sql("P.CodFiscal") + " IN ("
+    "        SELECT CodPartener FROM FX_DDF_REV_SA WHERE CodPartener IS NOT NULL "
+    "        UNION SELECT CodPartener FROM FX_DDF_REV_SB WHERE CodPartener IS NOT NULL "
+    "        UNION SELECT CodPartener FROM FX_ORD_TBL WHERE CodPartener IS NOT NULL) "
+    "      OR EXISTS (SELECT 1 FROM FX_DDF D WHERE D.CodFiscal = P.CodFiscal)))"
+)
+_ACTIVE = "(" + _ACTIVE_BY_ID + " OR " + _ACTIVE_BY_CF + ")"
 # The fiscal-code filters that need normalizing (unit CF, grouping) are applied in Python.
 # Ordered by IdPartener so the first row of each fiscal code is the one kept.
 _SQL_PARTNERS = (
@@ -100,7 +111,13 @@ _SQL_CLSF = (
 _SQL_UNITS = "SELECT IdUnitate, SursaSector FROM Unitati ORDER BY IdUnitate"
 
 _SQL_ONE = "SELECT IdPartener, IdUnitate, CodPartener, CodFiscal FROM Parteneri WHERE IdPartener = %s"
-_SQL_ONE_ACTIVE = f"SELECT {_ACTIVE} AS Activ FROM Parteneri P WHERE P.IdPartener = %s"
+# ById / ByCf: the two kinds of activity; Altele: how many OTHER Parteneri rows have the same normalized CodFiscal.
+_SQL_ONE_ACTIVE = (
+    f"SELECT {_ACTIVE_BY_ID} AS ById, {_ACTIVE_BY_CF} AS ByCf, "
+    "       (SELECT COUNT(*) FROM Parteneri Q WHERE Q.IdPartener <> P.IdPartener AND COALESCE(Q.CodFiscal, '') <> '' "
+    f"          AND {partner_links.fiscal_sql('Q.CodFiscal')} = {partner_links.fiscal_sql('P.CodFiscal')}) AS Altele "
+    "  FROM Parteneri P WHERE P.IdPartener = %s"
+)
 _SQL_INSERT = (
     "INSERT INTO Parteneri (IdUnitate, CodPartener, DenumirePartener, CodFiscal, ContIBAN, "
     "Banca, Adresa, Tip, Ascuns, Provenienta) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual')"
@@ -363,7 +380,9 @@ def delete_partener(id_partener):
         if row is None:
             _rollback(conn)
             return _json_utf8({"error": "Partenerul nu mai există în baza de date."}, 404)
-        if row["Activ"]:
+        # Slice 0122-03: refused when document rows still name this row by id, or when it is the LAST row of a
+        # CodFiscal that documents use. Another row with the same CodFiscal keeps the supplier, so this one may go.
+        if row["ById"] or (row["ByCf"] and int(row["Altele"] or 0) == 0):
             _rollback(conn)
             return _json_utf8({"error": "Partenerul apare pe documente (DDF / ORD) și nu se poate "
                                         "șterge; bifați «Ascuns» ca să nu mai apară în liste."}, 409)

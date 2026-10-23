@@ -48,7 +48,7 @@ from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 from utils.dbname import validate_db_name as _validate_db_name
 
-from . import forexe_bp
+from . import forexe_bp, partner_links
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +104,12 @@ _SQL_CLASIFICATII = (
 )
 _SQL_PARTENERI = (
     "SELECT P.* FROM Parteneri P "
-    "WHERE P.CodPartener IN (SELECT SA.CodPartener FROM FX_DDF_REV_SA SA "
-    "                        WHERE SA.CodAngajament = %s "
-    "                          AND SA.CodPartener IS NOT NULL) "
+    # Slice 0122-03: CodPartener of a row is the normalized CodFiscal (an old unit code still matches P.CodPartener).
+    "WHERE EXISTS (SELECT 1 FROM FX_DDF_REV_SA SA "
+    "               WHERE SA.CodAngajament = %s "
+    "                 AND SA.CodPartener IS NOT NULL "
+    "                 AND (SA.CodPartener = P.CodPartener "
+    "                      OR SA.CodPartener = " + partner_links.fiscal_sql("P.CodFiscal") + ")) "
     "ORDER BY P.CodPartener"
 )
 

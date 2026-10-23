@@ -10,6 +10,8 @@
 // notEndsWith lessThan greaterThan between isEmpty isNotEmpty; aggregates sum count average
 // min max countDistinct countEmpty countTrue countFalse first last.
 
+import { compareTyped } from '../utils/typed-order.js';
+
 export const ValueType = Object.freeze({ Text: 'text', Number: 'number', DateTime: 'datetime', Boolean: 'boolean' });
 
 export const Operator = Object.freeze({
@@ -96,6 +98,7 @@ export function toComparable(value, valueType) {
 }
 
 export function compareValues(a, b, valueType) {
+  if (valueType === ValueType.Number) return compareTyped(a, b, 'number');
   const x = toComparable(a, valueType);
   const y = toComparable(b, valueType);
   if (x === null && y === null) return 0;
@@ -371,7 +374,8 @@ export function buildItems({ rows, columns, filters, sort, groups, collapsed }) 
     // read the key in the column's type when it can be read that way (a date key sorts as a date)
     const x = coerceOperand(a, type);
     const y = coerceOperand(b, type);
-    const r = x !== null && y !== null && type !== ValueType.Text ? compareValues(x, y, type) : String(a).localeCompare(String(b), 'ro', { sensitivity: 'base', numeric: true });
+    const r = type === ValueType.Number ? compareValues(a, b, type)
+      : x !== null && y !== null && type !== ValueType.Text ? compareValues(x, y, type) : compareTyped(a, b, 'text');
     return g.dir === 'desc' ? -r : r;
   };
   keyed.sort((a, b) => {
@@ -383,7 +387,9 @@ export function buildItems({ rows, columns, filters, sort, groups, collapsed }) 
     }
     if (sort && colByKey.has(sort.key)) {
       const col = colByKey.get(sort.key);
-      const r = compareValues(a.row[sort.key], b.row[sort.key], col.valueType || ValueType.Text);
+      const value = row => typeof col.sortValue === 'function' ? col.sortValue(row[sort.key], row)
+        : (col.valueType || ValueType.Text) === ValueType.Text && col.formatter ? displayOf(row, sort.key) : row[sort.key];
+      const r = compareValues(value(a.row), value(b.row), col.sortType || col.valueType || ValueType.Text);
       if (r !== 0) return sort.dir === 'desc' ? -r : r;
     }
     return a.index - b.index; // stable

@@ -1,5 +1,5 @@
 // Shared column filter popup and icons; draft rows never supply checklist values.
-import { ValueType, allowedOperators, operatorCaption, operandCount, formatValue, createFilter, isBlank } from './engine.js';
+import { ValueType, allowedOperators, operatorCaption, operandCount, formatValue, createFilter, isBlank, compareValues } from './engine.js';
 import { layoutRect } from '../utils/layout-geometry.js';
 const FILTER_LIST_LIMIT = 500;
 function el(tag, className, text) {
@@ -19,13 +19,12 @@ export function filterIcon() {
 }
 export const filtering = {
   _distinctDisplayValues(col) {
-    const set = new Set();
-    this._rows.filter((row) => !this._opts.isBlankRow?.(row)).forEach((row) => set.add(formatValue(row[col.key], col)));
-    return [...set].sort((a, b) => {
-      if (a === '') return -1;
-      if (b === '') return 1;
-      return a.localeCompare(b, 'ro', { numeric: true, sensitivity: 'base' });
+    const values = new Map();
+    this._rows.filter((row) => !this._opts.isBlankRow?.(row)).forEach((row) => {
+      const raw = typeof col.sortValue === 'function' ? col.sortValue(row[col.key], row) : row[col.key];
+      values.set(formatValue(row[col.key], col), raw);
     });
+    return [...values.keys()].sort((a, b) => compareValues(values.get(a), values.get(b), col.sortType || col.valueType || ValueType.Text));
   },
 
   _openFilter(col, anchor) {

@@ -1,14 +1,20 @@
 """VC08-01: stock HTTP contracts; reuse document session/context resolution."""
 from flask import request
+from utils import vercon_suppliers as suppliers
 
 from . import numeric, protocol, stock, stock_source
 from .nomenclatoare import NomError
 
 
-def optional_id(name):
-    raw = request.args.get(name)
+def optional_id(name, source=None):
+    raw = (request.args if source is None else source).get(name)
     if raw is None or raw == '':
         return None
+    if name == 'supplier':
+        value = suppliers.code(raw)
+        if not value or len(value) > 50:
+            raise NomError('INVALID', 'Cod fiscal de furnizor invalid.', 422)
+        return value
     if name == 'category' and raw == 'none':
         return 0
     try:

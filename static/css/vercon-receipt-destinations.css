@@ -1,5 +1,5 @@
 .vc-page .vc-doc__header--nir.vc-doc__header--allocation { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); align-items: start; }
-.vc-doc__header--allocation .vc-field[data-field="IdPartener"] { grid-column: 1; grid-row: 1; }
+.vc-doc__header--allocation .vc-field[data-field="CodFiscal"] { grid-column: 1; grid-row: 1; }
 .vc-doc__header--allocation .vc-field[data-field="Accounts"] { grid-column: 1; grid-row: 2; }
 .vc-doc__header--allocation .vc-field[data-field="Numar"] { grid-column: 2; grid-row: 1; }
 .vc-doc__header--allocation .vc-field[data-field="Data"] { grid-column: 2; grid-row: 2; }

@@ -1,4 +1,4 @@
-"""MF selection identities and date-specific asset/holder catalogue. Read-only."""
+"""Shared OI/MF selection identities and MF asset/holder catalogue. Read-only."""
 from collections import defaultdict
 from decimal import Decimal
 from . import stock
@@ -38,7 +38,7 @@ def parse_selection(raw):
             chosen.add((parts[1], *values))
         return chosen
     except (ValueError, TypeError):
-        raise NomError('REPORT_FILTER', 'Selecția mijloacelor fixe este invalidă.', 422) from None
+        raise NomError('REPORT_FILTER', 'Selecția bunurilor OI / MF este invalidă.', 422) from None
 
 
 def identity(spec, row):

@@ -73,6 +73,9 @@ def pdf(model):
                 paragraph.drawOn(self.canv, self.width * element['x'], self.height - element.get('y', 0) - height)
     def render(block, available):
         kind = block['t']
+        if kind == 'form_grid':
+            from . import form_grid
+            return form_grid.pdf(block, available, para)
         if kind == 'positioned':
             return PositionedBand(block['elements'], available)
         if kind == 'break':
@@ -298,6 +301,7 @@ def xlsx(model, column_widths=None):
     row_index = 1
     centered_rows = []
     full_rows = []
+    form_headers = []
     widths = ColumnWidths(column_widths)
     edge = Side(style='thin', color='AAAAAA')
     def write(row, column, value, bold=False, point=10, numeric=False):
@@ -328,7 +332,11 @@ def xlsx(model, column_widths=None):
         nonlocal row_index
         for block in items:
             kind = block['t']
-            if kind == 'positioned':
+            if kind == 'form_grid':
+                from . import form_grid
+                form_headers.append((block, row_index))
+                row_index = form_grid.xlsx(sheet, block, row_index, write, widths)
+            elif kind == 'positioned':
                 for element in sorted(block['elements'], key=lambda e: (e.get('y', 0), e.get('x', 0))):
                     write(row_index, 1, element['text'], element.get('bold', False), element.get('size', 10))
                     if block.get('full_width'):
@@ -443,6 +451,10 @@ def xlsx(model, column_widths=None):
     for dimension in sheet.column_dimensions.values():
         index = column_index_from_string(dimension.index)
         dimension.width = widths.final(index, dimension.width)
+    if form_headers:
+        from . import form_grid
+        for block, first_row in form_headers:
+            form_grid.fit_rows(sheet, block, first_row)
     sheet.sheet_view.showGridLines = False
     sheet.page_setup.orientation = 'landscape' if model['layout']['landscape'] else 'portrait'
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4

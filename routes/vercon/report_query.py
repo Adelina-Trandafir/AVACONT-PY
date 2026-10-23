@@ -5,6 +5,7 @@ DC/subunit/gestiune/exercise boundary or submit a mutation through reports.
 No SQL is executed when an administrator saves a definition.
 """
 import re
+from utils import vercon_suppliers as suppliers
 from .tables import GESTIUNE_TABLES, EXERCITIU_TABLES
 from .nomenclatoare import NomError
 
@@ -27,6 +28,8 @@ def validate(sql):
     if set(PARAM.findall(sql)) - PARAMETERS:
         raise NomError('REPORT_QUERY', 'Interogarea folosește un parametru necunoscut.', 422)
     plain = STRINGS.sub("'literal'", sql)
+    if re.search(r'\b(IdPartener|PARTENER_ID)\b', plain, re.I):
+        raise NomError('REPORT_QUERY', 'Sursa raportului trebuie să lege furnizorii exclusiv prin cod fiscal.', 422)
     plain = MARKER.sub('REPORT_TABLE', PARAM.sub('0', plain))
     if re.search(r';|--|/\*|#|`|"|\b(INTO|OUTFILE|DUMPFILE|UPDATE|DELETE|INSERT|REPLACE|CALL|SET|WITH|FOR|LOCK|PROCEDURE|USE)\b', plain, re.I):
         raise NomError('REPORT_QUERY', 'Sunt permise numai SELECT-uri fără comentarii sau efecte secundare.', 422)
@@ -60,13 +63,37 @@ def validate(sql):
     return sql
 
 
+def fiscal_sources(sql):
+    """Adapt saved, explicitly aliased NIR/partner sources to the fiscal contract, in memory only."""
+    aliases = {}
+    plain = STRINGS.sub("''", sql)
+    for match in re.finditer(r'\{\{TABLE:(VC_NIR|Parteneri)\}\}\s+(?:AS\s+)?([A-Za-z_][A-Za-z0-9_]*)', plain, re.I):
+        aliases[match[2]] = 'CodPartener' if match[1].upper() == 'VC_NIR' else 'CodFiscal'
+    # A literal internal ID cannot be reinterpreted as a tax code. Keep such
+    # definitions editable, but let validation refuse execution until corrected.
+    for alias in aliases:
+        field = r'\b' + re.escape(alias) + r'\.IdPartener\b'
+        if (re.search(field + r"\s*(?:=|<>|!=|<=|>=|<|>|IN\s*\()\s*(?:\d|')", plain, re.I)
+                or re.search(r"(?:\b\d+|'literal')\s*(?:=|<>|!=|<=|>=|<|>)\s*" + field, plain, re.I)):
+            return sql
+    chunks = re.split('(' + STRINGS.pattern + ')', sql)
+    for index in range(0, len(chunks), 2):
+        for alias, column in aliases.items():
+            chunks[index] = re.sub(r'\b' + re.escape(alias) + r'\.IdPartener\b', alias + '.' + column, chunks[index], flags=re.I)
+    return ''.join(chunks)
+
+
 def execute(cursor, sql, ctx, params, *, result_filters=None):
+    sql = fiscal_sources(sql)
     validate(sql)
+    if 'VC_NIR' in MARKER.findall(sql):
+        from . import supplier_identity
+        supplier_identity.require(cursor)
     def scoped(match):
         table = match.group(1)
         if table == 'Parteneri':
-            return ('(SELECT p.* FROM Parteneri p WHERE p.IdPartener IN '
-                    '(SELECT n.IdPartener FROM VC_NIR n WHERE n.SubunitId=%(scope_s)s '
+            return ('(SELECT p.* FROM ' + suppliers.relation() + ' p WHERE p.CodFiscal IN '
+                    '(SELECT n.CodPartener FROM VC_NIR n WHERE n.SubunitId=%(scope_s)s '
                     'AND n.GestiuneId=%(scope_g)s AND n.ExercitiuId=%(scope_e)s))')
         where = 'SubunitId=%(scope_s)s AND GestiuneId=%(scope_g)s'
         if table in EXERCITIU_TABLES:

@@ -1,7 +1,9 @@
 """Lazy report filter branches, read through the existing scoped SELECT sources."""
 from decimal import Decimal
+from utils import vercon_suppliers as suppliers
 from . import stock, report_incoming_selection, report_outgoing_selection, report_mf_selection
 from .nomenclatoare import NomError
+from .report_order import document_order
 
 
 def account_filter(spec):
@@ -46,7 +48,8 @@ def product_nodes(source, node_id, recursive):
     rows = list(source.metadata(result_filters=filters).values())
 
     def variants(items):
-        return [{'id': f"variant:{row['variant']}", 'label': str(row['code'] or row['variant']) + ' / '
+        return [{'id': f"variant:{row['variant']}", 'sortType': 'number', 'sortValue': str(row['price']) if row['price'] is not None else None,
+                 'sortThen': [{'type': 'number', 'value': row['variant']}], 'label': str(row['code'] or row['variant']) + ' / '
                  + (stock.quantity_text(Decimal(row['price']), source.ctx['scale']) if row['price'] is not None else '—') + ' lei'}
                 for row in items]
 
@@ -86,9 +89,9 @@ def document_suppliers(source, node_id):
     supplier_key = None
     if node_id.startswith('document-supplier:'):
         supplier_key = node_id.split(':', 1)[1]
-        if supplier_key != 'none' and not supplier_key.isdecimal():
+        if supplier_key != 'none' and (suppliers.code(supplier_key) != supplier_key or not 0 < len(supplier_key) <= 50):
             raise NomError('REPORT_BRANCH', 'Furnizor invalid.', 422)
-    groups, documents = {}, {}
+    groups, documents, ordering = {}, {}, {}
     for row in source.rows('receipts'):
         day = row.get('movement_date') or row['date']
         if row['annulled'] or day is None or not source.params['start'] <= stock.day_of(day) <= source.params['end']:
@@ -96,12 +99,13 @@ def document_suppliers(source, node_id):
         supplier = str(row['supplier']) if row.get('supplier') is not None else 'none'
         if supplier_key is not None and supplier != supplier_key:
             continue
-        groups.setdefault(supplier, branch('document-supplier:' + supplier, row.get('party') or 'Fără furnizor'))
+        groups.setdefault(supplier, branch('document-supplier:' + supplier, row.get('party') or supplier if row.get('supplier') else 'Fără cod fiscal'))
         if supplier_key is not None:
             documents[row['document']] = f"{row['family'].upper()} {row['number']} / {day} / {row.get('party') or ''}"
+            ordering[f"document:{row['document']}"] = document_order(day, row['number'], row['document'])
     if supplier_key is None:
-        return {'nodes': sorted(groups.values(), key=lambda group: (group['label'].casefold(), group['id'])), 'documents': []}
-    return {'nodes': options(documents, 'document'),
+        return {'nodes': sorted(groups.values(), key=lambda group: (suppliers.name_key(group['label']), group['id'])), 'documents': []}
+    return {'nodes': [{**node, **ordering[node['id']]} for node in options(documents, 'document')],
             'documents': [{'id': item, 'label': label} for item, label in documents.items() if item is not None]}
 
 
@@ -149,13 +153,14 @@ def selection_branch(source, spec, node_id, *, recursive=False, documents=False,
         return {'nodes': options({row['category']: row['account'] for row in source.rows('oi_accounts')}, 'category-filter')}
     if node_id == 'selection:receiver' and account_filter(spec):
         return {'nodes': options({row['receiver']: row['party'] for row in source.rows('oi_holders')}, 'receiver')}
-    items = {}
+    items, ordering = {}, {}
     key = node_id.split(':', 1)[1]
     if spec['kind'] == 'food':
         for row in source.rows('food_history'):
             day = stock.day_of(row['date'])
             if day is not None and source.params['start'] <= day <= source.params['end']:
                 items[row['IdLista']] = f"{row['NumarLA']} / {row['date']}"
+                ordering[f"document:{row['IdLista']}"] = document_order(row['date'], row['NumarLA'], row['IdLista'])
     else:
         query = 'oi_documents' if account_filter(spec) else 'consumption' if spec.get('family') in ('bc', 'br') or spec['kind'].startswith('consumption') else 'receipts'
         for row in source.rows(query):
@@ -168,7 +173,8 @@ def selection_branch(source, spec, node_id, *, recursive=False, documents=False,
                 day = row.get('movement_date') or row['date']
                 if day is not None and source.params['start'] <= stock.day_of(day) <= source.params['end']:
                     items[row['document']] = f"{row['family'].upper()} {row['number']} / {day} / {row.get('party') or ''}"
-    result = {'nodes': options(items, key)}
+                    ordering[f"document:{row['document']}"] = document_order(day, row['number'], row['document'])
+    result = {'nodes': [{**node, **ordering.get(node['id'], {})} for node in options(items, key)]}
     if key == 'document':
         result['documents'] = [{'id': item, 'label': label} for item, label in items.items() if item is not None]
     return result

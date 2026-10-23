@@ -1,6 +1,7 @@
 """Receipt writes. The caller owns the transaction and the verified context."""
 from utils.clock import utc_now
 from decimal import Decimal
+from utils import vercon_suppliers as suppliers
 
 from . import numeric, protocol, receipt_choices, receipt_rules, receipt_number, receipt_auto, receipt_products
 from .nomenclatoare import NomError
@@ -26,18 +27,18 @@ def _clean_nir(cursor, repo, ctx, exercise, body, family, source=None, stored=No
     # supplier
     partner = None
     if family == 'storno':
-        partner = source['IdPartener'] if source else None
+        partner = suppliers.code(source['CodPartener']) if source else None
     else:
-        partner_id = _int(header.get('IdPartener'))
-        if doc_type == 'STOC_INITIAL' and partner_id is None:
+        fiscal = suppliers.code(header.get('CodFiscal'))
+        if doc_type == 'STOC_INITIAL' and not fiscal:
             partner = None
-        elif partner_id is None or not _one(cursor, "SELECT 1 FROM Parteneri WHERE IdPartener=%s AND COALESCE(Ascuns,0)=0 AND NULLIF(TRIM(CodFiscal),'') IS NOT NULL", (partner_id,)):
-            errors['h.IdPartener'] = 'Alegeți furnizorul.'
+        elif not suppliers.find(cursor, fiscal, active_only=True):
+            errors['h.CodFiscal'] = 'Alegeți furnizorul după codul fiscal.'
         else:
-            partner = partner_id
-    cols['IdPartener'] = partner
+            partner = fiscal
+    cols['CodPartener'] = partner
     if partner:
-        row = _one(cursor, 'SELECT DenumirePartener FROM Parteneri WHERE IdPartener=%s', (partner,))
+        row = suppliers.find(cursor, partner)
         cols['FurnizorV'] = (row['DenumirePartener'] if row else None)
     else:
         cols['FurnizorV'] = None

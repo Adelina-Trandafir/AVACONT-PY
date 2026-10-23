@@ -15,10 +15,10 @@ def add_subunit(model, unit_name, subunit_name):
     blocks, page = [], []
 
     def finish():
-        headers = [block for block in page if block['t'] == 'letterhead']
-        if headers:
-            for block in headers:
-                block['left'] = [*block['left'], caption]
+        if any(block['t'] == 'letterhead' for block in page):
+            # A builder may put the SAME letterhead dict on several pages (one per group); a copy is changed, never the shared one,
+            # or the caption would pile up once per page.
+            page[:] = [{**block, 'left': [*block['left'], caption]} if block['t'] == 'letterhead' else block for block in page]
         elif page:
             blocks.append({'t': 'text', 'text': caption, 'align': 'center'})
         blocks.extend(page)

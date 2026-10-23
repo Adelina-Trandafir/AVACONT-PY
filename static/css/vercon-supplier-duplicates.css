@@ -1,0 +1,16 @@
+/* VERCON: «Parteneri dublati» window (js/vercon/supplier-duplicates.js). Box, header, footer and table come from vercon-efactura.css (.vc-efi). */
+.vc-dup__list { display: flex; flex-direction: column; gap: 14px; min-height: 120px; max-height: 56vh; overflow: auto; }
+.vc-dup__group { padding: 8px 10px; border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); }
+.vc-dup__group h3 { margin: 0 0 6px; font-size: var(--fs-md, inherit); }
+.vc-dup .vc-efi__table tbody tr { cursor: default; }
+.vc-dup .vc-efi__table td.is-center, .vc-dup .vc-efi__table th:nth-child(-n+2) { text-align: center; }
+.vc-dup .vc-efi__table td.is-number { width: 1%; }
+.vc-dup__actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.vc-dup__actions > button { min-width: 120px; min-height: 34px; padding: 6px 16px; color: inherit; background: var(--sky-2, #eaf2fb); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); font: inherit; font-weight: 650; cursor: pointer; }
+.vc-dup__actions > button.is-primary { color: #fff; background: var(--blue, #309eff); border-color: var(--blue, #309eff); }
+.vc-dup__actions > button:disabled { opacity: .5; cursor: default; }
+.vc-dup__actions > button:focus-visible { outline: 2px solid var(--blue, #309eff); outline-offset: 1px; }
+.vc-dup__actions { align-items: center; gap: 8px; }
+.vc-dup__note { flex: 1 1 auto; min-width: 0; margin: 0; line-height: 1.3; }
+.vc-dup__note[data-state="error"] { color: #c0392b; }
+.vc-dup__actions > button:not(.is-primary):hover:not(:disabled) { background: var(--sky-1, #f3f8fe); }

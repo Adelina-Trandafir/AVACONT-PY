@@ -1,5 +1,5 @@
 // VC08-02: date projection from the server; no local accounting calculations.
-import { el, field, grid, column, modal, preview, showMessage } from './ui.js';
+import { el, field, grid, column, modal, preview, showMessage, statusBar } from './ui.js';
 import { decimalText } from './decimal-text.js';
 
 const statusText = { invalid: 'Date de corectat', not_entered: 'Neintrată la data aleasă', not_in_use: 'Nepredat',
@@ -33,7 +33,7 @@ export function openDepreciation(asset, opts, owner) {
   const dataGrid = grid(host, { columns, rows: [], rowKey: 'row_id', footer: false, layoutId: 'vercon.mf.depreciation' }, view.scope);
   const explanation = el('p', { className: 'vc-mf-amortization__note', textContent:
     'Calcul la data aleasă, cu parametrii curenți din registru și valoarea curentă a variantei. Durata deja folosită (DF) se adaugă la lunile calendaristice de la prima predare; transferul păstrează începutul. Valorile sursă rămân păstrate.' });
-  view.body.append(toolbar, status, explanation, host, totals, warnings);
+  view.body.append(toolbar, explanation, host, totals, warnings);
   const close = el('button', { type: 'button', textContent: 'Închide' }); close.addEventListener('click', view.close);
   const pdf = el('button', { type: 'button', textContent: 'Previzualizare', disabled: true });
   pdf.addEventListener('click', () => {
@@ -43,7 +43,7 @@ export function openDepreciation(asset, opts, owner) {
       { title: 'Parametri și observații', columns: [{ key: 'label', title: 'Parametru', width: 230 }, { key: 'value', title: 'Valoare / observație', width: 650 }], rows: diagnostics }], view.scope,
     { documentLabel: asset.code || asset.name, date: state.data.date });
   });
-  view.footer.append(close, pdf);
+  statusBar(view.footer, { start: [close], status, end: [pdf] });
 
   function diagnosticRows() {
     const row = state.data?.assets[0]; if (!row) return [];

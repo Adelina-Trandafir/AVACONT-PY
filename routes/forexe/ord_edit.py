@@ -93,7 +93,7 @@ from flask import request, g, current_app
 from routes.auth.guard import require_session
 from utils.database import get_kbot_connection, COMMON_DB
 
-from . import forexe_bp
+from . import forexe_bp, partner_links
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +282,8 @@ def incarca_dic_part_ind(cursor, cod: str) -> dict:
     for r in cursor.fetchall():
         cheie = _txt(r["CodIndicator"])
         if cheie not in dic:
-            dic[cheie] = (_txt(r["CodPartener"]), _int_or_none(r["IdPartener"]))
+            # Slice 0122-02: the partner of an indicator is its CodFiscal (normalized); no IdPartener.
+            dic[cheie] = (partner_links.normalize_cui(r["CodPartener"]), None)
     return dic
 
 
@@ -1114,8 +1115,8 @@ def get_ord_draft(idordp):
             "valoare": _num(r["Valoare"]),
             "ramas": _num(r["Ramas"]),
             "explicatie": _txt(r["Explicatie"]),
-            "cod_partener": _txt(r["CodPartener"]),
-            "id_partener": _int_or_none(r["IdPartener"]),
+            "cod_partener": partner_links.normalize_cui(r["CodPartener"]),
+            "id_partener": None,
         } for r in cursor.fetchall()]
 
         cursor.execute(_SQL_DRAFT_REC, (idordp,))
@@ -1322,7 +1323,6 @@ def valideaza_graf(cursor, sarcina: dict) -> None:
     id_clsf_ceruti = set()
     cod_ai_ceruti = set()
     id_unitati_cerute = set()
-    id_parteneri_ceruti = set()
     for i, l in enumerate(linii, start=1):
         if _num(l.get("valoare")) == 0.0:
             motive.append(f"Valoare = 0 pe rândul de plată #{i}.")
@@ -1343,9 +1343,6 @@ def valideaza_graf(cursor, sarcina: dict) -> None:
             motive.append(f"Unitatea lipsește pe rândul de plată #{i}.")
         else:
             id_unitati_cerute.add(id_unitate)
-        id_partener = _int_or_none(l.get("id_partener"))
-        if id_partener:
-            id_parteneri_ceruti.add(id_partener)
 
     documente = _lista(sarcina, "documente")
     if not documente:
@@ -1363,8 +1360,6 @@ def valideaza_graf(cursor, sarcina: dict) -> None:
                                       "Indicatorul «{}» nu există (CodAI)."))
     motive.extend(_verifica_existenta(cursor, "Unitati", "IdUnitate", id_unitati_cerute,
                                       "Unitatea {} nu există."))
-    motive.extend(_verifica_existenta(cursor, "Parteneri", "IdPartener", id_parteneri_ceruti,
-                                      "Partenerul {} nu există în nomenclator."))
 
     if motive:
         raise DateInvalide("Nu se poate salva din următoarele motive:\n- " + "\n- ".join(motive))
@@ -1664,7 +1659,8 @@ def _scrie_graf(cursor, sarcina: dict) -> dict:
             _num(l.get("valoare")), _num(l.get("ramas")),
             _txt(l.get("explicatie")),
             _int_or_none(l.get("id_clsf")),
-            _txt(l.get("cod_partener")) or None, _int_or_none(l.get("id_partener")),
+            # Slice 0122-02: CodPartener = normalized CodFiscal of the supplier, IdPartener never written.
+            partner_links.normalize_cui(l.get("cod_partener")) or None, None,
             _int_or_none(l.get("id_unitate")),
         )
         if real > 0:

@@ -9,6 +9,9 @@ const titles = { categorii: 'Categorii / Conturi', produse: 'Produse', variante:
   comisie_inventar: 'Comisie Inventariere', feluri: 'Feluri de mâncare' };
 
 function mountCrud(host, opts) {
+  const committee = ['comisie_nir', 'comisie_inventar'].includes(opts.kind);
+  if (committee) opts = { ...opts, rowSave: true };
+  const incompleteRow = committee ? 'Comisia nu poate fi salvată.' : 'Produsul nu poate fi salvat.';
   const ui = scope();
   const state = { rows: [], columns: opts.initialColumns || [], lookups: {}, labels: {}, selected: null, selectedId: null, canWrite: false,
     filter: '', visibility: opts.visibility || 'active', adding: null };
@@ -100,7 +103,7 @@ function mountCrud(host, opts) {
     if (!unsaved.has(item.__key)) return item;
     const missing = state.columns.find((spec) => spec.required && (item[spec.key] == null || String(item[spec.key]).trim() === ''));
     if (missing) {
-      const message = 'Produsul nu poate fi salvat. Completați ' + missing.label + ' în rând.';
+      const message = incompleteRow + ' Completați ' + missing.label + ' în rând.';
       if (opts.rowSave) throw new Error(message);
       say('Completați ' + missing.label + ' în rând.'); return item;
     }
@@ -133,7 +136,7 @@ function mountCrud(host, opts) {
   function rowIssue(item) {
     if (!unsaved.has(item.__key) || blank(item)) return '';
     const missing = state.columns.filter((spec) => spec.required && (item[spec.key] == null || String(item[spec.key]).trim() === ''));
-    return missing.length ? 'Produsul nu poate fi salvat. Completați: ' + missing.map((spec) => spec.label).join(', ') + '.' : '';
+    return missing.length ? incompleteRow + ' Completați: ' + missing.map((spec) => spec.label).join(', ') + '.' : '';
   }
   async function finishRow(item) {
     if (blank(item)) { unsaved.delete(item.__key); return true; }
@@ -211,7 +214,7 @@ function mountCrud(host, opts) {
           if (requests.has(item.__key)) dataGrid.cancelEdit(true);
           if (dataGrid.hasEdit && !await dataGrid.commitEdit()) return;
           const adding = !!item.__new;
-          if (opts.rowSave) { if (!await finishRow(item) || adding) return; }
+          if (opts.rowSave) { if (!await finishRow(item) || adding && opts.explicitAdd) return; }
           else await persist(item);
           dataGrid.setRows(visible(), { keepWidths: true }); await choose(item);
         }
@@ -239,18 +242,19 @@ function mountCrud(host, opts) {
       rowIssue: opts.rowSave ? rowIssue : undefined,
       confirmRowIssue: opts.rowSave ? async ({ row, message }) => {
         const keep = await confirmBox(message + ' Continuați editarea?',
-          { title: 'Produs incomplet', yes: 'Continuă editarea', no: 'Anulează rândul', warning: true });
+          { title: committee ? 'Comisie incompletă' : 'Produs incomplet', yes: 'Continuă editarea', no: 'Anulează rândul', warning: true });
         if (!keep) unsaved.delete(row.__key);
         return keep ? 'continue' : 'cancel';
       } : undefined,
       onRowLeave: opts.rowSave ? async ({ row }) => {
-        const completingAdd = !!row.__new && unsaved.has(row.__key) && !blank(row);
+        const completingAdd = !!opts.explicitAdd && !!row.__new && unsaved.has(row.__key) && !blank(row);
         return await finishRow(row) && !completingAdd;
       } : undefined,
       editGuard: (item) => busy || requests.has(item.__key) ? 'Așteptați confirmarea sau reîncercați salvarea din ⋮.' : '',
       columns: [...displayColumns.map((spec) => column(opts.rowSave ? { ...spec, required: false } : spec, { width: 1, minWidth: 0, editable, required: spec.required,
         options: (state.lookups[spec.key] || []).map((choice) => ({ value: choice.id, label: choice.label })),
         formatter: (value) => text(value, spec),
+        ...(spec.type === 'ref' || spec.type === 'choice' ? { sortValue: value => text(value, spec), sortType: 'text' } : {}),
         filterValue: opts.filterByLabel && spec.type === 'ref' ? (value) => text(value, spec) : undefined,
         cellAction: (opts.pickerColumns || [opts.pickerColumn]).includes(spec.key)
           ? { text: '...', label: spec.key === 'CC' ? 'Alege clasificarea MF' : 'Alege codul CPV', selectedOnly: true, disabled: !state.canWrite } : undefined,

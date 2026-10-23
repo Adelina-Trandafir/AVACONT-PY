@@ -1,7 +1,7 @@
 """Report data from owner-editable SQL. Exact decimals until the output boundary."""
 from collections import defaultdict
 from decimal import Decimal, localcontext
-from . import numeric, report_query, report_store, stock, oi_accounts
+from . import numeric, report_query, report_store, stock, oi_accounts, stock_valuation
 from .nomenclatoare import NomError
 
 REQUIRED_FIELDS = {
@@ -148,7 +148,7 @@ def aggregate(rows, keys, amounts=('quantity', 'value')):
         return [{**row, **{a: None if row[a] is None else format(row[a], 'f') for a in amounts}} for row in groups.values()]
 
 
-def balances(source, final=False):
+def balances(source, final=False, *, hide_empty=False):
     ctx, params, metadata = source.ctx, source.params, source.metadata()
     chosen = {key: row for key, row in metadata.items() if all(
         selected(row.get(field), params, field) for field in ('variant', 'category'))}
@@ -165,15 +165,16 @@ def balances(source, final=False):
     rows = []
     for (variant,), quantities in grouped.items():
         info = chosen[variant]
-        if info['price'] is None or info['price'] < 0:
-            raise NomError('STOCK_PRICE_INVALID', 'Prețul variantei nu permite evaluarea stocului.', 409)
         if final and quantities['closing'] == 0:
             continue
         amounts = {'opening': quantities['opening'], 'incoming': sum(quantities[k] for k in stock.POSITIVE),
                    'outgoing': sum(quantities[k] for k in stock.NEGATIVE), 'closing': quantities['closing']}
-        rows.append({**info, 'price': exact(info['price'], ctx['scale']),
+        if hide_empty and not params.get('show_without_movements') and not any(amounts.values()):
+            continue
+        price = stock_valuation.price(info)
+        rows.append({**info, 'price': exact(price, ctx['scale']),
                      **{k: exact(v, ctx['scale']) for k, v in amounts.items()},
-                     **{k + '_value': stock.value_text(v, info['price'], ctx['scale']) for k, v in amounts.items()}})
+                     **{k + '_value': stock.value_text(v, price, ctx['scale']) for k, v in amounts.items()}})
     sheets = []
     for m in statements:
         info = chosen[m['p']]
@@ -212,7 +213,7 @@ def dataset(source, spec):
         return rows
     kind = spec['kind']
     if kind in ('balance', 'product', 'accounts', 'final', 'inventory', 'statement'):
-        rows, statements = balances(source, kind in ('final', 'inventory'))
+        rows, statements = balances(source, kind in ('final', 'inventory'), hide_empty=kind == 'balance')
         if kind == 'accounts':
             rows = aggregate(rows, ('category', 'account'), ('opening_value', 'incoming_value', 'outgoing_value', 'closing_value'))
         if kind == 'statement':
@@ -226,9 +227,9 @@ def dataset(source, spec):
         rows = documents(source, None if spec.get('include_storno') else family, include_returns=spec.get('include_returns', False))
         if spec.get('include_storno'):
             rows = [storno_display(row) if row['family'] == 'storno' else row for row in rows]
-            rows.sort(key=lambda row: (row['date'], str(row['document'])), reverse=True)
+            rows.sort(key=lambda row: (row['date'], row['document']), reverse=True)
         if spec.get('include_returns') or spec.get('outgoing_selection'):
-            rows.sort(key=lambda row: (row['date'], str(row['document'])), reverse=True)
+            rows.sort(key=lambda row: (row['date'], row['document']), reverse=True)
         if kind == 'document_summary':
             rows = aggregate(rows, ('document', 'category', 'account'), ('value',))
         return rows

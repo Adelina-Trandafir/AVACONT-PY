@@ -10,6 +10,23 @@ ALL = ('MATERIALE', 'ALIMENTE', 'OI', 'MF')
 G = ('MATERIALE', 'ALIMENTE')
 CATALOG = {}
 
+# The OI branch follows the Access reference; Magazie remains a separate root.
+# Reuse the MF selection protocol and its coupled account/holder/document/product
+# identities, rather than the old independent use-account and holder filters.
+OI_REPORTS = {
+    'OI_Bon_BS': ('BONURI', 'Bonuri casare', 'bons'),
+    'OI_Bon_BP': ('BONURI', 'Bonuri predare', 'bons'),
+    'OI_Bon_BT': ('BONURI', 'Bonuri transfer', 'bons'),
+    'OI_Fisa_Evidenta_Produse': ('PRODUSE', 'Situație produse', 'balance'),
+    'OI_Fisa_Evidenta_Produse_STOC': ('PRODUSE', 'Stoc final produse', 'balance'),
+    'OI_Balanta': ('PRODUSE', 'Balanță obiecte inventar', 'balance'),
+    'OI_LISTA_INVENTAR_TOTAL': ('PRODUSE', 'Lista inventar', 'balance'),
+    'OI_Fisa_Evidenta_Primitori': ('PRIMITORI', 'Situație primitor', 'inventory'),
+    'OI_Fisa_Evidenta_Primitori_STOC': ('PRIMITORI', 'Stoc final primitor', 'inventory'),
+    'OI_LISTA_INVENTAR': ('PRIMITORI', 'Lista inventar', 'inventory'),
+    'OI_Fisa_Evidenta': ('PRIMITORI', 'Fișă de evidență / spații O.I.', 'inventory'),
+}
+
 
 def add(names, kind, types=ALL, group='Magazie', **options):
     for name in names.split('|'):
@@ -22,8 +39,8 @@ add('Centralizator_Conturi', 'accounts', group='Centralizatoare')
 add('Fisa_Produsului', 'product')
 add('Stoc_Final', 'final')
 add('LISTA_INVENTAR', 'inventory')
-add('Fisa_Magazie|FM1-u|FM2', 'statement', variant_required=True)
-add('Fisa_Magazie_BF', 'statement', variant_required=True)
+add('Fisa_Magazie|FM1-u|FM2', 'statement')
+add('Fisa_Magazie_BF', 'statement')
 add('OI_Balanta', 'balance', ('OI',), 'Obiecte de inventar', ledger='custody')
 add('MF_Balanta|MF_Balanta_Subinv', 'balance', ('MF',), 'Mijloace fixe', ledger='custody')
 add('OI_LISTA_INVENTAR|MF_LISTA_INVENTAR', 'inventory', ('OI', 'MF'),
@@ -104,6 +121,10 @@ def spec_of(name, gest_type):
         raise NomError('REPORT_UNKNOWN', 'Raportul nu există sau este exclus din portare.', 404)
     if gest_type not in spec['types']:
         raise NomError('FORM_NOT_AVAILABLE', 'Raportul nu este disponibil pentru acest tip de gestiune.', 403)
+    selection_mode = MF_SELECTION_MODES.get(spec['id']) if gest_type == 'MF' else None
+    if gest_type == 'OI' and spec['id'] in OI_REPORTS:
+        group, label, selection_mode = OI_REPORTS[spec['id']]
+        spec = {**spec, 'group': group, 'tree_group': group, 'label': label}
     if spec['kind'] == 'depreciation':
         filters = ['variant']
     elif spec.get('ledger') == 'custody':
@@ -118,10 +139,18 @@ def spec_of(name, gest_type):
         filters = ['category', 'variant', 'receiver', 'document']
     else:
         filters = ['category', 'variant', 'supplier', 'document']
+    if spec['id'] == 'OI_Balanta':
+        filters = ['category', 'variant']
     return {**spec, 'filters': filters,
-            'mf_selection': MF_SELECTION_MODES.get(spec['id']) if gest_type == 'MF' else None,
+            'mf_selection': selection_mode,
             'outgoing_filters': spec.get('family') in ('bc', 'br') or spec['kind'].startswith('consumption')}
 
 
 def catalog(gest_type):
+    if gest_type == 'OI':
+        warehouse = [spec_of(spec['id'], gest_type) for spec in CATALOG.values()
+                     if gest_type in spec['types'] and spec.get('ledger') != 'custody'
+                     and spec.get('family') not in ('bp', 'bt', 'bs')
+                     and spec['kind'] != 'depreciation']
+        return warehouse + [spec_of(name, gest_type) for name in OI_REPORTS]
     return [spec_of(spec['id'], gest_type) for spec in CATALOG.values() if gest_type in spec['types']]

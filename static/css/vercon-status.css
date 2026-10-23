@@ -1,0 +1,51 @@
+/* Stable action positions: message length cannot resize the outer columns. */
+.vc-page .vc-status-bar, .vc-page .vc-doc .vc-doc__bar.vc-status-bar,
+.vc-efi footer.vc-status-bar, .vc-modal footer.vc-status-bar {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-areas: none;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.vc-status-bar__start, .vc-status-bar__end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vc-status-bar__end { justify-content: flex-end; }
+.vc-status-bar__start > button, .vc-status-bar__end > button { flex: 0 0 auto; white-space: nowrap; }
+.vc-status-bar__messages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 1.4em;
+  overflow: hidden;
+}
+.vc-save-status,
+.vc-status-bar .vc-status-bar__messages > :is(.vc-save-status, .vc-hint) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  text-align: center;
+}
+.vc-status-bar__messages > :is(.vc-save-status, .vc-hint) { flex: 1 1 0; }
+.vc-save-status[hidden] { display: none; }
+.vc-status-bar .vc-status-bar__messages > :is([hidden], :empty) { display: none; }
+.vc-save-status:focus-visible, .vc-status-bar__messages > .vc-hint:focus-visible {
+  outline: 1px solid var(--blue, #309eff);
+  outline-offset: -1px;
+}
+/* Preserve the established widths of the inline document action buttons. */
+.vc-doc:is(.vc-doc--nir, .vc-doc--storno, .vc-doc--bc, .vc-doc--bp, .vc-doc--bt, .vc-doc--bs)
+  .vc-doc__bar--nir-editing .vc-status-bar__start > button,
+.vc-doc:is(.vc-doc--nir, .vc-doc--storno, .vc-doc--bc, .vc-doc--bp, .vc-doc--bt, .vc-doc--bs)
+  .vc-doc__bar--nir-editing .vc-status-bar__end > button { width: 8em; box-sizing: border-box; }

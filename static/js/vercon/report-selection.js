@@ -24,7 +24,8 @@ export function selectionNodes(response) {
         const node = { id: `product:${category}:${product}`, label: `${item.name || item.label}${item.um ? ' / ' + item.um : ''}`, children: [] };
         bucket.products.set(product, node); bucket.children.push(node);
       }
-      bucket.products.get(product).children.push({ id: `variant:${item.id}`, label: item.variant_label || item.label });
+      bucket.products.get(product).children.push({ id: `variant:${item.id}`, label: item.variant_label || item.label,
+        sortType: 'number', sortValue: item.price, sortThen: [{ type: 'number', value: item.id }] });
     }
     const children = [...categories.values()].map(({ products, ...node }) => node);
     nodes.push(...children);

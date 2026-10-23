@@ -1,4 +1,4 @@
-"""Reverse chronological edits/cancellations of BCs and food lists.
+"""Reverse chronological cancellation and full food-list edits.
 
 The route holds the gestiune row lock for writes. Cancelled records are skipped;
 within one day the larger primary key is the last record. No transaction is opened here.
@@ -6,6 +6,7 @@ within one day the larger primary key is the last record. No transaction is open
 from datetime import date
 
 from .nomenclatoare import NomError
+from . import consumption_period
 
 SPECS = {
     'bc': ('VC_Iesiri_H', 'IdBonConsum', 'DataBC', 'NumarBC', ' AND COALESCE(Retur,0)=0', 'bon de consum'),
@@ -28,6 +29,8 @@ def latest(cursor, ctx, family, exclude=None):
 def message(family, last):
     label = SPECS[family][-1]
     suffix = (' (nr. %s, %s)' % (last['number'], last['day'].strftime('%d.%m.%Y') if last['day'] else 'fără dată')) if last else ''
+    if family == 'bc':
+        return 'Anularea este permisă numai pentru ultimul bon de consum%s.' % suffix
     return ('Modificarea și anularea sunt permise numai în ordine inversă cronologică. '
             'Se poate modifica sau anula doar ultimul document de tip %s%s.' % (label, suffix))
 
@@ -52,6 +55,8 @@ def annotate_rows(cursor, ctx, family, rows):
         for row in rows:
             row['order_locked'] = not last or row['id'] != last['id']
             row['order_message'] = message(family, last) if row['order_locked'] else ''
+    if family == 'bc':
+        consumption_period.annotate(cursor, ctx, rows)
     return rows
 
 

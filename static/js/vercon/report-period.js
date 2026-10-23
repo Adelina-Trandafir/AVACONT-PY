@@ -29,12 +29,14 @@ export function reportPeriod(owner, onChange) {
       const nodes = periods.map(period => {
         const year = period.year;
         const lastMonth = Math.max(0, Math.min(12, Number(period.last_movement_month ?? period.max?.slice(5, 7) ?? 0)));
-        const range = (id, label, start, finish) => {
+        const range = (id, label, start, finish, sortDate = start) => {
           ranges.set(id, { start, end: finish, label: `${label} / ${year}` });
-          return { id, label, keywords: `${label} ${year} ${start.slice(5, 7)}` };
+          return { id, label, keywords: `${label} ${year} ${start.slice(5, 7)}`,
+            sortType: 'date', sortValue: sortDate, sortDirection: 'desc' };
         };
-        return { id: `year:${year}`, label: String(year), selectable: false, children: [
-          range(`period:${year}:all`, 'Tot anul', `${year}-01-01`, `${year}-12-31`),
+        return { id: `year:${year}`, label: String(year), selectable: false,
+          sortType: 'date', sortValue: `${year}-01-01`, sortDirection: 'desc', children: [
+          range(`period:${year}:all`, 'Tot anul', `${year}-01-01`, `${year}-12-31`, `${year}-12-31`),
           ...Array.from({ length: lastMonth }, (_, index) => lastMonth - index - 1)
             .map(month => range(`period:${year}:${month}`, MONTHS[month],
               `${year}-${String(month + 1).padStart(2, '0')}-01`, monthEnd(year, month))),
@@ -43,7 +45,7 @@ export function reportPeriod(owner, onChange) {
       if (data.all_years) {
         const id = 'period:all-years', label = 'TOTI anii';
         ranges.set(id, { ...data.all_years, label });
-        nodes.unshift({ id, label });
+        nodes.unshift({ id, label, sortType: 'date', sortValue: `${Math.max(...data.years)}-12-31`, sortDirection: 'desc' });
       }
       // Accounting periods include every calendar day, even without movements.
       const min = `${Math.min(...data.years)}-01-01`;

@@ -6,6 +6,7 @@ Neither read creates a price variant or incorporates an unsaved draft.
 """
 from datetime import date
 from decimal import Decimal
+from utils import vercon_suppliers as suppliers
 
 from flask import request
 
@@ -44,18 +45,19 @@ def _id(name, required=True):
 
 
 def supplier_statement(cursor, ctx, supplier, on):
-    partner = _one(cursor, 'SELECT IdPartener, DenumirePartener, CodFiscal FROM Parteneri WHERE IdPartener=%s', (supplier,))
+    supplier = suppliers.code(supplier)
+    partner = suppliers.find(cursor, supplier)
     if not partner:
         raise NomError('NOT_FOUND', 'Furnizorul nu mai există.', 404)
-    # The picker deduplicates fiscal codes; include documents of the other identities of that same supplier.
+    # Every document and every picker uses the same fiscal identity.
     rows = _all(cursor,
         'SELECT n.IdIntrare AS id, COALESCE(n.DataFc,n.Data) AS day, n.NrFact AS invoice, '
         'n.Valoare AS amount, COALESCE(n.Storno,0) AS storno '
-        'FROM VC_NIR n LEFT JOIN Parteneri p ON p.IdPartener=n.IdPartener '
+        'FROM VC_NIR n '
         'WHERE n.SubunitId=%s AND n.GestiuneId=%s AND n.ExercitiuId=%s '
         'AND n.Anulat=0 AND DATE(COALESCE(n.DataFc,n.Data))<=%s '
-        "AND (n.IdPartener=%s OR (NULLIF(TRIM(%s),'') IS NOT NULL AND TRIM(p.CodFiscal)=TRIM(%s))) "
-        'ORDER BY day,n.IdIntrare', (*_scope(ctx), on, supplier, partner['CodFiscal'], partner['CodFiscal']))
+        'AND n.CodPartener=%s '
+        'ORDER BY day,n.Numar,n.NumarSub', (*_scope(ctx), on, supplier))
     total = Decimal(0)
     entries = []
     for row in rows:
@@ -149,7 +151,9 @@ def register(bp, guard, scoped, session, build, need):
             raise NomError('FAMILY_UNKNOWN', 'Bonul de consum folosește fișa gestionarului.', 404)
         statement_family(family)
         vctx = scoped('read')
-        supplier = _id('supplier')
+        supplier = suppliers.code(request.args.get('supplier'))
+        if not supplier or len(supplier) > 50:
+            raise NomError('INVALID', 'Cod fiscal de furnizor invalid.', 422)
         on = protocol.to_date(request.args.get('date'), 'Data fișei')
         with session(False) as cursor:
             ctx, _ = build(cursor, vctx, family, False)

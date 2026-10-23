@@ -15,8 +15,8 @@ export function stornoSourceField(owner, sources, value, fallback, editable, onC
   node.append(host, input);
   const suppliers = new Map();
   for (const doc of sources) {
-    const id = `${doc.party_id ?? ''}:${doc.party || ''}`;
-    if (!suppliers.has(id)) suppliers.set(id, { id: `supplier:${id}`, label: doc.party || 'Fără furnizor', children: [] });
+    const id = String(doc.party_cf ?? '');
+    if (!suppliers.has(id)) suppliers.set(id, { id: `supplier:${id}`, label: doc.party_cf ? doc.party || doc.party_cf : 'Fără cod fiscal', children: [] });
     suppliers.get(id).children.push({ id: String(doc.id), label: sourceLabel(doc) });
   }
   const combo = owner.own(new ComboTree(host, { nodes: [...suppliers.values()], placeholder: 'Alegeți NIR-ul…',

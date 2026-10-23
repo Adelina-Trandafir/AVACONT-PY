@@ -1,16 +1,17 @@
-/* BC shares the inline document workspace and context cards with NIR. */
+/* BC shares the inline document workspace and context cards with NIR. Its header is three rows of two columns:
+   Receiver | Number, Account | Date, Explanations across the whole width. */
 .vc-page .vc-doc--bc .vc-doc__header {
   width: min(100%,1076px);
   margin-inline: auto;
-  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-columns: repeat(2,minmax(0,1fr));
   gap: 12px;
   padding-top: 0;
 }
 .vc-doc--bc .vc-doc__header .vc-field[data-field="IDC"] { grid-column: 1; grid-row: 1; }
-.vc-doc--bc .vc-doc__header .vc-field[data-field="IdMasina"] { grid-column: 2; grid-row: 1; }
-.vc-doc--bc .vc-doc__header .vc-field[data-field="Numar"] { grid-column: 3; grid-row: 1; }
-.vc-doc--bc .vc-doc__header .vc-field[data-field="Data"] { grid-column: 4; grid-row: 1; }
-.vc-doc--bc .vc-doc__header .vc-field[data-field="Expl"] { grid-column: 1 / 4; grid-row: 2; }
+.vc-doc--bc .vc-doc__header .vc-field[data-field="Numar"] { grid-column: 2; grid-row: 1; }
+.vc-doc--bc .vc-doc__header .vc-field[data-field="IdMasina"] { grid-column: 1; grid-row: 2; }
+.vc-doc--bc .vc-doc__header .vc-field[data-field="Data"] { grid-column: 2; grid-row: 2; }
+.vc-doc--bc .vc-doc__header .vc-field[data-field="Expl"] { grid-column: 1 / -1; grid-row: 3; }
 .vc-doc--bc .vc-field { position: relative; }
 .vc-doc--bc .vc-doc__tree { position: relative; }
 .vc-doc--bc .vc-receipt-tree__add {
