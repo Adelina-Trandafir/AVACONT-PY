@@ -62,3 +62,5 @@ button.ade-brand { padding: 0; background: none; border: 0; cursor: pointer; fon
 .ade-main .btn:hover:not(:disabled) { border-color: var(--blue); background: var(--sky-1); }
 .ade-main .btn:disabled { opacity: .48; cursor: default; }
 .ade-main .btn.is-danger { color: var(--danger, var(--ink)); }
+.ade-month-tax { flex: 0 0 auto; padding: 0 8px; line-height: 28px; white-space: nowrap; font-size: var(--fs-ms); color: var(--ade-header-text); background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .45); border-radius: var(--ade-field-radius); cursor: default; }
+.ade-month-tax[hidden] { display: none; }

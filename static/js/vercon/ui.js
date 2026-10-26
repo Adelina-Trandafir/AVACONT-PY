@@ -158,12 +158,13 @@ export function markSelected(tree, selected) {
   for (const item of tree.treeContainer.querySelectorAll('.treeview-item')) item.classList.toggle('selected', item.dataset.value === tree.selectedValue);
 }
 export const docNode =(row, label, rightText) => ({ id: `doc:${row.id}`, label, rightText, error: !!row.annulled, rightIcon: { icon: '⋮', action: 'options', title: 'Opțiuni document' } });
-export function groupedNodes(rows, groups, leaf) {
+// `order[level]` (optional) gives the sort fields of a group node (level < groups.length) or of a leaf (level === groups.length), from its first row.
+export function groupedNodes(rows, groups, leaf, order = []) {
   const walk = (items, level, prefix) => {
-    if (level === groups.length) return items.map((row) => docNode(row, leaf(row)));
+    if (level === groups.length) return items.map((row) => ({ ...docNode(row, leaf(row)), ...order[level]?.(row) }));
     const grouped = new Map();
     for (const row of items) { const label = String(groups[level](row) || '—'); if (!grouped.has(label)) grouped.set(label, []); grouped.get(label).push(row); }
-    return [...grouped].map(([label, children], index) => ({ id: `group:${prefix}:${index}`, label, children: walk(children, level + 1, `${prefix}:${index}`) }));
+    return [...grouped].map(([label, children], index) => ({ id: `group:${prefix}:${index}`, label, ...order[level]?.(children[0]), children: walk(children, level + 1, `${prefix}:${index}`) }));
   }; return walk(rows, 0, 'root');
 }
 export function rowMenu(gridInstance, row, entries) {

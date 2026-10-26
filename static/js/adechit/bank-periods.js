@@ -12,8 +12,8 @@ export function bindBankPeriods({ api, onChange }) {
     const result = await api('/api/adechit/bank-extracts/periods');
     const years = new Map();
     for (const period of result.periods) {
-      if (!years.has(period.year)) years.set(period.year, { id: `year:${period.year}`, label: `Anul ${period.year}`, bold: true, children: [] });
-      years.get(period.year).children.push({ id: `period:${period.value}`, label: MONTHS[period.month - 1] });
+      if (!years.has(period.year)) years.set(period.year, { id: `year:${period.year}`, label: `Anul ${period.year}`, bold: true, sortValue: period.year, sortType: 'number', sortDirection: 'desc', children: [] });
+      years.get(period.year).children.push({ id: `period:${period.value}`, label: MONTHS[period.month - 1], sortValue: period.month, sortType: 'number', sortDirection: 'desc' });
     }
     tree = new TreeView(document.getElementById('ade-bank-period-tree'), {
       inline: true, autoCollapse: false, selectableLevel: 2, indent: 12, showSearchBox: false,

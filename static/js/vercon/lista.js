@@ -229,7 +229,9 @@ export function mountLista(host, opts) {
     const popup = modal('Alege B.C.', dialogs), tree = el('div', { className: 'vc-bon-picker' }), detail = el('p', { className: 'vc-hint' });
     const add = el('button', { type: 'button', textContent: 'Adaugă BC', disabled: true, className: 'is-primary' }), cancel = el('button', { type: 'button', textContent: 'Renunță' });
     let selected; popup.body.append(tree, detail); popup.footer.append(cancel, add); cancel.addEventListener('click', popup.close);
-    const nodes = groupedNodes(available, [(row) => row.receiver, (row) => dateText(row.date)], (row) => 'BC ' + row.number + ' • ' + amount(row.total) + ' lei');
+    const nodes = groupedNodes(available, [(row) => row.receiver, (row) => dateText(row.date)], (row) => 'BC ' + row.number + ' • ' + amount(row.total) + ' lei',
+      [null, (row) => ({ sortType: 'date', sortValue: row.date, sortDirection: 'desc' }),
+        (row) => ({ sortType: 'date', sortValue: row.date, sortDirection: 'desc', sortThen: [{ type: 'number', value: row.number }, { type: 'number', value: row.id }] })]);
     const stripActions = (rows) => rows.forEach((node) => { delete node.rightIcon; if (node.children) stripActions(node.children); }); stripActions(nodes);
     paintTree(tree, nodes, { title: 'Bonuri disponibile', onSelect: (id) => { selected = available.find((row) => String(row.id) === id); add.disabled = !selected; detail.textContent = selected ? 'BC ' + selected.number + ' • ' + selected.receiver + ' • ' + amount(selected.total) + ' lei' : ''; } }, popup.scope);
     if (!available.length) detail.textContent = 'Nu există bonuri de consum disponibile.';
@@ -250,7 +252,8 @@ export function mountLista(host, opts) {
       id: 'month:' + month,
       label: month ? MONTHS[Number(month.slice(5)) - 1] + '/' + month.slice(0, 4) : 'Fără dată',
       sortType: 'date', sortValue: month ? `${month}-01` : null, sortDirection: 'desc',
-      children: rows.map(row => docNode(row, 'Lista ' + row.number + ' • ' + dateText(row.date) + (row.annulled ? ' • anulată' : ''), formatMoney(row.total))),
+      children: rows.map(row => ({ ...docNode(row, 'Lista ' + row.number + ' • ' + dateText(row.date) + (row.annulled ? ' • anulată' : ''), formatMoney(row.total)),
+        sortType: 'date', sortValue: row.date, sortDirection: 'desc', sortThen: [{ type: 'number', value: row.number }, { type: 'number', value: row.id }] })),
     }));
     paintTree(treeHost, nodes, { title: 'Liste salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onSelect: (id) => openDoc(id).catch(report), onAction: (id, anchor) => openMenu(anchor, [
       { label: 'Deschide', run: () => openDoc(id) },

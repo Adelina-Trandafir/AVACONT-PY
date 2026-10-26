@@ -388,7 +388,11 @@ class SchemaDiff:
 
         for col in src_tbl.columns_in_order():
             if col.is_generated:
-                continue                       # generated columns skipped
+                # A generated column that the target lacks is ADDED (a key built on it, e.g. AD_Chitante.AnScolar,
+                # cannot exist without it). One that already exists is never compared, modified or dropped.
+                if tgt_tbl.columns.get(col.name) is None:
+                    self._add_column(src_tbl, col)
+                continue
             # The seven migrated primary keys: plain INT here, AUTO_INCREMENT
             # on every migrated target, by design and forever. Neither
             # reported nor rewritten. See schema_common.EXEMPT_COLUMNS and

@@ -9,7 +9,7 @@ from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from .calculations import calculate
-from .domain import DomainError, require
+from .domain import DomainError, require, receipt_number_text
 from .receipt_output import amount_words, issuer_data
 
 FOOTER = 'Raport generat în ADECHIT'
@@ -38,8 +38,12 @@ def collate(text):
 
 
 def number_key(value):
+    """Sort key of a document number: whole numbers by value, 751,1 right after 751, everything else as text."""
     text = str(value if value is not None else '')
-    return (0, int(text), '') if text.isdigit() else (1, 0, collate(text))
+    base, _, fraction = text.partition(',')
+    if base.isdigit() and (not fraction or fraction.isdigit()):
+        return (0, int(base), int(fraction.ljust(2, '0')) if fraction else 0, '')
+    return (1, 0, 0, collate(text))
 
 
 def need_int(args, name):
@@ -190,9 +194,9 @@ def _day_bounds(start, end):
 def _cash_entries(repo, start, end):
     low, high = _day_bounds(start, end)
     scope = repo.scope()
-    entries = [{'Grupa': r['Grupa'], 'Nume': r['Nume'], 'Data': str(r['Data'])[:10], 'Serie': r['Serie'], 'Numar': r['Numar'],
+    entries = [{'Grupa': r['Grupa'], 'Nume': r['Nume'], 'Data': str(r['Data'])[:10], 'Serie': r['Serie'], 'Numar': receipt_number_text(r['Numar'], r['NumarSub']),
                 'Incasari': r['Valoare'] or 0, 'Plati': 0} for r in repo.query(
-        'SELECT g.Grupa, pl.Nume, c.Data, c.Serie, c.Numar, p.Plata AS Valoare FROM AD_Chitante c '
+        'SELECT g.Grupa, pl.Nume, c.Data, c.Serie, c.Numar, c.NumarSub, p.Plata AS Valoare FROM AD_Chitante c '
         'JOIN AD_Plati p ON p.IDPL=c.IDPL AND p.SubunitId=c.SubunitId '
         'JOIN AD_Platitori pl ON pl.IDP=p.IDP AND pl.SubunitId=p.SubunitId '
         'JOIN AD_Grupe g ON g.IDG=pl.IDG AND g.SubunitId=pl.SubunitId '
@@ -424,7 +428,7 @@ def debtor_report(repo, unit, args):
         blocks.append({'t': 'box', 'rows': rows})
         paid_by_attendance = {}
         for r in repo.query(
-                'SELECT p.IDZ, p.Data, p.Plata, c.Serie, c.Numar, c.Data AS ChData, a.NrDoc, a.DataDoc FROM AD_Plati p '
+                'SELECT p.IDZ, p.Data, p.Plata, c.Serie, c.Numar, c.NumarSub, c.Data AS ChData, a.NrDoc, a.DataDoc FROM AD_Plati p '
                 'LEFT JOIN AD_Chitante c ON c.IDPL=p.IDPL AND c.SubunitId=p.SubunitId '
                 'LEFT JOIN AD_AlteDoc a ON a.IDPL=p.IDPL AND a.SubunitId=p.SubunitId '
                 'WHERE p.SubunitId=%s AND p.IDP=%s AND p.Anulata=0 ORDER BY p.Data', (repo.scope(), child['IDP'])):
@@ -447,7 +451,7 @@ def debtor_report(repo, unit, args):
                 lines = []
                 for p in payments:
                     if p['Numar'] is not None:
-                        lines.append([dmy(p['Data']), num(p['Plata'], 2), 'Chitanță', str(p['Numar']), dmy(p['ChData'])])
+                        lines.append([dmy(p['Data']), num(p['Plata'], 2), 'Chitanță', receipt_number_text(p['Numar'], p['NumarSub']), dmy(p['ChData'])])
                     elif p['NrDoc'] is not None:
                         lines.append([dmy(p['Data']), num(p['Plata'], 2), 'Alt document', str(p['NrDoc']), dmy(p['DataDoc'])])
                     else:

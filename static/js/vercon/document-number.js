@@ -8,6 +8,9 @@ export function documentNumbers({ family, state, allocation, selection, api, abo
     async check(offer = false) {
       if (!['nir', 'storno', 'bc', 'bp', 'bt', 'bs'].includes(family) || state.mode === 'view' || allocation?.multi()) return;
       const draft = state.draft, automatic = family === 'storno' && offer;
+      // A blur of the empty number field (it fires while the new form is being drawn) must not cancel the automatic offer
+      // that is already in flight: on a fresh draft an empty number is always answered with the next free one.
+      if (family !== 'storno' && state.mode === 'add' && draft.autoNumber && !draft.header.Numar) offer = true;
       const currentNumber = draft.header.Numar || '', currentSub = Number(draft.header.NumarSub) || 0;
       const raw = automatic ? '' : currentNumber, sub = automatic ? 0 : currentSub, token = ++sequence;
       const day = draft.header.Data || '';

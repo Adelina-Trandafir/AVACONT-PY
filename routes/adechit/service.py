@@ -5,6 +5,7 @@ import math
 import re
 from calendar import monthrange
 from datetime import date, datetime
+from decimal import Decimal
 from .calculations import calculate, active, total
 from .domain import SCHEMA, EDITABLE, require, nz, access_long, update_situation, DomainError, validate_cnp
 
@@ -101,6 +102,14 @@ def save_catalog(repo, table, body, previous_active=()):
                     repo.update(table, other, {'Activ': False})
     if table == 'ValoriTaxe':
         require(nz(merged.get('TaxaZilnica')) > 0, 'TAX', 'Valoarea taxei trebuie să fie mai mare decât zero.', 400)
+        # A tax change reaches a month only when that month is opened: a tax some month already uses keeps its value.
+        # (a tax with no value yet may always be filled in)
+        if row and nz(row.get('TaxaZilnica')) and 'TaxaZilnica' in changes and Decimal(str(changes['TaxaZilnica'])) != Decimal(str(row['TaxaZilnica'])):
+            used = sorted(((month['Anul'], month['Luna']) for month in repo.rows('LunaD') if month.get('IDV') == row['IDV']))
+            require(not used, 'TAX_USED',
+                    f'Taxa este folosită de {len(used)} {"lună" if len(used) == 1 else "luni"} '
+                    f'(de la {MONTHS[used[0][1] - 1]} {used[0][0]}) și valoarea ei nu mai poate fi modificată. '
+                    'Adăugați o taxă nouă; ea se aplică de la luna următoare deschisă.', 409)
         require(bool((merged.get('Expl') or '').strip()), 'TAX', 'Explicația taxei este obligatorie.', 400)
         start = merged.get('DeLa')
         require((not creating and not start) or isinstance(start, str) and re.fullmatch(r'[1-9][0-9]{3}-(0[1-9]|1[0-2])', start),
@@ -222,6 +231,22 @@ def document_date(value, month):
     return day.isoformat()
 
 
+def school_year_bounds(day):
+    """First day of the school year that contains `day` and of the next one (ISO strings): September to August.
+    Mirrors AD_Chitante.AnScolar (sql/AD_13), so a receipt number is unique per series and school year."""
+    value = date.fromisoformat(day)
+    start = value.year if value.month >= 9 else value.year - 1
+    return f'{start}-09-01', f'{start + 1}-09-01'
+
+
+def receipt_number_taken(repo, serie, number, day):
+    """True when `serie`/`number` (without a sub-number) is already used by a receipt of the school year of `day` (cancelled receipts count).
+    The web application hands out whole numbers; 751 and 751,1 are two different numbers (AD_Chitante.NumarSub)."""
+    first, after = school_year_bounds(day)
+    return bool(repo.query('SELECT IDC FROM AD_Chitante WHERE SubunitId=%s AND Serie=%s AND Numar=%s AND NumarSub=0 AND Data>=%s AND Data<%s',
+                           (repo.scope(), serie, number, first, after)))
+
+
 def rewrite_snapshot(repo, attendance):
     snapshots = [r for r in repo.rows('SS_Buget') if r['IDZ'] == attendance['IDZ']]
     require(len(snapshots) == 1, 'SNAPSHOT', 'Situația salvată lipsește sau este duplicată; operația a fost anulată.')
@@ -289,9 +314,8 @@ def emit_document(repo, db_name, body):
             config = repo.receipt_config(lock=True)
             require(config is not None, 'CONFIG', 'Configurația chitanțelor nu a fost importată pentru această subunitate.')
             require(config['Numar'] > 0 and bool(config['Serie']), 'CONFIG', 'Seria sau următorul număr este invalid.')
-            duplicate = repo.query('SELECT IDC FROM AD_Chitante WHERE SubunitId=%s AND Serie=%s AND Numar=%s',
-                                   (repo.scope(), config['Serie'], config['Numar']))
-            require(not duplicate, 'NUMBER_USED', 'Numărul configurat este deja folosit. Verificați importul și configurația.')
+            require(not receipt_number_taken(repo, config['Serie'], config['Numar'], day), 'NUMBER_USED',
+                    'Numărul configurat este deja folosit în acest an școlar. Verificați importul și configurația.')
             explanation = (body.get('explanation') or '').strip() or receipt_explanation(config, month)
             require(bool(explanation.strip()), 'EXPLANATION', 'Explicația chitanței este obligatorie.', 400)
         else:

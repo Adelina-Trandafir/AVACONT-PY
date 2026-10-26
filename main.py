@@ -54,6 +54,7 @@ from routes.adechit.parent_portal import parent_portal_bp
 from routes import actiuni  # recent actions of the operator (Jurnal writes + read route)
 from routes.vercon import vercon_bp  # slice VC01-01: VERCON skeleton, section VR
 from routes.chat import chat_bp  # SLICE-CHAT-02: shared web chat, existing portal identity
+from routes.avacont import avacont_bp  # slice AV01-04: /api/avacont/* (subunits, chart of accounts; bearer)
 
 # 1. Initializam logger-ul global (ca sa scrie in fisierul .log)
 logger = setup_logger()
@@ -128,6 +129,7 @@ app.register_blueprint(adechit_bp)
 app.register_blueprint(parent_portal_bp)
 app.register_blueprint(vercon_bp)  # slice VC01-01/02: /api/vercon/context, /vercon
 app.register_blueprint(chat_bp)
+app.register_blueprint(avacont_bp)  # slice AV01-04: /api/avacont/subunitati, /api/avacont/conturi
 
 actiuni.init_app(app)  # recent actions: Jurnal rows for data writes + GET /api/actiuni
 

@@ -1,0 +1,9 @@
+/* SLICE-AD14-01: month closing window. Same blurred backdrop as the confirmation boxes (confirm-box.css), the tax grid inside. */
+/* tax columns total 710px (as in #ade-catalog), plus content padding and borders */
+.ade-close-month { width: min(744px, calc(96 * var(--application-vw, 1vw))); box-shadow: 0 10px 30px rgb(0 0 0 / .25); }
+.ade-close-month::backdrop { background: rgb(0 0 0 / .25); opacity: 1; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+.ade-close-month-intro, .ade-close-month-active { margin: 0; padding: 12px 16px 0; white-space: pre-line; }
+.ade-close-month-active { padding-bottom: 10px; font-weight: 700; }
+.ade-close-month .ade-catalog-grid { height: min(360px, calc(50 * var(--application-vh, 1vh))); }
+.ade-close-month footer { justify-content: space-between; gap: 10px; }
+.ade-close-month footer .btn { min-width: 130px; }

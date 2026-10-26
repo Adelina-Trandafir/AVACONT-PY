@@ -27,7 +27,10 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
         def rights(context):
             return drepturi.operations_of(context["email"], context["db_name"], SECTION)
 
-    def guard(operation):
+    def guard(operation, plain=False):
+        # plain=True: the unit is still checked, but no ADE transaction (and so no AD_Lock) is opened and the
+        # function gets no repository. For work that talks to a slow outside party (the mailbox) and whose
+        # rows belong to the whole unit; the function opens its own short connections.
         def decorate(function):
             @wraps(function)
             def guarded(*args, **kwargs):
@@ -37,6 +40,15 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
                         is_context = request.path.endswith('/context')
                         require(request.headers.get('X-Ade-Unit') == context['db_name'] or is_context,
                                 'CONTEXT_CHANGED', 'Unitatea s-a schimbat. Reîncărcați pagina.', 409)
+                        if plain:
+                            require(repository_factory is None, 'PREVIEW',
+                                    'Funcția nu este disponibilă în previzualizarea locală.', 409)
+                            g.ade_operations = rights(context)
+                            require(operation in g.ade_operations, 'FORBIDDEN', 'Nu aveți dreptul necesar pentru această operație ADE.', 403)
+                            result = function(*args, **kwargs)
+                            response = result if isinstance(result, Response) else jsonify(result)
+                            logger.info('ADE operation=%s method=%s path=%s outcome=success', operation, request.method, request.path)
+                            return response
                         with transaction(context['db_name'], repository_factory, request.headers.get('X-Ade-Subunit'),
                                          optional_subunit=is_context, email=context['email']) as repo:
                             g.ade_operations = rights(context)
@@ -341,6 +353,8 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
     report_routes.register(bp, guard)
     from . import working_days_routes
     working_days_routes.register(bp, guard, command)
+    from . import extras_routes
+    extras_routes.register(bp, guard)
 
     @bp.post('/api/adechit/cancel')
     @guard('cancel')

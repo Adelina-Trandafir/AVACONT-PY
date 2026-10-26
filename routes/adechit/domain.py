@@ -62,6 +62,14 @@ def group_educators(group, rows, day):
     return educators_at(rows, group['IDG'], day) if any(row['IDG'] == group['IDG'] for row in rows) else group.get('Educator')
 
 
+def receipt_number_text(number, sub=0):
+    """A receipt number as printed: 751 or 751,1. The sub-number is kept in hundredths like VC_NIR.NumarSub (751,1 = 751 + sub 10)."""
+    if number is None:
+        return ''
+    fraction = int(sub or 0)
+    return f'{number},{fraction:02d}'.rstrip('0') if fraction else str(number)
+
+
 def access_long(value):
     if value is None:
         return None

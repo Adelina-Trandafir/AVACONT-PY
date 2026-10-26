@@ -16,8 +16,10 @@ import { bindReports, outputReport, closeReportPreviews } from './reports.js';
 import { bindHelp } from './help.js';
 import { bindNoticeConfig } from './payment-notice-config.js';
 import { bindBankAssociations } from './bank-associations.js';
+import { bindExtractsIntake } from './extracts-intake.js';
 import { bindWorkingDays } from './working-days.js';
 import { bindChildSearch } from './child-search.js';
+import { bindMonthTax } from './month-tax.js';
 import { confirmBox, pickBox, reasonBox } from '../utils/confirm-box.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,7 +51,7 @@ function toPortal(dropToken) {
 
 async function api(path, options = {}) {
   const headers = { Accept: 'application/json', 'X-Ade-Unit': state.unit, 'X-Portal-Token': portalToken(), ...subunitHeader(), ...(options.headers || {}) };
-  if (options.body) headers['Content-Type'] = 'application/json';
+  if (options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';   // a FormData sets its own boundary
   if (options.method && options.method !== 'GET') headers['Idempotency-Key'] = options.key || idempotencyKey();
   const writing = Boolean(options.method && options.method !== 'GET');
   if (writing) state.pending += 1;   // a save in flight blocks a subunit switch
@@ -102,10 +104,10 @@ function monthNodes() {
     return { icon: '🔒', action: row.IDL === k_lastClosed ? 'reopen' : 'none', title: row.IDL === k_lastClosed ? k_title('Redeschide luna') : undefined };
   };
   return state.context.years.map((year) => ({
-    id: `year:${year}`, label: k_short ? String(year) : `Anul ${year}`, bold: true,
+    id: `year:${year}`, label: k_short ? String(year) : `Anul ${year}`, bold: true, sortValue: year, sortType: 'number', sortDirection: 'desc',
     children: state.loadedYears.has(year) ? state.context.months.filter((row) => row.Anul === year)
       .sort((a, b) => b.Luna - a.Luna).map((row) => ({ id: `month:${row.IDL}`,
-        label: k_short ? MONTHS_SHORT[row.Luna - 1] : row.LunaT,
+        label: k_short ? MONTHS_SHORT[row.Luna - 1] : row.LunaT, sortValue: row.Luna, sortType: 'number', sortDirection: 'desc',
         error: Boolean(row.Inchisa), rightIcon: k_icon(row) }))
       : [{ id: `pending:${year}`, label: 'Se încarcă…' }],
   }));
@@ -234,13 +236,14 @@ function syncTreeSelection() {
 
 function syncPickers() {
   state.childSearch?.syncContext();
+  state.monthTax?.sync();
   if (!state.monthCombo || !state.context) return;
   syncTreeSelection();
-  state.yearCombo.options.staticData = state.context.years.map((year) => ({ value: String(year), label: String(year) }));
+  state.yearCombo.options.staticData = state.context.years.map((year) => ({ value: String(year), label: String(year), sortValue: year, sortType: 'number', sortDirection: 'desc' }));
   if (state.year) state.yearCombo.setValue(String(state.year), String(state.year)); else state.yearCombo.clear();
   const k_months = state.context.months.filter((row) => row.Anul === state.year)
-    .sort((a, b) => String(a.LunaT || '').localeCompare(String(b.LunaT || ''), 'ro', { sensitivity: 'base' }))
-    .map((row) => ({ value: String(row.IDL), label: `<span class="ade-mo-lock">${row.Inchisa ? '🔒' : '🔓'}</span>${escapeHtml(row.LunaT)}`, text: row.LunaT, closed: Boolean(row.Inchisa) }));
+    .sort((a, b) => b.Luna - a.Luna)
+    .map((row) => ({ value: String(row.IDL), label: `<span class="ade-mo-lock">${row.Inchisa ? '🔒' : '🔓'}</span>${escapeHtml(row.LunaT)}`, text: row.LunaT, closed: Boolean(row.Inchisa), sortValue: row.Luna, sortType: 'number', sortDirection: 'desc' }));
   state.monthCombo.options.staticData = k_months;
   const k_month = k_months.find((item) => item.value === String(state.monthId));
   if (k_month) state.monthCombo.setValue(k_month.value, k_month.text); else state.monthCombo.clear();
@@ -821,7 +824,11 @@ async function monthIconAction(k_action, k_monthId) {
       await state.annual(k_monthId);
       return;
     }
-    if (!await confirmBox(`Închideți luna ${k_name}?`, { title: 'Închidere lună', yes: 'Închide', no: 'Renunță' })) return;
+    // the question and the tax grid in one window: the next month opens with the active tax, which can be changed (or a new one added) here
+    const k_next = k_month.Luna === 12 ? { year: k_month.Anul + 1, month: 1 } : { year: k_month.Anul, month: k_month.Luna + 1 };
+    if (!await state.payers.confirmMonthClose({ title: `Închidere lună · ${k_name}`, startMonth: `${k_next.year}-${String(k_next.month).padStart(2, '0')}`,
+      text: `Închideți luna ${k_name}?
+Luna următoare se deschide cu taxa zilnică activă. O puteți schimba sau adăuga o taxă nouă înainte de închidere.` })) return;
     await command('/api/adechit/close', 'Luna a fost închisă.', k_monthId);
   } else if (k_action === 'reopen') {
     // the month open right now (the one after this) is deleted by the server, with every attendance entered in it
@@ -857,6 +864,7 @@ function bind() {
   const clearNotice = clearMessageOnAction($('ade-message'));
   const catalogs = state.payers = bindCatalogs({ api, context: () => state.context, refresh: () => loadContext(true).catch(report), moveToSubunit });
   const bankAssociations = bindBankAssociations({ api, context: () => state.context, refresh: () => loadContext(true), monthId: () => state.monthId });
+  const extractsIntake = bindExtractsIntake({ api, context: () => state.context, onAssociate: () => bankAssociations.open() });
   const annual = bindAnnual({ api, refresh: () => loadContext(true), message: (text) => showMessage($('ade-message'), text, 'info') });
   state.annual = annual;
   wireLongPress();
@@ -894,6 +902,7 @@ function bind() {
     const k_dark = document.documentElement.dataset.theme === 'dark';
     openMenu($('ade-menu'), [
       { icon: '👥', label: 'Plătitori', run: () => $('ade-payers').click() },
+      { icon: '📥', label: 'Încărcare extrase bancare', run: () => extractsIntake.open() },
       { icon: '🏦', label: 'Asociere extrase cu copii', run: () => bankAssociations.open() },
       { icon: '💶', label: 'Taxe', run: () => $('ade-taxes').click() },
       { icon: '📅', label: 'Zile lucrătoare pe luni', run: () => workingDays.open() },
@@ -1024,6 +1033,8 @@ async function loadContext(rebuildTrees = false) {
   closeReportPreviews();
   const context = await readContext(rebuildTrees);
   state.context = { ...context, months: [], groups: [], years: [] }; state.unit = context.unit;
+  state.monthTax ??= bindMonthTax({ api, host: $('ade-month-tax'), month: selectedMonth, report });
+  state.monthTax.reset();
   state.subunit = context.subunit ? context.subunit.id : null;
   state.childSearch?.syncContext();
   showSubunits(context);
@@ -1036,7 +1047,7 @@ async function loadContext(rebuildTrees = false) {
   }
   rememberSubunit(state.unit, state.subunit);
   state.loadedYears.clear(); state.groupsRequest = null; state.groupsSequence += 1;
-  state.context.years = (await api('/api/adechit/years')).years;
+  state.context.years = [...(await api('/api/adechit/years')).years].sort((a, b) => b - a);
   $('ade-context').textContent = `${context.unit} · ${context.email}`;
   if (!rebuildTrees) {
     buildTrees(); buildPickers();

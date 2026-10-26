@@ -55,7 +55,10 @@ export function mountDocuments(host, opts) {
   const family = opts.family, config = families[family], abort = new AbortController();
   const receipt = ['nir', 'storno'].includes(family);
   const custody = ['bp', 'bt', 'bs'].includes(family);
-  const bonOrder = custody ? oiTreeOrder() : documentTreeOrder({ party: receipt ? 'party' : 'receiver', initialByDate: family !== 'nir' });
+  // Consumption and custody bons are grouped by month by default only in a food gestiune; the others start with the box off.
+  const defaultByDate = () => ['bc', 'bp', 'bt', 'bs'].includes(family) ? opts.sel().type === 'ALIMENTE' : family !== 'nir';
+  let orderType = opts.sel().type;
+  const bonOrder = custody ? oiTreeOrder(defaultByDate()) : documentTreeOrder({ party: receipt ? 'party' : 'receiver', initialByDate: defaultByDate() });
   const inline = receipt || family === 'bc' || custody;
   const sourceOptions = opts;
   let currentContext = { ...opts.sel() }, contextAbort = new AbortController(), loadGeneration = 0;
@@ -132,7 +135,7 @@ export function mountDocuments(host, opts) {
     const lookup = state.lookups || {}, specs = [], ref = (name, label, items, required = true) => ({ key: name, label, type: 'ref', required, showArrow: inline, options: options(items), ...(custody && state.mode !== 'add' ? { fallback: state.doc?.header.labels?.[name] || '' } : {}) });
     if (family === 'nir') specs.push({ ...{ ...ref('CodFiscal', 'Furnizor', lookup.partners, state.draft?.tip !== 'STOC_INITIAL'), dropDownOnEnter: true }, fallback: state.mode === 'add' ? '' : state.doc?.header.party || '' }, { key: 'Accounts', label: 'Categorie / cont', type: 'tree', required: true }, { ...ref('IdComisie', 'Comisie', lookup.commissions, (lookup.commissions || []).length > 0), dropDownStyle: 'simple' }, { key: 'NrFact', label: 'Număr factură', type: 'text', required: state.draft?.tip !== 'STOC_INITIAL' }, { key: 'DataFc', label: 'Data facturii', type: 'date', required: true }, { key: 'Valoare', label: 'Valoare Reală Factură (lei)', type: 'decimal', min: 0, hint: 'Necompletat: suma produselor. Valoarea declarată trebuie egalată exact.' });
     if (family === 'storno') specs.push({ key: 'NrFact', label: 'Număr factură storno', type: 'text', required: true }, { key: 'DataFc', label: 'Data facturii', type: 'date', required: true }, ref('IdComisie', 'Comisie', lookup.commissions, false));
-    if (family === 'bc') specs.push({ ...ref('IDC', 'Primitor / gestionar', lookup.receivers), dropDownOnEnter: true, fallback: state.doc?.header.receiver || '' }, ref('IdMasina', 'Cont', lookup.categories));
+    if (family === 'bc') specs.push({ ...ref('IDC', 'Primitor / gestionar', lookup.receivers), dropDownOnEnter: true, fallback: state.mode === 'add' ? '' : state.doc?.header.receiver || '' }, ref('IdMasina', 'Cont', lookup.categories));
     if (family === 'bp') specs.push(ref('IdMasinaP', 'Cont OI în magazie', lookup.warehouse_accounts), ref('IDC_BP', 'Primitor', lookup.holders), ref('IdMasina', 'Cont OI în folosință', lookup.use_accounts));
     if (family === 'bt') {
       const holderRef = (name, label, opposite) => ({ ...ref(name, label, lookup.holders),
@@ -990,6 +993,7 @@ export function mountDocuments(host, opts) {
   }
   async function reloadContext() {
     const next = { ...sourceOptions.sel() }, linked = family === 'nir' ? linkedReceipt(state.doc, next) : null;
+    if (next.type !== orderType) { orderType = next.type; bonOrder.reset(defaultByDate()); }
     pauseContext(); contextAbort = new AbortController(); currentContext = next;
     side?.setVisible(false);
     custodySide?.setVisible(false);

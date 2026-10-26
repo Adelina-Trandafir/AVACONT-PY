@@ -565,7 +565,10 @@ Numărul erorii se salvează în `schema_diff_log`, nu doar textul.
 - Nu modifică `AVACONT_COMUN` și nu o tratează niciodată ca țintă.
 - Nu compară coloanele generate (`GENERATED ALWAYS AS ... STORED /
   VIRTUAL`): nu le modifică și nu le șterge niciodată într-o bază care
-  există deja. La **creare** însă sunt scrise întocmai ca în sursă, cu
+  există deja. O coloană generată din sursă care **lipsește** dintr-un tabel
+  existent este însă adăugată (`ADD COLUMN`, înaintea cheilor), fiindcă o
+  cheie construită pe ea nu poate exista fără ea (26.10.2026,
+  `AD_Chitante.AnScolar`). La **creare** sunt scrise întocmai ca în sursă, cu
   expresia lor cu tot — altfel tabelul nou ar rămâne fără o coloană pe
   care aplicația o citește. (Până la 2026-08-23 erau scrise greșit, fără
   expresie, și `CREATE TABLE` cădea cu 1064; vezi

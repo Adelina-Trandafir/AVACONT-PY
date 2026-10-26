@@ -19,10 +19,14 @@ function previousMonth(value) {
 }
 
 export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
-  const dialog = document.getElementById('ade-catalog');
-  const content = document.getElementById('ade-catalog-content');
-  const message = document.getElementById('ade-catalog-message');
-  const save = document.getElementById('ade-catalog-save');
+  // Two windows share the tax grid: the catalog window (Taxe) and the month-closing window (slice AD14-01).
+  const catalogUi = { dialog: document.getElementById('ade-catalog'), content: document.getElementById('ade-catalog-content'),
+    message: document.getElementById('ade-catalog-message'), save: document.getElementById('ade-catalog-save'), saveLabel: 'Salvează și închide' };
+  const closeUi = { dialog: document.getElementById('ade-close-month'), content: document.getElementById('ade-close-month-content'),
+    message: document.getElementById('ade-close-month-message'), save: document.getElementById('ade-close-month-save'), saveLabel: 'Închide luna' };
+  let { dialog, content, message, save } = catalogUi;
+  let saveLabel = catalogUi.saveLabel;
+  let closing = null; // {resolve, startMonth, ...} while the month-closing window is open
   let grids = [];
   let drafts = new Map();
   let busy = false;
@@ -40,6 +44,15 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
     }
     if (row.Activ) row.PanaLa = null;
   }
+  // the month-closing window says which tax the next month will open with
+  function paintActive() {
+    const k_node = closing && document.getElementById('ade-close-month-active');
+    if (!k_node) return;
+    const k_row = taxRows.find((row) => row.Activ);
+    k_node.textContent = k_row
+      ? `Taxa activă (aplicată lunii următoare): ${Number(k_row.TaxaZilnica || 0).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} lei · ${k_row.Expl || 'fără explicație'}`
+      : 'Nu există o taxă activă.';
+  }
   function rebuildTaxes() {
     for (const row of taxRows) {
       const draft = drafts.get(`ValoriTaxe:${row.IDV}`);
@@ -50,6 +63,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
     for (const row of active) {
       row.Activ = true; closePrevious(row);
     }
+    paintActive();
   }
   function removeTax(row) {
     taxGrid?.cancelEdit();
@@ -104,7 +118,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
     }
     return true;
   }
-  const grid = (host, table, rows, columns, onSelect) => {
+  const grid = (host, table, rows, columns, onSelect, sortKey = 'Expl') => {
     const key = context().schema[table].key;
     const instance = new DataGrid(host, { columns, rows, rowKey: key, headerHeight: 32, mobileRowScale: 1.2, editable: context().permissions.includes('catalog'),
       theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'modern',
@@ -120,7 +134,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
         return { ...updated };
       }, onRowValidate: ({ row }) => validateTaxes(row),
       onEditError: ({ error: failure, row, key }) => invalidTax(row, failure, key).catch(error) });
-    instance.sortBy('Expl', 'asc');
+    if (sortKey) instance.sortBy(sortKey, 'asc'); else instance.sortBy(null, null);
     grids.push(instance);
     return instance;
   };
@@ -135,15 +149,24 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
     button.addEventListener('click', () => callback().catch(error));
     return button;
   };
-  async function open(kind) {
-    if (dialog.open || !context()) return;
+  // `close` = the month-closing window: {title, text, startMonth, resolve}; its tax grid shows the active tax first.
+  async function open(kind, close = null) {
+    if (catalogUi.dialog.open || closeUi.dialog.open || !context()) return;
+    ({ dialog, content, message, save, saveLabel } = close ? closeUi : catalogUi);
+    closing = close;
     drafts = new Map(); grids = []; request = null; loaded = false;
     save.disabled = true; content.replaceChildren();
-    document.getElementById('ade-catalog-title').textContent = kind === 'taxes' ? 'Taxe' : 'Plătitori';
+    if (close) {
+      document.getElementById('ade-close-month-title').textContent = close.title;
+      document.getElementById('ade-close-month-intro').textContent = close.text;
+      document.getElementById('ade-close-month-active').textContent = '';
+    } else document.getElementById('ade-catalog-title').textContent = kind === 'taxes' ? 'Taxe' : 'Plătitori';
     showMessage(message, '', 'info'); dialog.showModal();
     try {
       if (kind === 'taxes') {
         const rows = (await api('/api/adechit/rows/ValoriTaxe')).rows;
+        // closing: the active tax first, then the newest ones
+        if (close) rows.sort((a, b) => Number(Boolean(b.Activ)) - Number(Boolean(a.Activ)) || (b.DeLa || '').localeCompare(a.DeLa || ''));
         taxRows = rows;
         taxOriginals = new Map(rows.map((row) => [row.IDV, { ...row }]));
         const host = document.createElement('div'); host.className = 'ade-catalog-grid';
@@ -153,12 +176,13 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
           { ...text('Expl', 'Explicație', 250), validate: (value) => value?.trim() ? '' : 'Explicația taxei este obligatorie.' },
           { ...text('DeLa', 'Început', 120), editor: 'monthYear', parse: monthValue, formatter: monthText, nullable: true },
           { ...text('PanaLa', 'Sfârșit', 120), editable: false, formatter: monthText },
-          { ...text('Activ', 'Activ', 80), valueType: ValueType.Boolean, display: 'checkbox', editor: 'checkbox' }]);
+          { ...text('Activ', 'Activ', 80), valueType: ValueType.Boolean, display: 'checkbox', editor: 'checkbox' }], undefined, close ? null : 'Expl');
         taxGrid = instance;
         content.append(addButton('Adaugă taxă', async () => {
           if (busy || !await finishEdits()) return;
           const today = new Date();
           let start = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+          if (closing?.startMonth) start = closing.startMonth;   // the new tax applies from the month that opens now
           const latest = rows.map((item) => item.DeLa || '').sort().at(-1);
           if (latest >= start) {
             const [year, month] = latest.split('-').map(Number);
@@ -168,16 +192,29 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
           drafts.set(`ValoriTaxe:${row.IDV}`, { table: 'ValoriTaxe', id: null,
             values: { TaxaZilnica: 0, Expl: '', Activ: true, DeLa: start } });
           rows.push(row); rebuildTaxes(); instance.setRows(rows);
-          instance.beginNewRowEdit(row, 'TaxaZilnica', () => removeTax(row));
+          instance.beginNewRowEdit(row, 'TaxaZilnica', () => removeTax(row));   // opens the editor on the new row, scrolled into view
         }), host);
+        paintActive();
       }
       loaded = true; save.disabled = false;
     } catch (failure) {
-      error(failure); save.disabled = false; save.textContent = 'Închide';
+      // the month is never closed on a tax list that did not load
+      error(failure); save.disabled = Boolean(close); save.textContent = 'Închide';
     }
   }
-  dialog.addEventListener('cancel', (event) => event.preventDefault());
-  save.addEventListener('click', async () => {
+  // Leaves the month-closing window without closing the month: the tax changes made in it are dropped.
+  function cancelClose() {
+    if (busy || !closing) return;
+    const { resolve } = closing; closing = null;
+    drafts.clear(); grids.forEach((instance) => instance.destroy()); grids = [];
+    dialog.close(); resolve(false);
+  }
+  catalogUi.dialog.addEventListener('cancel', (event) => event.preventDefault());
+  closeUi.dialog.addEventListener('cancel', (event) => { event.preventDefault(); cancelClose(); });
+  document.getElementById('ade-close-month-cancel').addEventListener('click', cancelClose);
+  closeUi.save.addEventListener('click', () => commit());
+  catalogUi.save.addEventListener('click', () => commit());
+  async function commit() {
     if (busy) return;
     try {
       if (!await finishEdits()) return;
@@ -194,11 +231,19 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
         drafts.clear();
       }
       dialog.close(); grids.forEach((instance) => instance.destroy()); grids = [];
-      if (loaded) await refresh();
+      if (closing) { const { resolve } = closing; closing = null; resolve(true); }   // the caller closes the month (and reloads the context)
+      else if (loaded) await refresh();
     } catch (failure) { error(failure); }
-    finally { busy = false; content.inert = false; save.disabled = false; save.textContent = 'Salvează și închide'; }
-  });
+    finally { busy = false; content.inert = false; save.disabled = false; save.textContent = saveLabel; }
+  }
   const payers = bindPayers({ api, context, refresh, moveToSubunit });
   document.getElementById('ade-taxes').addEventListener('click', () => open('taxes'));
-  return { ...payers, isDirty: () => dialog.open && (drafts.size > 0 || grids.some(instance => instance.hasEdit)) || payers.isDirty() };
+  // Month closing: the question and the tax grid in one window. Resolves true when the operator chose «Închide luna»
+  // (tax changes already saved), false on «Renunță».
+  function confirmMonthClose({ title, text, startMonth }) {
+    return new Promise((resolve) => open('taxes', { title, text, startMonth, resolve })
+      .then(() => { if (!closeUi.dialog.open) resolve(false); })   // the window did not open (no context, another window open): nothing is closed
+      .catch((failure) => { closing = null; resolve(false); error(failure); }));
+  }
+  return { ...payers, confirmMonthClose, isDirty: () => dialog.open && (drafts.size > 0 || grids.some(instance => instance.hasEdit)) || payers.isDirty() };
 }

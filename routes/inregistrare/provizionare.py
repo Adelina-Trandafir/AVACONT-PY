@@ -44,9 +44,10 @@ import re
 import secrets
 
 import config
-from routes.auth import mailer
+from routes.auth import mailer, password_policy
 from routes.inregistrare import cerere as cerere_mod
 from routes.inregistrare import nume, randuri
+from routes.inregistrare import provizionare_drepturi as drepturi
 from utils.database import get_kbot_provisioning_connection
 
 logger = logging.getLogger(__name__)
@@ -409,6 +410,11 @@ def _prepare(conn, row, cod_program, say) -> dict:
         ) from None
 
     _check_template(conn)
+    grant_problem, grant_lines = drepturi.check_references(conn, TEMPLATE_DB)
+    if grant_problem:
+        for line in grant_lines:
+            say(line)
+        raise ProvizionareRefuzata(grant_problem)
 
     dictionaries = randuri.read_dictionaries(conn)
     placeholder_ids = {ss: 0 for ss in ss_list}
@@ -685,7 +691,7 @@ def _create_account(conn, dc, email, undo, say):
     never the grants today's accounts carry (D18, D26, plan 13).
     """
     cur = conn.cursor(buffered=True)
-    cur.execute("CREATE USER %s@'%' IDENTIFIED BY %s", (email, secrets.token_urlsafe(32)))
+    cur.execute("CREATE USER %s@'%' IDENTIFIED BY %s", (email, password_policy.random_compliant()))
     undo.append((f"DROP USER {email}", lambda: _drop_user(email)))
     # Not a GRANT of our own: in `GRANT ... ON db.*` MariaDB treats the name as a
     # pattern and counts the grantor's rights only when granted on that exact string,

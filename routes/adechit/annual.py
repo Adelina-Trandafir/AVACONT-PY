@@ -1,6 +1,6 @@
 """August rollover drafts and changes, inside the month-close transaction."""
 from .domain import require
-from .service import validate_values, validate_educator
+from .service import validate_values, validate_educator, receipt_number_taken
 
 
 def educator_values(item, existing=None):
@@ -33,7 +33,9 @@ def preview(repo, month_id):
         group['educator_details'] = [{key: row.get(key) for key in ('Educator', 'EMail', 'CNP')}
             for name in group['educators']
             for row in [next((item for item in active_periods if item['Educator'] == name), {'Educator': name})]]
-    return {'month': month, 'groups': groups, 'children': children, 'history': history}
+    config = repo.receipt_config()
+    receipts = {'Serie': config['Serie'], 'Numar': config['Numar']} if config else None
+    return {'month': month, 'groups': groups, 'children': children, 'history': history, 'receipt_config': receipts}
 
 
 def validate(repo, month, draft):
@@ -72,6 +74,15 @@ def validate(repo, month, draft):
         name = names[row['id']]
         require(list(names.values()).count(name) == 1 and name not in other_names,
                 'NAME_UNIQUE', 'Denumirea unei grupe noi trebuie să fie unică.', 400)
+    receipts = draft.get('receipts')
+    if receipts is not None:
+        require(isinstance(receipts, dict) and set(receipts) <= {'reset', 'next_number'} and type(receipts.get('reset')) is bool,
+                'RECEIPTS', 'Alegerea privind numerotarea chitanțelor este invalidă.', 400)
+        if receipts['reset']:
+            number = receipts.get('next_number', 1)
+            require(type(number) is int and 1 <= number <= 2147483647, 'RECEIPTS',
+                    'Primul număr de chitanță din noul an trebuie să fie un număr întreg pozitiv.', 400)
+            require(current['receipt_config'] is not None, 'CONFIG', 'Configurația chitanțelor nu a fost importată pentru această subunitate.')
     for row in draft['children']:
         require(type(row.get('departed')) is bool and type(row.get('group_id')) is int and row['group_id'] in groups,
                 'GROUP', 'Alegeți grupa destinație și starea fiecărui copil.', 400)
@@ -84,6 +95,15 @@ def validate(repo, month, draft):
 def apply(repo, month, draft, current, username):
     end = f"{month['Anul']:04d}-08-31"
     start = f"{month['Anul']:04d}-09-01"
+    receipts = draft.get('receipts') or {}
+    if receipts.get('reset'):
+        # New school year, new numbering: the series stays, the next number starts again (the key is per school year, sql/AD_13).
+        config = repo.receipt_config(lock=True)
+        require(config is not None, 'CONFIG', 'Configurația chitanțelor nu a fost importată pentru această subunitate.')
+        number = receipts.get('next_number', 1)
+        require(not receipt_number_taken(repo, config['Serie'], number, start), 'NUMBER_USED',
+                'Numărul de început ales este deja folosit în noul an școlar. Alegeți altul.', 400)
+        repo.execute('UPDATE AD_ReceiptConfig SET Numar=%s, Version=Version+1 WHERE SubunitId=%s', (number, repo.scope()))
     groups = {row['IDG']: row for row in current['groups']}
     new_ids = {}
     for item in draft.get('new_groups', []):

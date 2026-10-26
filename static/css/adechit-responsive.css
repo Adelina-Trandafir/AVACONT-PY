@@ -21,3 +21,4 @@ html[data-theme="dark"] .ade-header { background: var(--card); }
   .ade-tablist button { min-width: 100px; padding-inline: 8px; }
 }
 
+@media (max-width: 980px) { .ade-month-tax { display: none; } }

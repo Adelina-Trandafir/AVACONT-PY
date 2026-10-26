@@ -586,6 +586,9 @@ def import_extrase():
     Totul intr-o SINGURA tranzactie, ca in original: un extras pe jumatate scris (fisier
     fara antete, antet fara randuri) nu e o stare din care sa se poata continua, iar
     reluarea e ieftina -- deduplicarea face a doua rulare aproape goala.
+
+    Munca propriu-zisa e in `importa_extrase`, partajata cu ADECHIT (incarcare manuala si
+    din e-mail). Raspunsul acestei rute ramane cel din contract, fara `rezultate`.
     """
     data = request.json or {}
     extrase = data.get("extrase")
@@ -604,95 +607,17 @@ def import_extrase():
             cursor = timing.watch(conn.cursor())
             conn.start_transaction()
 
-        with timing.stage("nomenclatoare"):
-            nom = _Nomenclatoare(cursor)
-        avertismente = list(nom.avertismente)
-
-        # Ce stim deja, pe cheia naturala (vezi antetul: NU pe sirul HASH).
-        with timing.stage("citeste ce e deja importat"):
-            cursor.execute(_F_EXISTENTE_SQL)
-            fisiere_vazute = {
-                (str(nume), data_ex.date() if data_ex is not None else None)
-                for (nume, data_ex) in cursor.fetchall()
-            }
-            cursor.execute(_E_EXISTENTE_SQL)
-            # DataDoc is a DATE since 0080-01; `_zi` folds a driver datetime to a date
-            # so the pair (read, written) compares like with like.
-            operatiuni_vazute = {
-                (_zi(dd), nd, cui, _f(sd), _f(sc))
-                for (dd, nd, cui, sd, sc) in cursor.fetchall()
-            }
-
-        importate = 0
-        sarite = 0
-        randuri_scrise = 0
-
-        for extras in extrase:
-            xml_text = extras.get("XmlContent")
-            if not xml_text:
-                sarite += 1
-                continue
-
-            pdf_fisier = extras.get("PdfFisier") or ""
-            data_fisier = extras.get("DataFisier") or ""
-            cale_fisier = extras.get("CaleLocala") or ""
-
-            try:
-                # Etapa se deschide o data pe extras si se aduna intr-un singur rand
-                # de raport, cu `n` = cate extrase si maximul lor. Un XML de cateva
-                # megaocteti se vede aici, si NU in coloana «sql».
-                with timing.stage("parsare XML"):
-                    radacina = ElementTree.fromstring(xml_text)
-            except ElementTree.ParseError as err:
-                # Access ridica «XML invalid (Fisier=...)» si oprea tot. Aici se
-                # numeste fisierul si se merge mai departe: un extras stricat nu are
-                # voie sa tina pe loc restul descarcarii.
-                avertismente.append(f"XML invalid în «{pdf_fisier}»: {err}")
-                sarite += 1
-                continue
-
-            data_extras = parse_data_extras(radacina.get("Data_extras"))
-            cheie_fisier = (pdf_fisier, data_extras.date() if data_extras else None)
-            if cheie_fisier in fisiere_vazute:
-                sarite += 1
-                continue
-            fisiere_vazute.add(cheie_fisier)
-
-            with timing.stage("scrie FX_Extrase_F"):
-                cursor.execute(_F_INSERT_SQL, (
-                    pdf_fisier,
-                    cale_fisier,
-                    data_extras,
-                    xml_text,
-                    hash_fisier(pdf_fisier, data_fisier),
-                ))
-                idexf = _id_nou(cursor, "FX_Extrase_F")
-            importate += 1
-
-            with timing.stage("scrie antete + operatiuni"):
-                for cont_ext in radacina.findall("cont_ext"):
-                    idexh, id_unitate, id_clsf = _scrie_antet(
-                        cursor, nom, cont_ext, idexf, avertismente)
-                    if idexh is None:
-                        continue
-                    for cont_misc in cont_ext.findall("cont_misc"):
-                        if _scrie_operatiune(cursor, nom, cont_misc, idexh, id_unitate,
-                                             id_clsf, operatiuni_vazute):
-                            randuri_scrise += 1
+        rezultat = importa_extrase(cursor, extrase)
 
         with timing.stage("commit"):
             conn.commit()
         logger.info(
-            f"[forexe.extrase.import] {db_name}: primite={len(extrase)} "
-            f"importate={importate} sarite={sarite} randuri={randuri_scrise}"
+            f"[forexe.extrase.import] {db_name}: primite={rezultat['primite']} "
+            f"importate={rezultat['importate']} sarite={rezultat['sarite']} "
+            f"randuri={rezultat['randuri']}"
         )
-        return _json_utf8({
-            "primite": len(extrase),
-            "importate": importate,
-            "sarite": sarite,
-            "randuri": randuri_scrise,
-            "avertismente": avertismente,
-        }, 200)
+        rezultat.pop("rezultate")
+        return _json_utf8(rezultat, 200)
 
     except Exception as e:
         if conn is not None:
@@ -702,6 +627,139 @@ def import_extrase():
     finally:
         if conn is not None:
             conn.close()
+
+
+def importa_extrase(cursor, extrase, sari_continut_cunoscut=False):
+    """
+    Scrie extrasele primite (liste de {PdfFisier, DataFisier, XmlContent, CaleLocala}) in
+    tranzactia deschisa a apelantului; commit/rollback raman ale lui.
+
+    Intoarce {primite, importate, sarite, randuri, avertismente, rezultate}, unde
+    `rezultate` are cate un rand per extras primit, in aceeasi ordine:
+    {fisier, stare, randuri, mesaj}. Starile: importat, duplicat, fara_xml, invalid.
+
+    `sari_continut_cunoscut` (cerut de ADECHIT, la incarcarea manuala si din e-mail): un
+    fisier cu alt nume decat unul deja importat, dar ale carui operatiuni exista TOATE in
+    baza, e dublura (acelasi extras descarcat de doua ori) si nu mai scrie nici macar un
+    antet gol. Robotul FOREXE nu il cere, deci comportamentul lui ramane cel de pana acum.
+    """
+    with timing.stage("nomenclatoare"):
+        nom = _Nomenclatoare(cursor)
+    avertismente = list(nom.avertismente)
+
+    # Ce stim deja, pe cheia naturala (vezi antetul: NU pe sirul HASH).
+    with timing.stage("citeste ce e deja importat"):
+        cursor.execute(_F_EXISTENTE_SQL)
+        fisiere_vazute = {
+            (str(nume), data_ex.date() if data_ex is not None else None)
+            for (nume, data_ex) in cursor.fetchall()
+        }
+        cursor.execute(_E_EXISTENTE_SQL)
+        # DataDoc is a DATE since 0080-01; `_zi` folds a driver datetime to a date
+        # so the pair (read, written) compares like with like.
+        operatiuni_vazute = {
+            (_zi(dd), nd, cui, _f(sd), _f(sc))
+            for (dd, nd, cui, sd, sc) in cursor.fetchall()
+        }
+
+    importate = 0
+    sarite = 0
+    randuri_scrise = 0
+    rezultate = []
+
+    for extras in extrase:
+        pdf_fisier = extras.get("PdfFisier") or ""
+        xml_text = extras.get("XmlContent")
+        if not xml_text:
+            sarite += 1
+            rezultate.append({"fisier": pdf_fisier, "stare": "fara_xml", "randuri": 0,
+                              "mesaj": "Fișierul nu conține XML de extras."})
+            continue
+
+        data_fisier = extras.get("DataFisier") or ""
+        cale_fisier = extras.get("CaleLocala") or ""
+
+        try:
+            # Etapa se deschide o data pe extras si se aduna intr-un singur rand
+            # de raport, cu `n` = cate extrase si maximul lor. Un XML de cateva
+            # megaocteti se vede aici, si NU in coloana «sql».
+            with timing.stage("parsare XML"):
+                radacina = ElementTree.fromstring(xml_text)
+        except ElementTree.ParseError as err:
+            # Access ridica «XML invalid (Fisier=...)» si oprea tot. Aici se
+            # numeste fisierul si se merge mai departe: un extras stricat nu are
+            # voie sa tina pe loc restul descarcarii.
+            avertismente.append(f"XML invalid în «{pdf_fisier}»: {err}")
+            sarite += 1
+            rezultate.append({"fisier": pdf_fisier, "stare": "invalid", "randuri": 0,
+                              "mesaj": f"XML invalid: {err}"})
+            continue
+
+        data_extras = parse_data_extras(radacina.get("Data_extras"))
+        cheie_fisier = (pdf_fisier, data_extras.date() if data_extras else None)
+        if cheie_fisier in fisiere_vazute:
+            sarite += 1
+            rezultate.append({"fisier": pdf_fisier, "stare": "duplicat", "randuri": 0,
+                              "mesaj": "Extrasul a fost deja încărcat (același fișier)."})
+            continue
+        fisiere_vazute.add(cheie_fisier)
+
+        if sari_continut_cunoscut:
+            chei = [_cheie_operatiune(cont_misc)
+                    for cont_ext in radacina.findall("cont_ext")
+                    if cont_ext.find("cont") is not None
+                    for cont_misc in cont_ext.findall("cont_misc")]
+            if chei and all(c in operatiuni_vazute for c in chei):
+                sarite += 1
+                rezultate.append({"fisier": pdf_fisier, "stare": "duplicat", "randuri": 0,
+                                  "mesaj": "Toate operațiunile din fișier există deja în baza de date."})
+                continue
+
+        with timing.stage("scrie FX_Extrase_F"):
+            cursor.execute(_F_INSERT_SQL, (
+                pdf_fisier,
+                cale_fisier,
+                data_extras,
+                xml_text,
+                hash_fisier(pdf_fisier, data_fisier),
+            ))
+            idexf = _id_nou(cursor, "FX_Extrase_F")
+        importate += 1
+
+        randuri_fisier = 0
+        with timing.stage("scrie antete + operatiuni"):
+            for cont_ext in radacina.findall("cont_ext"):
+                idexh, id_unitate, id_clsf = _scrie_antet(
+                    cursor, nom, cont_ext, idexf, avertismente)
+                if idexh is None:
+                    continue
+                for cont_misc in cont_ext.findall("cont_misc"):
+                    if _scrie_operatiune(cursor, nom, cont_misc, idexh, id_unitate,
+                                         id_clsf, operatiuni_vazute):
+                        randuri_fisier += 1
+        randuri_scrise += randuri_fisier
+        rezultate.append({"fisier": pdf_fisier, "stare": "importat", "randuri": randuri_fisier,
+                          "mesaj": f"{randuri_fisier} operațiuni noi.", "idexf": idexf})
+
+    return {
+        "primite": len(extrase),
+        "importate": importate,
+        "sarite": sarite,
+        "randuri": randuri_scrise,
+        "avertismente": avertismente,
+        "rezultate": rezultate,
+    }
+
+
+def _cheie_operatiune(cont_misc):
+    """
+    Cheia naturala a unui rand de extras -- exact tuplul pe care `_scrie_operatiune` il
+    cauta in `vazute` -- calculata fara a scrie nimic.
+    """
+    d = parse_cont_misc(cont_misc)
+    return (parse_data_yyyymmdd(d.get("datadoc")), null_if_empty(d.get("nrdoc")),
+            null_if_empty(d.get("platitor")), parse_loose_number(d.get("sumad")),
+            parse_loose_number(d.get("sumac")))
 
 
 def _f(v) -> float:

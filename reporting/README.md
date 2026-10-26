@@ -11,7 +11,7 @@ Identificatorii și cheile existente nu se redenumesc la refactorizare. ADECHIT 
 
 Nu există DDL, seed sau sincronizare automată. Tabela lipsă (MariaDB 1146) și SQLite folosesc fallback-ul existent; alte erori nu sunt ascunse. Importurile publice istorice `routes.adechit.report_excel.column_key/configured_widths` rămân disponibile prin reexport, fără o a doua implementare.
 
-Dependențele renderelor PDF/Excel sunt în `PYTHON/requirements-reporting.txt`; `requirements-adechit.txt` rămâne un punct de instalare compatibil. Acest refactor este scris local, fără rularea testelor sau a interogărilor.
+Dependențele renderelor PDF/Excel sunt în `PYTHON/requirements-reporting.txt`; `requirements-adechit.txt` rămâne un punct de instalare compatibil. Acest refactor este testat, rulat și publicat (confirmat de operator, 23.10.2026).
 
 
 ## Motorul și previzualizarea comune (SLICE-ADE9-05)

@@ -7,7 +7,8 @@ session's database, the yearly budget of one classification and its corrections.
         -> 200 { "items": [ { "id_clsf", "id_unitate", "id_clsf_acc", "capitol", "subcapitol", "articol", "alineat",
                               "denumire", "ss", "clsf", "in_forexe" }, ... ],
                  "names": { "capitol": {"65": ...}, "subcapitol": {"650402": ...},
-                            "articol": {"10.01": ...}, "ss": {"02A": ...} } }
+                            "articol": {"10.01": ...}, "ss": {"02A": ...} },
+                 "subunitati_copil": { "02A": {"parinte": "...", "copii": ["..."]} } }     (slice AV01-11: sources that have child subunits)
 
     GET  /api/forexe/nomenclatoare/clasificatii/<id_clsf>/buget?an=2026
         -> 200 { "budgets": [ {"id", "data_inceput", "trim1".."trim4"}, ... ],
@@ -72,6 +73,7 @@ from routes.inregistrare import nomenclatoare as registration_lists
 from routes.inregistrare import randuri
 from utils import clsf_pair
 from utils.database import COMMON_DB, get_kbot_connection
+from utils.subunitati_copil import child_sources
 
 from . import forexe_bp
 from .budget_on_day import as_day, budget_on_day
@@ -220,7 +222,8 @@ def get_clasificatii_tree():
             # Slice 0107: used in FOREXE = FX_Indicatori_Buget has a row for it (FOREXE reported its credit).
             "in_forexe": bool(r["InForexe"]),
         } for r in cursor.fetchall()]
-        return _json_utf8({"items": items, "names": read_names(cursor)}, 200)
+        # Slice AV01-11: the sources that have child subunits (they work on the parent's data; the window says so). Advice only.
+        return _json_utf8({"items": items, "names": read_names(cursor), "subunitati_copil": child_sources(cursor)}, 200)
     except Exception as e:
         logger.error("[forexe.clasificatii_edit] tree %s: %s", db_name, e, exc_info=True)
         return _json_utf8({"error": f"Eroare la citirea clasificațiilor: {e}"}, 500)

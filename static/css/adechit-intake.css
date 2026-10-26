@@ -1,0 +1,23 @@
+/* Loading bank statements: PDF files / folder and the unit mailbox. Opens over the page like the other ADE windows. */
+.ade-intake-window { width: min(1080px, calc(96 * var(--application-vw, 1vw))); height: min(720px, calc(92 * var(--application-vh, 1vh))); max-height: calc(92 * var(--application-vh, 1vh)); overflow: hidden; }
+.ade-intake-window[open] { display: flex; flex-direction: column; }
+.ade-intake-window [hidden] { display: none !important; }
+.ade-intake-window .btn:disabled { opacity: .48; cursor: default; }
+.ade-intake-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; padding: 10px 16px; overflow: auto; }
+.ade-intake-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ade-intake-box { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 0 0 10px; border: 1px solid var(--line); }
+.ade-intake-box > :not(h3) { margin-inline: 10px; }
+.ade-intake-window h3 { margin: 0; padding: 6px 10px; background: var(--sky-2); border-bottom: 1px solid var(--line); font-size: var(--fs-lg); }
+.ade-intake-hint { margin-block: 0; color: var(--ink-soft); font-size: var(--fs-ms); white-space: pre-line; overflow-wrap: anywhere; }
+.ade-intake-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ade-intake-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.ade-intake-settings > h3, .ade-intake-settings > .ade-intake-hint, .ade-intake-settings > .ade-intake-actions { grid-column: 1 / -1; }
+.ade-intake-settings label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ade-intake-window input:not([type="checkbox"]), .ade-intake-window select { box-sizing: border-box; min-height: 32px; padding: 4px 8px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; }
+.ade-intake-history { display: flex; flex-direction: column; flex: 1; min-height: 220px; border: 1px solid var(--line); }
+.ade-intake-history .ade-list-grid { flex: 1; min-height: 0; }
+.ade-intake-window .dgv { --dgv-back: var(--card); }
+@media (max-width: 760px) {
+  .ade-intake-window { width: calc(100 * var(--application-vw, 1vw)); height: calc(100 * var(--application-dvh, 1dvh)); max-height: none; border-radius: 0; }
+  .ade-intake-sources, .ade-intake-settings { grid-template-columns: minmax(0, 1fr); }
+}

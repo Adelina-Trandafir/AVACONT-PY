@@ -26,6 +26,8 @@ export function documentTreeOrder({ party = 'party', rootTotals = false, initial
   const branch = doc => byDate ? documentMonthId(monthKey(doc.date)) : documentPartyId(partyKey(doc, party), party);
   return {
     get byDate() { return byDate; },
+    // A new default (another kind of gestiune): the box is drawn again from it when the tree is mounted.
+    reset(value) { byDate = value; },
     branch,
     nodes(documents) {
       const groups = new Map();

@@ -13,7 +13,7 @@
 <script type="module" src="/static/js/chat/bootstrap.js"></script></head>
 <body class="portal ade-page"><header class="header ade-header">
 <div class="ade-header__left"><button class="brand ade-brand" id="ade-apps" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Aplicații"><svg class="ade-brand__icon" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#309eff"/><text x="16" y="24" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="800" fill="#fff">A</text></svg><span class="ade-brand__name">ADECHIT</span></button><button class="pmenu__top ade-main-menu" id="ade-menu" type="button" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 14 12" width="14" height="12" aria-hidden="true"><path d="M0 1h14M0 6h14M0 11h14" stroke="currentColor" stroke-width="2" fill="none"/></svg><span>Meniu</span></button></div>
-<div class="ade-header__center"><div id="ade-unit" class="ade-subunit" hidden><div id="ade-unit-combo" class="ade-picker"></div></div><div id="ade-subunit" class="ade-subunit" hidden><div id="ade-subunit-combo" class="ade-picker"></div></div><div class="ade-search" id="ade-child-search"></div></div>
+<div class="ade-header__center"><span id="ade-month-tax" class="ade-month-tax" title="Taxa zilnică a lunii alese" hidden>Taxa zilnică: <b></b></span><div id="ade-unit" class="ade-subunit" hidden><div id="ade-unit-combo" class="ade-picker"></div></div><div id="ade-subunit" class="ade-subunit" hidden><div id="ade-subunit-combo" class="ade-picker"></div></div><div class="ade-search" id="ade-child-search"></div></div>
 <div class="ade-header__right"><span id="ade-context" class="ade-header__context"></span><span id="ade-session-timer" class="ade-session-timer" role="timer" hidden>⏱ <b>05:00</b></span><button class="btn ade-menu-btn ade-help-btn" id="ade-help" type="button" aria-label="Ajutor" title="Ajutor"><b>?</b></button></div>
 <div class="ade-header__hidden" hidden><button id="ade-payers" type="button">Plătitori</button><button id="ade-taxes" type="button">Taxe</button></div></header>
 <main class="ade-main">
@@ -92,11 +92,54 @@
   </div>
   <footer><nav class="ade-bank-modes" aria-label="Mod asociere"><button id="ade-bank-manual-mode" class="btn" type="button" aria-pressed="true" hidden>Asociere manuală</button><button id="ade-bank-auto-mode" class="btn" type="button" aria-pressed="false">Previzualizare automată</button></nav><p id="ade-bank-message" class="msg" role="status" hidden></p><button id="ade-bank-save" class="btn ade-bank-manual" type="button" disabled>Asociază și înregistrează în Alte plăți</button><button id="ade-bank-auto-save" class="btn" type="button" hidden disabled>Generează documentele bifate</button></footer>
 </dialog>
+<dialog id="ade-intake-dialog" class="ade-catalog ade-intake-window" aria-labelledby="ade-intake-title">
+  <header class="ade-catalog-header"><h2 id="ade-intake-title">Încărcare extrase bancare</h2><button id="ade-intake-close" class="btn" type="button">Închide</button></header>
+  <p id="ade-intake-message" class="msg" role="status" hidden></p>
+  <div class="ade-intake-body">
+    <div class="ade-intake-sources">
+      <section class="ade-intake-box" aria-labelledby="ade-intake-files-title">
+        <h3 id="ade-intake-files-title">Din fișiere PDF</h3>
+        <p class="ade-intake-hint">Alegeți extrasele (de forma TREZ…_ExtrasEP_….pdf) sau un folder întreg. Extrasele deja încărcate sunt recunoscute și sărite.</p>
+        <div class="ade-intake-actions"><button id="ade-intake-pick-files" class="btn" type="button">Alege fișiere…</button><button id="ade-intake-pick-folder" class="btn" type="button">Alege folder…</button></div>
+        <input id="ade-intake-files" type="file" accept=".pdf,application/pdf" multiple hidden>
+        <input id="ade-intake-folder" type="file" webkitdirectory multiple hidden>
+      </section>
+      <section class="ade-intake-box" aria-labelledby="ade-intake-mail-title">
+        <h3 id="ade-intake-mail-title">Din e-mail</h3>
+        <p id="ade-intake-mail-state" class="ade-intake-hint"></p>
+        <div class="ade-intake-actions"><button id="ade-intake-fetch" class="btn" type="button">Verifică e-mailul acum</button><button id="ade-intake-mail-settings" class="btn" type="button" aria-expanded="false">Setări e-mail…</button></div>
+      </section>
+    </div>
+    <form id="ade-intake-settings" class="ade-intake-box ade-intake-settings" hidden autocomplete="off">
+      <h3>Setări e-mail</h3>
+      <label>Furnizor <select id="ade-intake-preset"><option value="">Altul</option><option value="imap.gmail.com">Gmail</option><option value="imap.mail.yahoo.com">Yahoo</option><option value="outlook.office365.com">Outlook / Microsoft 365</option></select></label>
+      <label>Server IMAP <input id="ade-intake-host" type="text" maxlength="253" placeholder="imap.gmail.com" autocomplete="off"></label>
+      <label>Adresa de e-mail <input id="ade-intake-user" type="email" maxlength="255" autocomplete="off"></label>
+      <label>Parola (de aplicație) <input id="ade-intake-password" type="password" maxlength="255" autocomplete="new-password"></label>
+      <label>Dosar <input id="ade-intake-folder-name" type="text" maxlength="255" value="INBOX"></label>
+      <label>Expeditor (opțional) <input id="ade-intake-sender" type="text" maxlength="255" placeholder="ex. trezorerie"></label>
+      <label>Numele atașamentului conține <input id="ade-intake-name-part" type="text" maxlength="100" value="ExtrasEP"></label>
+      <label>Citește mesajele începând cu <input id="ade-intake-since" type="date"></label>
+      <p class="ade-intake-hint">La Gmail și Yahoo folosiți o «parolă de aplicație» (nu parola contului) și activați accesul IMAP. Parola se păstrează criptat pe server și nu se mai afișează; lăsată goală, rămâne cea salvată.</p>
+      <div class="ade-intake-actions"><button id="ade-intake-settings-save" class="btn" type="submit">Salvează</button><button id="ade-intake-settings-test" class="btn" type="button">Testează conexiunea</button><button id="ade-intake-settings-cancel" class="btn" type="button">Renunță</button></div>
+    </form>
+    <section class="ade-intake-history" aria-labelledby="ade-intake-history-title"><h3 id="ade-intake-history-title">Ultimele încărcări</h3><div id="ade-intake-grid" class="ade-list-grid"></div></section>
+  </div>
+  <footer><button id="ade-intake-associate" class="btn" type="button">Asociază plăți cu extrase…</button></footer>
+</dialog>
 <dialog id="ade-catalog" class="ade-catalog" aria-labelledby="ade-catalog-title" aria-describedby="ade-catalog-message">
   <header class="ade-catalog-header"><h2 id="ade-catalog-title">Plătitori</h2><span>Salvare obligatorie înainte de închidere</span></header>
   <p id="ade-catalog-message" class="msg" role="alert" hidden></p>
   <section id="ade-catalog-content" class="ade-catalog-content"></section>
   <footer><button id="ade-catalog-save" class="btn" type="button">Salvează și închide</button></footer>
+</dialog>
+<dialog id="ade-close-month" class="ade-catalog ade-close-month" aria-labelledby="ade-close-month-title" aria-describedby="ade-close-month-message">
+  <header class="ade-catalog-header"><h2 id="ade-close-month-title">Închidere lună</h2></header>
+  <p id="ade-close-month-message" class="msg" role="alert" hidden></p>
+  <p id="ade-close-month-intro" class="ade-close-month-intro"></p>
+  <p id="ade-close-month-active" class="ade-close-month-active"></p>
+  <section id="ade-close-month-content" class="ade-catalog-content"></section>
+  <footer><button id="ade-close-month-cancel" class="btn" type="button">Renunță</button><button id="ade-close-month-save" class="btn" type="button">Închide luna</button></footer>
 </dialog>
 <dialog id="ade-payers-dialog" class="ade-catalog ade-payers-window" aria-labelledby="ade-payers-title">
   <header class="ade-catalog-header"><h2 id="ade-payers-title">Plătitori</h2><button id="ade-payers-back" class="btn ade-payers-mobile-action" type="button" aria-label="Înapoi" title="Înapoi">↩️</button></header>
@@ -133,6 +176,11 @@
         <button id="ade-annual-add-educator" class="btn" type="button">Adaugă educator</button>
       </section>
     </fieldset>
+    <section id="ade-annual-receipts" class="ade-annual-receipts" hidden>
+      <label><input id="ade-annual-receipts-reset" type="checkbox"> Reia numerotarea chitanțelor în noul an școlar</label>
+      <label>Prima chitanță din septembrie <input id="ade-annual-receipts-number" type="number" min="1" step="1" value="1" disabled></label>
+      <span id="ade-annual-receipts-info"></span>
+    </section>
     <footer><button id="ade-annual-cancel" class="btn" type="button">Renunță</button><button id="ade-annual-save" class="btn" type="submit">Închide august și deschide septembrie</button></footer>
   </form>
 </dialog>

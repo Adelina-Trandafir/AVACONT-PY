@@ -1,4 +1,5 @@
 """Monthly advance payment notice and its per-subunit HTML configuration."""
+from collections import Counter
 from decimal import Decimal, ROUND_HALF_UP
 from .domain import require
 from . import report_richtext
@@ -41,6 +42,23 @@ def save_configuration(repo, body):
     return configuration(repo)
 
 
+def month_tax(repo, month):
+    """The month's own tax row. When that link is missing or dangling (an import can leave it so), the tax its attendance rows
+    carry, then the tax whose period covers the month, then the only tax there is."""
+    taxes = repo.rows('ValoriTaxe')
+    by_id = {row['IDV']: row for row in taxes}
+    if month.get('IDV') in by_id:
+        return by_id[month['IDV']]
+    used = Counter(row['IDV'] for row in repo.rows('Prezenta', IDL=month['IDL']) if row.get('IDV') in by_id)
+    if used:
+        return by_id[used.most_common(1)[0][0]]
+    period = f'{month["Anul"]:04d}-{month["Luna"]:02d}'
+    covering = [row for row in taxes if row.get('DeLa') and row['DeLa'] <= period and (not row.get('PanaLa') or row['PanaLa'] >= period)]
+    if covering:
+        return max(covering, key=lambda row: row['DeLa'])
+    return taxes[0] if len(taxes) == 1 else None
+
+
 def payment_notice_report(repo, unit, args):
     from .reports import need_int, opt_int, situation_rows, collate, num, col, model
     from .receipt_output import issuer_data
@@ -51,7 +69,8 @@ def payment_notice_report(repo, unit, args):
     month, rows = situation_rows(repo, month_id, None if everything else group_id)
     require(bool(rows), 'NO_DATA', 'Raportul selectat nu conține date.', 404)
     days = month_days(month)
-    tax = repo.get('ValoriTaxe', month['IDV'])
+    tax = month_tax(repo, month)
+    require(tax is not None, 'TAX', f'Luna {MONTHS[month["Luna"] - 1]} {month["Anul"]} nu are o taxă zilnică asociată (legătura lunii: {month.get("IDV")}).', 400)
     require(tax.get('TaxaZilnica') is not None, 'TAX', 'Taxa zilnică lipsește pentru luna selectată.')
     daily = Decimal(str(tax['TaxaZilnica']))
     monthly = (days * daily).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)

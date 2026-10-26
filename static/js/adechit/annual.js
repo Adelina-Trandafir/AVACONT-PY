@@ -93,6 +93,7 @@ export function bindAnnual({ api, refresh, message }) {
     event.preventDefault(); move(Number(node.dataset.value), [...dragIds]).catch(fail); dragIds = []; clearDropTargets();
   });
   $('ade-annual-move').addEventListener('click', () => move(targetId).catch(fail));
+  $('ade-annual-receipts-reset').addEventListener('change', (event) => { $('ade-annual-receipts-number').disabled = !event.target.checked; });
   $('ade-annual-name').addEventListener('input', (event) => { current().name = event.target.value; $('ade-annual-group-title').textContent = event.target.value || 'Grupă nouă'; renderTree(); });
   $('ade-annual-add-educator').addEventListener('click', async () => {
     if (busy || !await commit()) return;
@@ -120,12 +121,18 @@ export function bindAnnual({ api, refresh, message }) {
         await showGroup(group.id); say('Grupa nouă trebuie să aibă nume unic, cel puțin un educator și cel puțin un copil care rămâne.'); return;
       }
     }
+    const resetReceipts = !$('ade-annual-receipts').hidden && $('ade-annual-receipts-reset').checked;
+    const firstReceipt = Number($('ade-annual-receipts-number').value);
+    if (resetReceipts && !(Number.isInteger(firstReceipt) && firstReceipt >= 1)) {
+      $('ade-annual-receipts-number').focus(); say('Primul număr de chitanță trebuie să fie un număr întreg pozitiv.'); return;
+    }
     const payload = (group) => ({ id: group.id, version: group.version, name: group.name.trim(),
       educators: group.educators.map((row) => ({ Educator: row.name.trim(), EMail: row.EMail?.trim() || null, CNP: row.CNP?.trim() || null })) });
     const body = JSON.stringify({ id: plan.month.IDL, annual: { version: plan.month.Version,
       groups: groups.filter((group) => group.id >= 0).map(payload), new_groups: groups.filter((group) => group.id < 0).map(payload),
       children: children.map((child) => ({ id: child.IDP, version: child.Version, departed: child.departed, group_id: child.group_id })),
-      history: plan.history.map((row) => ({ id: row.IDGE, version: row.Version })) } });
+      history: plan.history.map((row) => ({ id: row.IDGE, version: row.Version })),
+      ...(plan.receipt_config ? { receipts: resetReceipts ? { reset: true, next_number: firstReceipt } : { reset: false } } : {}) } });
     if (retry?.body !== body) retry = { body, key: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}` };
     busy = true; $('ade-annual-workspace').disabled = true; save.disabled = true; cancel.disabled = true;
     say('Se închide anul și se deschide septembrie…');
@@ -148,6 +155,10 @@ export function bindAnnual({ api, refresh, message }) {
         CNP: row.CNP || '', start: `01.09.${plan.month.Anul}` })) }));
     children = plan.children.map((child) => ({ ...child, group_id: child.IDG, departed: false, OriginalGroup: groups.find((group) => group.id === child.IDG).name }));
     $('ade-annual-title').textContent = `Închidere anuală · august ${plan.month.Anul}`;
+    const receipts = plan.receipt_config;
+    $('ade-annual-receipts').hidden = !receipts;
+    $('ade-annual-receipts-reset').checked = false; $('ade-annual-receipts-number').value = '1'; $('ade-annual-receipts-number').disabled = true;
+    if (receipts) $('ade-annual-receipts-info').textContent = `Acum: seria ${receipts.Serie}, următorul număr ${receipts.Numar}. Dacă nu bifați, numerotarea continuă.`;
     targetCombo = new Combobox($('ade-annual-target'), { readonly: true, placeholder: 'Grupa destinație', staticData: [], onSelect: (id) => { targetId = Number(id); } });
     tree = new TreeView(treeHost, { inline: true, showSearchBox: false, onSelect: ({ id }) => showGroup(Number(id)).catch(fail) });
     renderTree(); dialog.showModal();

@@ -11,6 +11,8 @@ Without an active validation plugin strict_password_validation enforces nothing:
 reports plugin_active=False and only the application floor (FALLBACK_MIN_LENGTH) applies.
 """
 import logging
+import secrets
+import string
 
 from utils.database import get_kbot_comun_connection
 
@@ -54,6 +56,28 @@ def read_policy():
             "digits": _int("simple_password_check_digits", 1),
             "letters_same_case": _int("simple_password_check_letters_same_case", 1),
             "other_characters": _int("simple_password_check_other_characters", 1)}
+
+
+def random_compliant(policy=None, length=32):
+    """A random password that passes `evaluate()` for `policy` (read from the server when None).
+    For accounts whose real password the user chooses later: a plain random token fails the
+    plugin whenever it happens to lack a special character or a digit."""
+    if policy is None:
+        try:
+            policy = read_policy()
+        except Exception as err:    # the plugin check on the server still decides; use the usual floor
+            logger.warning("password policy unreadable, using the usual floor: %s", err)
+            policy = {"minimal_length": 8, "digits": 1, "letters_same_case": 1, "other_characters": 1}
+    rng = secrets.SystemRandom()
+    specials = "!#$%&*+-=?@^_~"
+    chars = ([rng.choice(string.digits) for _ in range(max(policy["digits"], 1))]
+             + [rng.choice(string.ascii_uppercase) for _ in range(max(policy["letters_same_case"], 1))]
+             + [rng.choice(string.ascii_lowercase) for _ in range(max(policy["letters_same_case"], 1))]
+             + [rng.choice(specials) for _ in range(max(policy["other_characters"], 1))])
+    pool = string.ascii_letters + string.digits + specials
+    chars += [rng.choice(pool) for _ in range(max(length, policy["minimal_length"]) - len(chars))]
+    rng.shuffle(chars)
+    return "".join(chars)
 
 
 def evaluate(password, policy):
