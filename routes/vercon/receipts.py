@@ -260,6 +260,7 @@ def create_nir(cursor, repo, ctx, exercise, body, request_key, request_id, parse
     invoices.require(cursor)
     body = {**body, 'id': None}
     parsed = parsed if parsed is not None else _clean_nir(cursor, repo, ctx, exercise, body, 'nir')
+    parsed['accept_difference'] = body.get('accept_difference') is True
     errors = {}
     header = body.get('header') or {}
     sub = _sub_number(header.get('NumarSub'), errors)
@@ -334,6 +335,7 @@ def edit_nir(cursor, repo, ctx, exercise, doc_id, body, request_id):
     previous = saved_document(cursor, repo, ctx, doc_id)
     old_lines = {r['id']: r for r in previous['lines']}
     parsed = _clean_nir(cursor, repo, ctx, exercise, body, 'nir', stored=old_lines)
+    parsed['accept_difference'] = body.get('accept_difference') is True
     errors = {}
     header = body.get('header') or {}
     manual = header.get('Numar')

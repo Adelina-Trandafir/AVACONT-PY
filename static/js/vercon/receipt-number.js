@@ -13,6 +13,9 @@ export const subHundredths = (k_text) => {
   return k_digits ? Number(k_digits.padEnd(2, '0')) : 0;
 };
 
+/** The digits of a bon number as a number, to sort by: 'BC 13' -> 13, '13' -> 13. */
+export const numberValue = (k_text) => Number(String(k_text ?? '').replace(/\D/g, '')) || 0;
+
 /** The number as the operator reads it: 707 or 707,1. */
 export const numberText = (k_doc) => {
   const k_sub = subText(k_doc?.sub_number);

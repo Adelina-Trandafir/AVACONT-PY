@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from flask import request
 
-from . import oi, protocol
+from . import bon_number, oi, protocol
 from .documents import _all, _int, _iso, _money, _one, _scope
 from .nomenclatoare import NomError
 
@@ -52,7 +52,7 @@ def statement(cursor, ctx, on, holder=None, variant=None):
                  giver=giver, receiver=receiver, parties=parties, where=where), params)
         for row in rows:
             sign = -1 if holder is not None and row['giver_id'] == holder else 1
-            entries.append({'id': row['id'], 'kind': family.upper(), 'number': row['number'],
+            entries.append({'id': row['id'], 'kind': family.upper(), 'number': bon_number.display(family, row['number']),
                             'date': _iso(row['day']), 'giver': row['giver'] or ('Magazie' if family == 'bp' else ''),
                             'receiver': row['receiver'] or ('Casare' if family == 'bs' else ''),
                             'quantity': _money(sign * Decimal(row['quantity'] or 0), ctx['scale']),

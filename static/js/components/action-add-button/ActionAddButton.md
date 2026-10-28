@@ -1,12 +1,8 @@
 # ActionAddButton
 
-Buton comun pentru adăugare, folosit în Produse și în antetul arborelui
-„Documente salvate” din NIR. Aspectul, cursorul, hover-ul și dimensiunile
-implicite sunt definite o singură dată în `action-add-button.css`.
+Buton comun pentru adăugare, folosit în Produse și în antetul arborelui „Documente salvate” din NIR. Aspectul, cursorul, hover-ul și dimensiunile implicite sunt definite o singură dată în `action-add-button.css`.
 
-Componenta urmează modelul controalelor JS existente: clasa `ActionAddButton`
-creează un element HTML nativ `button`, accesibil prin `.element`.
-Butonul are `type="button"`, deci nu trimite automat formularele.
+Componenta urmează modelul controalelor JS existente: clasa `ActionAddButton` creează un element HTML nativ `button`, accesibil prin `.element`. Butonul are `type="button"`, deci nu trimite automat formularele.
 
 ## Încărcare și utilizare
 
@@ -30,9 +26,7 @@ const addReceipt = new ActionAddButton(heading, {
 });
 ```
 
-Primul argument este containerul în care se adaugă butonul. Poate fi
-`null` pentru compunerea ulterioară: `toolbar.prepend(button.element)`.
-Textele și iconul sunt atribuite prin `textContent`, fără HTML interpretat.
+Primul argument este containerul în care se adaugă butonul. Poate fi `null` pentru compunerea ulterioară: `toolbar.prepend(button.element)`. Textele și iconul sunt atribuite prin `textContent`, fără HTML interpretat.
 
 ## Opțiuni
 
@@ -55,17 +49,11 @@ Textele și iconul sunt atribuite prin `textContent`, fără HTML interpretat.
 - `setLabel(text)`: schimbă textul și actualizează varianta doar cu icon.
 - `destroy()`: elimină listener-ul prin AbortController și scoate butonul din DOM.
 
-Pagina sau scope-ul care creează componenta trebuie să apeleze `destroy()`
-la demontare. Nu recreați butonul la fiecare actualizare dacă antetul lui
-rămâne în DOM; folosiți `setEnabled()` pentru schimbarea disponibilității.
-Enter și Space folosesc comportamentul nativ al butonului. Iconul este
-ascuns cititoarelor de ecran; numele accesibil vine din `ariaLabel`/tooltip.
+Pagina sau scope-ul care creează componenta trebuie să apeleze `destroy()` la demontare. Nu recreați butonul la fiecare actualizare dacă antetul lui rămâne în DOM; folosiți `setEnabled()` pentru schimbarea disponibilității. Enter și Space folosesc comportamentul nativ al butonului. Iconul este ascuns cititoarelor de ecran; numele accesibil vine din `ariaLabel`/tooltip.
 
 ## Variabile CSS
 
-Variabilele pot fi stabilite pe buton, pe container sau la nivelul aplicației.
-Paginile folosesc aceste variabile pentru diferențe deliberate și păstrează
-regulile de hover, border, padding și cursor în componenta comună.
+Variabilele pot fi stabilite pe buton, pe container sau la nivelul aplicației. Paginile folosesc aceste variabile pentru diferențe deliberate și păstrează regulile de hover, border, padding și cursor în componenta comună.
 
 | Variabilă | Fallback |
 |---|---|
@@ -94,15 +82,8 @@ NIR păstrează dimensiunile anterioare ale textului și iconului:
 }
 ```
 
-Butonul disponibil are cursor `pointer`, fundal și bordură evidențiate la
-hover și contur la focus din tastatură. Butonul dezactivat are cursor normal,
-opacitate redusă și nu primește evidențiere la hover. Starea `hidden` este
-respectată de CSS.
+Butonul disponibil are cursor `pointer`, fundal și bordură evidențiate la hover și contur la focus din tastatură. Butonul dezactivat are cursor normal, opacitate redusă și nu primește evidențiere la hover. Starea `hidden` este respectată de CSS.
 
-Integrarea VERCON este în `vercon.html`, `vercon/nomenclator-grid.js` și
-`vercon/docs.js`. Stilurile vechi ale butoanelor de adăugare au fost eliminate
-din CSS-ul produselor și al NIR; regula generică a barelor nomenclatoarelor
-exclude `.k-action-add-button`, pentru a nu suprascrie stilul componentei.
+Integrarea VERCON este în `vercon.html`, `vercon/nomenclator-grid.js` și `vercon/docs.js`. Stilurile vechi ale butoanelor de adăugare au fost eliminate din CSS-ul produselor și al NIR; regula generică a barelor nomenclatoarelor exclude `.k-action-add-button`, pentru a nu suprascrie stilul componentei.
 
-Stare la 15.10.2026: implementare în surse; fără teste sau verificări executate,
-conform AGENTS.md. Aspectul în browser nu este confirmat prin rulare.
+Stare la 15.10.2026: implementare în surse; fără teste sau verificări executate, conform AGENTS.md. Aspectul în browser nu este confirmat prin rulare.

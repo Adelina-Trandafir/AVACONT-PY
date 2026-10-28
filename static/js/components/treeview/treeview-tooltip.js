@@ -30,6 +30,9 @@ function textClipped(element) {
   const visible = { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight };
   // A row can be wider than its visible panel even though the label itself has no ellipsis.
   for (let parent = element; parent; parent = parent.parentElement) {
+    // The root's clientWidth is the window itself (not zoomed), so under application zoom its inner box comes out too small;
+    // the window is already `visible` above, in the same screen coordinates as the text rectangles.
+    if (parent === doc.documentElement) continue;
     const style = win.getComputedStyle(parent);
     const clipX = CLIPPING.test(style.overflowX), clipY = CLIPPING.test(style.overflowY);
     if (!clipX && !clipY) continue;

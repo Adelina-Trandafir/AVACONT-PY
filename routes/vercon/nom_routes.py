@@ -9,12 +9,14 @@ line and (for a create) the RequestKey are committed together or not at all.
     PUT  /api/vercon/nom/<kind>/<id>                   nomenclatoare  edit    {values, version}
     POST /api/vercon/nom/<kind>/<id>/active            nomenclatoare  on/off  {active, version}
     GET  /api/vercon/settings                          read           zec / scara / type / counters
-    POST /api/vercon/settings                          configure      {zec, scara}  only while the gestiune holds no data
+    POST /api/vercon/settings                          configure      {zec, scara, bc_per_account?}  only while the gestiune holds no data
 """
 from contextlib import contextmanager
+from decimal import Decimal
 
 from flask import g, request
 
+from . import consumption_numbering
 from . import nomenclatoare as nom
 from .capabilities import FormUnavailable
 from .nomenclatoare import NomError
@@ -180,9 +182,25 @@ def register(bp, guard, scoped, open_db):
                            (who['subunit'], who['gestiune']))
             stored = [{'key': r['SettingKey'], 'value': format(r['IntValue'], 'f')} for r in cursor.fetchall()]
         gest = ctx['gestiune']
+        per_account = any(row['key'] == consumption_numbering.SETTING and Decimal(row['value']) == 1 for row in stored)
         return {'name': gest['name'], 'type': gest_type, 'zec': int(gest.get('zec', _DEFAULT_ZEC)), 'scara': scale,
                 'populated': bool(gest.get('populated')), 'settings': stored,
+                'bc_per_account': per_account and gest_type == 'MATERIALE',
                 'can_write': 'configure' in g.vercon_operations}
+
+    @bp.get('/api/vercon/numbering')
+    @guard('read')
+    def numbering_read():
+        """SLICE-VC06-19: the next number of every numbered document of the chosen gestiune and exercise."""
+        from . import numbering_overview, protocol
+        ctx = scoped('read')
+        who, gest_type, scale = facts(ctx)
+        year = ctx['selection'].get('year')
+        with session(False) as cursor:
+            exercise = protocol.exercise_of(cursor, who['subunit'], who['gestiune'], gest_type, year)
+            rows = numbering_overview.overview(cursor, {'subunit': who['subunit'], 'gestiune': who['gestiune'], 'exercitiu': exercise['id'],
+                                                        'type': gest_type, 'year': year, 'an': exercise['an']})
+        return {'rows': rows, 'year': exercise['an']}
 
     @bp.post('/api/vercon/settings')
     @guard('configure')
@@ -204,4 +222,21 @@ def register(bp, guard, scoped, open_db):
                 raise NomError('NOT_FOUND', 'Gestiunea nu mai există sau setările sunt deja aplicate.', 409)
             nom.audit(cursor, who, 'settings.precision', 'VC_Gestiuni', who['gestiune'], {'Zec': ctx['gestiune'].get('zec'), 'Scara': scale},
                        {'Zec': zec, 'Scara': scara}, None, request_id())
+            per_account = data.get('bc_per_account')
+            if per_account is not None:
+                # SLICE-VC06-19: the consumption bons of a MATERIALE gestiune are numbered separately for every account.
+                if not isinstance(per_account, bool):
+                    raise NomError('INVALID', 'Cerere invalidă.', 400)
+                if gest_type != 'MATERIALE':
+                    raise NomError('INVALID', 'Numerotarea pe cont se poate cere numai la o gestiune de materiale.', 422, {'bc_per_account': 'Numai la materiale.'})
+                cursor.execute('SELECT IntValue FROM VC_Settings WHERE SubunitId=%s AND GestiuneId=%s AND SettingKey=%s FOR UPDATE',
+                               (who['subunit'], who['gestiune'], consumption_numbering.SETTING))
+                row = cursor.fetchone()
+                before = bool(row and int(row['IntValue']) == 1)
+                if before != per_account:
+                    cursor.execute('INSERT INTO VC_Settings (SubunitId, GestiuneId, SettingKey, IntValue) VALUES (%s,%s,%s,%s) '
+                                   'ON DUPLICATE KEY UPDATE IntValue=VALUES(IntValue), Version=Version+1',
+                                   (who['subunit'], who['gestiune'], consumption_numbering.SETTING, 1 if per_account else 0))
+                    nom.audit(cursor, who, 'settings.bc_numbering', 'VC_Settings', consumption_numbering.SETTING,
+                              {'per_account': before}, {'per_account': per_account}, None, request_id())
         return {'zec': zec, 'scara': scara}

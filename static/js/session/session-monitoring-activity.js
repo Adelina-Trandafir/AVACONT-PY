@@ -13,7 +13,9 @@ export const sessionMonitoringActivityMixin = {
   /**
    * 👆 Gestionează activitatea utilizatorului
    */
-  handleUserActivity() {
+  handleUserActivity(event) {
+    // Un deget pe ecran poate fi începutul unui scroll; atingerea propriu-zisă ajunge ca `click`.
+    if (event && event.type === 'pointerdown' && event.pointerType === 'touch') return;
     const now = Date.now();
 
     // Emit event pentru activitatea utilizatorului
@@ -23,46 +25,37 @@ export const sessionMonitoringActivityMixin = {
       extensionCount: this.extensionCount,
     });
 
-    // DOAR în perioada de grație: încearcă prelungirea automată
-    if (this.inGracePeriod && this.extensionCount < this.SESSION_CONFIG.MAX_EXTENSIONS) {
-      // Ascunde warning-ul dacă e vizibil
-      if (this.warningShown) {
-        const modal = document.getElementById('session-warning-modal');
-        if (modal) {
-          const intervalId = modal.dataset.countdownInterval;
-          if (intervalId) clearInterval(intervalId);
-          modal.remove();
-          this.warningShown = false;
-        }
-      }
+    // Orice activitate (tastare, click, scroll, atingere - nu mișcarea mouse-ului) reia timpul de la capăt.
+    if (!this.sessionDuration) return;
+    if (this.sessionStartTime + this.sessionDuration <= now) return; // expirat: doar serverul decide
 
-      // Încearcă prelungirea automată
-      this.attemptAutoExtension();
-      this.lastActivitySent = now;
-      return;
+    // Local, imediat (cel mult o dată pe secundă, în afară de cazul în care un avertisment e deschis).
+    if (this.warningShown || this.finalWarningShown || this.inGracePeriod || now - this.lastLocalReset >= 1000) {
+      this.lastLocalReset = now;
+      this.adoptSessionDeadline(this.sessionDuration / 1000);
     }
 
-    // ÎN AFARA perioadei de grație: doar înregistrează activitatea, NU reseta timerul
-    if (!this.inGracePeriod) {
-      // Ascunde warning-ul dacă e vizibil (pentru cazuri speciale)
-      if (this.warningShown) {
-        const modal = document.getElementById('session-warning-modal');
-        if (modal) {
-          const intervalId = modal.dataset.countdownInterval;
-          if (intervalId) clearInterval(intervalId);
-          modal.remove();
-          this.warningShown = false;
-        }
+    // Serverul află cel mult o dată la ACTIVITY_DEBOUNCE.
+    if (this.renewing || now - this.lastActivitySent < this.SESSION_CONFIG.ACTIVITY_DEBOUNCE) return;
+    this.lastActivitySent = now;
+    void this.renewOnServer();
+  },
+
+  /**
+   * 🔄 Spune serverului că utilizatorul lucrează (restartează durata sesiunii)
+   */
+  async renewOnServer() {
+    this.renewing = true;
+    try {
+      const response = await this.api('POST', '/api/portal/session/renew');
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 401 || (response.ok && data.authenticated === false)) {
+        this.handleSessionExpired('Sesiunea a expirat');
       }
-
-      // DOAR actualizează timpul ultimei activități - NU reseta sessionStartTime
-      this.lastActivitySent = now;
-
-      this.log(
-        `🔍 Activitate înregistrată la: ${new Date(now).toLocaleTimeString()} (timer continuă să curgă)`
-      );
-
-      // NU reprogramează warning-ul și expirarea - lasă timerul să curgă normal
+    } catch (error) {
+      this.log.error('❌ Reînnoirea sesiunii a eșuat:', error);
+    } finally {
+      this.renewing = false;
     }
   },
 

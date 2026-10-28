@@ -2,6 +2,7 @@
 from decimal import Decimal
 from . import food_balance, report_body, report_data, report_model, report_layouts, stock
 from .nomenclatoare import NomError
+from .report_balance import alphabetical
 
 MEALS = (('md', 'Mic dejun', 'MicDejun', 'VMD'), ('d', 'Dejun', 'Dejun', 'VD'), ('c', 'Cină / Gustare', 'Cina', 'VC'))
 
@@ -51,6 +52,7 @@ def build(source, spec, layout):
             raise NomError('REPORT_SOURCE', 'Un aliment nu are variantă în gestiunea curentă.', 409)
         lines.append({**metadata[raw['variant']], **raw, **{key: report_data.exact(raw[key], scale) for key in ('quantity', 'price', 'value')}})
     lines = report_data.aggregate(lines, ('variant', 'price', 'name', 'um'))
+    lines.sort(key=lambda row: (alphabetical(row.get('name')), row.get('product') or 0, row['variant']))
     if spec['id'] == 'BC subreport 2013':
         return [section('alimente', lines, ('value',))]
     summary, meal_columns = [], []

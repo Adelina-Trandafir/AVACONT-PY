@@ -15,7 +15,7 @@ values). Cancelling a list frees its bons.
 from utils.clock import bucharest_today, utc_now
 from decimal import Decimal
 
-from . import document_order, food_list_portions, lista_bc, numeric, protocol
+from . import bon_number, document_order, food_list_portions, lista_bc, numeric, protocol
 from .documents import _all, _dec, _exists, _fail, _int, _money, _one, _scope, _text, _iso
 from .nomenclatoare import NomError
 
@@ -59,7 +59,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
     doc = {'family': 'lista', 'id': doc_id, 'version': head['Version'], 'annulled': bool(head['Anulat']), 'reason': head['MotivAnulare'], 'annulled_by': head['AnulatDe'],
             'number': head['NumarLA'], 'header': {'Data': _iso(head['DATALA']), 'Comentarii': summary.get('Comentarii'), 'Valoare': _money(head['ValoareLista'], scale),
                                                     'bons_total': _money(head['ValoareBon'], scale), 'diff': _money(head['DEP'], scale)},
-            'meals': meals, 'bons': [{'id': b['IdBonConsum'], 'number': b['NumarBC'], 'date': _iso(b['DataBC']), 'receiver': b['Denumire'] or '', 'total': _money(b['ValoareBC'], scale),
+            'meals': meals, 'bons': [{'id': b['IdBonConsum'], 'number': bon_number.display('bc', b['NumarBC']), 'date': _iso(b['DataBC']), 'receiver': b['Denumire'] or '', 'total': _money(b['ValoareBC'], scale),
                                       'annulled': bool(b['Anulat'])} for b in bons]}
     return food_list_portions.annotate(cursor, ctx, [doc])[0]
 
@@ -90,7 +90,7 @@ def eligible_bons(cursor, ctx, exclude_list=None):
     rows = _all(cursor, 'SELECT h.IdBonConsum, h.NumarBC, h.DataBC, h.ValoareBC, c.Denumire FROM VC_Iesiri_H h LEFT JOIN VC_Clienti c ON c.SubunitId=h.SubunitId AND c.GestiuneId=h.GestiuneId AND c.IDC=h.IDC '
                         'WHERE h.SubunitId=%s AND h.GestiuneId=%s AND h.ExercitiuId=%s AND COALESCE(h.Retur,0)=0 AND h.Anulat=0 AND NOT EXISTS (SELECT 1 FROM VC_LegBCLA l WHERE l.SubunitId=h.SubunitId '
                         'AND l.GestiuneId=h.GestiuneId AND l.ExercitiuId=h.ExercitiuId AND l.IdBonConsum=h.IdBonConsum AND l.IdLista<>%s) ORDER BY h.DataBC DESC, h.IdBonConsum DESC', (s, g, e, exclude_list or 0))
-    return [{'id': r['IdBonConsum'], 'number': r['NumarBC'], 'date': _iso(r['DataBC']), 'receiver': r['Denumire'] or '', 'total': _money(r['ValoareBC'], scale)} for r in rows]
+    return [{'id': r['IdBonConsum'], 'number': bon_number.display('bc', r['NumarBC']), 'date': _iso(r['DataBC']), 'receiver': r['Denumire'] or '', 'total': _money(r['ValoareBC'], scale)} for r in rows]
 
 
 # ---- writing ---------------------------------------------------------------------------------------------------------

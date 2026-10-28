@@ -35,3 +35,9 @@ from .configurari.jurnale import jurnale  # noqa: E402,F401
 #   clasificatii_venituri.py -> GET /api/avacont/clasificatii-venituri (+ /nomenclator, /sumar, /<id>/buget), POST /adauga, POST /<id>/buget
 #                               (Clasificatii_Venituri, Clasificatii_Venituri_Buget, Clasificatii_Venituri_Rectificari)
 from .configurari.clasificatii_venituri import clasificatii_venituri  # noqa: E402,F401
+# configurari/sablon_operatii/  (slice AV01-14; sql/AVACONT/Configurari/SablonOperatii/AV01_14_sablon_operatii.sql)
+#   sablon_operatii.py -> GET/POST /api/avacont/sabloane-operatii                          (TZ_SablonOperatii, TZ_SablonOperatiiLinie)
+from .configurari.sablon_operatii import sablon_operatii  # noqa: E402,F401
+# configurari/sablon_salarii/  (slice AV01-15; sql/AVACONT/Configurari/SablonSalarii/AV01_15_sablon_salarii.sql)
+#   sablon_salarii.py -> GET/POST /api/avacont/sabloane-salarii                           (TZ_SablonSalarii, TZ_SablonSalariiLinie)
+from .configurari.sablon_salarii import sablon_salarii  # noqa: E402,F401

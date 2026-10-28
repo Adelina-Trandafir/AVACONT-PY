@@ -203,7 +203,7 @@ def register(bp, guard, scoped, open_db):
             ctx, _ = build(cursor, vctx, family, False)
             if family == 'bc':
                 from .consumption_number import check
-                return check(cursor, ctx, request.args.get('number'), exclude)
+                return check(cursor, ctx, request.args.get('number'), exclude, documents._int(request.args.get('account')))
             if family in oi.FAMILIES_OI:
                 from .oi_number import check
                 return check(cursor, ctx, family, request.args.get('number'), exclude)

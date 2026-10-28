@@ -41,7 +41,7 @@ const families = {
   nir: { title: 'Recepție NIR', number: 'Număr NIR', lines: 'Produse recepționate', groups: ['party', 'date'] },
   bc: { title: 'Bon de consum', number: 'Număr BC', lines: 'Produse pe bon', groups: ['receiver', 'date'] },
   storno: { title: 'Factură storno', number: 'Număr FCS', lines: 'Produse stornate', groups: ['party', 'date'], source: 'Recepția stornată' },
-  br: { title: 'Retur bon de consum', number: 'Număr retur', lines: 'Produse returnate', groups: ['receiver', 'date'], source: 'Bonul returnat' },
+  br: { title: 'Retur bon de consum', number: 'Număr BX', lines: 'Produse returnate', groups: ['receiver', 'date'], source: 'Bonul returnat' },
   bp: { title: 'Bon de predare', number: 'Număr BP', lines: 'Produse predate', groups: ['holder', 'date'] },
   bt: { title: 'Bon de transfer', number: 'Număr BT', lines: 'Produse transferate', groups: ['old', 'date'], holder: 'IDC_OLD' },
   bs: { title: 'Bon de casare', number: 'Număr BS', lines: 'Produse casate', groups: ['holder', 'date'], holder: 'IDC_BC' },
@@ -58,7 +58,10 @@ export function mountDocuments(host, opts) {
   // Consumption and custody bons are grouped by month by default only in a food gestiune; the others start with the box off.
   const defaultByDate = () => ['bc', 'bp', 'bt', 'bs'].includes(family) ? opts.sel().type === 'ALIMENTE' : family !== 'nir';
   let orderType = opts.sel().type;
-  const bonOrder = custody ? oiTreeOrder(defaultByDate()) : documentTreeOrder({ party: receipt ? 'party' : 'receiver', initialByDate: defaultByDate() });
+  // The consumption bons offer a popup of three groupings (SLICE-VC06-19); the other families keep the box.
+  const bcGroupings = [{ key: 'date', icon: '📅', label: 'Grupare Data' }, { key: 'receiver', icon: '👤', label: 'Grupare Primitor' }, { key: 'category', icon: '🧾', label: 'Grupare Cont' }];
+  const bonOrder = custody ? oiTreeOrder(defaultByDate())
+    : documentTreeOrder({ party: receipt ? 'party' : 'receiver', initialByDate: defaultByDate(), groupings: family === 'bc' ? bcGroupings : null });
   const inline = receipt || family === 'bc' || custody;
   const sourceOptions = opts;
   let currentContext = { ...opts.sel() }, contextAbort = new AbortController(), loadGeneration = 0;
@@ -223,11 +226,11 @@ export function mountDocuments(host, opts) {
   async function allowDiscard() { if (state.pendingBody || pendingCancel || pendingLink) { say('Rezultatul operației nu este confirmat. Reluați aceeași operație înainte de a schimba documentul.', true); return false; } return !state.dirty && !headerUi.dirty() && !linesUi.dirty() || await confirmBox('Renunțați la modificările nesalvate?', { title: 'Modificări nesalvate', yes: 'Renunț', no: 'Rămân aici', warning: true }); }
   async function open(id) {
     if (state.busy || !await allowDiscard()) return; const sequence = ++openSequence, doc = await opts.api(url(`/${id}`)); if (sequence !== openSequence || abort.signal.aborted) return;
-    Object.assign(state, { doc, draft: null, mode: 'view', dirty: false, requestKey: null, pendingBody: null, returnSource: null }); say(doc.has_efactura ? '' : editMessage(doc)); paint();
+    Object.assign(state, { doc, draft: null, mode: 'view', dirty: false, requestKey: null, pendingBody: null, returnSource: null }); say(''); paint();
   }
   function draftFromDoc(doc) { return { source: doc.header.source ?? null, tip: doc.doc_type || 'NIR', invoice: doc.invoice, header: { ...doc.header, Numar: String(doc.number ?? '').replace(/\D/g, ''), NumarSub: Number(doc.sub_number) || 0 }, lines: doc.lines.map((line) => newLine({ ...line, _savedCode: line.code })) }; }
   async function add() { if (!await allowDiscard()) return; allocation?.clearDraftProducts(); const today = state.lookups.today; Object.assign(state, { mode: 'add', dirty: false, requestKey: null, pendingBody: null, draft: { source: null, tip: 'NIR', vat: null, autoNumber: true, header: { Data: today, DataFc: today, NumarSub: 0 }, lines: config.source && family !== 'storno' || config.holder ? [] : [newLine()] } }); say(''); if (family === 'bp') await loadWarehouseStock(); paint(); if (family === 'storno') await refreshStornoSources(); if (receipt || custody || bc) await checkNumber(true); }
-  async function edit() { if (!state.doc || !state.canWrite || state.doc.annulled || state.busy || state.pendingBody || pendingCancel || pendingLink) return; if (editLocked(state.doc)) { say(editMessage(state.doc), true); return; } if (orphanReturn()) { say('Returul nu are bon sursă. Alegeți Bonul returnat și folosiți Asociază cu un bon de consum, apoi puteți modifica returul.', true); inputs.get('source')?._combo?.input.focus(); return; } allocation?.clearDraftProducts(); state.mode = 'edit'; state.draft = draftFromDoc(state.doc); state.dirty = false; say(family === 'bc' ? 'La salvare se verifică stocul pe toate datele ulterioare bonului și se recalculează lista asociată.' : ''); if (family === 'storno') await refreshStornoSources(); if (config.source || config.holder) await eligible(); if (family === 'bp') await loadWarehouseStock(); paint(); }
+  async function edit() { if (!state.doc || !state.canWrite || state.doc.annulled || state.busy || state.pendingBody || pendingCancel || pendingLink) return; if (editLocked(state.doc)) { say(editMessage(state.doc)); return; } if (orphanReturn()) { say('Returul nu are bon sursă. Alegeți Bonul returnat și folosiți Asociază cu un bon de consum, apoi puteți modifica returul.', true); inputs.get('source')?._combo?.input.focus(); return; } allocation?.clearDraftProducts(); state.mode = 'edit'; state.draft = draftFromDoc(state.doc); state.dirty = false; say(family === 'bc' ? 'La salvare se verifică stocul pe toate datele ulterioare bonului și se recalculează lista asociată.' : ''); if (family === 'storno') await refreshStornoSources(); if (config.source || config.holder) await eligible(); if (family === 'bp') await loadWarehouseStock(); paint(); }
   async function discard() { if (!await allowDiscard()) return; allocation?.clearDraftProducts(); state.mode = 'view'; state.draft = null; state.dirty = false; state.requestKey = null; state.pendingBody = null; say(''); paint(); }
   // VC06-07: the NIR starts from an invoice the accountant sent from K-BOT (efactura-intake.js fills the draft; the Administrator picks the product of each line).
   async function fromEfactura() {
@@ -504,6 +507,12 @@ export function mountDocuments(host, opts) {
           state.draft.lines = []; try { await eligible(); paintLines(); } catch (error) { report(error); }
         }
         if (spec.key === accountKey()) { const incompatible = state.draft.lines.filter((line) => (line.variant || line.product) && !inAccount(family === 'nir' ? product(line.product) : variant(line.variant))); if (incompatible.length) { state.draft.header[spec.key] = previous; paintHeader(); say('Contul nu se poate schimba: există produse care nu îi aparțin.', true); return; } paintLines(); }
+        if (family === 'bc' && spec.key === 'IdMasina' && String(previous) !== String(value)) {
+          // With numbering per account the number depends on the account: the automatic one is offered again, a typed one is only rechecked.
+          const draft = state.draft, offer = state.mode === 'add' && draft.autoNumber;
+          if (offer) draft.header.Numar = '';
+          try { await checkNumber(offer); } catch (error) { report(error); }
+        }
         if (spec.key === 'Data') {
           availability();
           if (family === 'bp' && previous !== value) { state.available = {}; try { await loadWarehouseStock(); paintLines(); } catch (error) { report(error); } }
@@ -697,13 +706,19 @@ export function mountDocuments(host, opts) {
   }
   // The header VAT rate is locked as soon as a line has been filled in (the empty new row does not count).
   let vatInput = null;
+  const seededDrafts = new WeakSet();
   function syncVatLock() {
-    if (!vatInput?._combo) return;
+    if (!vatInput?._combo || !state.draft) return;
     const rows = state.draft.lines.filter(line => !isBlankLine(line));
     const taxes = rows.map(line => state.lookups.vat.find(item => String(item.id) === String(line.IDTVA)));
     const common = rows.length > 0 && taxes.every(item => item && String(item.percent) === String(taxes[0]?.percent));
     vatInput.closest('.vc-field').hidden = state.mode === 'edit' ? !common : new Set(taxes.filter(Boolean).map(item => Number(item.percent))).size > 1;
-    if (common) state.draft.vat = [...state.lookups.vat].reverse().find(item => Number(item.percent) === Number(taxes[0].percent))?.id;
+    // A saved NIR has no header rate of its own: take it from the lines once, when the draft opens.
+    // After that a rate changed in the grid never moves the header (only the header moves the lines).
+    if (!seededDrafts.has(state.draft)) {
+      seededDrafts.add(state.draft);
+      if (common && state.draft.vat == null) state.draft.vat = [...state.lookups.vat].reverse().find(item => Number(item.percent) === Number(taxes[0].percent))?.id;
+    }
     vatInput.value = state.draft.vat ?? '';
     const tax = state.lookups.vat.find(item => String(item.id) === String(state.draft.vat));
     vatInput._combo.setValue(String(state.draft.vat ?? ''), tax ? `${tax.percent}%` : '');
@@ -783,7 +798,7 @@ export function mountDocuments(host, opts) {
       openMenu(anchor, [...(doc.source_missing ? [{ icon: '↔', label: 'Asociază cu un bon de consum', disabled: !state.canWrite || doc.annulled, run: () => run(edit).catch(report) }] : []),
         ...(family === 'nir' && doc.has_efactura ? [{ icon: '📄', label: 'Afișează eFactura', disabled: state.busy, run: () => run(() => showReceiptEfactura({ api: opts.api, selection: opts.sel(), doc: state.doc, owner: dialogs })).catch(report) }] : []),
         ...(family === 'nir' && doc.doc_type !== 'STOC_INITIAL' ? [{ icon: '↔', label: 'Asociază eFactura…', disabled: !state.canWrite || state.busy || editing() || doc.annulled || !!state.pendingBody || !!pendingCancel || !!pendingLink, run: () => run(associateSavedEfactura).catch(report) }] : []),
-        { icon: '✎', label: 'Modifică', disabled: !state.canWrite || doc.annulled || editLocked(doc), run: () => run(edit).catch(report) }, { icon: '◉', label: 'Previzualizează', run: () => run(preview).catch(report) }, { icon: '◷', label: 'Istoric', run: () => run(history).catch(report) }, { icon: '×', label: 'Anulează', rule: true, disabled: !state.canWrite || doc.annulled || doc.order_locked, run: () => run(cancel).catch(report) }], { align: 'right' });
+        { icon: '✎', label: 'Modifică', disabled: !state.canWrite || doc.annulled, run: () => run(edit).catch(report) }, { icon: '◉', label: 'Previzualizează', run: () => run(preview).catch(report) }, { icon: '◷', label: 'Istoric', run: () => run(history).catch(report) }, { icon: '×', label: 'Anulează', rule: true, disabled: !state.canWrite || doc.annulled || doc.order_locked, run: () => run(cancel).catch(report) }], { align: 'right' });
     } }, treeUi);
     paintTreeAdd();
   }
@@ -824,7 +839,7 @@ export function mountDocuments(host, opts) {
       end.push(button(`Salvează ${family === 'nir' ? 'NIR' : 'bonul'}`, save, { className: 'is-primary', 'data-retry-save': 'true' }));
     } else {
       if (!inline) start.push(button('+ Adaugă', add, { disabled: !state.canWrite }));
-      if (state.doc) { start.push(button('Previzualizează', preview)); end.push(button('Modifică', edit, { disabled: !state.canWrite || state.doc.annulled || editLocked(state.doc) })); }
+      if (state.doc) { start.push(button('Previzualizează', preview)); end.push(button('Modifică', edit, { disabled: !state.canWrite || state.doc.annulled })); }
     }
     statusBar(bar, { start, status, note, end });
   }
@@ -911,6 +926,16 @@ export function mountDocuments(host, opts) {
         const fields = headerSpecs().filter(spec => Object.hasOwn(data.errors, `h.${spec.key}`)).map(spec => spec.label);
         say(fields.length ? `Completați sau corectați: ${fields.join(', ')}.` : 'Completați sau corectați rândurile marcate din tabel.', true);
         return;
+      }
+      if (family === 'nir' && !state.pendingBody && !sharedReceipt(invoiceDoc())) {
+        // A difference of at most 1 leu between the invoice value and the lines is a warning, not a block.
+        const gap = syncInvoiceValue();
+        if (gap?.different && gap.canCorrect) {
+          const proceed = await confirmBox(`${gap.summary}\n\nPuteți apăsa butonul de corecție de lângă Valoare sau puteți salva NIR-ul cu această diferență. Salvați cu diferență?`,
+            { title: 'Diferență între valoarea facturii și produse', yes: 'Salvează cu diferență', no: 'Nu salva', warning: true });
+          if (!proceed) { say('Salvarea a fost oprită. Corectați diferența sau salvați cu diferență.', true); return; }
+          data.body.accept_difference = true;
+        }
       }
       root.inert = true; say('Se salvează…');
       state.requestKey ||= key(); state.pendingBody ||= structuredClone({ ...data.body, ...(state.mode === 'edit' ? { version: state.doc.version } : {}) });

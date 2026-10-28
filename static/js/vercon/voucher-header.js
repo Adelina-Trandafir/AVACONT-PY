@@ -1,6 +1,6 @@
 // The local draft/reader printout uses the same merged-cell structure as reports.
 const FAMILIES = { bp: ['BP', 'BON DE PREDARE'], bt: ['BT', 'BON DE TRANSFER'],
-  bs: ['BS', 'BON DE CASARE'], bc: ['BC', 'BON DE CONSUM'], br: ['BR', 'BON DE RETUR'] };
+  bs: ['BS', 'BON DE CASARE'], bc: ['BC', 'BON DE CONSUM'], br: ['BX', 'BON DE RETUR'] };
 const TYPES = { MF: 'MIJLOACE FIXE ÎN FOLOSINȚĂ', OI: 'OBIECTE DE INVENTAR ÎN FOLOSINȚĂ',
   MATERIALE: 'MATERIALE', ALIMENTE: 'ALIMENTE' };
 

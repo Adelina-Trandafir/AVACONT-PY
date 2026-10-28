@@ -70,6 +70,9 @@ MAX_SQL_BYTES = 100_000
 
 RAN_BY = "AvacontPush"
 
+# RulatDe of a row written by `mark`: the structure came from schema_sync, the text itself was not run there.
+MARK_BY = "KBotAdmin (schema_sync)"
+
 # The ledger as the template has it (sql/0102_01_sursa.sql). Used only to create it on
 # AVACONT_SURSA when that script was not run; every other database copies the template's table.
 _LEDGER_DDL = (
@@ -208,13 +211,16 @@ def prepare(name: str, raw_text: str) -> tuple:
 # Targets and ledger
 # ---------------------------------------------------------------------------------
 
-def collect_targets(conn, explicit: str = None) -> list:
+def collect_targets(conn, explicit: str = None, only_source: bool = False) -> list:
     """AVACONT_SURSA first, then the units.
 
     `explicit` (--targets, what AvacontPush sends: the databases the operator ticked after the
     server listed the ones that really exist) names the units; a name the server does not have
     stops the run. Without it, the units of the registry (CAI) that exist on the server.
+    `only_source` (--only-source, KBotAdmin's «Interogare pe SURSA») is the template alone.
     """
+    if only_source:
+        return [SOURCE_DB]
     if explicit:
         units = verify_targets(conn, parse_targets(explicit), logger)
         return [SOURCE_DB] + [u for u in units if u != SOURCE_DB]
@@ -302,13 +308,13 @@ def _run_on(conn_admin, db: str, name: str, statements: list, normalized: str, d
         unit.close()
 
 
-def run(name: str, raw_text: str, view_only: bool, targets: str = None) -> int:
+def run(name: str, raw_text: str, view_only: bool, targets: str = None, only_source: bool = False) -> int:
     statements, normalized, digest = prepare(name, raw_text)
     say(f"Interogarea «{name}»: {len(statements)} instrucțiuni, SHA-256 {digest[:16]}…")
 
     conn = connect()
     try:
-        names = collect_targets(conn, targets)
+        names = collect_targets(conn, targets, only_source)
         plan = []
         for db in names:
             state, detail = ledger_state(conn, db, name, digest)
@@ -349,7 +355,63 @@ def run(name: str, raw_text: str, view_only: bool, targets: str = None) -> int:
         if failed:
             say(f"Terminat cu erori pe: {', '.join(failed)}. Cele eșuate nu sunt marcate ca rulate.")
             return EXIT_FAILED
+        if only_source:
+            say(f"Terminat: rulată pe {SOURCE_DB}. Unitățile nu au fost atinse.")
+            return EXIT_OK
         say(f"Terminat: rulată pe {len(pending)} baze, restul o aveau deja.")
+        return EXIT_OK
+    finally:
+        conn.close()
+
+
+def mark(name: str, targets: str = None) -> int:
+    """Writes the ledger row of a query that already ran on AVACONT_SURSA into the units, WITHOUT executing it.
+
+    Used after schema_sync brought the structure to the units: the query changed structure, the sync carried
+    it, so the units must not run the text a second time. The text and the hash are the template's own.
+    A unit that already holds the hash is left alone; a unit that holds the name with another text is reported.
+    """
+    name = (name or "").strip()
+    if not NAME_RE.match(name):
+        raise QueryRefused("Numele interogării: 3–100 de caractere, doar litere, cifre, _ . -")
+    conn = connect()
+    try:
+        if not _has_ledger(conn, SOURCE_DB):
+            raise QueryRefused(f"`{SOURCE_DB}` nu are `{LEDGER}`: nicio interogare nu a rulat încă pe ea.")
+        rows = query(conn, f"SELECT Hash, Interogare FROM `{SOURCE_DB}`.`{LEDGER}` WHERE Nume = %s", (name,))
+        if not rows:
+            raise QueryRefused(f"«{name}» nu a rulat pe {SOURCE_DB}; nu o pot marca pe unități.")
+        digest, text = rows[0]["Hash"], rows[0]["Interogare"] or ""
+        units = [db for db in collect_targets(conn, targets) if db != SOURCE_DB]
+        say(f"Marcare «{name}» (SHA-256 {digest[:16]}…) pe {len(units)} unități; nu se execută nimic.")
+        failed = []
+        for db in units:
+            state, detail = ledger_state(conn, db, name, digest)
+            if state == "DONE":
+                say(f"  {db}: {detail}")
+                continue
+            if state == "CONFLICT":
+                failed.append(db)
+                say(f"  {db}: REFUZAT — {detail}")
+                continue
+            try:
+                ensure_ledger(conn, db)
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(
+                        f"INSERT INTO `{db}`.`{LEDGER}` (Hash, Nume, RulatDe, Randuri, Interogare) "
+                        "VALUES (%s, %s, %s, NULL, %s)", (digest, name, MARK_BY, text))
+                finally:
+                    cursor.close()
+                say(f"  {db}: marcată")
+            except (SchemaSyncError, mysql.connector.Error) as exc:
+                failed.append(db)
+                say(f"  {db}: EȘUAT — {exc}")
+        say("")
+        if failed:
+            say(f"Terminat cu erori pe: {', '.join(failed)}.")
+            return EXIT_FAILED
+        say("Terminat: unitățile au interogarea marcată ca rulată.")
         return EXIT_OK
     finally:
         conn.close()
@@ -390,12 +452,21 @@ def main(argv=None) -> int:
     mode.add_argument("--view", action="store_true", help="arată ce s-ar rula; nu execută nimic")
     mode.add_argument("--run", action="store_true", help="execută")
     mode.add_argument("--status", action="store_true", help="registrul fiecărei baze")
+    mode.add_argument("--mark", action="store_true",
+                      help="scrie în registrul unităților o interogare rulată pe AVACONT_SURSA, fără s-o execute "
+                           "(după schema_sync); are nevoie doar de --name")
+    parser.add_argument("--only-source", action="store_true",
+                        help="rulează doar pe AVACONT_SURSA (șablonul); unitățile nu sunt atinse")
     args = parser.parse_args(argv)
 
     _setup_logging()
     try:
         if args.status:
             return status()
+        if args.mark:
+            return mark(args.name, args.targets)
+        if args.only_source and args.targets:
+            raise QueryRefused("--only-source nu merge cu --targets.")
         if not args.name or not (args.sql_b64 or args.sql_file):
             raise QueryRefused("Trebuie --name și --sql-b64 (sau --sql-file).")
         if args.sql_b64:
@@ -406,7 +477,7 @@ def main(argv=None) -> int:
         else:
             with open(args.sql_file, "r", encoding="utf-8-sig") as handle:
                 text = handle.read()
-        return run(args.name, text, view_only=args.view, targets=args.targets)
+        return run(args.name, text, view_only=args.view, targets=args.targets, only_source=args.only_source)
     except QueryRefused as exc:
         say(f"REFUZAT: {exc}")
         return EXIT_REFUSED

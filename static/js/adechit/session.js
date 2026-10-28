@@ -1,8 +1,12 @@
-// The server owns the deadline. Page load renews it; polling and local activity only read it.
+// The server owns the deadline. Page load and the operator's activity (typing, clicks, scrolling, touch --
+// never mouse movement) renew it; polling only reads it.
 import { messageBox } from '../utils/confirm-box.js';
 import { beginSessionExit } from '../utils/session-exit.js';
 
 const RESYNC_MS = 60 * 1000;
+// Scrolling (wheel, scroll, touch-drag) is deliberately not activity: only someone who scrolls and does nothing else is logged out.
+const ACTIVITY_EVENTS = ['keydown', 'input', 'pointerdown', 'click'];
+const ACTIVITY_SEND_MS = 20 * 1000;   // at most one renewal call per 20 s of continuous activity
 const clock = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
 async function readSession(token, signal, renew = false) {
@@ -21,6 +25,7 @@ export function startSessionTimer({ token, onExpired, host, warningSeconds = 15 
   // A demo supplying its own clock stays isolated from authenticated session routes.
   const renew = renewSession || checkSession || (signal => readSession(token, signal, true));
   let deadline = 0, stopped = false, left = false, syncing = false, warned = 0, notice = null, noticeLevel = 0;
+  let total = 0, lastSent = 0, sending = false;
   const abort = new AbortController(), header = host?.closest('header');
   let tick, sync;
   const closeNotice = () => { notice?.close(); notice = null; };
@@ -28,6 +33,7 @@ export function startSessionTimer({ token, onExpired, host, warningSeconds = 15 
     if (stopped) return;
     stopped = true; abort.abort(); clearInterval(tick); clearInterval(sync);
     document.removeEventListener('visibilitychange', wake);
+    ACTIVITY_EVENTS.forEach(name => document.removeEventListener(name, active, true));
     window.removeEventListener('pagehide', stop);
     window.removeEventListener('app:session-expired', stop);
     closeNotice(); header?.classList.remove('is-session-ending');
@@ -44,7 +50,7 @@ export function startSessionTimer({ token, onExpired, host, warningSeconds = 15 
       host.hidden = seconds > showFromSeconds;
       const value = host.querySelector('b'); if (value) value.textContent = clock(seconds);
       host.classList.toggle('is-urgent', seconds <= criticalSeconds);
-      host.title = 'Timp rămas până la deconectarea automată. Refreshul paginii reînnoiește sesiunea; activitatea curentă nu o prelungește.';
+      host.title = 'Timp rămas până la deconectarea automată. Orice activitate (tastare, click, salvare, ștergere) îl reia de la capăt.';
     }
     header?.classList.toggle('is-session-ending', seconds <= criticalSeconds);
     const level = seconds <= criticalSeconds ? 2 : seconds <= warningSeconds ? 1 : 0;
@@ -74,7 +80,10 @@ export function startSessionTimer({ token, onExpired, host, warningSeconds = 15 
       const data = await (initial ? renew : check)(abort.signal);
       if (stopped) return;
       if (data.authenticated === false || Number.isFinite(data.expires_in) && data.expires_in <= 0) { leave(); return; }
-      if (Number.isFinite(data.expires_in)) deadline = started + Math.max(0, data.expires_in) * 1000;
+      if (Number.isFinite(data.expires_in)) {
+        deadline = started + Math.max(0, data.expires_in) * 1000;
+        if (initial || !total) total = data.expires_in;
+      }
       runTick();
     } catch (error) {
       if (error.name !== 'AbortError') {
@@ -84,9 +93,28 @@ export function startSessionTimer({ token, onExpired, host, warningSeconds = 15 
     }
     finally { syncing = false; }
   };
+  // Activity: the count starts over at once on the page; the server is told at most every ACTIVITY_SEND_MS.
+  function active(event) {
+    if (event.type === 'pointerdown' && event.pointerType === 'touch') return;   // a finger down may be the start of a scroll; the tap's own click counts
+    if (stopped || !deadline || !total) return;
+    const now = Date.now();
+    if (deadline <= now) return;   // already over: only the server may say whether it really is
+    deadline = now + total * 1000;
+    runTick();
+    if (sending || now - lastSent < ACTIVITY_SEND_MS) return;
+    sending = true; lastSent = now;
+    renew(abort.signal)
+      .then(data => {
+        if (stopped) return;
+        if (data.authenticated === false || Number.isFinite(data.expires_in) && data.expires_in <= 0) leave();
+      })
+      .catch(error => { if (error.name !== 'AbortError') console.error('[session] Activitatea nu a putut fi trimisă', error); })
+      .finally(() => { sending = false; });
+  }
   function wake() { if (!document.hidden) { runTick(); if (!stopped) void resync(); } }
   tick = setInterval(runTick, 1000); sync = setInterval(resync, RESYNC_MS);
   document.addEventListener('visibilitychange', wake);
+  ACTIVITY_EVENTS.forEach(name => document.addEventListener(name, active, { capture: true, passive: true }));
   window.addEventListener('pagehide', stop, { once: true });
   window.addEventListener('app:session-expired', stop, { once: true });
   void resync(true);

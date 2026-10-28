@@ -612,11 +612,19 @@ def post_ddf_genereaza():
         parteneri = []
 
         # ---- the header -------------------------------------------------------------
-        if rev0:
+        existent = _citeste_ddf(cursor, cod)
+        # A document header that has no revision at all (its revisions were deleted, or only the
+        # header came over): revision 0 is written ONTO that header instead of being refused, because
+        # there is no other revision to add and a second FX_DDF row would split the document.
+        antet_gol = False
+        if rev0 and existent is not None:
+            cursor.execute("SELECT COUNT(*) AS n FROM FX_DDF_REV WHERE IDDF = %s",
+                           (int(existent["IDDF"]),))
+            antet_gol = int((cursor.fetchone() or {}).get("n") or 0) == 0
+        if rev0 and not antet_gol:
             # No FX_DDF row exists yet. Built from FX_Angajamente, exactly as the `Else`
             # branch of `Genereaza_DDF_Buget` does. CUAL is NOT allocated here -- the number
             # lock does that, so what the operator sees in the header is genuinely held.
-            existent = _citeste_ddf(cursor, cod)
             if existent is not None:
                 raise DateInvalide(
                     f"Angajamentul «{cod}» are deja un document de fundamentare "
@@ -649,7 +657,6 @@ def post_ddf_genereaza():
                 "nou": True,
             }
         else:
-            existent = _citeste_ddf(cursor, cod)
             if existent is None:
                 raise DateInvalide(
                     f"Angajamentul «{cod}» nu are încă un document de fundamentare. "

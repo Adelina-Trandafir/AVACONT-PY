@@ -63,7 +63,7 @@ Cauza identificata in surse: randurile cu node.tooltip si etichetele copacilor c
 
 Schimbari:
 
-- Politica comuna bazata pe geometria textului efectiv afisat: overflow propriu al etichetei/textului din dreapta si decupare de catre parinti/viewport. Masuratorile folosesc acelasi sistem de coordonate vizuale, inclusiv zoom-ul aplicatiei.
+- Politica comuna bazata pe geometria textului efectiv afisat: overflow propriu al etichetei/textului din dreapta si decupare de catre parinti/viewport. Masuratorile folosesc acelasi sistem de coordonate vizuale, inclusiv zoom-ul aplicatiei. Elementul `html` nu intra in lista parintilor care decupeaza (fereastra e acoperita de `innerWidth`); altfel, sub zoom, zona lui iesea prea ingusta si textul din dreapta era socotit trunchiat (detalii: `docs/worklog/SLICE-VC08-15-tooltip-arbori.md`).
 - Mecanismul comun refuza tooltip-ul unui nod al carui text incape. Nu continua cautarea unui titlu pe stramosii nodului, evitand mostenirea unui tooltip al containerului.
 - Nodurile cu text trunchiat pot afisa textul complet chiar daca nu au un tooltip configurat. Un tooltip explicit al nodului ramane conditionat de aceeasi regula.
 - Titlurile neconditionate ale nodurilor si etichetelor au fost eliminate din randarea TreeView. Metadatele optionale sunt pastrate separat. Breadcrumb pastreaza numele accesibil, fara tooltip nativ permanent.

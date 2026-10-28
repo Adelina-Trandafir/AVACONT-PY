@@ -23,7 +23,7 @@ Everything here runs inside the transaction of the route.
 from utils.clock import bucharest_today, utc_now
 from decimal import Decimal
 
-from . import numeric, protocol, oi_custody
+from . import bon_number, numeric, protocol, oi_custody
 from .documents import (_NOT_IN_ACCOUNT, _account_of_variant, _all, _dec, _exists, _fail, _int, _line_key, _money, _name_join, _one, _scope, _text, _iso,
                         _MAX_LINES, priced_line, total_of)
 from .nomenclatoare import NomError
@@ -52,7 +52,7 @@ def list_documents(cursor, ctx, family):
                          'LEFT JOIN VC_Clienti c ON c.SubunitId=t.SubunitId AND c.GestiuneId=t.GestiuneId AND c.IDC=t.{h}{oj} '
                          'WHERE t.SubunitId=%s AND t.GestiuneId=%s AND t.ExercitiuId=%s AND t.{k} IS NOT NULL AND t.{k}<>0 GROUP BY t.{k} ORDER BY d DESC, t.{k} DESC').format(
         k=spec['key'], n=spec['num'], d=spec['date'], h=spec['holder'], tb=spec['table'], old=old_sql, oj=old_join), (s, g, e))
-    return [{'id': r['id'], 'number': r['number'], 'date': _iso(r['d']), 'holder_id': r['holder_id'], 'holder': r['holder'] or '',
+    return [{'id': r['id'], 'number': bon_number.display(family, r['number']), 'date': _iso(r['d']), 'holder_id': r['holder_id'], 'holder': r['holder'] or '',
              'old_id': r['old_id'], 'old': r['old_name'] or '', 'total': _money(Decimal(r['total'] or 0), ctx['scale']), 'annulled': bool(r['annulled']),
              'version': '%d-%d' % (r['version_id'], r['version_sum']), 'lines': r['line_count']} for r in rows]
 
@@ -104,7 +104,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
                         'IDC_OLD': holders.get(first.get('IDC_OLD'), '')}
     header['Valoare'] = _money(sum(Decimal(r['ValoareCUTVA'] or 0) for r in rows), scale)
     return {'family': family, 'id': doc_id, 'version': _rev(rows), 'annulled': any(r['Anulat'] for r in rows), 'reason': first['MotivAnulare'],
-            'annulled_by': first['AnulatDe'], 'number': first[spec['num']], 'header': header, 'lines': lines}
+            'annulled_by': first['AnulatDe'], 'number': bon_number.display(family, first[spec['num']]), 'header': header, 'lines': lines}
 
 
 def _batches_of_document(cursor, ctx, family, doc_id):
@@ -207,7 +207,7 @@ def _number(cursor, ctx, family, manual, errors, exclude=None):
         errors['h.Numar'] = 'Numărul %s este deja folosit.' % number
         return None
     protocol.raise_counter(cursor, ctx, spec['kind'], number)
-    return str(number)
+    return bon_number.text(family, number)   # BP 13, BT 13, BS 13 (casare)
 
 
 def _outputs(cursor, ctx, family, doc_id, products):
@@ -326,7 +326,7 @@ def create_bp(cursor, repo, ctx, exercise, body, request_key, request_id):
     now = utc_now()
     _write_bp(cursor, repo, ctx, doc_id, number, header, lines, None, now)
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in lines})
-    oi_custody.check_timeline(cursor, ctx)
+    oi_custody.check_timeline(cursor, ctx, {l['variant'] for l in lines})
     protocol.freeze(cursor, ctx)
     protocol.audit(cursor, ctx, 'bp.create', 'VC_OI_Predare', doc_id, None, {'number': number, 'holder': header['IDC_BP'], 'lines': len(lines)}, request_key, request_id)
     return {'id': doc_id, 'number': number}
@@ -358,7 +358,7 @@ def edit_bp(cursor, repo, ctx, exercise, doc_id, body, request_id):
     _fail(errors)
     number = rows[0]['NRBP']
     manual = (body.get('header') or {}).get('Numar')
-    if manual not in (None, '') and str(_int(manual)) != str(number):
+    if manual not in (None, '') and _int(manual) != bon_number.parse('bp', number):
         number = _number(cursor, ctx, 'bp', manual, errors, exclude=doc_id)
     _fail(errors)
     old_products = {r['IdProdus'] for r in rows}
@@ -368,7 +368,7 @@ def edit_bp(cursor, repo, ctx, exercise, doc_id, body, request_id):
     repo.delete('VC_OI_Predare', {'IDBP': doc_id})
     _write_bp(cursor, repo, ctx, doc_id, number, header, lines, bc_id, utc_now())
     protocol.check_timeline(cursor, ctx, {l['variant'] for l in lines} | old_products)
-    oi_custody.check_timeline(cursor, ctx)
+    oi_custody.check_timeline(cursor, ctx, {l['variant'] for l in lines} | old_products)
     protocol.audit(cursor, ctx, 'bp.update', 'VC_OI_Predare', doc_id, {'number': rows[0]['NRBP'], 'lines': len(rows)}, {'number': number, 'lines': len(lines)}, None, request_id)
     return {'id': doc_id, 'number': number}
 
@@ -469,7 +469,7 @@ def edit_out(family, cursor, repo, ctx, exercise, doc_id, body, request_id):
     spec = SPEC[family]
     number = rows[0][spec['num']]
     manual = (body.get('header') or {}).get('Numar')
-    if manual not in (None, '') and str(_int(manual)) != str(number):
+    if manual not in (None, '') and _int(manual) != bon_number.parse(family, number):
         number = _number(cursor, ctx, family, manual, errors, exclude=doc_id)
     _fail(errors)
     lines = _taken_lines(cursor, ctx, family, _giver(family, header), doc_id, body.get('lines'), header['_date'], errors)
@@ -496,7 +496,7 @@ def cancel(cursor, repo, ctx, family, doc_id, body, request_id):
         cursor.execute('UPDATE VC_Iesiri_H SET Anulat=1, MotivAnulare=%s, AnulatDe=%s, AnulatLa=NOW(), Version=Version+1 WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND IdBonConsum=%s',
                        (reason, ctx['email'], *_scope(ctx), rows[0]['IdBonConsum']))
     protocol.check_timeline(cursor, ctx, {r['IdProdus'] for r in rows})
-    oi_custody.check_timeline(cursor, ctx)
+    oi_custody.check_timeline(cursor, ctx, {r['IdProdus'] for r in rows})
     protocol.audit(cursor, ctx, family + '.cancel', spec['table'], doc_id, {'Anulat': 0}, {'Anulat': 1, 'Motiv': reason}, None, request_id)
     return {'id': doc_id}
 

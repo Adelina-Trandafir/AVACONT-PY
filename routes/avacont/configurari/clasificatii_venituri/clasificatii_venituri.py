@@ -27,6 +27,11 @@ and the page shows the notice (utils/subunitati_copil.py). A child never has cla
         -> 200 { "idclsfv": n }. The classification takes its name (capitals) from the nomenclator; the key is the largest one + 1.
         400 for a code that is not a revenue code of the nomenclator or a missing source, 409 for one that already exists on that source.
 
+    DELETE /api/avacont/clasificatii-venituri/<idclsfv>
+        -> 200 { "idclsfv": n }. 409 (with the places named) when anything depends on the classification: a used classification is never deleted.
+        What counts as «depends» is decided in dependente.py: every table with a foreign key to Clasificatii_Venituri.IdClsfV is found by itself,
+        and a table without one (FX_Extrase_H) is subscribed there with one line. 404 when it is gone already.
+
     GET  /api/avacont/clasificatii-venituri/sumar?an=2026&ss=02A
         -> 200 { "items": [ { "idclsfv", "budget": {"id", "data_inceput", "trim1".."trim4"}|null, "corrections": {"trim1".."trim4"}|null } ],
                  "copii": { "parinte": "...", "copii": ["..."] } | null }
@@ -47,6 +52,7 @@ from datetime import date
 
 import mysql.connector
 from flask import g, request
+from mysql.connector import errorcode
 
 from routes.auth.guard import require_session
 from utils.database import COMMON_DB, get_kbot_connection
@@ -54,6 +60,7 @@ from utils.subunitati_copil import child_sources
 
 from ... import avacont_bp
 from ...common import json_utf8, rollback
+from .dependente import CLASIFICATII_VENITURI
 
 logger = logging.getLogger(__name__)
 
@@ -319,6 +326,50 @@ def cv_post_adauga():
         rollback(conn)
         logger.error("[avacont.clasificatii_venituri] adaugare %s: %s", db_name, e, exc_info=True)
         return json_utf8({"error": f"Eroare la adăugarea clasificației: {e}"}, 500)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+@avacont_bp.route("/api/avacont/clasificatii-venituri/<int:id_clsfv>", methods=["DELETE"])
+@require_session
+def cv_delete(id_clsfv):
+    """Deletes a revenue classification that is used nowhere; one with a budget, corrections or bank-statement headers is REFUSED."""
+    db_name = g.session.db_name
+    conn = None
+    try:
+        conn = get_kbot_connection(db_name)
+        conn.autocommit = False
+        cursor = conn.cursor(dictionary=True, buffered=True)
+        if not conn.in_transaction:
+            conn.start_transaction()
+        cursor.execute("SELECT SS, Capitol, SubCapitol, Paragraf FROM Clasificatii_Venituri WHERE IdClsfV = %s FOR UPDATE", (id_clsfv,))
+        row = cursor.fetchone()
+        if row is None:
+            conn.rollback()
+            return json_utf8({"error": "Clasificația nu mai există."}, 404)
+        code = f"{_text(row['Capitol'])}.{_text(row['SubCapitol'])}.{_text(row['Paragraf'])}"
+        # Every table that depends on a classification (found by foreign key, or subscribed in dependente.py) decides here: a used one stays.
+        used = CLASIFICATII_VENITURI.usage(cursor, id_clsfv)
+        if used:
+            conn.rollback()
+            return json_utf8({"error": f"Clasificația {code} ({_text(row['SS'])}) nu se poate șterge: este folosită în "
+                                       + ", ".join(used) + "."}, 409)
+        cursor.execute("DELETE FROM Clasificatii_Venituri WHERE IdClsfV = %s", (id_clsfv,))
+        conn.commit()
+        logger.info("[avacont.clasificatii_venituri] %s: stearsa %s pe %s (id %s)", db_name, code, _text(row["SS"]), id_clsfv)
+        return json_utf8({"idclsfv": id_clsfv}, 200)
+    except mysql.connector.Error as e:
+        rollback(conn)
+        if e.errno == errorcode.ER_ROW_IS_REFERENCED_2:
+            # A place the list above does not know yet still blocks (the foreign keys are RESTRICT).
+            return json_utf8({"error": "Clasificația nu se poate șterge: este folosită în buget sau rectificări."}, 409)
+        logger.error("[avacont.clasificatii_venituri] stergere %s/%s: %s", db_name, id_clsfv, e, exc_info=True)
+        return json_utf8({"error": f"Eroare la ștergerea clasificației: {e}"}, 500)
+    except Exception as e:
+        rollback(conn)
+        logger.error("[avacont.clasificatii_venituri] stergere %s/%s: %s", db_name, id_clsfv, e, exc_info=True)
+        return json_utf8({"error": f"Eroare la ștergerea clasificației: {e}"}, 500)
     finally:
         if conn is not None:
             conn.close()

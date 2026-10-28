@@ -27,7 +27,7 @@ export function oiContext(root, { family, api, selection, draft }) {
     }
     const columns = [
       ['Data', row => format(row.date, { type: 'date' }), 'date'],
-      ['Bon', row => `${row.kind} ${row.number ?? ''}`, 'document'],
+      ['Bon', row => row.number ?? row.kind, 'document'],
       ...(product ? [['Cant.', row => format(row.quantity, { type: 'decimal' }), 'number']] : []),
       ['Valoare', row => formatMoney(row.value), 'number'],
     ];

@@ -327,7 +327,6 @@ export class DataGrid {
     this._resizeObserver.observe(this._scroll);
     this._window.addEventListener('click', (ev) => this._onRowClick(ev), { signal });
     this._window.addEventListener('dblclick', (ev) => this._onRowDblClick(ev), { signal });
-    this._window.addEventListener('mouseover', (ev) => this._tipIfClipped(ev), { signal });
     root.addEventListener('keydown', (ev) => this._onKey(ev), { signal });
     root.addEventListener('focusout', (ev) => this._onFocusOut(ev), { signal });
     document.addEventListener('pointerdown', (ev) => {
@@ -337,6 +336,12 @@ export class DataGrid {
 
   // ------------------------------------------------------------------ data -> items
   _col(key) { return this._columns.find((c) => c.key === key); }
+
+  // Optional `cellFor(row)` on a column: overrides (display, editor, parse, validate, formatter, editable...) for the cells of that row,
+  // so one column can hold a number in one row and a check box in another. Columns without it are returned as they are.
+  _cellColumn(row, col) {
+    return col && typeof col.cellFor === 'function' ? { ...col, ...col.cellFor(row) } : col;
+  }
 
   /** Order, visibility, widths and the fill column from the layout (explicit, or the provider's for this grid's id). */
   _applyLayout(cols) {
@@ -559,12 +564,23 @@ export class DataGrid {
         cell.classList.add('is-action');
       } else {
         const title = el('span', 'dgv__title', col.title);
-        title.title = col.tooltip || col.title;
+        if (col.tooltip) title.title = col.tooltip;   // only a tooltip someone wrote: repeating the title of the column says nothing
         cell.appendChild(title);
       }
 
       if (this._sort && this._sort.key === col.key) {
         cell.appendChild(el('span', 'dgv__sort', this._sort.dir === 'asc' ? '▲' : '▼'));
+      }
+      if (col.headerButton && !col.headerAction) {
+        // a small command next to the title (an emoji), e.g. a refresh: it emits onHeaderAction({ key }) like the whole-cell header action
+        const command = el('button', 'dgv__head-btn', col.headerButton.text);
+        command.type = 'button';
+        if (col.headerButton.title) command.title = col.headerButton.title;
+        command.setAttribute('aria-label', col.headerButton.title || col.title);
+        command.disabled = Boolean(col.headerButton.disabled);
+        command.addEventListener('click', (ev) => { ev.stopPropagation(); this._emit('onHeaderAction', { key: col.key }); }, { signal });
+        command.addEventListener('pointerdown', (ev) => ev.stopPropagation(), { signal });
+        cell.appendChild(command);
       }
       if (col.filter) {
         const btn = el('button', 'dgv__fb', '▾');
@@ -675,7 +691,8 @@ export class DataGrid {
         row.addEventListener('dragend', (event) => this._emit('onRowDragEnd', { event }));
       }
       const indent = this._groups.length ? this._indentOf(this._groups.length) : 0;
-      cols.forEach((col, ci) => {
+      cols.forEach((baseCol, ci) => {
+        const col = this._cellColumn(item.row, baseCol);
         const text = formatValue(item.row[col.key], col);
         const cell = this._cell(col, text);
         if (col.selectionCheckbox && this._opts.multiSelect) {
@@ -757,6 +774,9 @@ export class DataGrid {
     if (this._isRight(col)) cell.classList.add('is-right');
     else if (col.align === 'center') cell.classList.add('is-center');   // body cells only: the header keeps its own look
     cell.textContent = text;
+    // A clipped text is shown whole by the tooltip system (data-kbot-tooltip-overflow, which decides on hover whether it is clipped);
+    // a tooltip someone wrote stays a title. The cell is never rewritten on hover: that would close the tooltip at once.
+    if (col.tooltip) cell.title = col.tooltip; else cell.setAttribute('data-kbot-tooltip-overflow', '');
     return cell;
   }
 
@@ -933,12 +953,6 @@ export class DataGrid {
     const viewH = this._scroll.clientHeight - this._opts.headerHeight - (this._foot.hidden ? 0 : h);
     if (top < this._scroll.scrollTop) this._scroll.scrollTop = top;
     else if (top + h > this._scroll.scrollTop + viewH) this._scroll.scrollTop = top + h - viewH;
-  }
-
-  _tipIfClipped(ev) {
-    const cell = ev.target.closest('.dgv__cell');
-    if (!cell || cell.classList.contains('is-band')) return;
-    cell.title = this._col(cell.dataset.key)?.tooltip || (cell.scrollWidth > cell.clientWidth ? cell.textContent : '');
   }
 
   _emit(name, payload) {

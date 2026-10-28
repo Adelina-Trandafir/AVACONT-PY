@@ -139,7 +139,7 @@ export const editing = {
   },
   beginEdit(row, key, { onCancelRow } = {}) {
     if (this._edit || this._destroyed) return false;
-    const column = this._col(key);
+    const column = this._cellColumn(row, this._col(key));
     if (!this.canEdit(row, column)) return false;
     // editGuard(row, column) returns a reason text when the grid must stay locked for now (e.g. the header above it is incomplete)
     const k_blocked = typeof this._opts.editGuard === 'function' ? this._opts.editGuard(row, column) : '';

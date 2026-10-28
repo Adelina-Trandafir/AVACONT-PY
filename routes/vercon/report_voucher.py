@@ -2,7 +2,7 @@
 
 FAMILIES = {'bp': ('BP', 'BON DE PREDARE'), 'bt': ('BT', 'BON DE TRANSFER'),
             'bs': ('BS', 'BON DE CASARE'), 'bc': ('BC', 'BON DE CONSUM'),
-            'br': ('BR', 'BON DE RETUR')}
+            'br': ('BX', 'BON DE RETUR')}
 TYPES = {'MF': 'MIJLOACE FIXE ÎN FOLOSINȚĂ', 'OI': 'OBIECTE DE INVENTAR ÎN FOLOSINȚĂ',
          'MATERIALE': 'MATERIALE', 'ALIMENTE': 'ALIMENTE'}
 

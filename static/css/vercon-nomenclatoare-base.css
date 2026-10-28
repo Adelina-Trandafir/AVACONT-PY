@@ -23,4 +23,9 @@
 .vc-nom__sub { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .vc-nom__sub[hidden] { display: none; }
 @media (max-width: 700px) { .vc-nom__body { grid-template-columns: 1fr; } }
+/* SLICE-VC06-19: the gestiune settings window = caption, properties grid and numbering grid (equal heights), buttons. */
+.vc-settings.kmodal { display: flex; flex-direction: column; gap: 10px; }
+.vc-settings .vc-settings-grid, .vc-settings .vc-settings-numbers { flex: 1 1 0; min-height: 0; height: auto; }
+.vc-settings .vc-dgv .dgv { min-height: 0; }
+.vc-settings .vc-status-bar { flex: 0 0 auto; }
 

@@ -95,6 +95,10 @@
 .dgv__hc { justify-content: center; text-align: center; padding: 0 22px; }
 .dgv__title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dgv__sort { flex: none; font-size: var(--fs-2xs); color: var(--dgv-accent); }
+.dgv__head-btn { flex: none; width: 22px; height: 22px; padding: 0; line-height: 1; cursor: pointer; border: 1px solid transparent; border-radius: 4px; background: transparent; color: inherit; font-size: 1em; }
+.dgv__head-btn:hover:not(:disabled) { border-color: var(--dgv-line); background: var(--dgv-back); }
+.dgv__head-btn:disabled { opacity: .45; cursor: default; }
+.dgv__head-btn:focus-visible { outline: 2px solid var(--dgv-accent); outline-offset: 1px; }
 .dgv__fb {
   position: absolute; right: 3px; top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity .12s;
   flex: none; width: 20px; height: 20px; padding: 0; line-height: 1; cursor: pointer;

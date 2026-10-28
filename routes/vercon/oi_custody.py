@@ -175,9 +175,12 @@ def batches(cursor, ctx, holder, exclude=None, on_date=None):
     return result
 
 
-def check_timeline(cursor, ctx):
+def check_timeline(cursor, ctx, products=None):
+    """Fail when a holding goes negative; `products` limits the check to what the operation touches."""
     grouped = defaultdict(lambda: defaultdict(Decimal))
     for event in events(cursor, ctx):
+        if products is not None and event['IdProdus'] not in products:
+            continue
         key = (event['IDC_PTC'], event['origin'], event['IdProdus'], event['IDM'], event['PUTVA'])
         grouped[key][event['date']] += event['quantity']
     for quantities in grouped.values():

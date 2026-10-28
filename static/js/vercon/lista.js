@@ -1,4 +1,5 @@
 // Lista de alimente: one draft, three meals and a set of existing BC links.
+import { numberValue } from './receipt-number.js';
 import { confirmBox, reasonBox } from '../utils/confirm-box.js';
 import { format, formatMoney, parse } from './fields.js';
 import { el, scope, field, column, grid, paintTree, groupedNodes, docNode, modal, rowMenu, openMenu, showMessage, statusBar } from './ui.js';
@@ -229,11 +230,11 @@ export function mountLista(host, opts) {
     const popup = modal('Alege B.C.', dialogs), tree = el('div', { className: 'vc-bon-picker' }), detail = el('p', { className: 'vc-hint' });
     const add = el('button', { type: 'button', textContent: 'Adaugă BC', disabled: true, className: 'is-primary' }), cancel = el('button', { type: 'button', textContent: 'Renunță' });
     let selected; popup.body.append(tree, detail); popup.footer.append(cancel, add); cancel.addEventListener('click', popup.close);
-    const nodes = groupedNodes(available, [(row) => row.receiver, (row) => dateText(row.date)], (row) => 'BC ' + row.number + ' • ' + amount(row.total) + ' lei',
+    const nodes = groupedNodes(available, [(row) => row.receiver, (row) => dateText(row.date)], (row) => row.number + ' • ' + amount(row.total) + ' lei',
       [null, (row) => ({ sortType: 'date', sortValue: row.date, sortDirection: 'desc' }),
-        (row) => ({ sortType: 'date', sortValue: row.date, sortDirection: 'desc', sortThen: [{ type: 'number', value: row.number }, { type: 'number', value: row.id }] })]);
+        (row) => ({ sortType: 'date', sortValue: row.date, sortDirection: 'desc', sortThen: [{ type: 'number', value: numberValue(row.number) }, { type: 'number', value: row.id }] })]);
     const stripActions = (rows) => rows.forEach((node) => { delete node.rightIcon; if (node.children) stripActions(node.children); }); stripActions(nodes);
-    paintTree(tree, nodes, { title: 'Bonuri disponibile', onSelect: (id) => { selected = available.find((row) => String(row.id) === id); add.disabled = !selected; detail.textContent = selected ? 'BC ' + selected.number + ' • ' + selected.receiver + ' • ' + amount(selected.total) + ' lei' : ''; } }, popup.scope);
+    paintTree(tree, nodes, { title: 'Bonuri disponibile', onSelect: (id) => { selected = available.find((row) => String(row.id) === id); add.disabled = !selected; detail.textContent = selected ? selected.number + ' • ' + selected.receiver + ' • ' + amount(selected.total) + ' lei' : ''; } }, popup.scope);
     if (!available.length) detail.textContent = 'Nu există bonuri de consum disponibile.';
     add.addEventListener('click', () => {
       if (!selected || token !== generation || state.draft !== draft || draft.bons.some((row) => String(row.id) === String(selected.id))) return;

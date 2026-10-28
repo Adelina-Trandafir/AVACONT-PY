@@ -6,6 +6,15 @@
   padding: 8px;
 }
 .vc-doc .vc-receipt-tree > .vc-document-tree-order { border-top: 1px solid var(--line); align-self: stretch; }
+/* SLICE-VC06-19: the consumption bons choose their grouping in a popup opened by this button. */
+.vc-doc .vc-document-tree-group {
+  --action-add-button-height: 34px;
+  --action-add-button-font-size: var(--fs-ms);
+  --action-add-button-icon-size: var(--fs-lg);
+  --action-add-button-padding-x: 12px;
+  --action-add-button-radius: 17px;
+  --action-add-button-gap: 8px;
+}
 .vc-doc .vc-doc__tree .treeview-label { min-width: 0; }
 .vc-doc .vc-doc__tree .treeview-righttext { flex-shrink: 0; }
 .vc-doc--nir .treeview-item.is-bold.is-italic :is(.treeview-label, .treeview-righttext) { font-weight: 700; font-style: italic; }

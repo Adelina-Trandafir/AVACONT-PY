@@ -84,7 +84,8 @@ def write(cursor, anchor, groups, header, data, key, request_id):
         raise NomError('INVALID', 'Adăugați produsele recepționate.', 422)
     grand = sum((total(group['parsed']) for group in groups), Decimal(0))
     declared = _dec(header.get('Valoare'))
-    if header.get('Valoare') not in (None, '') and (declared is None or declared < 0 or declared != grand):
+    accepted = data.get('accept_difference') is True and declared is not None and declared >= 0 and abs(declared - grand) <= receipt_rules.ACCEPTED_DIFFERENCE
+    if header.get('Valoare') not in (None, '') and (declared is None or declared < 0 or declared != grand) and not accepted:
         raise NomError('NIR_TOTAL', 'Totalul produselor trebuie să fie exact valoarea facturii. Folosiți corecția sau completați rândurile.', 422,
                        {'h.Valoare': 'Total produse: %s.' % format(grand, 'f')})
     for group in groups:

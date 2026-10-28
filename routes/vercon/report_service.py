@@ -4,7 +4,7 @@ from utils.clock import utc_now
 from decimal import Decimal
 import hashlib
 import json
-from . import report_balance, report_body, report_catalog, report_data, report_food, report_store, report_output, report_reception, report_identity
+from . import report_balance, report_body, report_catalog, report_data, report_food, report_store, report_output, report_reception, report_identity, report_sort
 from .nomenclatoare import NomError
 from . import report_voucher
 from . import report_statement
@@ -70,6 +70,8 @@ def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None, issuer
         if spec['kind'] == 'balance':
             rows = report_balance.prepare(rows, params)
             layout = {**layout, 'value': report_balance.display_layout(layout['value'], params)}
+        else:
+            rows = report_sort.by_name(rows, spec, layout['value'].get('groups', []))
         if (params.get('document') is not None or params.get('document_ids') is not None) and not rows:
             raise NomError('NOT_FOUND', 'Documentul nu este disponibil în selecția raportului.', 404)
         committees = {row['IdComisie']: row for row in source.rows('committee')} if spec.get('family') in ('nir', 'storno') else {}

@@ -21,5 +21,6 @@
 .vc-doc__header.is-labels-inline .vc-label-short { display: inline; }
 /* the three reserved field rows (vercon-documente-layout.css) lose their label line: 32px control per row */
 @media (min-width: 801px) {
-  .vc-page :is(.vc-doc--nir, .vc-doc--bc) .vc-doc__header.is-labels-inline:has(.vc-field) { min-height: calc(3 * 32px + 24px); }
+  .vc-page .vc-doc--nir .vc-doc__header.is-labels-inline:has(.vc-field) { min-height: calc(3 * 32px + 24px); }
+  .vc-page .vc-doc--bc .vc-doc__header.is-labels-inline:has(.vc-field) { min-height: calc(2 * 32px + 12px); }
 }

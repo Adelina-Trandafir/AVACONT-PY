@@ -57,31 +57,85 @@ class Accounts:
         return {**self.parse(row), 'stored_IDM': row['IDM'], 'IDM': self.account(row)}
 
 
+def _num(value):
+    """5.0000 -> 5, 184.9900 -> 184,99 (the way the operator reads it)."""
+    text = format(Decimal(value or 0).normalize(), 'f')
+    return text.replace('.', ',')
+
+
+def _unresolved(cursor, ctx, family, row, lots, accounts):
+    """The refusal sentence, in words the operator can check against the bon: the number printed on it, its date,
+    the product and the holder by NAME, quantity and price, and what the register holds for the same bon and product."""
+    name = holder = None
+    if row['IdProdus']:
+        cursor.execute('SELECT pr.DenumireP, pr.UM, pp.COD FROM VC_ProduseP pp LEFT JOIN VC_Produse pr ON pr.SubunitId=pp.SubunitId '
+                       'AND pr.GestiuneId=pp.GestiuneId AND pr.ID=pp.ID WHERE pp.SubunitId=%s AND pp.GestiuneId=%s AND pp.IdProdus=%s',
+                       (ctx['subunit'], ctx['gestiune'], row['IdProdus']))
+        name = cursor.fetchone()
+    if row['holder']:
+        cursor.execute('SELECT Denumire FROM VC_Clienti WHERE SubunitId=%s AND GestiuneId=%s AND IDC=%s',
+                       (ctx['subunit'], ctx['gestiune'], row['holder']))
+        holder = cursor.fetchone()
+    product = 'produs necompletat'
+    if name:
+        product = '«%s»%s' % (name['DenumireP'] or 'fără denumire',
+                              ' (%s)' % ', '.join(x for x in (name['UM'], name['COD']) if x) if name['UM'] or name['COD'] else '')
+    quantity = abs(Decimal(row['Cant'] or 0))
+    in_register = lots.get((family, row['document'], row['holder'], row['IdProdus']), [])
+    if not in_register:
+        found = 'Registrul OI nu are nicio linie pentru acest bon, acest produs și acest gestionar.'
+    else:
+        found = 'În registrul OI, pentru același bon, produs și gestionar, sunt: %s.' % '; '.join(
+            '%s x %s lei (contul %s)' % (_num(q), _num(price), account) for price, q, account in in_register)
+    why = ('Nici o linie din registru, nici suma liniilor lui nu dă cantitatea de pe bon la același preț.' if not accounts
+           else 'Registrul are mai multe linii cu aceeași cantitate și preț, în conturi diferite (%s).' % ', '.join(sorted(str(a) for a in accounts)))
+    return NomError('OI_ACCOUNT_ORIGIN',
+                    'Linia %s din bonul %s %s din %s: %s, %s x %s lei, gestionar %s. %s %s' % (
+                        row['ID'], family.upper(), row['number'] or '(fără număr)',
+                        row['day'].strftime('%d.%m.%Y') if row['day'] else '(fără dată)',
+                        product, _num(quantity), _num(row['PUTVA']),
+                        (holder or {}).get('Denumire') or row['holder'] or 'necompletat', why, found), 409)
+
+
 def line_accounts(cursor, ctx):
     """Associate saved document lines with their inherited account, without a multiplying join."""
     from .oi_custody import register_rows
     received = defaultdict(set)
+    # One bon line can be split in the register into several rows, one per source lot it took from (a BS line of 5
+    # becomes 4 from lot A + 1 from lot B). `batch` keeps the accounts and the total quantity of those rows together.
+    batch_accounts = defaultdict(set)
+    batch_quantity = defaultdict(Decimal)
+    lots = defaultdict(list)   # (family, document, holder, product) -> (price, quantity, account), only for the refusal text
     for row in register_rows(cursor, ctx):
         if row['family'] == 'bs' and row['quantity'] > 0 or row['family'] != 'bs' and row['quantity'] < 0:
             continue
         key = (row['family'], row['document'], row['IDC_PTC'], row['IdProdus'], row['PUTVA'], abs(row['quantity']))
         received[key].add(row['IDM'])
+        batch = key[:5]
+        batch_accounts[batch].add(row['IDM'])
+        batch_quantity[batch] += abs(row['quantity'])
+        lots[(row['family'], row['document'], row['IDC_PTC'], row['IdProdus'])].append((row['PUTVA'], abs(row['quantity']), row['IDM']))
     result = {}
-    for family, table, document, holder in (
-        ('bp', 'VC_OI_Predare', 'IDBP', 'IDC_BP'),
-        ('bt', 'VC_OI_Transfer', 'IDBT', 'IDC_BT'),
-        ('bs', 'VC_OI_Casare', 'IDBC', 'IDC_BC'),
+    for family, table, document, holder, number, date in (
+        ('bp', 'VC_OI_Predare', 'IDBP', 'IDC_BP', 'NRBP', 'DATABP'),
+        ('bt', 'VC_OI_Transfer', 'IDBT', 'IDC_BT', 'NRBT', 'DATABT'),
+        ('bs', 'VC_OI_Casare', 'IDBC', 'IDC_BC', 'NRBC', 'DATABC'),
     ):
-        cursor.execute('SELECT ID,{document} AS document,{holder} AS holder,IdProdus,PUTVA,Cant '
+        cursor.execute('SELECT ID,{document} AS document,{holder} AS holder,IdProdus,PUTVA,Cant,{number} AS number,{date} AS day '
                        'FROM {table} WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND Anulat=0'.format(
-                           document=document, holder=holder, table=table),
+                           document=document, holder=holder, table=table, number=number, date=date),
                        (ctx['subunit'], ctx['gestiune'], ctx['exercitiu']))
-        for row in cursor.fetchall():
-            key = (family, row['document'], row['holder'], row['IdProdus'], row['PUTVA'], abs(Decimal(row['Cant'] or 0)))
-            accounts = received.get(key, set())
+        rows = cursor.fetchall()
+        line_quantity = defaultdict(Decimal)
+        for row in rows:
+            line_quantity[(family, row['document'], row['holder'], row['IdProdus'], row['PUTVA'])] += abs(Decimal(row['Cant'] or 0))
+        for row in rows:
+            batch = (family, row['document'], row['holder'], row['IdProdus'], row['PUTVA'])
+            accounts = received.get(batch + (abs(Decimal(row['Cant'] or 0)),), set())
+            if not accounts and batch_quantity.get(batch) == line_quantity[batch]:
+                accounts = batch_accounts[batch]   # the register split the line(s) into lots; the totals agree
             if len(accounts) != 1:
-                raise NomError('OI_ACCOUNT_ORIGIN', 'Contul liniei %s din bonul %s %s nu are o proveniență univocă în registru.' %
-                               (row['ID'], family.upper(), row['document']), 409)
+                raise _unresolved(cursor, ctx, family, row, lots, accounts)
             result[(family, row['ID'])] = next(iter(accounts))
     return result
 

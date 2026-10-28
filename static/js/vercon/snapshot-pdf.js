@@ -15,7 +15,7 @@ export async function snapshotPdf(title, sections, { documentHeader = null } = {
     const leftWidth = (width - margin * 2) * .6, rightWidth = (width - margin * 2) * .4;
     const left = [identity.name, identity.fiscal_code ? `Cod fiscal: ${identity.fiscal_code}` : '', identity.address]
       .filter(Boolean).flatMap(text => wrap(text, leftWidth - 16));
-    const right = wrap(`Subunitatea: ${identity.subunit_name}`, rightWidth - 16);
+    const right = wrap(identity.subunit_name, rightWidth - 16);
     left.forEach((line, index) => context.fillText(line, margin, 38 + index * 24));
     context.textAlign = 'right';
     right.forEach((line, index) => context.fillText(line, width - margin, 38 + index * 24));

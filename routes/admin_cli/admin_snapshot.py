@@ -13,6 +13,10 @@ carries CHECK VALUES computed by the database itself ("count:a:b", the row count
 The client sends the pages of its previous copy (--state-file); a page whose check value did not change is answered
 with just its description ("same": true) and its rows are NOT read; a changed page is read again and re-cut.
 
+Exception: the tables in COUNT_ONLY_TABLES (AD_IdMap, VC_IdMap: written only by a migration) are not checked page by
+page. If their row count equals the sum of "n" of the previous pages, every page is answered "same" from the client's
+state; only a different count sends them through the normal check below.
+
 Two check values per page:
     sum   the quick one. In a table that has a trusted "last changed" column (ON UPDATE CURRENT_TIMESTAMP or DataModif)
           a big binary column (PDF, picture) counts by its LENGTH, so the database does not read it again every day.
@@ -54,6 +58,9 @@ PAGE_BYTES_DEFAULT = 4 * 1024 * 1024
 BIG_BLOBS = {"tinyblob", "blob", "mediumblob", "longblob"}
 BIN_TYPES = BIG_BLOBS | {"binary", "varbinary", "bit", "geometry", "point", "linestring", "polygon", "multipoint",
                          "multilinestring", "multipolygon", "geometrycollection"}
+# Tables written only by a migration/import and huge: when the row count equals the previous copy's, their pages are
+# NOT checked (no per-row MD5), in "fast" and in "full" mode alike. A different count falls back to the normal check.
+COUNT_ONLY_TABLES = frozenset({"AD_IDMAP", "VC_IDMAP"})
 MODCOL_RX = re.compile(r"ON UPDATE (?:current_timestamp|now)", re.I)
 
 
@@ -140,7 +147,12 @@ class _Table:
 
     def __init__(self, conn, db, name):
         self.conn, self.db, self.name = conn, db, name
+        # seconds spent per kind of work, for the profile the client shows (slice ME02 profiler)
+        self.t = {"describe": 0.0, "count": 0.0, "check": 0.0, "read": 0.0, "emit": 0.0}
+        self.checks = 0
+        t0 = time.perf_counter()
         self.ddl, self.cols, self.pk, self.modcol = _describe(conn, db, name)
+        self.t["describe"] = time.perf_counter() - t0
         self.pk_idx = [next(i for i, c in enumerate(self.cols) if c["n"] == k) for k in self.pk]
         self.big = any(c["dt"] in BIG_BLOBS for c in self.cols)
         # the quick check differs from the full one only here: big binary columns and a trusted "last changed" column
@@ -148,12 +160,15 @@ class _Table:
 
     def check(self, lo, hi, full):
         """(row count, 'count:a:b') of the rows with keys in (lo, hi]."""
+        t0 = time.perf_counter()
         where, params = _range_where(self.pk, lo, hi)
         use_length = self.two_checks and not full
         sql = ("SELECT COUNT(*) AS n, BIT_XOR(CAST(CONV(LEFT(m,16),16,10) AS UNSIGNED)) AS a, "
                "BIT_XOR(CAST(CONV(SUBSTR(m,17,16),16,10) AS UNSIGNED)) AS b "
                "FROM (SELECT MD5(%s) AS m FROM %s.%s%s) x") % (_row_text_expr(self.cols, use_length), _q(self.db), _q(self.name), where)
         r = _rows(self.conn, sql, params)[0]
+        self.t["check"] += time.perf_counter() - t0
+        self.checks += 1
         return int(r["n"]), "%d:%x:%x" % (int(r["n"]), int(r["a"] or 0), int(r["b"] or 0))
 
     def rows(self, lo, hi, batch):
@@ -227,6 +242,7 @@ def _usable_prev(pk, pages):
 
 
 def _emit_page(table, lo, hi, rows, counts):
+    t0, check0 = time.perf_counter(), table.t["check"]
     n, sum_quick = table.check(lo, hi, False)
     sum_full = table.check(lo, hi, True)[1] if table.two_checks else sum_quick
     if n != len(rows):
@@ -237,13 +253,22 @@ def _emit_page(table, lo, hi, rows, counts):
     counts["pages"] += 1
     counts["changed"] += 1
     counts["rows"] += n
+    table.t["emit"] += (time.perf_counter() - t0) - (table.t["check"] - check0)     # the check inside is counted as "check"
 
 
 def _cut_range(table, lo, hi, page_rows, page_bytes, batch, counts):
     """Reads the keys in (lo, hi] and emits them as pages. The last page of the range ends exactly at hi, so the
     ranges of a table keep touching; an empty range stays as one empty page."""
     chunk, chunk_bytes, chunk_lo, last_key = [], 0, lo, None
-    for key, enc in table.rows(lo, hi, batch):
+    source = iter(table.rows(lo, hi, batch))
+    while True:
+        t0 = time.perf_counter()
+        try:
+            key, enc = next(source)
+        except StopIteration:
+            table.t["read"] += time.perf_counter() - t0
+            break
+        table.t["read"] += time.perf_counter() - t0
         if table.pk and chunk and (len(chunk) >= page_rows or chunk_bytes >= page_bytes):
             _emit_page(table, chunk_lo, last_key, chunk, counts)
             chunk, chunk_bytes, chunk_lo = [], 0, last_key
@@ -253,13 +278,50 @@ def _cut_range(table, lo, hi, page_rows, page_bytes, batch, counts):
     _emit_page(table, chunk_lo, hi, chunk, counts)
 
 
+def _count_unchanged(table, pages):
+    """'skip' when the table has as many rows as the previous copy had, 'count-differs' when it has not, 'no-n' when the
+    previous pages carry no row count (a state file from before the count was sent): then the table is checked page by
+    page as usual. The time of the COUNT(*) goes to the table's profile."""
+    if not all(isinstance(p.get("n"), int) for p in pages):
+        return "no-n"
+    t0 = time.perf_counter()
+    now = int(_rows(table.conn, "SELECT COUNT(*) AS n FROM %s.%s" % (_q(table.db), _q(table.name)))[0]["n"])
+    table.t["count"] += time.perf_counter() - t0
+    return "skip" if now == sum(p["n"] for p in pages) else "count-differs"
+
+
+def _end_table(table, started, action, counts):
+    """The tableend record, with the profile of the table (milliseconds per kind of work)."""
+    ms = lambda seconds: int(round(seconds * 1000))
+    _emit({"t": "tableend", "name": table.name, "pages": counts["pages"], "rows": counts["rows"], "changed": counts["changed"],
+           "prof": {"action": action, "total_ms": ms(time.perf_counter() - started), "describe_ms": ms(table.t["describe"]),
+                    "count_ms": ms(table.t["count"]), "check_ms": ms(table.t["check"]), "read_ms": ms(table.t["read"]),
+                    "emit_ms": ms(table.t["emit"]), "checks": table.checks}})
+
+
 def _do_table(conn, db, name, prev, mode, page_rows, page_bytes, totals):
+    started = time.perf_counter()
     table = _Table(conn, db, name)
     _emit({"t": "table", "name": name, "ddl": table.ddl, "cols": table.cols, "pk": table.pk, "modcol": table.modcol})
     batch = 8 if table.big else max(50, min(page_rows, 1000))
     old = []
     if prev is not None and prev.get("pk") == table.pk and _usable_prev(table.pk, prev.get("pages") or []):
         old = prev["pages"]
+    action = "checked" if old else ("first" if prev is None else "prev-unusable")
+    if old and name.upper() in COUNT_ONLY_TABLES:
+        verdict = _count_unchanged(table, old)
+        if verdict == "skip":
+            counts = {"pages": 0, "changed": 0, "rows": 0}
+            for page in old:
+                _emit({"t": "page", "table": name, "lo": page.get("lo"), "hi": page.get("hi"), "n": page["n"], "sum": page["sum"],
+                       "full": page.get("full") or page["sum"], "same": True})
+                counts["pages"] += 1
+                counts["rows"] += page["n"]
+            _end_table(table, started, "count-skip", counts)
+            for k in counts:
+                totals[k] += counts[k]
+            return
+        action = verdict                                # 'count-differs' or 'no-n': the normal check follows
     if not old:
         old = [{"lo": None, "hi": None, "sum": None, "full": None}]   # nothing usable from before: cut the whole key space
     counts = {"pages": 0, "changed": 0, "rows": 0}
@@ -281,7 +343,7 @@ def _do_table(conn, db, name, prev, mode, page_rows, page_bytes, totals):
             counts["rows"] += n
         else:
             _cut_range(table, lo, hi, page_rows, page_bytes, batch, counts)
-    _emit({"t": "tableend", "name": name, "pages": counts["pages"], "rows": counts["rows"], "changed": counts["changed"]})
+    _end_table(table, started, action, counts)
     for k in counts:
         totals[k] += counts[k]
 
@@ -347,19 +409,27 @@ def cmd_snap_run(args):
             raise AdminError("Copia locala se face pe o singura baza.")
         db = dbs[0]
         started = time.time()
+        clock = time.perf_counter()
         conn.start_transaction(consistent_snapshot=True, isolation_level="REPEATABLE READ")
         names = [r["n"] for r in _rows(conn, "SELECT TABLE_NAME AS n FROM information_schema.TABLES "
                                              "WHERE TABLE_SCHEMA = %s AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME", (db,))]
         version = _rows(conn, "SELECT VERSION() AS v")[0]["v"]
-        _emit({"t": "begin", "db": db, "server_time": _iso(utc_now()), "version": version, "mode": args.mode, "tables": len(names)})
+        list_ms = int(round((time.perf_counter() - clock) * 1000))
+        # "prof": 1 tells the client this server sends timings (an older admin_snapshot.py does not)
+        _emit({"t": "begin", "db": db, "server_time": _iso(utc_now()), "version": version, "mode": args.mode, "tables": len(names),
+               "prof": 1, "list_ms": list_ms, "state_tables": len(state)})
         totals = {"pages": 0, "changed": 0, "rows": 0}
+        clock = time.perf_counter()
         for name in names:
             _do_table(conn, db, name, state.get(name), args.mode, page_rows, page_bytes, totals)
+        tables_ms = int(round((time.perf_counter() - clock) * 1000))
+        clock = time.perf_counter()
         _extras(conn, db)
+        extras_ms = int(round((time.perf_counter() - clock) * 1000))
         conn.rollback()                                # nothing was written; this just ends the snapshot
         seconds = round(time.time() - started, 1)
         _emit({"t": "end", "tables": len(names), "pages": totals["pages"], "changed": totals["changed"], "rows": totals["rows"],
-               "seconds": seconds})
+               "seconds": seconds, "tables_ms": tables_ms, "extras_ms": extras_ms})
         return {"db": db, "tables": len(names), "pages": totals["pages"], "changed": totals["changed"], "rows": totals["rows"],
                 "seconds": seconds, "mode": args.mode}
     except (mysql.connector.Error, SchemaSyncError) as err:

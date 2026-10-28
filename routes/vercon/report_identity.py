@@ -3,7 +3,7 @@ from copy import deepcopy
 import re
 from .nomenclatoare import NomError
 
-VERSION = 1
+VERSION = 2
 
 
 def read(cursor, unit, ctx, *, issuer=None):
@@ -64,7 +64,7 @@ def configured(stored, issuer, unit):
         left.append('Cod fiscal: ' + issuer['fiscal_code'])
     if issuer['address']:
         left.append(issuer['address'])
-    identity['letterhead'] = {'left': left, 'right': 'Subunitatea: ' + issuer['subunit_name']}
+    identity['letterhead'] = {'left': left, 'right': issuer['subunit_name']}
     # Mandatory common header, independent of legacy/custom layout header bands.
     identity['elements'] = [
         {'id': 'report-issuer', 'band': 'header', 'text': '\n'.join(left),

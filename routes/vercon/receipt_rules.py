@@ -6,6 +6,8 @@ from decimal import Decimal
 from . import numeric, protocol
 from .nomenclatoare import NomError
 
+ACCEPTED_DIFFERENCE = Decimal(1)
+
 
 def chronology(cursor, ctx, number, sub, day, exclude=None):
     from .documents import _all, _sub_text
@@ -106,7 +108,8 @@ def exact_total(parsed):
         raise NomError('HISTORICAL_VALUES', 'Documentul are valori istorice lipsă. Corectați explicit liniile înainte de o modificare economică.', 422)
     total = sum((line['v']['ValoareCUTVA'] for line in parsed['lines']), Decimal(0))
     target = parsed['declared']
-    if target is not None and target != total:
+    # The operator may knowingly save a difference of at most 1 leu; the invoice keeps the declared value.
+    if target is not None and target != total and not (parsed.get('accept_difference') and abs(target - total) <= ACCEPTED_DIFFERENCE):
         message = 'Totalul liniilor (%s) diferă de valoarea NIR (%s) cu %s lei. Aplicați corecția sau corectați repartizarea.' % (
             format(total, 'f'), format(target, 'f'), format(target - total, 'f'))
         raise NomError('NIR_TOTAL_DIFFERENT', message, 422, {'h.Valoare': message})

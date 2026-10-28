@@ -73,19 +73,19 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
                                 response = result if isinstance(result, (Response, tuple)) else jsonify(result)
                                 diagnostics.info(operation, 'success', context, rid)
                     except SelectionInvalid as error:
-                        diagnostics.refusal(operation, context, rid, error.reason)
+                        diagnostics.refusal(operation, context, rid, error.reason, str(error))
                         response = _refuse(409, error.reason, str(error))
                     except Busy as error:
                         diagnostics.busy(operation, context, rid)
                         response = _refuse(409, 'GESTIUNE_OCCUPIED', 'Gestiunea este ocupată de alt utilizator (%s).' % error.holder)
                     except LockLost as error:
-                        diagnostics.refusal(operation, context, rid, 'LOCK_LOST')
+                        diagnostics.refusal(operation, context, rid, 'LOCK_LOST', str(error))
                         response = _refuse(409, 'LOCK_LOST', str(error))
                     except NomError as error:
-                        diagnostics.refusal(operation, context, rid, error.reason)
+                        diagnostics.refusal(operation, context, rid, error.reason, str(error))
                         response = (jsonify(error=str(error), reason=error.reason, fields=error.fields), error.status)
                     except FormUnavailable as error:
-                        diagnostics.refusal(operation, context, rid, error.reason)
+                        diagnostics.refusal(operation, context, rid, error.reason, str(error))
                         response = _refuse(error.status, error.reason, str(error))
                     except Exception:
                         logger.exception(diagnostics.line(operation, 'failed', context, rid))

@@ -15,7 +15,7 @@ export function documentNumbers({ family, state, allocation, selection, api, abo
       const raw = automatic ? '' : currentNumber, sub = automatic ? 0 : currentSub, token = ++sequence;
       const day = draft.header.Data || '';
       const context = state.mode === 'add' && allocation ? allocation.numberSelection() : selection();
-      const answer = await track(api(`/api/vercon/doc/${family}/number?${new URLSearchParams(context)}&number=${encodeURIComponent(raw)}&sub=${sub}&date=${encodeURIComponent(day)}${state.mode === 'edit' ? `&exclude=${state.doc.id}` : ''}`, { headers: { 'X-Vercon-Version': '' } }));
+      const answer = await track(api(`/api/vercon/doc/${family}/number?${new URLSearchParams(context)}&number=${encodeURIComponent(raw)}&sub=${sub}&date=${encodeURIComponent(day)}${family === 'bc' && draft.header.IdMasina ? `&account=${encodeURIComponent(draft.header.IdMasina)}` : ''}${state.mode === 'edit' ? `&exclude=${state.doc.id}` : ''}`, { headers: { 'X-Vercon-Version': '' } }));
       if (aborted() || draft !== state.draft || token !== sequence || draft.header.Data !== day || String(draft.header.Numar || '') !== String(currentNumber) || (Number(draft.header.NumarSub) || 0) !== currentSub) return;
       const { input, subGroup, subBox } = controls();
       if (offer && !raw) {

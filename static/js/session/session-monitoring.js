@@ -25,9 +25,9 @@ import { sessionMonitoringActivityMixin } from './session-monitoring-activity.js
 const SESSION_CONFIG = {
   SESSION_DURATION: null, // Se va seta din server (minute)
   WARNING_TIME: 60000, // Avertizează cu 1 minut înainte
-  ACTIVITY_EVENTS: ['click', 'keypress', 'scroll', 'touchstart'],
+  ACTIVITY_EVENTS: ['keydown', 'input', 'pointerdown', 'click'],   // never mouse movement or scrolling
   DEBUG_MODE: testMode,   // the single switch (utils/debug-tools.js)
-  ACTIVITY_DEBOUNCE: 5000, // Nu trimite activitate mai des de 5 secunde
+  ACTIVITY_DEBOUNCE: 20000, // Nu trimite activitate mai des de 20 secunde (reinnoirea sesiunii)
   CHECK_BEFORE_WARNING: 10000, // Verifică cu server cu 10s înainte de warning
   MAX_EXTENSIONS: 2, // replaced by the server's value in init()
 };
@@ -68,6 +68,8 @@ class SessionMonitoring {
     this.warningTimeout = null;
     this.expiryTimeout = null;
     this.lastActivitySent = 0;
+    this.lastLocalReset = 0;
+    this.renewing = false;
     this.warningShown = false;
     this.finalWarningShown = false;
     this.sessionExpiryTime = null;

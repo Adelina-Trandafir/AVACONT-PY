@@ -39,8 +39,13 @@ def info(operation, outcome, context, rid):
     logger.log(level, line(operation, outcome, context, rid))
 
 
-def refusal(operation, context, rid, reason):
-    logger.warning(line(operation, 'refused', context, rid, reason))
+def refusal(operation, context, rid, reason, message=None):
+    """`message` is the sentence the operator saw (it names the document and the line): without it a 409 in the
+    log says only the reason code and cannot be traced back to the row that caused it."""
+    text = line(operation, 'refused', context, rid, reason)
+    if message:
+        text += ' msg=%s' % ' '.join(str(message).split())[:500]
+    logger.warning(text)
 
 
 # SLICE-VC04-05: the audit distinguishes these outcomes. `refused` = a rule said no, `busy` = the gestiune is held by

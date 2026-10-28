@@ -81,9 +81,9 @@ UNDE STAU NOMENCLATOARELE (si de ce nu se ghicesc)
     citeste NECALIFICAT, din baza unitatii, fiindca acolo sta: e o tabela pe baza, nu una
     comuna ca DefaSS. Aceleasi coloane ca in Access -- Capitol, SubCapitol, Paragraf,
     IdClsfV -- deci interogarea lui FX_DicClsfV se poarta verbatim.
-    FARA filtru pe unitate: tabela n-are `IdUnitate` nici in Access, nici aici, fiindca
-    tine clasificatiile de venituri ale intregii DIRECTII. E singurul nomenclator din set
-    care nu e cautat pe unitate, si asta e o proprietate a lui, nu o scapare.
+    FARA filtru pe unitate: tabela n-are `IdUnitate`, fiindca tine clasificatiile de
+    venituri ale intregii DIRECTII. In schimb are `SS` (slice AV01-12, o clasificatie de
+    venituri apartine unei surse-sector) si se cauta pe (SS al contului, cod).
 
 Cand tabela lipseste, campul ramane NULL -- exact ce facea si Access cand cautarea lui
 nu gasea nimic (`IdUnitate = -1` inseamna coloana nescrisa) -- DAR se pune un avertisment
@@ -325,7 +325,7 @@ class _Nomenclatoare:
         self._sursa_pentru_prefix = self._incarca_surse()
         self._unitate_pentru_sursa = self._incarca_unitati()
         self._clsf = {}      # (id_unitate) -> {ClsfSal: IDClsf}
-        self._clsf_v = None  # toata baza, fara unitate: {Capitol+SubCapitol+Paragraf: IdClsfV}
+        self._clsf_v = None  # toata baza: {(SS, Capitol+SubCapitol+Paragraf): IdClsfV}; o clasificatie de venituri apartine unei surse
         self._parteneri = {}  # (id_unitate) -> {CodFiscal: CodPartener}
         self._indicatori = None  # {f"{CodAngajament}!{IdClsf}": CodAI}
 
@@ -420,7 +420,7 @@ class _Nomenclatoare:
             self._clsf[id_unitate] = harta
         return harta.get(clsf_sal)
 
-    def clsf_venituri_pentru(self, clsf_sal: str):
+    def clsf_venituri_pentru(self, clsf_sal: str, sursa: str):
         """
         Acelasi ClsfSal pe clasificatia de VENITURI, pentru `IdClsfV`.
 
@@ -429,9 +429,10 @@ class _Nomenclatoare:
         coloane -- Capitol, SubCapitol, Paragraf, IdClsfV -- deci interogarea din Access se
         poarta verbatim, nu se reinventeaza.
 
-        FARA filtru pe unitate, ca in Access: tabela n-are `IdUnitate` nici acolo, nici pe
-        MariaDB. Tinea clasificatiile de venituri ale intregii DIRECTII, si le tine si
-        acum; de asta e si singurul nomenclator din set care nu e cautat pe unitate.
+        FARA filtru pe unitate (tabela n-are `IdUnitate`), dar CU sursa: din slice AV01-12
+        o clasificatie de venituri apartine unei surse-sector (`Clasificatii_Venituri.SS`),
+        iar acelasi cod poate exista pe doua surse. Cheia e (SS, cod), cu SS-ul contului
+        antetului; fara sursa nu se cauta, ca sa nu se aleaga clasificatia altei surse.
 
         `CONCAT_WS('', ...)` si nu `CONCAT(...)`: cele trei coloane sunt nulabile, iar
         `CONCAT` intoarce NULL daca oricare argument e NULL, pe cand `&` din Access trata
@@ -441,14 +442,14 @@ class _Nomenclatoare:
         if harta is None:
             try:
                 self._cursor.execute(
-                    "SELECT CONCAT_WS('', Capitol, SubCapitol, Paragraf) AS Clsf, IdClsfV "
+                    "SELECT SS, CONCAT_WS('', Capitol, SubCapitol, Paragraf) AS Clsf, IdClsfV "
                     "FROM Clasificatii_Venituri"
                 )
                 harta = {}
-                for (clsf, idv) in self._cursor.fetchall():
-                    # Primul castiga, ca la `clsf_pentru`.
-                    if clsf is not None and str(clsf) not in harta:
-                        harta[str(clsf)] = int(idv)
+                for (ss, clsf, idv) in self._cursor.fetchall():
+                    # Cheia (SS, cod) e unica in tabela (UK_Clasificatii_Venituri_SS_CSP).
+                    if clsf is not None and ss is not None:
+                        harta.setdefault((str(ss).upper(), str(clsf)), int(idv))
             except mysql.connector.Error as err:
                 if err.errno != _ER_NO_SUCH_TABLE:
                     raise
@@ -461,7 +462,9 @@ class _Nomenclatoare:
                     "fost sincronizată cu AVACONT_SURSA."
                 )
             self._clsf_v = harta
-        return harta.get(clsf_sal)
+        if not sursa:
+            return None
+        return harta.get((str(sursa).upper(), clsf_sal))
 
     # -- parteneri / indicatori -------------------------------------------
     def partener_pentru(self, id_unitate: int, cod_fiscal):
@@ -825,7 +828,7 @@ def _scrie_antet(cursor, nom: _Nomenclatoare, cont_ext, idexf: int, avertismente
         id_clsf = nom.clsf_pentru(id_unitate, clsf_sal)
         if id_clsf is None:
             # «cauta si in clasifi venituri» -- ramura din Extrase_H_Add, netinsa.
-            id_clsf_v = nom.clsf_venituri_pentru(clsf_sal)
+            id_clsf_v = nom.clsf_venituri_pentru(clsf_sal, sursa)
 
     def suma(grup: str, camp: str) -> float:
         return parse_loose_number(_text_copil(cont_ext.find(grup), camp))

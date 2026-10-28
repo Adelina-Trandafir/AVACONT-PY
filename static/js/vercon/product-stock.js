@@ -2,7 +2,7 @@ import { el, scope, paintTree, markSelected } from './ui.js';
 import { format } from './fields.js';
 import { decimalText } from './decimal-text.js';
 
-const kinds = { nir: 'NIR', storno: 'Storno', bc: 'BC', br: 'Retur', bp: 'Predare',
+const kinds = { nir: 'NIR', storno: 'Storno', bc: 'Consum', br: 'Retur', bp: 'Predare',
   bt_in: 'Transfer primit', bt_out: 'Transfer predat', bs: 'Casare' };
 const amount = (value) => value == null ? '—' : decimalText(value, 2);
 const price = (value) => value == null ? 'Fără preț' : decimalText(value, 4) + ' lei';

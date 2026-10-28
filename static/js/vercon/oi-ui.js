@@ -1,3 +1,4 @@
+import { numberValue } from './receipt-number.js';
 import { consumptionCategory } from './consumption-ui.js';
 import { docNode } from './ui.js';
 import { format, formatMoney } from './fields.js';
@@ -31,8 +32,8 @@ export function oiDocumentNodes(documents, family) {
   }
   return [...holders].map(([holder, docs]) => ({
     id: `receiver:${encodeURIComponent(holder)}`, label: docs[0].holder || '—',
-    children: [...docs].sort((a, b) => Number(b.number) - Number(a.number)
+    children: [...docs].sort((a, b) => numberValue(b.number) - numberValue(a.number)
       || String(b.date || '').localeCompare(String(a.date || '')) || b.id - a.id)
-      .map(doc => docNode(doc, `${family.toUpperCase()} ${doc.number}${doc.annulled ? ' • anulat' : ''}`, formatMoney(doc.total))),
+      .map(doc => docNode(doc, `${doc.number}${doc.annulled ? ' • anulat' : ''}`, formatMoney(doc.total))),
   }));
 }

@@ -1,7 +1,7 @@
 """Grouped report bands, headers and signatures from editable layout data."""
 from collections import OrderedDict
 from decimal import Decimal, ROUND_CEILING, localcontext
-from . import report_model, report_voucher
+from . import bon_number, report_model, report_voucher
 
 
 def date(value):
@@ -54,7 +54,7 @@ def doc_heading(spec, row, unit, committees, ctx, gestiune_name):
     return [{'t': 'box', 'rows': [('Număr document / Dată', str(row['number']) + ' / ' + date(row['date'])),
               ('Produs, lucrare (comandă)', row.get('explanation') or ''),
               ('Predător', unit.get('manager') or ''), ('Primitor', row.get('party') or ''),
-              ('Nr. comandă', ('BR ' if spec['family'] == 'br' else 'BC ') + str(row['number']))]}]
+              ('Nr. comandă', bon_number.display(spec['family'], row['number']))]}]
 
 
 def reception_signatures(row, committees):

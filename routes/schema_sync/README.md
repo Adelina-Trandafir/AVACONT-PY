@@ -1,31 +1,18 @@
 # schema_sync — sincronizare structură baze de date
 
-Aduce structura fiecărei baze de unitate la forma din `AVACONT_SURSA`:
-tabele, coloane, chei primare, indexuri, chei străine și — nou — setul de
-caractere (charset / collation) al coloanelor de text.
+Aduce structura fiecărei baze de unitate la forma din `AVACONT_SURSA`: tabele, coloane, chei primare, indexuri, chei străine și — nou — setul de caractere (charset / collation) al coloanelor de text.
 
-Scris integral în Python. Înlocuiește procedurile stocate
-`proc_SchemaDiff_DDL`, `proc_SchemaDiff_CreateTable`,
-`proc_ExecuteSchemaDiff` și funcția `fn_sql_default`.
+Scris integral în Python. Înlocuiește procedurile stocate `proc_SchemaDiff_DDL`, `proc_SchemaDiff_CreateTable`, `proc_ExecuteSchemaDiff` și funcția `fn_sql_default`.
 
 ---
 
 ## Starea pasului de deblocare a cheilor străine
 
-Verificat pe un server MariaDB **10.3.32** ridicat special pentru asta, cu
-o bază de test construită instrucțiune cu instrucțiune (2026-08-20).
+Verificat pe un server MariaDB **10.3.32** ridicat special pentru asta, cu o bază de test construită instrucțiune cu instrucțiune (2026-08-20).
 
-Avertismentul de dinainte — «pasul pune `ADD CONSTRAINT` la loc, dar nu
-emite `DROP FOREIGN KEY` înainte» — **era greșit**. Pasul emitea corect
-și ștergerea, și recrearea. Ce se stricase era baza de test: fusese
-construită ca un singur lot, lotul se oprise la prima eroare, iar cele
-două chei străine nu ajunseseră niciodată să existe. Neexistând nicio
-cheie în țintă, nu era nimic de desfăcut; cele două `FK CREATE` din
-rezumat veneau din comparația obișnuită («cheia lipsește în țintă»), nu
-din pasul de deblocare.
+Avertismentul de dinainte — «pasul pune `ADD CONSTRAINT` la loc, dar nu emite `DROP FOREIGN KEY` înainte» — **era greșit**. Pasul emitea corect și ștergerea, și recrearea. Ce se stricase era baza de test: fusese construită ca un singur lot, lotul se oprise la prima eroare, iar cele două chei străine nu ajunseseră niciodată să existe. Neexistând nicio cheie în țintă, nu era nimic de desfăcut; cele două `FK CREATE` din rezumat veneau din comparația obișnuită («cheia lipsește în țintă»), nu din pasul de deblocare.
 
-Verificarea a scos însă la iveală **patru defecte reale** ale pasului,
-toate reproduse și toate corectate:
+Verificarea a scos însă la iveală **patru defecte reale** ale pasului, toate reproduse și toate corectate:
 
 | Nr. | Ce se întâmpla | Eroarea |
 |---|---|---|
@@ -34,29 +21,19 @@ toate reproduse și toate corectate:
 | 3 | O cheie aflată pe un tabel care urma să fie **șters** era pusă la loc după ștergerea tabelului | 1146 |
 | 4 | O cheie pe care sursa **nu o are** era ștearsă corect de comparația obișnuită, apoi **înviată** de pasul de deblocare | niciuna — tăcut |
 
-După corectare, pe aceeași bază de test: `--run --mode FORCE
---allow-destructive` — **11 instrucțiuni, 11 reușite, 0 eșecuri**; a doua
-rulare, în ambele moduri, generează **zero** instrucțiuni.
+După corectare, pe aceeași bază de test: `--run --mode FORCE --allow-destructive` — **11 instrucțiuni, 11 reușite, 0 eșecuri**; a doua rulare, în ambele moduri, generează **zero** instrucțiuni.
 
 ### O limită care rămâne
 
-În modul **SAFE**, dacă o coloană diferă *și* la tip, *și* la charset, nu
-se emite nimic pentru ea: SAFE nu modifică tipuri, iar repararea de
-charset este pe ramura următoare a aceleiași verificări. Charset-ul
-rămâne nereparat până la o rulare `FORCE`. Repararea de charset rulează
-în ambele moduri **doar** când charset-ul este singura diferență.
+În modul **SAFE**, dacă o coloană diferă *și* la tip, *și* la charset, nu se emite nimic pentru ea: SAFE nu modifică tipuri, iar repararea de charset este pe ramura următoare a aceleiași verificări. Charset-ul rămâne nereparat până la o rulare `FORCE`. Repararea de charset rulează în ambele moduri **doar** când charset-ul este singura diferență.
 
-O cheie străină dintr-**altă** bază de unitate care arată spre o coloană
-reparată aici nu poate fi văzută (se citește doar ținta) și va bloca
-modificarea cu 1833. Nu apare în structura actuală, unde referințele
-încrucișate merg doar spre `AVACONT_COMUN`.
+O cheie străină dintr-**altă** bază de unitate care arată spre o coloană reparată aici nu poate fi văzută (se citește doar ținta) și va bloca modificarea cu 1833. Nu apare în structura actuală, unde referințele încrucișate merg doar spre `AVACONT_COMUN`.
 
 ---
 
 ## Instalare
 
-Fișierele stau în `routes/schema_sync/`. E nevoie de un fișier
-`__init__.py` gol în acel folder.
+Fișierele stau în `routes/schema_sync/`. E nevoie de un fișier `__init__.py` gol în acel folder.
 
 ```
 AVACONT-PY/
@@ -79,8 +56,7 @@ cd C:\cale\catre\AVACONT-PY
 python -m routes.schema_sync.schema_sync --view --mode SAFE
 ```
 
-Rularea directă (`python routes\schema_sync\schema_sync.py`) **nu
-funcționează** — importurile relative cer forma cu `-m`.
+Rularea directă (`python routes\schema_sync\schema_sync.py`) **nu funcționează** — importurile relative cer forma cu `-m`.
 
 ---
 
@@ -102,46 +78,30 @@ funcționează** — importurile relative cer forma cu `-m`.
 
 Lucrul se face în două faze separate.
 
-**Faza 1 — generare.** Se citește structura din `AVACONT_SURSA` și din
-fiecare bază țintă, se compară în Python, iar diferențele se scriu ca
-instrucțiuni SQL în tabelul `AVACONT_COMUN.schema_diff_log`. **Nu se
-modifică nimic** în această fază.
+**Faza 1 — generare.** Se citește structura din `AVACONT_SURSA` și din fiecare bază țintă, se compară în Python, iar diferențele se scriu ca instrucțiuni SQL în tabelul `AVACONT_COMUN.schema_diff_log`. **Nu se modifică nimic** în această fază.
 
-**Faza 2 — execuție.** Se citesc instrucțiunile din acel tabel și se
-rulează, una câte una, în ordinea corectă. Fiecare rând primește data
-execuției și, dacă a eșuat, numărul erorii MariaDB.
+**Faza 2 — execuție.** Se citesc instrucțiunile din acel tabel și se rulează, una câte una, în ordinea corectă. Fiecare rând primește data execuției și, dacă a eșuat, numărul erorii MariaDB.
 
-Separarea permite să vedeți exact ce urmează să se întâmple înainte ca
-ceva să se întâmple.
+Separarea permite să vedeți exact ce urmează să se întâmple înainte ca ceva să se întâmple.
 
 ### De unde vin bazele țintă
 
-Din `AVACONT_COMUN.CAI`, coloana `DbName`, valori distincte. O bază
-trecută în `CAI` dar care nu există pe server este ignorată, cu avertisment
-în jurnal. `AVACONT_COMUN` și `AVACONT_SURSA` nu pot fi niciodată ținte.
+Din `AVACONT_COMUN.CAI`, coloana `DbName`, valori distincte. O bază trecută în `CAI` dar care nu există pe server este ignorată, cu avertisment în jurnal. `AVACONT_COMUN` și `AVACONT_SURSA` nu pot fi niciodată ținte.
 
-`--list-targets` răspunde la altă întrebare și citește din altă parte: ce
-baze de unitate există **pe server** — numele care încep cu trei cifre din
-`information_schema.SCHEMATA`, fără șabloanele și schemele serverului. Fiecare
-linie spune și dacă registrul `CAI` o listează:
+`--list-targets` răspunde la altă întrebare și citește din altă parte: ce baze de unitate există **pe server** — numele care încep cu trei cifre din `information_schema.SCHEMATA`, fără șabloanele și schemele serverului. Fiecare linie spune și dacă registrul `CAI` o listează:
 
 ```
 DB<TAB>000_DEMO<TAB>CAI
 DB<TAB>202_UNITATE<TAB>-
 ```
 
-O bază marcată `-` există, dar `CAI` nu o cunoaște — deci discovery-ul
-obișnuit **nu** ar atinge-o. Se afișează tocmai ca să se vadă.
+O bază marcată `-` există, dar `CAI` nu o cunoaște — deci discovery-ul obișnuit **nu** ar atinge-o. Se afișează tocmai ca să se vadă.
 
-Prefixul `DB` este acolo ca cel care citește ieșirea (AvacontPush, prin SSH)
-să nu poată confunda o linie de jurnal cu un nume de bază. Listarea se face
-înainte de orice altceva: nu creează tabelul de control și nu cade pe un
-server al cărui `sql_mode` ar refuza o sincronizare adevărată.
+Prefixul `DB` este acolo ca cel care citește ieșirea (AvacontPush, prin SSH) să nu poată confunda o linie de jurnal cu un nume de bază. Listarea se face înainte de orice altceva: nu creează tabelul de control și nu cade pe un server al cărui `sql_mode` ar refuza o sincronizare adevărată.
 
 ### Ordinea de execuție
 
-Contează, pentru că MariaDB refuză multe operații dacă nu sunt făcute în
-ordine. Instrucțiunile se execută astfel:
+Contează, pentru că MariaDB refuză multe operații dacă nu sunt făcute în ordine. Instrucțiunile se execută astfel:
 
 | Nr. | Operație |
 |---|---|
@@ -158,92 +118,55 @@ ordine. Instrucțiunile se execută astfel:
 | 11 | creare chei străine |
 | 99 | curățare marcaje `rename:` din `AVACONT_SURSA` |
 
-Repararea charset-ului stă la pasul 8: **după** ce coloanele există, dar
-**înainte** de a se construi vreo cheie peste ele. O cheie construită
-peste coloane cu seturi de caractere diferite eșuează cu eroarea 3780.
+Repararea charset-ului stă la pasul 8: **după** ce coloanele există, dar **înainte** de a se construi vreo cheie peste ele. O cheie construită peste coloane cu seturi de caractere diferite eșuează cu eroarea 3780.
 
-`CREATE TABLE` (pasul 6) **nu conține chei străine**. Ele se emit separat, la
-pasul 11. Tabelele se creează în ordine alfabetică, deci o cheie scrisă în
-interiorul lui `CREATE TABLE` poate arăta spre un tabel la care lotul nu a
-ajuns încă — `FX_Extrase` spre `FX_Extrase_H` este exact cazul, și pică cu
-eroarea 1005 / 150. Scoase la pasul 11, toate tabelele există deja.
+`CREATE TABLE` (pasul 6) **nu conține chei străine**. Ele se emit separat, la pasul 11. Tabelele se creează în ordine alfabetică, deci o cheie scrisă în interiorul lui `CREATE TABLE` poate arăta spre un tabel la care lotul nu a ajuns încă — `FX_Extrase` spre `FX_Extrase_H` este exact cazul, și pică cu eroarea 1005 / 150. Scoase la pasul 11, toate tabelele există deja.
 
 ---
 
 ## O singură bază, pentru probe
 
-`--targets` primește numele bazei și lucrează **numai** pe ea, sărind peste
-tot ce e trecut în `CAI`:
+`--targets` primește numele bazei și lucrează **numai** pe ea, sărind peste tot ce e trecut în `CAI`:
 
 ```
 python -m routes.schema_sync.schema_sync --view --targets 000_DEMO
 python -m routes.schema_sync.schema_sync --run --mode FORCE --targets 000_DEMO --allow-destructive
 ```
 
-Mai multe baze se despart prin virgulă: `--targets 000_DEMO,018_GRRS`.
-Opțiunea merge la fel și cu `schema_generate`, și cu `schema_execute`.
+Mai multe baze se despart prin virgulă: `--targets 000_DEMO,018_GRRS`. Opțiunea merge la fel și cu `schema_generate`, și cu `schema_execute`.
 
-**Un nume greșit oprește rularea, nu o continuă.** O bază trecută în `CAI`
-dar absentă de pe server este doar ignorată, cu avertisment — registrul are
-voie să fie înaintea realității. Un nume **tastat de mână** e altceva: fără
-verificarea asta, `--targets 000_DEMOO` scria un avertisment, apoi
-«Schemele sunt deja sincronizate», apoi ieșea cu codul 0 — adică exact ce
-se vede după o rulare curată pe baza corectă.
+**Un nume greșit oprește rularea, nu o continuă.** O bază trecută în `CAI` dar absentă de pe server este doar ignorată, cu avertisment — registrul are voie să fie înaintea realității. Un nume **tastat de mână** e altceva: fără verificarea asta, `--targets 000_DEMOO` scria un avertisment, apoi «Schemele sunt deja sincronizate», apoi ieșea cu codul 0 — adică exact ce se vede după o rulare curată pe baza corectă.
 
 ---
 
 ## SAFE și FORCE
 
-**SAFE** — adaugă și repară, dar nu strică nimic din ce nu trebuie:
-creează tabele, coloane, indexuri și chei care lipsesc, și repară
-charset-ul. Nu modifică tipul unei coloane existente.
+**SAFE** — adaugă și repară, dar nu strică nimic din ce nu trebuie: creează tabele, coloane, indexuri și chei care lipsesc, și repară charset-ul. Nu modifică tipul unei coloane existente.
 
-**FORCE** — în plus, modifică ce diferă: tipuri de coloane, chei primare,
-indexuri și chei străine cu altă definiție.
+**FORCE** — în plus, modifică ce diferă: tipuri de coloane, chei primare, indexuri și chei străine cu altă definiție.
 
-Repararea charset-ului rulează **în ambele moduri**. Nu e o preferință, e
-o corecție: lăsată nefăcută, blochează crearea cheilor mai târziu.
-Excepție: dacă aceeași coloană diferă *și* la tip, în SAFE nu se atinge
-deloc — vezi «O limită care rămâne», mai sus.
+Repararea charset-ului rulează **în ambele moduri**. Nu e o preferință, e o corecție: lăsată nefăcută, blochează crearea cheilor mai târziu. Excepție: dacă aceeași coloană diferă *și* la tip, în SAFE nu se atinge deloc — vezi «O limită care rămâne», mai sus.
 
 ---
 
 ## Legăturile spre alte baze (`AVACONT_COMUN`)
 
-O cheie străină care arată spre `AVACONT_SURSA` înseamnă «schema proprie» și
-este **rescrisă** spre baza țintă. Una care arată spre `AVACONT_COMUN` este
-lăsată așa cum e: aceea chiar este o legătură între baze, intenționat.
+O cheie străină care arată spre `AVACONT_SURSA` înseamnă «schema proprie» și este **rescrisă** spre baza țintă. Una care arată spre `AVACONT_COMUN` este lăsată așa cum e: aceea chiar este o legătură între baze, intenționat.
 
-`AVACONT_COMUN` **nu este niciodată sincronizată** de acest program. Deci tot
-ce ține de ea — tabelele-părinte și coloanele lor — trebuie să fie deja
-corect înainte de rulare.
+`AVACONT_COMUN` **nu este niciodată sincronizată** de acest program. Deci tot ce ține de ea — tabelele-părinte și coloanele lor — trebuie să fie deja corect înainte de rulare.
 
 ### Ce se verifică înainte de a crea o cheie
 
-Înainte ca vreo instrucțiune să ajungă pe server, fiecare cheie care urmează
-să fie creată este trecută prin trei verificări:
+Înainte ca vreo instrucțiune să ajungă pe server, fiecare cheie care urmează să fie creată este trecută prin trei verificări:
 
-1. **există tabelul și coloana spre care arată?** Dacă lipsesc în
-   `AVACONT_COMUN`, se spune limpede că acolo nu se poate repara de aici;
-2. **se potrivesc seturile de caractere?** Comparația se face cu forma pe
-   care coloanele o vor **avea la sfârșit**, nu cu cea de acum: în interiorul
-   țintei, coloana referită este reparată la pasul 8, adică înainte ca cheia
-   să fie refăcută la pasul 11. Pentru `AVACONT_COMUN`, starea de acum **este**
-   starea finală, fiindcă nimic nu o schimbă;
-3. **se potrivesc datele?** Se numără rândurile din țintă a căror valoare nu
-   există în tabelul-părinte. Acestea sunt rândurile care ar face
-   `ADD CONSTRAINT` să eșueze cu eroarea 1452.
+1. **există tabelul și coloana spre care arată?** Dacă lipsesc în `AVACONT_COMUN`, se spune limpede că acolo nu se poate repara de aici;
+2. **se potrivesc seturile de caractere?** Comparația se face cu forma pe care coloanele o vor **avea la sfârșit**, nu cu cea de acum: în interiorul țintei, coloana referită este reparată la pasul 8, adică înainte ca cheia să fie refăcută la pasul 11. Pentru `AVACONT_COMUN`, starea de acum **este** starea finală, fiindcă nimic nu o schimbă;
+3. **se potrivesc datele?** Se numără rândurile din țintă a căror valoare nu există în tabelul-părinte. Acestea sunt rândurile care ar face `ADD CONSTRAINT` să eșueze cu eroarea 1452.
 
-Verificarea datelor (3) se face **numai dacă toate coloanele implicate
-există deja**. O coloană pe care chiar acest lot urmează să o adauge (pasul
-7) nu poate fi numărată — întrebarea ar fi `Unknown column`, eroarea 1054.
-În cazul acela cheia se creează fără verificare prealabilă, iar dacă datele
-nu se potrivesc, eșecul apare la execuție, cu 1452, și este scris în
-`schema_diff_log`.
+Verificarea datelor (3) se face **numai dacă toate coloanele implicate există deja**. O coloană pe care chiar acest lot urmează să o adauge (pasul
+7) nu poate fi numărată — întrebarea ar fi `Unknown column`, eroarea 1054. În cazul acela cheia se creează fără verificare prealabilă, iar dacă datele nu se potrivesc, eșecul apare la execuție, cu 1452, și este scris în `schema_diff_log`.
 
-Ce nu trece este scris în `schema_diff_log` cu un mesaj în `error_msg` și
-**nu se execută** — rândurile cu eroare sunt sărite. Mesajul numește și
-câteva dintre valorile vinovate:
+Ce nu trece este scris în `schema_diff_log` cu un mesaj în `error_msg` și **nu se execută** — rândurile cu eroare sunt sărite. Mesajul numește și câteva dintre valorile vinovate:
 
 ```
 Cheia `fk_ist_tip` nu poate fi creată: 3 rânduri din `000_DEMO`.`FX_Istoric`
@@ -253,9 +176,7 @@ au în `TipRand` valori care nu există în `AVACONT_COMUN`.`DefaTipRand`
 
 ### Lista completă: `schema_diff/blocaje_<dată>.json`
 
-Mesajele din jurnal dau trei exemple — destul cât să știți că e o problemă,
-prea puțin cât să o reparați. Lista întreagă se scrie, la fiecare generare
-care găsește blocaje, într-un fișier JSON alături de `.sql`:
+Mesajele din jurnal dau trei exemple — destul cât să știți că e o problemă, prea puțin cât să o reparați. Lista întreagă se scrie, la fiecare generare care găsește blocaje, într-un fișier JSON alături de `.sql`:
 
 ```
 2 chei nu se pot crea din cauza datelor. Lista completă:
@@ -275,22 +196,15 @@ Pentru fiecare cheie blocată fișierul conține:
 | `sql_inspectare` | `SELECT`-ul gata scris care le listează pe toate |
 | `esantion_limitat` | `true` dacă listarea s-a oprit la 500 de rânduri |
 
-Deci: `randuri_afectate` spune cât de mare e problema, `chei_primare` spune
-exact ce rânduri să deschideți, iar `sql_inspectare` se poate copia direct în
-client.
+Deci: `randuri_afectate` spune cât de mare e problema, `chei_primare` spune exact ce rânduri să deschideți, iar `sql_inspectare` se poate copia direct în client.
 
-Se scrie și la `--view`, fiindcă blocajele se află la generare, nu la
-execuție.
+Se scrie și la `--view`, fiindcă blocajele se află la generare, nu la execuție.
 
 ### De ce se amână și ștergerea, nu doar crearea
 
-Dacă o cheie **există deja** în țintă și urma să fie desfăcută doar ca să se
-poată schimba setul de caractere de sub ea, atunci refuzul de a o recrea nu
-poate fi luat singur. Ștergerea ar rămâne, cheia s-ar pierde definitiv, iar
-programul ar lăsa baza mai puțin consistentă decât a găsit-o.
+Dacă o cheie **există deja** în țintă și urma să fie desfăcută doar ca să se poată schimba setul de caractere de sub ea, atunci refuzul de a o recrea nu poate fi luat singur. Ștergerea ar rămâne, cheia s-ar pierde definitiv, iar programul ar lăsa baza mai puțin consistentă decât a găsit-o.
 
-De aceea, într-un asemenea caz **stau pe loc toate**: ștergerea cheii,
-schimbarea de charset de pe ambele capete și recrearea. Se scrie:
+De aceea, într-un asemenea caz **stau pe loc toate**: ștergerea cheii, schimbarea de charset de pe ambele capete și recrearea. Se scrie:
 
 ```
 Amânat: cheia `fk_pl_cod` de pe `FX_PlatiLinii` nu se poate reface (...),
@@ -298,57 +212,34 @@ deci nu se șterge și nu se schimbă setul de caractere sub ea — altfel cheia
 s-ar pierde definitiv.
 ```
 
-Restul lotului merge mai departe. După ce datele sunt corectate, o rulare
-nouă face ce a rămas.
+Restul lotului merge mai departe. După ce datele sunt corectate, o rulare nouă face ce a rămas.
 
-Situația asta apare doar dacă cineva a încărcat date cu
-`FOREIGN_KEY_CHECKS=0`: cât timp cheia e activă, InnoDB nu lasă să intre
-rânduri fără părinte.
+Situația asta apare doar dacă cineva a încărcat date cu `FOREIGN_KEY_CHECKS=0`: cât timp cheia e activă, InnoDB nu lasă să intre rânduri fără părinte.
 
 ### O limită de fond
 
-O coloană aflată sub o cheie spre `AVACONT_COMUN` **nu-și poate schimba
-setul de caractere singură.** MariaDB cere ca cele două capete ale unei chei
-să aibă aceeași colaționare, nu doar același charset (altfel 1005 / errno
-150), deci ori se mută amândouă, ori niciunul. Cum `AVACONT_COMUN` nu este
-sincronizată de aici, o astfel de diferență se raportează, dar nu se repară
-— se corectează în `AVACONT_COMUN`, separat.
+O coloană aflată sub o cheie spre `AVACONT_COMUN` **nu-și poate schimba setul de caractere singură.** MariaDB cere ca cele două capete ale unei chei să aibă aceeași colaționare, nu doar același charset (altfel 1005 / errno 150), deci ori se mută amândouă, ori niciunul. Cum `AVACONT_COMUN` nu este sincronizată de aici, o astfel de diferență se raportează, dar nu se repară — se corectează în `AVACONT_COMUN`, separat.
 
 ---
 
 ## Operațiile distructive
 
-Sunt marcate `is_destructive` următoarele: ștergerea unui tabel, a unei
-coloane, a unui index sau a unei chei; modificarea unei chei primare; și
-îngustarea unui charset (`utf8mb4` → `utf8`).
+Sunt marcate `is_destructive` următoarele: ștergerea unui tabel, a unei coloane, a unui index sau a unei chei; modificarea unei chei primare; și îngustarea unui charset (`utf8mb4` → `utf8`).
 
-**Fără `--allow-destructive` nu se execută NIMIC** — nici măcar
-instrucțiunile nedistructive din același lot. Este un refuz total, nu o
-sărire selectivă: multe operații distructive sunt primul pas dintr-o
-pereche (întâi `DROP FOREIGN KEY`, apoi `ADD CONSTRAINT`), iar executarea
-doar a celei de-a doua lasă structura mai rău decât dacă nu se începea.
+**Fără `--allow-destructive` nu se execută NIMIC** — nici măcar instrucțiunile nedistructive din același lot. Este un refuz total, nu o sărire selectivă: multe operații distructive sunt primul pas dintr-o pereche (întâi `DROP FOREIGN KEY`, apoi `ADD CONSTRAINT`), iar executarea doar a celei de-a doua lasă structura mai rău decât dacă nu se începea.
 
 Cu `--allow-destructive`, înainte de execuție:
 
-1. se face automat o copie de siguranță cu `mysqldump`, pentru fiecare
-   bază afectată, iar fișierul este verificat că nu e gol;
+1. se face automat o copie de siguranță cu `mysqldump`, pentru fiecare bază afectată, iar fișierul este verificat că nu e gol;
 2. vi se cere să tastați exact `DA`.
 
-Dacă `mysqldump` nu există pe calculatorul de pe care rulați, operațiile
-distructive sunt refuzate. `--skip-backup` ocolește asta, pe răspunderea
-dumneavoastră.
+Dacă `mysqldump` nu există pe calculatorul de pe care rulați, operațiile distructive sunt refuzate. `--skip-backup` ocolește asta, pe răspunderea dumneavoastră.
 
 ### Nu există anulare
 
-Instrucțiunile DDL (`ALTER`, `DROP`, `CREATE`) produc în MariaDB un
-*commit implicit*: tranzacția curentă se închide singură înainte ca
-instrucțiunea să ruleze. Un `ROLLBACK` după un `ALTER TABLE` nu anulează
-nimic.
+Instrucțiunile DDL (`ALTER`, `DROP`, `CREATE`) produc în MariaDB un *commit implicit*: tranzacția curentă se închide singură înainte ca instrucțiunea să ruleze. Un `ROLLBACK` după un `ALTER TABLE` nu anulează nimic.
 
-De aceea singura revenire este copia de siguranță, restaurată manual.
-Când o execuție eșuează, programul afișează comanda exactă de restaurare.
-Nu o rulează singur — restaurarea pierde tot ce s-a scris în baza
-respectivă după momentul copiei.
+De aceea singura revenire este copia de siguranță, restaurată manual. Când o execuție eșuează, programul afișează comanda exactă de restaurare. Nu o rulează singur — restaurarea pierde tot ce s-a scris în baza respectivă după momentul copiei.
 
 ---
 
@@ -359,9 +250,7 @@ Se pune `python -m routes.schema_sync.` înaintea fiecăreia.
 ```
 schema_sync --view --mode SAFE
 ```
-Calculează diferențele, le scrie într-un fișier `.sql` în folderul
-`schema_diff/`, afișează
-rezumatul. **Nu execută nimic.** Modul recomandat pentru început.
+Calculează diferențele, le scrie într-un fișier `.sql` în folderul `schema_diff/`, afișează rezumatul. **Nu execută nimic.** Modul recomandat pentru început.
 
 ```
 schema_sync --mode SAFE
@@ -371,8 +260,7 @@ Calculează, afișează, întreabă, execută dacă răspundeți `da`.
 ```
 schema_sync --run --mode SAFE
 ```
-Calculează și execută fără a întreba. Operațiile distructive rămân
-refuzate fără `--allow-destructive`.
+Calculează și execută fără a întreba. Operațiile distructive rămân refuzate fără `--allow-destructive`.
 
 ```
 schema_sync --run --mode FORCE --allow-destructive --backup-dir D:\backup
@@ -382,8 +270,7 @@ Sincronizare completă, cu copie de siguranță și confirmare tastată.
 ```
 schema_sync --list-targets
 ```
-Scrie bazele de unitate de pe server, una pe linie, și iese. Nu compară,
-nu execută și nu creează nimic.
+Scrie bazele de unitate de pe server, una pe linie, și iese. Nu compară, nu execută și nu creează nimic.
 
 ```
 schema_sync --drop-legacy --view
@@ -408,17 +295,13 @@ schema_sync --drop-legacy --view
 | `--list-targets` | scrie bazele de unitate de pe server (`DB<TAB>nume<TAB>CAI\|-`) și iese |
 | `--verbose` | afișează fiecare instrucțiune SQL |
 
-Cele două faze se pot rula și separat, cu `schema_generate` și
-`schema_execute`, aceleași opțiuni.
+Cele două faze se pot rula și separat, cu `schema_generate` și `schema_execute`, aceleași opțiuni.
 
 ---
 
 ## Din K-BOT Migrator, peste HTTP
 
-Migratorul este o fereastră Windows, iar bazele sunt aici, pe server. Ca
-să nu-i trebuiască un cont de shell și o cheie SSH pe calculatorul
-fiecărui operator, aceiași pași se pot porni și printr-o rută, păzită de
-aceeași `X-Api-Key` ca restul rutelor de migrare:
+Migratorul este o fereastră Windows, iar bazele sunt aici, pe server. Ca să nu-i trebuiască un cont de shell și o cheie SSH pe calculatorul fiecărui operator, aceiași pași se pot porni și printr-o rută, păzită de aceeași `X-Api-Key` ca restul rutelor de migrare:
 
 ```
 POST /api/migrare/schema-sync
@@ -428,10 +311,7 @@ POST /api/migrare/schema-sync
 GET  /api/migrare/stare/<id>?de_la=<câte rânduri s-au citit deja>
 ```
 
-Ruta pornește o lucrare și întoarce imediat un identificator; jurnalul se
-citește din `stare`, rând cu rând, cât timp rularea este încă în curs —
-aceeași buclă pe care migratorul o folosește deja pentru analiză și
-pentru scriere.
+Ruta pornește o lucrare și întoarce imediat un identificator; jurnalul se citește din `stare`, rând cu rând, cât timp rularea este încă în curs — aceeași buclă pe care migratorul o folosește deja pentru analiză și pentru scriere.
 
 | Câmp din cerere | Înlocuiește |
 |---|---|
@@ -439,59 +319,42 @@ pentru scriere.
 | `permite_distructive` | `--allow-destructive` **și** confirmarea tastată `DA`, care nu are cine să o tasteze într-o cerere |
 | `doar_vezi` | `--view` |
 
-Nu există `--targets` cu mai multe baze: ruta primește **o singură**
-bază, cea aleasă în migrator, și îi verifică forma (`000_DEMO`) înainte
-de orice. Bazele de serviciu — `AVACONT_SURSA`, `AVACONT_COMUN` — sunt
-refuzate, ca și în linia de comandă.
+Nu există `--targets` cu mai multe baze: ruta primește **o singură** bază, cea aleasă în migrator, și îi verifică forma (`000_DEMO`) înainte de orice. Bazele de serviciu — `AVACONT_SURSA`, `AVACONT_COMUN` — sunt refuzate, ca și în linia de comandă.
 
-**O rulare o dată, pe tot serverul.** Două sincronizări în paralel și-ar
-încurca instrucțiunile în același `schema_diff_log`; a doua primește
-«O sincronizare de schemă este deja în curs pe server» și nu pornește.
+**O rulare o dată, pe tot serverul.** Două sincronizări în paralel și-ar încurca instrucțiunile în același `schema_diff_log`; a doua primește «O sincronizare de schemă este deja în curs pe server» și nu pornește.
 
-Linia de comandă rămâne neatinsă și este în continuare calea de urmat
-pentru `--drop-legacy`, pentru mai multe baze deodată și pentru orice
-rulare în care vreți să citiți rezumatul înainte de a răspunde.
+Linia de comandă rămâne neatinsă și este în continuare calea de urmat pentru `--drop-legacy`, pentru mai multe baze deodată și pentru orice rulare în care vreți să citiți rezumatul înainte de a răspunde.
 
 ---
 
 ## Redenumirea unei coloane
 
-Ca să redenumiți o coloană în toate bazele, puneți în `AVACONT_SURSA`, în
-comentariul coloanei **noi**, numele **vechi**:
+Ca să redenumiți o coloană în toate bazele, puneți în `AVACONT_SURSA`, în comentariul coloanei **noi**, numele **vechi**:
 
 ```
 rename:NumeVechi
 rename:NumeVechi|comentariul care rămâne pe coloană
 ```
 
-Programul generează `CHANGE COLUMN NumeVechi NumeNou ...` în fiecare bază
-unde coloana veche există, iar la sfârșit (pasul 99) șterge marcajul
-`rename:` din `AVACONT_SURSA`, păstrând doar textul de după `|`.
+Programul generează `CHANGE COLUMN NumeVechi NumeNou ...` în fiecare bază unde coloana veche există, iar la sfârșit (pasul 99) șterge marcajul `rename:` din `AVACONT_SURSA`, păstrând doar textul de după `|`.
 
-Dacă în vreo bază coloana veche nu există, se scrie o eroare în
-`schema_diff_log` și rândul respectiv nu se execută. Restul continuă.
+Dacă în vreo bază coloana veche nu există, se scrie o eroare în `schema_diff_log` și rândul respectiv nu se execută. Restul continuă.
 
 ---
 
 ## Verificări făcute automat înainte de orice
 
-**`sql_mode` trebuie să conțină `STRICT_TRANS_TABLES`.** Fără el, o
-conversie de charset care nu încape **trunchiază datele în tăcere**, fără
-nicio eroare. Programul refuză să pornească altfel.
+**`sql_mode` trebuie să conțină `STRICT_TRANS_TABLES`.** Fără el, o conversie de charset care nu încape **trunchiază datele în tăcere**, fără nicio eroare. Programul refuză să pornească altfel.
 
-Se raportează și dacă `AVACONT_SURSA` are mai multe combinații de
-charset — ele se propagă în ținte exact așa cum sunt.
+Se raportează și dacă `AVACONT_SURSA` are mai multe combinații de charset — ele se propagă în ținte exact așa cum sunt.
 
 ---
 
 ## Despre diacritice
 
-Trecerea de la `utf8mb4` la `utf8` **nu afectează diacriticele
-românești**. Toate — ă â î ș ț Ă Â Î Ș Ț — fac parte din planul de bază
-Unicode și încap în `utf8`. Verificat pe date reale.
+Trecerea de la `utf8mb4` la `utf8` **nu afectează diacriticele românești**. Toate — ă â î ș ț Ă Â Î Ș Ț — fac parte din planul de bază Unicode și încap în `utf8`. Verificat pe date reale.
 
-Se pierd doar caracterele din planurile superioare: emoji și caractere
-chinezești rare. Dacă bănuiți că există așa ceva într-o coloană:
+Se pierd doar caracterele din planurile superioare: emoji și caractere chinezești rare. Dacă bănuiți că există așa ceva într-o coloană:
 
 ```sql
 SELECT COUNT(*) FROM `000_DEMO`.`Clasificatii`
@@ -504,13 +367,9 @@ Zero înseamnă că se poate converti fără pierderi.
 
 ## Jurnal și urme
 
-`schema_sync.log` — în folderul din care rulați, cu rotire la 10 MB și
-cinci generații păstrate, în același format ca `api_server.log`.
+`schema_sync.log` — în folderul din care rulați, cu rotire la 10 MB și cinci generații păstrate, în același format ca `api_server.log`.
 
-`AVACONT_COMUN.schema_diff_log` — fiecare instrucțiune generată, cu data
-execuției și eventuala eroare. Tabelul este creat automat la prima rulare.
-Stă în `AVACONT_COMUN` **intenționat**: pus în `AVACONT_SURSA`, ar fi fost
-copiat ca tabel nou în fiecare bază de unitate.
+`AVACONT_COMUN.schema_diff_log` — fiecare instrucțiune generată, cu data execuției și eventuala eroare. Tabelul este creat automat la prima rulare. Stă în `AVACONT_COMUN` **intenționat**: pus în `AVACONT_SURSA`, ar fi fost copiat ca tabel nou în fiecare bază de unitate.
 
 Ce a eșuat, cu numărul erorii:
 
@@ -530,12 +389,9 @@ WHERE executed_at IS NULL
 ORDER BY priority, id;
 ```
 
-La o rulare nouă, rândurile neexecutate sunt șterse și regenerate, ca să
-nu se dubleze. `--no-reset` păstrează.
+La o rulare nouă, rândurile neexecutate sunt șterse și regenerate, ca să nu se dubleze. `--no-reset` păstrează.
 
-Ștergerea se face **după** ce noua comparație s-a încheiat cu bine, nu
-înainte. Altfel, o comparație care crapă la jumătate lăsa tabelul gol: și
-planul vechi șters, și cel nou nescris.
+Ștergerea se face **după** ce noua comparație s-a încheiat cu bine, nu înainte. Altfel, o comparație care crapă la jumătate lăsa tabelul gol: și planul vechi șters, și cel nou nescris.
 
 ---
 
@@ -563,14 +419,5 @@ Numărul erorii se salvează în `schema_diff_log`, nu doar textul.
 - Nu atinge datele — doar structura.
 - Nu sincronizează vederi (`views`), proceduri sau declanșatoare.
 - Nu modifică `AVACONT_COMUN` și nu o tratează niciodată ca țintă.
-- Nu compară coloanele generate (`GENERATED ALWAYS AS ... STORED /
-  VIRTUAL`): nu le modifică și nu le șterge niciodată într-o bază care
-  există deja. O coloană generată din sursă care **lipsește** dintr-un tabel
-  existent este însă adăugată (`ADD COLUMN`, înaintea cheilor), fiindcă o
-  cheie construită pe ea nu poate exista fără ea (26.10.2026,
-  `AD_Chitante.AnScolar`). La **creare** sunt scrise întocmai ca în sursă, cu
-  expresia lor cu tot — altfel tabelul nou ar rămâne fără o coloană pe
-  care aplicația o citește. (Până la 2026-08-23 erau scrise greșit, fără
-  expresie, și `CREATE TABLE` cădea cu 1064; vezi
-  `tests/test_schema_diff_columns.py`.)
+- Nu compară coloanele generate (`GENERATED ALWAYS AS ... STORED / VIRTUAL`): nu le modifică și nu le șterge niciodată într-o bază care există deja. O coloană generată din sursă care **lipsește** dintr-un tabel existent este însă adăugată (`ADD COLUMN`, înaintea cheilor), fiindcă o cheie construită pe ea nu poate exista fără ea (26.10.2026, `AD_Chitante.AnScolar`). La **creare** sunt scrise întocmai ca în sursă, cu expresia lor cu tot — altfel tabelul nou ar rămâne fără o coloană pe care aplicația o citește. (Până la 2026-08-23 erau scrise greșit, fără expresie, și `CREATE TABLE` cădea cu 1064; vezi `tests/test_schema_diff_columns.py`.)
 - Nu restaurează singur o copie de siguranță.

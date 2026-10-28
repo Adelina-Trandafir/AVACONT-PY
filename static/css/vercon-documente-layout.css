@@ -23,8 +23,12 @@
   --vc-document-header-min-height: calc(3 * var(--vc-document-header-row-height) + 24px);
 }
 @media (min-width: 801px) {
-  .vc-page :is(.vc-doc--nir, .vc-doc--bc) .vc-doc__header:has(.vc-field) {
+  .vc-page .vc-doc--nir .vc-doc__header:has(.vc-field) {
     min-height: var(--vc-document-header-min-height);
+    align-content: start;
+  }
+  .vc-page .vc-doc--bc .vc-doc__header:has(.vc-field) {
+    min-height: calc(2 * var(--vc-document-header-row-height) + 12px);
     align-content: start;
   }
 }

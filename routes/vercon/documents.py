@@ -13,13 +13,14 @@ are committed together or not at all. Rules shared by the four families:
   * a document another one depends on (a receipt with a storno, a bon with a return, an asset already in
     the OI/MF register) is not edited or cancelled until that dependency is cancelled first. Editing a BC in the active
     month validates the full stock timeline and recalculates its food list atomically; cancellation still requires unlinking it.
-Numbers: automatic, unique per gestiune + kind + exercise; a manual number is accepted only when free.
+Numbers: automatic, unique per gestiune + kind + exercise; a manual number is accepted only when free. A MATERIALE gestiune
+can number its BC separately for every account (consumption_numbering).
 """
 from utils.clock import utc_now
 from utils import vercon_suppliers as suppliers
 from decimal import Decimal, InvalidOperation
 
-from . import consumption_period, document_order, numeric, protocol, receipt_choices
+from . import bon_number, consumption_numbering, consumption_period, document_order, numeric, protocol, receipt_choices
 from .nomenclatoare import NomError
 
 FAMILIES = ('nir', 'storno', 'bc', 'br')
@@ -148,13 +149,14 @@ def list_documents(cursor, ctx, family):
         return [{'id': r['IdIntrare'], 'number': abs(r['Numar'] or 0), 'sub_number': r['sub_number'], 'date': _iso(r['Data']), 'invoice_date': _iso(r['DataFc']), 'invoice': r['NrFact'],
                  'total': _money(r['Valoare'], scale), 'party_cf': r['CodPartener'], 'party': r['Partener'] or '', 'doc_type': r['TipDoc'],
                  'source': r['IdStorno'], 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows]
-    rows = _all(cursor, 'SELECT h.IdBonConsum, h.NumarBC, h.DataBC, h.ValoareBC, h.IDC, h.IdMasina, h.IdRetur, h.Anulat, h.Version, c.Denumire AS Primitor, '
+    rows = _all(cursor, 'SELECT h.IdBonConsum, h.NumarBC, h.DataBC, h.ValoareBC, h.IDC, h.IdMasina, h.IdRetur, h.Anulat, h.Version, c.Denumire AS Primitor, m.Masina AS Cont, '
                         '(SELECT COUNT(*) FROM VC_LegBCLA l WHERE l.SubunitId=h.SubunitId AND l.GestiuneId=h.GestiuneId AND l.ExercitiuId=h.ExercitiuId AND l.IdBonConsum=h.IdBonConsum) AS Legaturi '
                         'FROM VC_Iesiri_H h LEFT JOIN VC_Clienti c ON c.SubunitId=h.SubunitId AND c.GestiuneId=h.GestiuneId AND c.IDC=h.IDC '
+                        'LEFT JOIN VC_Masini m ON m.SubunitId=h.SubunitId AND m.GestiuneId=h.GestiuneId AND m.IdMasina=h.IdMasina '
                         'WHERE h.SubunitId=%s AND h.GestiuneId=%s AND h.ExercitiuId=%s AND COALESCE(h.Retur,0)=%s ORDER BY h.DataBC DESC, h.IdBonConsum DESC',
                 (s, g, e, 1 if family == 'br' else 0))
-    return [{'id': r['IdBonConsum'], 'number': r['NumarBC'], 'date': _iso(r['DataBC']), 'total': _money(r['ValoareBC'], scale),
-             'receiver_id': r['IDC'], 'receiver': r['Primitor'] or '', 'category_id': r['IdMasina'], 'source': r['IdRetur'],
+    return [{'id': r['IdBonConsum'], 'number': bon_number.display(family, r['NumarBC']), 'date': _iso(r['DataBC']), 'total': _money(r['ValoareBC'], scale),
+             'receiver_id': r['IDC'], 'receiver': r['Primitor'] or '', 'category_id': r['IdMasina'], 'category': r['Cont'] or '', 'source': r['IdRetur'],
              'source_missing': family == 'br' and r['IdRetur'] is None,
              'source_label': 'Fără bon sursă' if family == 'br' and r['IdRetur'] is None else None,
              'linked': bool(r['Legaturi']), 'annulled': bool(r['Anulat']), 'version': r['Version']} for r in rows]
@@ -228,10 +230,10 @@ def get_document(cursor, repo, ctx, family, doc_id):
                   (s, g, e, h['IdRetur'])) if family == 'br' and h['IdRetur'] is not None else None
     source_missing = family == 'br' and h['IdRetur'] is None
     return {'family': family, 'id': doc_id, 'version': h['Version'], 'annulled': bool(h['Anulat']), 'reason': h['MotivAnulare'], 'annulled_by': h['AnulatDe'],
-            'number': h['NumarBC'], 'linked': bool(linked['n']), 'source_missing': source_missing,
+            'number': bon_number.display(family, h['NumarBC']), 'linked': bool(linked['n']), 'source_missing': source_missing,
             'header': {'IDC': h['IDC'], 'receiver': client['Denumire'] if client else None, 'IdMasina': h['IdMasina'], 'Data': _iso(h['DataBC']),
                        'Expl': h['Expl'], 'Valoare': _money(h['ValoareBC'], scale), 'source': h['IdRetur'],
-                       'source_label': 'Fără bon sursă' if source_missing else 'BC %s' % source['NumarBC'] if source else None},
+                       'source_label': 'Fără bon sursă' if source_missing else bon_number.display('bc', source['NumarBC']) if source else None},
             'lines': out_lines}
 
 
@@ -295,9 +297,18 @@ def _nir_number_taken(cursor, ctx, number, storno, exclude=None, sub=0):
     return bool(_one(cursor, sql + ' LIMIT 1', params))
 
 
-def _bon_number_taken(cursor, ctx, text, retur, exclude=None):
-    sql = 'SELECT 1 FROM VC_Iesiri_H WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND NumarBC=%s AND COALESCE(Retur,0)=%s AND Anulat=0'
-    params = list(_scope(ctx)) + [text, 1 if retur else 0]
+def _bon_number_taken(cursor, ctx, family, number, exclude=None, account=None):
+    """Is this number of a BC / BR in use? Every spelling of it counts (BC 13, BC13, 13). `account` narrows the search to one account
+    (the gestiune numbers its BC per account)."""
+    if number is None:
+        return False
+    spellings = bon_number.variants(family, number)
+    sql = ('SELECT 1 FROM VC_Iesiri_H WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND NumarBC IN (' + ','.join(['%s'] * len(spellings))
+           + ') AND COALESCE(Retur,0)=%s AND Anulat=0')
+    params = list(_scope(ctx)) + spellings + [1 if family == 'br' else 0]
+    if account is not None:
+        sql += ' AND IdMasina=%s'
+        params.append(account)
     if exclude:
         sql += ' AND IdBonConsum<>%s'
         params.append(exclude)
@@ -308,30 +319,33 @@ def _kind(family):
     return {'nir': 'NIR', 'storno': 'STORNO', 'bc': 'BC', 'br': 'BR'}[family]
 
 
-def _assign_number(cursor, ctx, family, manual, errors, exclude=None, sub=0):
+def _assign_number(cursor, ctx, family, manual, errors, exclude=None, sub=0, account=None):
     """(number, text). Automatic when `manual` is empty; a manual number only when free. For NIR/storno the number is the
-    integer stored in NIR.Numar (a storno stores it negative); for the bons it is the text stored in NumarBC (BR: BX<n>)."""
-    prefix = 'BX' if family == 'br' else ''
+    integer stored in NIR.Numar (a storno stores it negative); for the bons it is the text stored in NumarBC (bon_number: BC 13, BX 13).
+    `account` = the account of a BC: with per-account numbering (consumption_numbering) it picks the counter and the scope."""
+    bon = family in ('bc', 'br')
+    scoped = account if family == 'bc' and account is not None and consumption_numbering.per_account(cursor, ctx) else None
+    kind = consumption_numbering.kind(scoped) if family == 'bc' else _kind(family)
     if manual in (None, ''):
         if sub:
             errors['h.Numar'] = 'Sub-numărul se poate folosi numai împreună cu un număr.'
             return None, None
         if family in ('nir', 'storno'):
             return protocol.next_number(cursor, ctx, _kind(family), lambda n: _nir_number_taken(cursor, ctx, n, family == 'storno', exclude)), None
-        number = protocol.next_number(cursor, ctx, _kind(family), lambda n: _bon_number_taken(cursor, ctx, prefix + str(n), family == 'br', exclude))
-        return number, prefix + str(number)
+        number = protocol.next_number(cursor, ctx, kind, lambda n: _bon_number_taken(cursor, ctx, family, n, exclude, scoped))
+        return number, bon_number.text(family, number)
     number = _int(manual)
     if number is None or number < 1:
         errors['h.Numar'] = 'Numărul trebuie să fie un întreg pozitiv.'
         return None, None
     taken = _nir_number_taken(cursor, ctx, number, family == 'storno', exclude, sub) if family in ('nir', 'storno') \
-        else _bon_number_taken(cursor, ctx, prefix + str(number), family == 'br', exclude)
+        else _bon_number_taken(cursor, ctx, family, number, exclude, scoped)
     if taken:
-        errors['h.Numar'] = 'Numărul %s este deja folosit.' % (prefix + str(number) + _sub_text(sub))
+        errors['h.Numar'] = 'Numărul %s este deja folosit.' % ((bon_number.text(family, number) if bon else str(number)) + _sub_text(sub))
         return None, None
     if not sub:
-        protocol.raise_counter(cursor, ctx, _kind(family), number)   # a sub-number sits between two numbers: it moves nothing
-    return number, (prefix + str(number) if family in ('bc', 'br') else None)
+        protocol.raise_counter(cursor, ctx, kind, number)   # a sub-number sits between two numbers: it moves nothing
+    return number, (bon_number.text(family, number) if bon else None)
 
 
 # ---- guards shared by edit and cancel --------------------------------------------------------------------------------
@@ -586,7 +600,7 @@ def create_bc(cursor, repo, ctx, exercise, body, request_key, request_id):
     cols = _bon_header(cursor, repo, ctx, exercise, header, errors)
     lines = _clean_bon_lines(repo, ctx, body.get('lines'), errors, cols.get('IdMasina'))
     _fail(errors)
-    number, text = _assign_number(cursor, ctx, 'bc', header.get('Numar'), errors)
+    number, text = _assign_number(cursor, ctx, 'bc', header.get('Numar'), errors, account=cols.get('IdMasina'))
     _fail(errors)
     total = numeric.to_stored(total_of(lines, ctx['scale']), ctx['scale'])
     doc_id = repo.insert('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'Retur': 0, 'DataSalvare': utc_now()})
@@ -643,8 +657,13 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     consumption_period.require_date(cursor, ctx, cols['DataBC'])
     text = before['NumarBC']
     manual = header.get('Numar')
-    if manual not in (None, '') and str(_int(manual)) != str(text):
-        _, text = _assign_number(cursor, ctx, 'bc', manual, errors, exclude=doc_id)
+    account = cols.get('IdMasina')
+    # With per-account numbering a bon moved to another account is checked (and its number reserved) in that account.
+    moved = account != before['IdMasina'] and consumption_numbering.per_account(cursor, ctx)
+    if manual not in (None, '') and (_int(manual) != bon_number.parse('bc', text) or moved):
+        _, text = _assign_number(cursor, ctx, 'bc', manual, errors, exclude=doc_id, account=account)
+    elif moved and _bon_number_taken(cursor, ctx, 'bc', bon_number.parse('bc', text), doc_id, account):
+        _, text = _assign_number(cursor, ctx, 'bc', None, errors, exclude=doc_id, account=account)
     _fail(errors)
     # a saved line keeps its price: a line of the same variant is re-priced only when the page changed its quantity
     variants = {line['variant'] for line in lines} | {row['IdProdus'] for row in old_lines}
@@ -764,7 +783,7 @@ def edit_br(cursor, repo, ctx, exercise, doc_id, body, request_id):
     lines = _clean_return_lines(cursor, ctx, source['IdBonConsum'], body.get('lines'), exclude=doc_id)
     text = before['NumarBC']
     manual = header.get('Numar')
-    if manual not in (None, '') and 'BX' + str(_int(manual)) != str(text):
+    if manual not in (None, '') and _int(manual) != bon_number.parse('br', text):
         _, text = _assign_number(cursor, ctx, 'br', manual, errors, exclude=doc_id)
     _fail(errors)
     repo.delete('VC_IesiriRetur', {'IdBonConsum': doc_id})

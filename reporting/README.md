@@ -16,47 +16,17 @@ Dependențele renderelor PDF/Excel sunt în `PYTHON/requirements-reporting.txt`;
 
 ## Motorul și previzualizarea comune (SLICE-ADE9-05)
 
-`output.py` este motorul generic PDF/Excel extras din VERCON. Primește modelul
-cu `layout`, `identity`, `blocks`, `title`, `filename`, `gestiune_name` și
-`period_text`. Nu importă aplicațiile sau Flask. Suportă și formule de antet,
-culori de celule, text formatat (`richtext.py`) și coloane numerice opționale.
-ADECHIT traduce blocurile sale în `routes/adechit/report_model.py`, păstrând
-identificatorii de raport/coloană și filtrarea coloanelor. VERCON păstrează
-semantica textelor exacte în Excel și rendererul special al formularului NIR.
+`output.py` este motorul generic PDF/Excel extras din VERCON. Primește modelul cu `layout`, `identity`, `blocks`, `title`, `filename`, `gestiune_name` și `period_text`. Nu importă aplicațiile sau Flask. Suportă și formule de antet, culori de celule, text formatat (`richtext.py`) și coloane numerice opționale. ADECHIT traduce blocurile sale în `routes/adechit/report_model.py`, păstrând identificatorii de raport/coloană și filtrarea coloanelor. VERCON păstrează semantica textelor exacte în Excel și rendererul special al formularului NIR.
 
-`snapshots.py` implementează salvarea atomică pe disc, expirarea de 10 minute
-și legarea de proprietar, comună ambelor aplicații. Adaptorul definește directorul
-și tipul erorii. ADECHIT folosește `instance/adechit-reports/snapshots` (sau
-`ADECHIT_REPORT_CONFIG_DIR`), cu proprietar email + DC + subunitate. La export,
-autentificarea, drepturile și contextul sunt controlate din nou. Lățimile Excel
-se citesc la fiecare export din configurarea existentă.
+`snapshots.py` implementează salvarea atomică pe disc, expirarea de 10 minute și legarea de proprietar, comună ambelor aplicații. Adaptorul definește directorul și tipul erorii. ADECHIT folosește `instance/adechit-reports/snapshots` (sau `ADECHIT_REPORT_CONFIG_DIR`), cu proprietar email + DC + subunitate. La export, autentificarea, drepturile și contextul sunt controlate din nou. Lățimile Excel se citesc la fiecare export din configurarea existentă.
 
-Controlul comun este `static/js/reporting/pdf-preview.js`, cu CSS propriu
-`static/css/report-preview.css`, peste PDF.js din Portal. Antetul aplicației și
-acțiunea Excel se furnizează prin opțiuni. Adaptoarele VERCON își păstrează
-importurile publice, iar ADECHIT nu mai deschide pagini HTML pentru rapoartele
-din panou. Rutele HTML vechi rămân pentru compatibilitate.
+Controlul comun este `static/js/reporting/pdf-preview.js`, cu CSS propriu `static/css/report-preview.css`, peste PDF.js din Portal. Antetul aplicației și acțiunea Excel se furnizează prin opțiuni. Adaptoarele VERCON își păstrează importurile publice, iar ADECHIT nu mai deschide pagini HTML pentru rapoartele din panou. Rutele HTML vechi rămân pentru compatibilitate.
 
-Publicați împreună modulele comune și adaptoarele ambelor aplicații. Nu se
-suprascriu directoarele runtime din `instance/`. Fără DDL nou. Implementare
-scrisă local; teste, generare de documente și probe în browser neexecutate.
+Publicați împreună modulele comune și adaptoarele ambelor aplicații. Nu se suprascriu directoarele runtime din `instance/`. Fără DDL nou. Implementare scrisă local; teste, generare de documente și probe în browser neexecutate.
 
 
 ## Pregătire exclusivă și loading imediat (SLICE-ADE9-07)
 
-`static/js/reporting/report-progress.js` ține o singură operație în pregătire
-per pagină. `openPdfReport(title, source, owner, details)` primește acum și o
-funcție `source(view)`: componenta ia blocarea, deschide fereastra și permite
-pictarea indicatorului înainte să apeleze funcția. Nu generați/descărcați
-raportul înaintea acestui apel; altfel loading-ul nu poate acoperi acea parte.
-Funcția întoarce bytes sau `{data, title, filename, mime, downloadOnly,
-exportExcel}`; `null` încheie fără rezultat, după invalidarea contextului sau
-renunțarea la selecție. `details.isCurrent` protejează rezultatele întârziate.
+`static/js/reporting/report-progress.js` ține o singură operație în pregătire per pagină. `openPdfReport(title, source, owner, details)` primește acum și o funcție `source(view)`: componenta ia blocarea, deschide fereastra și permite pictarea indicatorului înainte să apeleze funcția. Nu generați/descărcați raportul înaintea acestui apel; altfel loading-ul nu poate acoperi acea parte. Funcția întoarce bytes sau `{data, title, filename, mime, downloadOnly, exportExcel}`; `null` încheie fără rezultat, după invalidarea contextului sau renunțarea la selecție. `details.isCurrent` protejează rezultatele întârziate.
 
-PDF.js notifică `onRendered` pentru pagina curentă. Preview-ul păstrează
-loading-ul până la primul render reușit și eliberează blocarea în `finally`.
-Un export cu `downloadOnly` închide progresul după pregătirea și predarea
-fișierului browserului. Erorile sunt jurnalizate și afișate în aceeași
-fereastră, cu descărcarea PDF ca rezervă dacă bytes au fost primiți.
-Închiderea ferestrei nu eliberează prematur o cerere încă în desfășurare.
-Blocarea este pentru pagina curentă; nu este un lock MariaDB sau între taburi.
+PDF.js notifică `onRendered` pentru pagina curentă. Preview-ul păstrează loading-ul până la primul render reușit și eliberează blocarea în `finally`. Un export cu `downloadOnly` închide progresul după pregătirea și predarea fișierului browserului. Erorile sunt jurnalizate și afișate în aceeași fereastră, cu descărcarea PDF ca rezervă dacă bytes au fost primiți. Închiderea ferestrei nu eliberează prematur o cerere încă în desfășurare. Blocarea este pentru pagina curentă; nu este un lock MariaDB sau între taburi.

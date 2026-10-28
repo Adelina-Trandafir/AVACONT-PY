@@ -16,6 +16,7 @@ must show as an error on their screen, not as a silent wait.
 """
 import logging
 import smtplib
+import time
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid, parseaddr
 
@@ -73,13 +74,30 @@ def _deliver(msg, conf, to_addrs=None):
     `to_addrs` overrides the recipients of the envelope (the headers stay as written).
     """
     opener = smtplib.SMTP_SSL if conf["use_ssl"] else smtplib.SMTP
-    with opener(conf["host"], conf["port"], timeout=conf["timeout"]) as smtp:
-        # STARTTLS on an already-encrypted session is an error, not a second layer.
-        if conf["use_tls"] and not conf["use_ssl"]:
-            smtp.starttls()
-        if conf["user"]:
-            smtp.login(conf["user"], conf["password"])
-        smtp.send_message(msg, to_addrs=to_addrs)
+    # Seconds per stage, logged even when a stage fails: "the code arrives late" is either
+    # this server being slow (a long stage here) or the mail server's queue (all stages short).
+    started = time.monotonic()
+    marks = []
+    try:
+        # The constructor connects (and resolves the local host name for EHLO).
+        with opener(conf["host"], conf["port"], timeout=conf["timeout"]) as smtp:
+            marks.append(("connect", time.monotonic()))
+            # STARTTLS on an already-encrypted session is an error, not a second layer.
+            if conf["use_tls"] and not conf["use_ssl"]:
+                smtp.starttls()
+                marks.append(("starttls", time.monotonic()))
+            if conf["user"]:
+                smtp.login(conf["user"], conf["password"])
+                marks.append(("login", time.monotonic()))
+            smtp.send_message(msg, to_addrs=to_addrs)
+            marks.append(("send", time.monotonic()))
+    finally:
+        stages, previous = [], started
+        for name, moment in marks:
+            stages.append(f"{name} {moment - previous:.1f}s")
+            previous = moment
+        logger.info("smtp %s:%s %s, total %.1fs", conf["host"], conf["port"],
+                    ", ".join(stages) or "no stage finished", time.monotonic() - started)
 
 
 def _message_id(conf):
