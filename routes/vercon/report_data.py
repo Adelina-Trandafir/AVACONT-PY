@@ -135,17 +135,20 @@ def documents(source, family=None, *, include_returns=False):
 
 def aggregate(rows, keys, amounts=('quantity', 'value')):
     groups = {}
+    variants = {}
     with localcontext() as context:
         context.prec = 60
         for row in rows:
             key = tuple(row.get(k) for k in keys)
+            variants.setdefault(key, set()).add(row.get('stock_variant', row.get('variant')))
             if key not in groups:
                 groups[key] = {**row, **{a: Decimal(0) for a in amounts}}
             target = groups[key]
             for amount in amounts:
                 value = row.get(amount)
                 target[amount] = None if value is None or target[amount] is None else target[amount] + Decimal(str(value))
-        return [{**row, **{a: None if row[a] is None else format(row[a], 'f') for a in amounts}} for row in groups.values()]
+        return [{**row, 'stock_variant': next(iter(variants[key])) if len(variants[key]) == 1 else None,
+                 **{a: None if row[a] is None else format(row[a], 'f') for a in amounts}} for key, row in groups.items()]
 
 
 def balances(source, final=False, *, hide_empty=False):
@@ -167,8 +170,7 @@ def balances(source, final=False, *, hide_empty=False):
         info = chosen[variant]
         if final and quantities['closing'] == 0:
             continue
-        amounts = {'opening': quantities['opening'], 'incoming': sum(quantities[k] for k in stock.POSITIVE),
-                   'outgoing': sum(quantities[k] for k in stock.NEGATIVE), 'closing': quantities['closing']}
+        amounts = {'opening': quantities['opening'], **stock.warehouse_turnover(quantities), 'closing': quantities['closing']}
         if hide_empty and not params.get('show_without_movements') and not any(amounts.values()):
             continue
         price = stock_valuation.price(info)

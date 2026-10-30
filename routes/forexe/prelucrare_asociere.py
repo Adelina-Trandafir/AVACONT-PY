@@ -38,6 +38,7 @@ VB.NET, nu idiomuri Python):
 import hashlib
 import logging
 import math
+from datetime import date, datetime
 from typing import Dict, List, Optional, Set, Tuple
 
 from utils import asociere_log as journal
@@ -543,10 +544,44 @@ def citeste_instantanee_context(cursor, cod: str, de_decis: Set[int],
 #    rationament ca F25 la pasul 4b. Plasarea MANUALA pe o receptie stearsa ramane
 #    permisa (un instantaneu dinaintea stergerii ii apartine pe drept); doar SUGESTIA
 #    automata se abtine.
+#
+# 3. DISTANTA IN TIMP (slice 0122-10, operator 29.10.2026). Suma singura nu e dovada: o
+#    recapitulare lunara (salarii) are aceeasi suma luna de luna, iar un instantaneu din
+#    12.10.2026 («Salarii septembrie», 137.865,00) a fost sugerat pe receptia din 10.06.2026
+#    («Salarii mai», tot 137.865,00). Nimic nu a dat eroare, dar `DIF` al instantaneului a
+#    iesit 0 si fiecare plata din 12-17.10 a vazut receptiile cu 137.865,00 mai putine. In date
+#    un instantaneu sta la cel mult 6 zile de data antetului receptiei lui; peste
+#    `PRAG_ZILE_SUGESTIE` zile legatura nu mai e sigura, deci NU se sugereaza (instantaneul
+#    ramane la operator). Nu exista scutire «suma se potriveste»: in cazul de mai sus suma
+#    (si, pe AAB, valoarea liniei) se potrivea exact, iar legatura era totusi gresita.
+PRAG_ZILE_SUGESTIE = 31
+
 _R_CANDIDATI_AUTO_SQL = (
-    "SELECT IDRR, SumaAntet FROM FX_Receptii_R "
+    "SELECT IDRR, SumaAntet, DataR FROM FX_Receptii_R "
     "WHERE CodAngajament = %s AND Sters = 0 ORDER BY DataR DESC, IDRR DESC"
 )
+
+
+def _zi_din(valoare) -> Optional[date]:
+    """A date from a datetime / date / ISO string, or None when it is missing or unreadable."""
+    if valoare is None:
+        return None
+    if isinstance(valoare, datetime):
+        return valoare.date()
+    if isinstance(valoare, date):
+        return valoare
+    try:
+        return date.fromisoformat(str(valoare)[:10])
+    except ValueError:
+        return None
+
+
+def zile_intre(a, b) -> Optional[int]:
+    """Whole days between two dates (absolute), or None when either is missing: no date = no verdict."""
+    za, zb = _zi_din(a), _zi_din(b)
+    if za is None or zb is None:
+        return None
+    return abs((za - zb).days)
 
 
 def _cheie_suma(valoare) -> str:
@@ -569,15 +604,18 @@ def pas4c_automat(cursor, cod: str, instantanee: List[dict]) -> Dict[int, int]:
     sub F11, trecerea automata poate fi GRESITA, nu doar incompleta.
     """
     cursor.execute(_R_CANDIDATI_AUTO_SQL, (cod,))
-    # {suma: [IDRR, ...]} cu cea mai recenta receptie prima (LIFO).
-    dic_r: Dict[str, List[int]] = {}
+    # {suma: [(IDRR, DataR), ...]} cu cea mai recenta receptie prima (LIFO).
+    dic_r: Dict[str, List[Tuple[int, object]]] = {}
     for r in cursor.fetchall():
-        dic_r.setdefault(_cheie_suma(r["SumaAntet"]), []).append(int(r["IDRR"]))
+        dic_r.setdefault(_cheie_suma(r["SumaAntet"]), []).append(
+            (int(r["IDRR"]), r.get("DataR")))
 
     journal.section("trecerea automată (doar sugestii, nu scrie nimic)")
     journal.line("candidați după sumă: %s",
-                 "  ".join("%s -> %s" % (k, v) for k, v in sorted(dic_r.items()))
+                 "  ".join("%s -> %s" % (k, [c[0] for c in v]) for k, v in sorted(dic_r.items()))
                  or "(nicio recepție neștearsă)")
+    journal.line("prag de distanță instantaneu - recepție: %d zile (peste prag nu se sugerează)",
+                 PRAG_ZILE_SUGESTIE)
 
     folosite: Set[int] = set()
     sugestii: Dict[int, int] = {}
@@ -592,15 +630,26 @@ def pas4c_automat(cursor, cod: str, instantanee: List[dict]) -> Dict[int, int]:
                 journal.line("tura %d: IDRH %s (%s, %s) -- nicio recepție cu suma asta",
                              tura, inst["idrh"], journal.moment(inst["data_h"]), cheie)
                 continue
-            while candidati:
-                idrr = candidati.pop(0)
-                if idrr not in folosite:
-                    folosite.add(idrr)
-                    sugestii[inst["idrh"]] = idrr
-                    journal.line("tura %d: IDRH %s (%s, %s) -> recepția %s",
-                                 tura, inst["idrh"], journal.moment(inst["data_h"]),
-                                 cheie, idrr)
-                    break
+            ales = None
+            for candidat in candidati:
+                if candidat[0] in folosite:
+                    continue
+                distanta = zile_intre(inst["data_h"], candidat[1])
+                if distanta is not None and distanta > PRAG_ZILE_SUGESTIE:
+                    journal.line("tura %d: IDRH %s (%s, %s) -- recepția %s are aceeași sumă, dar "
+                                 "e la %d zile distanță (peste %d): nu se sugerează",
+                                 tura, inst["idrh"], journal.moment(inst["data_h"]), cheie,
+                                 candidat[0], distanta, PRAG_ZILE_SUGESTIE)
+                    continue
+                ales = candidat
+                break
+            if ales is not None:
+                candidati.remove(ales)
+                folosite.add(ales[0])
+                sugestii[inst["idrh"]] = ales[0]
+                journal.line("tura %d: IDRH %s (%s, %s) -> recepția %s",
+                             tura, inst["idrh"], journal.moment(inst["data_h"]),
+                             cheie, ales[0])
 
     # RUN 1 -- instantanee de la cel mai nou catre cel mai vechi.
     _incearca(sorted(instantanee, key=lambda x: (x["data_h"], x["idrh"]), reverse=True), 1)

@@ -65,10 +65,6 @@
         <label for="p-parola">Parola</label>
         <input id="p-parola" type="password" autocomplete="current-password" maxlength="128" required>
       </div>
-      <div class="field">
-        <label for="p-app-combo-input">Aplicația</label>
-        <div id="p-app-combo"></div>
-      </div>
       <p class="msg" id="msg-login" role="alert" hidden></p>
       <div class="actions portal__login-actions">
         <!-- Certificate sign-in: computers only. certificat.js removes this block on a phone/tablet. -->
@@ -94,6 +90,25 @@
       <div class="actions">
         <button class="btn btn--ghost btn--lg" type="button" id="btn-code-back">Înapoi</button>
         <button class="btn btn--primary btn--lg" type="submit" id="btn-code">Intră</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Application selection follows authentication: the current unit determines K-BOT access. -->
+  <section class="card portal__card" id="card-choice" hidden>
+    <h1>Alegeți aplicația</h1>
+    <form id="form-app-choice" novalidate>
+      <div class="field">
+        <label for="p-unit-choice-input">Unitatea</label>
+        <div id="p-unit-choice"></div>
+      </div>
+      <div class="field">
+        <label for="p-app-combo-input">Aplicația</label>
+        <div id="p-app-combo"></div>
+      </div>
+      <p class="msg" id="msg-choice" role="alert" hidden></p>
+      <div class="actions">
+        <button class="btn btn--primary btn--lg" type="submit" id="btn-app-choice">Deschide</button>
       </div>
     </form>
   </section>

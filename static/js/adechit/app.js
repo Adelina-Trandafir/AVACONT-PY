@@ -4,6 +4,7 @@ import { Combobox } from '../components/combobox/combobox.js';
 import { DatePicker } from '../components/datepicker/datepicker.js';
 import { showMessage as paintMessage, clearMessageOnAction } from '../portal/messages.js';
 import { openMenu } from './menu.js';
+import { applicationAccountEntries } from '../portal/application-access.js';
 import { bindMenuZoom } from '../components/menu/menu-zoom.js';
 import { tooltipSettingsMenuEntry } from '../components/tooltip/tooltip-settings.js';
 import '../components/tooltip/tooltip-titles.js';
@@ -739,7 +740,7 @@ function escapeHtml(value) {
 }
 
 function fillSuggestedAmount() {
-  const amount = state.ledger === 'refund' ? state.selected.SIC : state.selected.SID;
+  const amount = state.ledger === 'refund' ? state.selected.SFC : state.selected.SFD;
   if (amount > 0) $('ade-ledger-value').value = amount;
 }
 
@@ -911,12 +912,14 @@ function bind() {
     ], { label: 'Meniu', below: $('ade-menu').closest('header') });
   });
   // The «A» opens the applications of the account (ADECHIT is this page, so it is not listed).
-  $('ade-apps').addEventListener('click', () => {
+  $('ade-apps').addEventListener('click', async () => {
+    const entries = await applicationAccountEntries(leaveApplication);
     openMenu($('ade-apps'), [
       { icon: '🏢', label: $('ade-context').textContent || 'Contul curent', disabled: true },
-      { icon: '🤖', label: 'K-BOT', rule: true, run: () => leaveApplication('/portal') },
+      ...entries.applications,
       { icon: '🏗️', label: 'VERCON', run: () => leaveApplication('/vercon') },
       { icon: '📒', label: 'Avacont · în curând', disabled: true },
+      ...entries.certificates,
       tooltipSettingsMenuEntry(),
     ], { label: 'Aplicații', below: $('ade-apps').closest('header') });
   });
@@ -1033,7 +1036,8 @@ async function loadContext(rebuildTrees = false) {
   closeReportPreviews();
   const context = await readContext(rebuildTrees);
   state.context = { ...context, months: [], groups: [], years: [] }; state.unit = context.unit;
-  state.monthTax ??= bindMonthTax({ api, host: $('ade-month-tax'), month: selectedMonth, report });
+  state.monthTax ??= bindMonthTax({ api, host: $('ade-month-tax'), state, month: selectedMonth,
+    loadSituation, selectChild, unsavedWork, report });
   state.monthTax.reset();
   state.subunit = context.subunit ? context.subunit.id : null;
   state.childSearch?.syncContext();

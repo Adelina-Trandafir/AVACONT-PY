@@ -1,16 +1,20 @@
 import { openMenu } from '../components/menu/menu.js';
 import { tooltipSettingsMenuEntry } from '../components/tooltip/tooltip-settings.js';
+import { applicationAccountEntries } from '../portal/application-access.js';
 
 let applicationMenu;
 
-function openApplications(anchor) {
+async function openApplications(anchor) {
   if (!applicationMenu || applicationMenu.signal?.aborted) return;
   const { context, navigate } = applicationMenu;
+  const entries = await applicationAccountEntries(navigate);
+  if (applicationMenu.signal?.aborted) return;
   openMenu(anchor, [
     { icon: '🏢', label: context() || 'Contul curent', disabled: true },
-    { icon: '🤖', label: 'K-BOT', rule: true, run: () => navigate('/portal') },
+    ...entries.applications,
     { icon: '📋', label: 'ADECHIT', run: () => navigate('/adechit') },
     { icon: '📒', label: 'Avacont · în curând', disabled: true },
+    ...entries.certificates,
     tooltipSettingsMenuEntry(),
   ], { label: 'Aplicații', below: anchor.closest('header') });
 }

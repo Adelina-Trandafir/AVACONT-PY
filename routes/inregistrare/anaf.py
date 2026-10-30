@@ -98,7 +98,7 @@ def is_valid_cf(cf) -> bool:
     return bool(cf) and MIN_CF_DIGITS <= len(cf) <= MAX_CF_DIGITS
 
 
-def lookup(cf, when=None, url=None, timeout=None, missing_is_404=False) -> dict:
+def lookup(cf, when=None, url=None, timeout=None, missing_is_404=False, strict_missing=False) -> dict:
     """
     Asks ANAF about one fiscal code and answers the fields the page shows.
 
@@ -108,7 +108,9 @@ def lookup(cf, when=None, url=None, timeout=None, missing_is_404=False) -> dict:
     Raises AnafNotFound when ANAF does not know the code, AnafIncomplete when it
     knows it but names nothing, and AnafUnavailable for every transport failure, for
     an `<html>` page and for a body that is not the JSON object v9 promises. With `missing_is_404` an HTTP 404 is read as
-    "ANAF does not know this code" (what v9 answers for some codes that do not exist) and is not logged as an error. Nothing
+    "ANAF does not know this code" (what v9 answers for some codes that do not exist) and is not logged as an error.
+    `strict_missing` requires the requested code in `notFound` before raising AnafNotFound;
+    it is used only by VERCON's restricted partner editor. Nothing
     is swallowed: each one keeps the original error chained to it and is logged here
     before it leaves.
     """
@@ -155,6 +157,15 @@ def lookup(cf, when=None, url=None, timeout=None, missing_is_404=False) -> dict:
 
     found = payload.get("found") or []
     if not found:
+        # Opt-in for VERCON's manual-CF permission: an empty/malformed response
+        # must not authorize a manual update. Existing callers retain their policy.
+        if strict_missing:
+            missing = payload.get("notFound")
+            if not isinstance(payload.get("found"), list) or not isinstance(missing, list) or cf not in {
+                str(item.get('cui') if isinstance(item, dict) else item).strip() for item in missing
+                if isinstance(item, (str, int, dict))
+            }:
+                raise AnafUnavailable("ANAF nu a confirmat explicit codul ca negasit")
         raise AnafNotFound(cf)
 
     fields = _fields(found[0])

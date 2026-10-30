@@ -102,25 +102,27 @@ def save_catalog(repo, table, body, previous_active=()):
                     repo.update(table, other, {'Activ': False})
     if table == 'ValoriTaxe':
         require(nz(merged.get('TaxaZilnica')) > 0, 'TAX', 'Valoarea taxei trebuie să fie mai mare decât zero.', 400)
-        # A tax change reaches a month only when that month is opened: a tax some month already uses keeps its value.
+        # A used rate keeps its value; another rate can be chosen for an open month.
         # (a tax with no value yet may always be filled in)
         if row and nz(row.get('TaxaZilnica')) and 'TaxaZilnica' in changes and Decimal(str(changes['TaxaZilnica'])) != Decimal(str(row['TaxaZilnica'])):
             used = sorted(((month['Anul'], month['Luna']) for month in repo.rows('LunaD') if month.get('IDV') == row['IDV']))
             require(not used, 'TAX_USED',
                     f'Taxa este folosită de {len(used)} {"lună" if len(used) == 1 else "luni"} '
                     f'(de la {MONTHS[used[0][1] - 1]} {used[0][0]}) și valoarea ei nu mai poate fi modificată. '
-                    'Adăugați o taxă nouă; ea se aplică de la luna următoare deschisă.', 409)
+                    'Adăugați o taxă nouă și selectați-o din Taxa zilnică a lunii deschise.', 409)
         require(bool((merged.get('Expl') or '').strip()), 'TAX', 'Explicația taxei este obligatorie.', 400)
         start = merged.get('DeLa')
-        require((not creating and not start) or isinstance(start, str) and re.fullmatch(r'[1-9][0-9]{3}-(0[1-9]|1[0-2])', start),
-                'TAX_PERIOD', 'Completați începutul taxei în format lună/an.', 400)
-        require(not merged.get('PanaLa') or not start or start <= merged['PanaLa'],
-                'TAX_PERIOD', 'Începutul taxei nu poate depăși sfârșitul.', 400)
+        # An existing checkbox can be changed independently of its historical period.
+        if creating or set(changes) != {'Activ'}:
+            require((not creating and not start) or isinstance(start, str) and re.fullmatch(r'[1-9][0-9]{3}-(0[1-9]|1[0-2])', start),
+                    'TAX_PERIOD', 'Completați începutul taxei în format lună/an.', 400)
+            require(not merged.get('PanaLa') or not start or start <= merged['PanaLa'],
+                    'TAX_PERIOD', 'Începutul taxei nu poate depăși sfârșitul.', 400)
         if creating or 'DeLa' in changes and start != row.get('DeLa'):
             require(start and start > max((item.get('DeLa') or '' for item in repo.rows(table)
                                           if item['IDV'] != body.get('id')), default=''),
                     'TAX_PERIOD', 'Taxa nouă trebuie să înceapă după taxele existente.', 400)
-        if creating or merged.get('Activ'):
+        if creating:
             previous_end = None
             if start:
                 year, month = map(int, start.split('-'))
@@ -128,7 +130,7 @@ def save_catalog(repo, table, body, previous_active=()):
             for other in repo.rows(table):
                 if other['IDV'] == body.get('id'):
                     continue
-                if other.get('Activ') or creating and (other['IDV'] in previous_active or other.get('DeLa') and not other.get('PanaLa')):
+                if other.get('Activ') or other['IDV'] in previous_active or other.get('DeLa') and not other.get('PanaLa'):
                     require(not start or not other.get('DeLa') or other['DeLa'] < start,
                             'TAX_PERIOD', 'Perioada taxei se suprapune cu taxa anterioară.', 400)
                     values = {'Activ': False}
@@ -137,6 +139,10 @@ def save_catalog(repo, table, body, previous_active=()):
                     repo.update(table, other, values)
             if merged.get('Activ'):
                 changes['PanaLa'] = None
+        if merged.get('Activ'):
+            for other in repo.rows(table):
+                if other['IDV'] != body.get('id') and other.get('Activ'):
+                    repo.update(table, other, {'Activ': False})
     return repo.insert(table, changes) if creating else repo.update(table, row, changes)
 
 
@@ -151,12 +157,20 @@ def save_catalog_batch(repo, body):
         require(isinstance(item.get('values'), dict), 'VALUES', 'Modificări invalide.', 400)
     require(sum(bool(item['values'].get('Activ')) for item in items if item['table'] == 'ValoriTaxe') <= 1,
             'TAX', 'Selectați o singură taxă activă.', 400)
+    # Review all tax versions before creating a new period can close/disable another reviewed row.
+    for item in items:
+        if item['table'] == 'ValoriTaxe' and item.get('id') is not None:
+            row = repo.get('ValoriTaxe', item['id'])
+            require(row['Version'] == item.get('version'), 'CONFLICT', 'Datele s-au modificat. Reîncărcați rândul.')
     # Activating a tax updates the old active row's version; process other edits first.
     items = sorted(items, key=lambda item: bool(item['values'].get('Activ')) if item['table'] == 'ValoriTaxe' else False)
     saved = []
     previous_active = [row['IDV'] for row in repo.rows('ValoriTaxe') if row.get('Activ')]
     for item in items:
-        saved.append(save_catalog(repo, item['table'], item, previous_active))
+        command = dict(item)
+        if item['table'] == 'ValoriTaxe' and item.get('id') is not None:
+            command['version'] = repo.get('ValoriTaxe', item['id'])['Version']
+        saved.append(save_catalog(repo, item['table'], command, previous_active))
         if item['table'] == 'ValoriTaxe' and item.get('id') is None:
             previous_active = []
     return {'rows': saved}

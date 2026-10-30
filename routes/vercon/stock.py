@@ -16,6 +16,20 @@ POSITIVE = ('entries', 'returns', 'transfers_in')
 NEGATIVE = ('issues', 'storno', 'transfers_out', 'scrapping')
 
 
+def warehouse_turnover(quantities):
+    """Accounting columns: storno reduces entries; returns reduce issues.
+
+    Physical movement buckets and their signs stay unchanged for stock validation.
+    Signed historical corrections keep their signs; never use abs() here.
+    """
+    with localcontext() as context:
+        context.prec = 60
+        incoming = quantities.get('entries', 0) + quantities.get('transfers_in', 0) - quantities.get('storno', 0)
+        outgoing = (quantities.get('issues', 0) + quantities.get('transfers_out', 0)
+                    + quantities.get('scrapping', 0) - quantities.get('returns', 0))
+        return {'incoming': incoming, 'outgoing': outgoing}
+
+
 def day_of(raw):
     if raw is None:
         raise NomError('STOCK_DATE_MISSING', 'O mișcare de stoc nu are dată. Corectați documentul sursă înainte de calcul.', 409)
@@ -151,11 +165,12 @@ def read(cursor, ctx, start, end, *, ledger='warehouse', product=None, variant=N
         return (*prefix, suppliers.name_key(info['name']), info['price'] or Decimal(0), suppliers.name_key(info['code']))
 
     rows = []
-    totals = {bucket: 0 for bucket in ('opening', *dict.fromkeys(BUCKETS.values()), 'closing')}
+    totals = {bucket: 0 for bucket in ('opening', *dict.fromkeys(BUCKETS.values()), 'closing', 'incoming', 'outgoing')}
     # Totals use direct decimal products, without per-variant display rounding.
     for key, quantities in sorted(grouped.items(), key=row_order):
         info = identity(key)
         price = selected[key[-1]]['price'] or 0
+        quantities = {**quantities, **warehouse_turnover(quantities)}
         rows.append({**info, 'quantities': {k: quantity_text(v, scale) for k, v in quantities.items()},
                      'values': {k: value_text(v, price, scale) for k, v in quantities.items()}})
         for bucket, quantity in quantities.items():

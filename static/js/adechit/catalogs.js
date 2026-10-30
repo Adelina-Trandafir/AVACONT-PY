@@ -36,14 +36,9 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
   let taxRows = [];
   let taxOriginals = new Map();
   let taxGrid = null;
+  let activationEdits = [];
   let validationPrompt = null;
   const error = (failure) => { console.error('[ADE catalog]', failure); showMessage(message, failure.message, 'error'); };
-  function closePrevious(row) {
-    for (const other of taxRows) if (other.IDV !== row.IDV && (other.Activ || other._closedBy === row.IDV)) {
-      other.Activ = false; other.PanaLa = previousMonth(row.DeLa); other._closedBy = row.IDV;
-    }
-    if (row.Activ) row.PanaLa = null;
-  }
   // the month-closing window says which tax the next month will open with
   function paintActive() {
     const k_node = closing && document.getElementById('ade-close-month-active');
@@ -57,11 +52,22 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
     for (const row of taxRows) {
       const draft = drafts.get(`ValoriTaxe:${row.IDV}`);
       Object.assign(row, taxOriginals.get(row.IDV) || { PanaLa: null }, draft?.values || {});
-      delete row._closedBy;
     }
-    const active = taxRows.filter((row) => row.Activ).sort((a, b) => (a.DeLa || '').localeCompare(b.DeLa || ''));
-    for (const row of active) {
-      row.Activ = true; closePrevious(row);
+    // Checkbox choices follow the operator's actions, never the dates of the tax rows.
+    for (const edit of activationEdits) {
+      const selected = taxRows.find(row => row.IDV === edit.id);
+      if (!selected) continue;
+      if (edit.active) taxRows.forEach(row => { row.Activ = false; });
+      selected.Activ = edit.active;
+    }
+    // Only newly added periods close earlier open periods; reactivation preserves history.
+    const previousActive = new Set([...taxOriginals.values()].filter(row => row.Activ).map(row => row.IDV));
+    const added = taxRows.filter(row => row.IDV < 0).sort((a, b) => (a.DeLa || '').localeCompare(b.DeLa || ''));
+    for (const row of added) for (const other of taxRows) {
+      if (other.IDV === row.IDV || !row.DeLa || other.DeLa && other.DeLa >= row.DeLa) continue;
+      if (previousActive.has(other.IDV) || other.DeLa && !other.PanaLa) {
+        other.PanaLa = previousMonth(row.DeLa); previousActive.delete(other.IDV);
+      }
     }
     paintActive();
   }
@@ -71,6 +77,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
       taxRows.splice(taxRows.findIndex((item) => item.IDV === row.IDV), 1);
     }
     drafts.delete(`ValoriTaxe:${row.IDV}`);
+    activationEdits = activationEdits.filter(edit => edit.id !== row.IDV);
     rebuildTaxes(); taxGrid?.setRows(taxRows); request = null;
   }
   async function invalidTax(row, failure, key) {
@@ -129,6 +136,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
         const draft = drafts.get(token) || { table, id: row[key] < 0 ? null : row[key], version: row.Version, values: {} };
         draft.values[field] = value;
         drafts.set(token, draft);
+        if (field === 'Activ') activationEdits.push({ id: row.IDV, active: Boolean(value) });
         const updated = taxRows.find((item) => item.IDV === row.IDV);
         rebuildTaxes();
         return { ...updated };
@@ -154,7 +162,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
     if (catalogUi.dialog.open || closeUi.dialog.open || !context()) return;
     ({ dialog, content, message, save, saveLabel } = close ? closeUi : catalogUi);
     closing = close;
-    drafts = new Map(); grids = []; request = null; loaded = false;
+    drafts = new Map(); activationEdits = []; grids = []; request = null; loaded = false;
     save.disabled = true; content.replaceChildren();
     if (close) {
       document.getElementById('ade-close-month-title').textContent = close.title;
@@ -191,7 +199,7 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
           const row = { IDV: --sequence, TaxaZilnica: 0, Expl: '', Activ: true, DeLa: start, PanaLa: null };
           drafts.set(`ValoriTaxe:${row.IDV}`, { table: 'ValoriTaxe', id: null,
             values: { TaxaZilnica: 0, Expl: '', Activ: true, DeLa: start } });
-          rows.push(row); rebuildTaxes(); instance.setRows(rows);
+          rows.push(row); activationEdits.push({ id: row.IDV, active: true }); rebuildTaxes(); instance.setRows(rows);
           instance.beginNewRowEdit(row, 'TaxaZilnica', () => removeTax(row));   // opens the editor on the new row, scrolled into view
         }), host);
         paintActive();
@@ -221,7 +229,16 @@ export function bindCatalogs({ api, context, refresh, moveToSubunit }) {
       if (!await validateTaxes()) return;
       busy = true; save.disabled = true; content.inert = true;
       if (drafts.size) {
-        const items = [...drafts.entries()].map(([token, draft]) => {
+        const pending = new Map(drafts);
+        // Include automatic unchecks even if the operator finally leaves every checkbox clear.
+        for (const row of taxRows) {
+          const original = taxOriginals.get(row.IDV);
+          if (!original || Boolean(original.Activ) === Boolean(row.Activ)) continue;
+          const token = `ValoriTaxe:${row.IDV}`;
+          const draft = pending.get(token) || { table: 'ValoriTaxe', id: row.IDV, version: original.Version, values: {} };
+          pending.set(token, { ...draft, values: { ...draft.values, Activ: Boolean(row.Activ) } });
+        }
+        const items = [...pending.entries()].map(([token, draft]) => {
           const row = taxRows.find((item) => `ValoriTaxe:${item.IDV}` === token);
           return { ...draft, values: { ...draft.values, ...('Activ' in draft.values ? { Activ: row.Activ } : {}) } };
         });

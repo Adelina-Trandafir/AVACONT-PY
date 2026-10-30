@@ -1,0 +1,10 @@
+/* SLICE-WB02-01: dedicated entry point, reusing the portal's certificate appearance. */
+@import url("portal-layout.css");
+@import url("portal-theme.css");
+@import url("portal-certificate.css");
+
+.certificate-admin .portal__main { min-height: 100dvh; overflow: auto; }
+.certificate-admin .portal__card { height: auto; max-height: none; }
+.certificate-admin .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.certificate-admin .portal__dlg { max-height: calc(100dvh - 32px); overflow: auto; }
+.certificate-admin .portal__certs li { flex-wrap: wrap; }

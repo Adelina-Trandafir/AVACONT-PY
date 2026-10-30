@@ -130,7 +130,8 @@ def register(bp, guard, scoped, session, build):
     @guard('read')
     def supplier_duplicates():
         scoped('read')
-        can_merge = 'receptie' in g.vercon_operations
+        from .partners import is_administrator
+        can_merge = 'receptie' in g.vercon_operations and not is_administrator(g.portal)
         if not can_merge:
             return {'can_merge': False, 'groups': []}
         with session(False) as cursor:
@@ -139,6 +140,9 @@ def register(bp, guard, scoped, session, build):
     @bp.post('/api/vercon/suppliers/merge')
     @guard('receptie')
     def supplier_merge():
+        from .partners import is_administrator
+        if is_administrator(g.portal):
+            raise NomError('FORBIDDEN', 'Administratorul poate actualiza partenerii numai prin ANAF sau cod fiscal negăsit în ANAF.', 403)
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             raise NomError('INVALID', 'Cerere invalidă.', 400)

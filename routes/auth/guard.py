@@ -131,6 +131,15 @@ def _resolve(fn, args, kwargs, allow_restricted=False, touch=True):
 
     g.session = sess
     g.session_token = token
+
+    # Slice 0124-03 (operator, 30.10.2026, CRITICAL): a Secretar / Administrator sees no DDF but the ones addressed to them;
+    # everything else works as before. Imported here, not at the top: routes.forexe imports this module.
+    from routes.forexe.ddf_flux_core import refuza_restrans, rol_sesiune
+    refuzat = refuza_restrans(request.path, request.method)
+    if refuzat is not None:
+        logger.warning("AUTH_403 restricted role=%s user=%s path=%s %s",
+                       rol_sesiune(), sess.username, request.method, request.path)
+        return refuzat
     return fn(*args, **kwargs)
 
 

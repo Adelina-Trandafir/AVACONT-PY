@@ -14,6 +14,7 @@ import logging
 import mysql.connector
 
 from utils.database import get_kbot_comun_connection
+from .policy import can_enter_kbot
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,8 @@ SECTION_KB = "KB"
 
 
 def sections_of(email, db_name):
-    """The sections the user may enter in this unit. KB: anybody with a row in Unitati_Utilizatori
-    for the unit; the other sections: the roles granted in Utilizatori_Roluri."""
+    """Web sections in this unit. KB requires Contabil or Director in Unitati_Utilizatori;
+    the other sections use the roles granted in Utilizatori_Roluri."""
     if not email or not db_name:
         return []
     granted = _safe_rows(
@@ -56,9 +57,9 @@ def sections_of(email, db_name):
         "JOIN Roluri r ON r.IdRol = ur.IdRol WHERE ur.UN = %s AND ur.DC = %s",
         (email, db_name),
     )
-    member = _safe_rows("SELECT 1 AS x FROM Unitati_Utilizatori WHERE UN = %s AND DC = %s", (email, db_name))
-    found = {r["Sectiune"] for r in granted}
-    if member:
+    member = _safe_rows("SELECT Rol FROM Unitati_Utilizatori WHERE UN = %s AND DC = %s", (email, db_name))
+    found = {r["Sectiune"] for r in granted if r["Sectiune"] != SECTION_KB}
+    if any(can_enter_kbot(row.get("Rol")) for row in member):
         found.add(SECTION_KB)
     return sorted(found)
 

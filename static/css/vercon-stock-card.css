@@ -1,0 +1,33 @@
+/* Opt-in links in VERCON reports; fields and annotations in other viewers remain inert. */
+/* PDF.js sizes the viewport as page content. The site's global border-box
+   shrinks the canvas by the page border while annotation dimensions stay full. */
+.vc-page .report-view-pdf--product-links .pdfViewer .page { box-sizing: content-box; }
+/* Use the canvas display area as the annotation viewport, including after zoom;
+   override the independent dimensions written inline by PDF.js. */
+.vc-page .report-view-pdf--product-links .pdfViewer .page > .annotationLayer { width: 100% !important; height: 100% !important; }
+.report-view-pdf--product-links .annotationLayer a[href*="/api/vercon/stock/balance?"] { pointer-events: auto; cursor: pointer; text-decoration: none; }
+.report-view-pdf--product-links .annotationLayer a[href*="/api/vercon/stock/balance?"]:focus-visible { outline: 2px solid var(--primary-color, #175da8); outline-offset: 2px; }
+.vc-page .report-view-pdf--product-links .annotationLayer .linkAnnotation:has(> a[href*="/api/vercon/stock/balance?"]):is(:hover, :focus-within) { outline: 2px solid #175da8; outline-offset: -1px; }
+.vc-page .report-view-pdf--product-links .annotationLayer .linkAnnotation > a[href*="/api/vercon/stock/balance?"]:hover { background: transparent !important; box-shadow: none !important; opacity: 1 !important; }
+.confirm-box.vc-stock-card {
+  width: min(840px,calc(94 * var(--application-vw, 1vw)));
+  max-width: calc(94 * var(--application-vw, 1vw));
+  height: calc(67.5 * var(--application-dvh, var(--application-vh, 1vh)));
+  max-height: calc(67.5 * var(--application-dvh, var(--application-vh, 1vh)));
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.vc-stock-card > header, .vc-stock-card > footer { flex: 0 0 auto; }
+.vc-stock-card > footer { justify-content: flex-end; }
+.vc-stock-card .vc-modal__body {
+  display: grid; grid-template-rows: auto auto minmax(120px,1fr); gap: 12px;
+  flex: 1 1 0; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto;
+}
+.vc-stock-card > header h2 { overflow-wrap: anywhere; }
+.vc-stock-card__facts, .vc-stock-card__summary { display: grid; grid-template-columns: auto minmax(0,1fr) auto minmax(0,1fr); gap: 6px 16px; margin: 0; }
+.vc-stock-card__facts dt, .vc-stock-card__summary dt { font-weight: 600; }
+.vc-stock-card__facts dd, .vc-stock-card__summary dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vc-stock-card__summary { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+.vc-stock-card .vc-stock-card__grid.vc-dgv { height: 100%; min-height: 120px; min-width: 0; }
+.vc-stock-card__grid .dgv__scroll { overflow-x: hidden; }
+.vc-stock-card__opening { font-weight: 700; }
+@media (max-width: 650px) { .vc-stock-card__facts, .vc-stock-card__summary { grid-template-columns: auto minmax(0,1fr); } }

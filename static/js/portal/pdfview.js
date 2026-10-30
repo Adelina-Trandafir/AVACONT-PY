@@ -33,7 +33,7 @@ async function loadLibs() {
   }
 }
 
-export function createPdfView(container, { onState, onRendered, initialScale = 'page-width' } = {}) {
+export function createPdfView(container, { onState, onRendered, initialScale = 'page-width', docBaseUrl } = {}) {
   container.classList.add('pdfview');
   const scroll = document.createElement('div');
   scroll.className = 'pdfview__scroll';
@@ -90,7 +90,8 @@ export function createPdfView(container, { onState, onRendered, initialScale = '
       let doc;
       try {
         // Copy: pdf.js takes ownership of (transfers) the buffer it is given.
-        doc = await l.pdfjsLib.getDocument({ data: new Uint8Array(data).slice(), enableXfa: true, isEvalSupported: false }).promise;
+        doc = await l.pdfjsLib.getDocument({ data: new Uint8Array(data).slice(), enableXfa: true, isEvalSupported: false,
+          ...(docBaseUrl ? { docBaseUrl } : {}) }).promise;
       } catch (err) {
         console.error('[pdfview] the document could not be read', err);
         throw new Error('Documentul nu a putut fi afișat. Îl puteți descărca și deschide în K-BOT.');

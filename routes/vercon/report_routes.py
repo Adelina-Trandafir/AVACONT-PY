@@ -5,6 +5,7 @@ from flask import Response, current_app, g, request
 from . import report_catalog, report_data, report_output, report_service, report_excel, report_period, report_selection, protocol, stock
 from .nomenclatoare import NomError
 from . import report_identity
+from . import report_balance
 from . import report_mf
 from .stock_routes import optional_id
 
@@ -220,10 +221,14 @@ def register(bp, guard, scoped, session, build):
             model = cache().get(owner(ctx), token)
             if model.get('letterhead_version') != report_identity.VERSION:
                 raise NomError('REPORT_EXPIRED', 'Generați din nou raportul pentru antetul actualizat.', 409)
-            report_catalog.spec_of(model['report_name'], ctx['type'])
+            spec = report_catalog.spec_of(model['report_name'], ctx['type'])
+            if (spec.get('ledger') != 'custody' and spec['kind'] in ('balance', 'product', 'accounts')
+                    and model.get('warehouse_balance_version') != report_balance.VERSION):
+                raise NomError('REPORT_EXPIRED', 'Generați din nou raportul pentru rulajele actualizate ale balanței.', 409)
             widths = report_excel.read_widths(cursor, model) if format_name == 'xlsx' else None
         try:
-            data = report_output.pdf(model) if format_name == 'pdf' else report_output.xlsx(model, widths)
+            preview = format_name == 'pdf' and request.args.get('preview') == '1'
+            data = report_output.pdf(model, preview=preview) if format_name == 'pdf' else report_output.xlsx(model, widths)
         except ImportError as error:
             raise NomError('REPORT_DEPENDENCY', 'Exportul necesită dependențele din requirements-reporting.txt pe server.', 503) from error
         mime = 'application/pdf' if format_name == 'pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

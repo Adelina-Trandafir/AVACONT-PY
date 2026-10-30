@@ -242,7 +242,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened, onAcc
     treeSeq += 1;
     if (!isAccountant(me.role)) closePage();
     tab = applyPortalAccess(me.role, tab);
-    if (onAccessChanged) onAccessChanged(me.role);
+    if (onAccessChanged && onAccessChanged(me.role) === false) return;
     if (onUnitOpened) onUnitOpened();
     cache.clear();
     await resetSelection();
@@ -984,7 +984,7 @@ export function createApp({ call, callBytes, onUnauthorized, onUnitOpened, onAcc
       ensureWidgets();
       closePage();
       tab = applyPortalAccess(me.role, tab);
-      if (onAccessChanged) onAccessChanged(me.role);
+      if (onAccessChanged && onAccessChanged(me.role) === false) return;
       say('');
       cache.clear();
       await resetSelection();

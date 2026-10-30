@@ -7,6 +7,8 @@ import { format as formatField } from './fields.js';
 import { reportPeriod } from './report-period.js';
 import { reportPeriodAction } from './report-period-action.js';
 import { generateReport } from './report-request.js';
+import { stockCardLinks } from './report-stock-card.js';
+import { reportPdfSource } from './report-pdf-source.js';
 
 export function mountReports(host, { api, sel }) {
   const owner = scope(), selectionOwner = scope();
@@ -175,14 +177,17 @@ export function mountReports(host, { api, sel }) {
         if (!await owner.commit() || !current() || view.closed) return null;
         let model = await generate(seq);
         if (!model || view.closed || !current()) return null;
-        let data;
+        const load = model => format === 'pdf' ? reportPdfSource(api, model, sel(), current)
+          : api(`/api/vercon/reports/export/${model.snapshot}/${format}?${new URLSearchParams(sel())}`, { responseType: 'arrayBuffer' })
+            .then(data => ({ data }));
+        let source;
         try {
-          data = await api(`/api/vercon/reports/export/${model.snapshot}/${format}?${new URLSearchParams(sel())}`, { responseType: 'arrayBuffer' });
+          source = await load(model);
         } catch (error) {
           if (error.reason !== 'REPORT_EXPIRED' || !current() || view.closed) throw error;
           state.model = null; model = await generate(seq);
           if (!model || view.closed || !current()) return null;
-          data = await api(`/api/vercon/reports/export/${model.snapshot}/${format}?${new URLSearchParams(sel())}`, { responseType: 'arrayBuffer' });
+          source = await load(model);
         }
         if (!current() || view.closed) return null;
         const snapshot = model.snapshot, filename = model.filename, selection = new URLSearchParams(sel()).toString();
@@ -192,7 +197,8 @@ export function mountReports(host, { api, sel }) {
           if (!current() || preview.closed || progress.closed) return null;
           return { data, filename: filename + '.xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
         };
-        return { data, title: model.title, filename: filename + '.' + format, exportExcel,
+        return { ...source, title: model.title, filename: filename + '.' + format, exportExcel,
+          onLink: stockCardLinks(api, model, current),
           toolbarActions: [reportPeriodAction({ api, name: state.name, params: query(), catalog: periodCatalog, dateOnly, isCurrent: current })],
           downloadOnly: format === 'xlsx', mime: format === 'xlsx'
             ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf' };

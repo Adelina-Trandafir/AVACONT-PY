@@ -12,6 +12,8 @@ _OM = frozenset({OI, MF})
 # operation -> (role code, label, gestiune types it is valid for, writes data)
 OPERATIONS = {
     "read":          ("VR_CITIRE",        "citire",                         ALL, False),
+    # SLICE-VC06-26: limited ANAF permission available to everyone with VR read, without new role grants.
+    "parteneri_anaf": (None,               "parteneri: ANAF / cod fiscal negăsit", ALL, True),
     "nomenclatoare": ("VR_NOMENCLATOARE", "nomenclatoare (produse, categorii, gestionari)", ALL, True),
     "receptie":      ("VR_RECEPTIE",      "receptie (NIR)",                 ALL, True),
     "storno":        ("VR_STORNO",        "storno intrari",                 ALL, True),

@@ -2,6 +2,8 @@
 from decimal import Decimal
 from unicodedata import normalize
 
+VERSION = 2
+
 
 def alphabetical(value):
     # Romanian letters follow their base letter; support legacy cedilla spelling.
@@ -13,7 +15,7 @@ def alphabetical(value):
 
 def prepare(rows, params):
     if not params.get('show_without_movements', False):
-        # Compare exact quantities, including negative and sub-display precision stock.
+        # Compare net turnover and balances; fully offset documents do not keep an empty row.
         rows = [row for row in rows if any(
             Decimal(str(row[key])) != 0 for key in ('opening', 'incoming', 'outgoing', 'closing'))]
     return sorted(rows, key=lambda row: (

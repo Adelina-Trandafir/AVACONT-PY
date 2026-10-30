@@ -41,6 +41,11 @@ def pdf(model):
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import Paragraph, Table, TableStyle
     from .report_output import tokens
+    from reporting import pdf_row_links
+
+    row_links = bool(model.get('stock_card'))
+    if row_links:
+        Table = pdf_row_links.table_type(Table)
 
     with FONT_LOCK:
         for name, filename in FONTS.items():
@@ -65,11 +70,15 @@ def pdf(model):
               'PERIOADA': model['period_text'], 'RAPORT': model['title'],
               'ANTET': identity['header'], 'SUBSOL': identity['footer'], 'SUBUNITATE': identity.get('subunit_name', '')}
 
-    def paragraph(value='', align=TA_LEFT, point=None, font='NirMono'):
+    def paragraph(value='', align=TA_LEFT, point=None, font='NirMono', href=None):
         point = point or size
-        return Paragraph(escape(str(value if value is not None else '')).replace('\n', '<br/>'),
-                         ParagraphStyle('nir', fontName=font, fontSize=point,
-                                        leading=point * 1.12, alignment=align, spaceAfter=0))
+        text = escape(str(value if value is not None else '')).replace('\n', '<br/>')
+        if href:
+            text = ('<font color="#175da8">' + text + '</font>' if row_links else
+                    '<link href="' + escape(href, quote=True) + '" color="#175da8">' + text + '</link>')
+        result = Paragraph(text, ParagraphStyle('nir', fontName=font, fontSize=point,
+                                               leading=point * 1.12, alignment=align, spaceAfter=0))
+        return pdf_row_links.mark(result, href) if row_links else result
 
     def table(data, proportions, commands=(), minima=None, repeat=0, inset=0):
         total = sum(proportions)
@@ -146,7 +155,7 @@ def pdf(model):
                 ['', '', '', '', '', *[paragraph(label, TA_CENTER) for label in ('Cantitate', 'Preț unitar', 'Valoare')]]]
         for index, row in enumerate(document['lines'], 1):
             rows.append([paragraph(index, TA_CENTER), paragraph(row.get('code') or row.get('variant'), TA_CENTER),
-                         paragraph(row.get('name'), TA_CENTER), paragraph(row.get('um'), TA_CENTER),
+                         paragraph(row.get('name'), TA_CENTER, href=row.get('stock_card_href')), paragraph(row.get('um'), TA_CENTER),
                          paragraph(document_quantity(row.get('quantity')), TA_RIGHT),
                          paragraph(report_model.number(row.get('quantity'), zec), TA_RIGHT),
                          paragraph(report_model.number(row.get('price'), zec), TA_RIGHT),

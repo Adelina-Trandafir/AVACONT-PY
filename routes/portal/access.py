@@ -6,10 +6,11 @@ import mysql.connector
 from flask import g
 
 from .portal import _fail, _user_units, require_portal_session
+from .policy import can_enter_kbot
 
 logger = logging.getLogger(__name__)
 
-DOCUMENT_ROLES = frozenset({"administrator", "director", "secretar"})
+DOCUMENT_ROLES = frozenset({"director"})
 DOCUMENT_READERS = frozenset({"tree", "ddf", "ord", "ddf-pdf", "ord-pdf"})
 TREE_FIELDS = ("CodAngajament", "Descriere", "Stare", "DataAngajamentNou", "Surse")
 
@@ -36,6 +37,8 @@ def require_portal_data(reader):
                 return _fail("DB_ERROR", "Drepturile contului nu au putut fi citite.", 500)
             unit = next((u for u in units if u["DC"] == g.portal["db_name"]), None)
             role = str((unit or {}).get("Rol") or "").strip().casefold()
+            if not can_enter_kbot(role):
+                return _fail("ROL_INTERZIS", "K-BOT este disponibil doar pentru rolurile Contabil și Director.", 403)
             if not is_accountant(role) and not (
                     role in DOCUMENT_ROLES and reader in DOCUMENT_READERS):
                 return _fail("ROL_INTERZIS", "Nu aveți dreptul de a consulta aceste informații.", 403)

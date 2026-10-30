@@ -1,9 +1,10 @@
 // Matches routes/portal/access.py; the server enforces these rules independently.
-const documentRoles = new Set(['administrator', 'director', 'secretar']);
+const documentRoles = new Set(['director']);
 const documentTabs = new Set(['fundamentari', 'ordonantari']);
 const normalizeRole = (role) => String(role || '').trim().toLowerCase();
 
 export const isAccountant = (role) => normalizeRole(role) === 'contabil';
+export const canEnterKbot = (role) => ['contabil', 'director'].includes(normalizeRole(role));
 export const canOpenTab = (role, tab) => isAccountant(role)
   || (documentRoles.has(normalizeRole(role)) && documentTabs.has(tab));
 

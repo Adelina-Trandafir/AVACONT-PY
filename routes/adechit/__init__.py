@@ -294,6 +294,12 @@ def create_blueprint(authenticate=None, repository_factory=None, rights=None):
     def prepare_attendance(repo):
         return command(repo, 'attendance/prepare', lambda body: service.prepare_attendance(repo, body))
 
+    @bp.post('/api/adechit/month-tax')
+    @guard('catalog')
+    def change_month_tax(repo):
+        from .month_tax import change
+        return command(repo, 'month-tax', lambda body: change(repo, body))
+
     @bp.get('/api/adechit/situation/<int:month_id>')
     @guard('read')
     def situation(repo, month_id):

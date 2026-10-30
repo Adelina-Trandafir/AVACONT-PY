@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="portal-cert-origin" content="__CERT_ORIGIN__">
+  <title>Înrolează Certificat Digital · K-BOT</title>
+  <link rel="icon" type="image/png" href="/static/site/img/art/logo-64.png">
+  <script src="/static/js/portal/theme-init.js"></script>
+  <link rel="stylesheet" href="/static/css/typography.css">
+  <link rel="stylesheet" href="/static/site/site.css">
+  <link rel="stylesheet" href="/static/site/detalii.css">
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/certificat-administrator.css">
+  <script type="module" src="/static/js/portal/certificat-administrator.js"></script>
+</head>
+<body class="portal certificate-admin">
+  <main class="portal__main">
+    <section class="card portal__card">
+      <h1>Înrolează Certificat Digital</h1>
+      <p id="certificate-account" class="lead">Se verifică accesul...</p>
+      <p>Conectează tokenul sau cardul și selectează certificatul în browser. Certificatul se înrolează pe contul tău K-BOT și poate fi folosit pentru autentificare.</p>
+      <p>Înrolarea unui certificat nou dezactivează certificatul anterior al contului.</p>
+      <p id="msg-page" class="msg" role="alert" hidden></p>
+      <div class="actions">
+        <a id="certificate-back" class="btn btn--ghost" href="/portal">Înapoi în aplicație</a>
+        <button id="btn-cert" class="btn btn--primary" type="button" hidden>Verifică certificatul</button>
+      </div>
+    </section>
+  </main>
+  <dialog class="card portal__dlg" id="dlg-cert" aria-labelledby="dlg-cert-title">
+    <h2 id="dlg-cert-title">Certificat digital</h2>
+    <p class="lead" id="cert-state">Se verifică...</p>
+    <p class="msg" id="msg-cert" role="alert" hidden></p>
+    <ul class="portal__certs" id="cert-list"></ul>
+    <div class="actions">
+      <button class="btn btn--ghost" type="button" id="btn-cert-close">Închide</button>
+      <button class="btn btn--primary" type="button" id="btn-cert-enrol" hidden>Înrolează certificatul acesta</button>
+    </div>
+  </dialog>
+</body>
+</html>

@@ -365,12 +365,13 @@ def final_state(objects):
 
 
 def _pairs(query, conn, sql, db, tables):
-    """{(table, name)} in lower case from a query that returns columns t and n; empty when no tables."""
+    """{(table, name)} in lower case from a query that returns columns t and n, kept for the tables given (lower
+    case); empty when no tables. The query filters on the schema only: a filter on TABLE_NAME is case sensitive on
+    a server with lower_case_table_names=0 (a lower-cased name finds nothing), so the names are compared here."""
     if not tables:
         return set()
-    marks = ",".join(["%s"] * len(tables))
-    rows = query(conn, sql.replace("{marks}", marks), [db] + sorted(tables))
-    return {(r["t"].lower(), r["n"].lower()) for r in rows}
+    rows = query(conn, sql, [db])
+    return {(r["t"].lower(), r["n"].lower()) for r in rows if r["t"].lower() in tables}
 
 
 def verify(query, conn, db, objects):
@@ -381,13 +382,13 @@ def verify(query, conn, db, objects):
     present = {k[1] for k in state if k[1] in existing}
     columns = _pairs(query, conn,
                      "SELECT TABLE_NAME AS t, COLUMN_NAME AS n FROM information_schema.COLUMNS "
-                     "WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN ({marks})", db, present)
+                     "WHERE TABLE_SCHEMA = %s", db, present)
     indexes = _pairs(query, conn,
                      "SELECT DISTINCT TABLE_NAME AS t, INDEX_NAME AS n FROM information_schema.STATISTICS "
-                     "WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN ({marks})", db, present)
+                     "WHERE TABLE_SCHEMA = %s", db, present)
     keys = _pairs(query, conn,
                   "SELECT TABLE_NAME AS t, CONSTRAINT_NAME AS n FROM information_schema.TABLE_CONSTRAINTS "
-                  "WHERE CONSTRAINT_SCHEMA = %s AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND TABLE_NAME IN ({marks})",
+                  "WHERE CONSTRAINT_SCHEMA = %s AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
                   db, present)
     checks = []
     for (kind, table, name), item in state.items():

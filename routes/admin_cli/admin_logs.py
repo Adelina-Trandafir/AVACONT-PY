@@ -18,7 +18,7 @@ import re
 from datetime import datetime, timedelta
 from utils.clock import parse_access_time, utc_from_timestamp, utc_now
 
-MAX_DETAIL = 4000
+MAX_DETAIL = 60000   # safety cap only: an asociere.log block (tables of every reception/snapshot) runs to ~10-20 KB
 ACCESS_TAIL_BYTES = 6 * 1024 * 1024   # the access log is huge: only its end is read
 
 _RX_LINE = re.compile(

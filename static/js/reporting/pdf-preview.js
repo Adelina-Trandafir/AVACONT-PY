@@ -14,14 +14,14 @@ export function downloadFile(data, type, filename) {
 }
 
 // A lazy source runs only after the dialog is visible and the shared gate is acquired.
-// It returns bytes or { data, title, filename, exportExcel, downloadOnly, mime }.
+// It returns bytes or { data, title, filename, exportPdf, exportExcel, downloadOnly, mime }.
 export async function openPdfReport(title, source, owner, details = {}) {
   const task = beginReport(title, owner, details);
   if (!task) return null;
   const view = task.view;
   const current = () => !view.closed && (details.isCurrent?.() ?? true);
-  let data, filename, canDownloadPdf = false;
-  const downloadPdf = () => downloadFile(data, 'application/pdf', filename);
+  let data, filename, downloadPdf, canDownloadPdf = false;
+  const status = el('span', { role: 'status', className: 'report-view-status' });
   try {
     await task.paint();
     if (!current()) { view.close(); return view; }
@@ -30,6 +30,16 @@ export async function openPdfReport(title, source, owner, details = {}) {
     const output = result instanceof ArrayBuffer || ArrayBuffer.isView(result) ? { data: result } : result;
     data = output.data;
     const options = { ...details, ...output };
+    const exportData = () => typeof options.exportPdf === 'function' ? options.exportPdf(view) : data;
+    downloadPdf = async () => {
+      const source = data, name = filename;
+      try {
+        const bytes = await exportData();
+        if (bytes && current() && data === source) downloadFile(bytes, 'application/pdf', name);
+      } catch (error) {
+        if (current()) showMessage(status, error.message || 'PDF-ul nu a putut fi descărcat.', 'error');
+      }
+    };
     filename = options.filename || title.replace(/[<>:"/\\|?*]/g, '_') + '.pdf';
     if (options.title) view.setTitle(options.title, options);
     if (options.downloadOnly) {
@@ -39,12 +49,27 @@ export async function openPdfReport(title, source, owner, details = {}) {
     canDownloadPdf = true;
     task.message('Se afișează raportul…');
     const toolbar = el('nav', { className: 'report-view-toolbar', 'aria-label': 'Acțiuni raport' });
-    const status = el('span', { role: 'status', className: 'report-view-status' });
     const host = el('div', { className: 'report-view-pdf' });
+    const configureLinks = () => {
+      const linked = typeof options.onLink === 'function';
+      host.classList.toggle('report-view-pdf--product-links', linked);
+      if (linked) host.setAttribute('data-kbot-tooltip', 'off');
+      else host.removeAttribute('data-kbot-tooltip');
+    };
+    configureLinks();
+    const onLink = event => {
+      const anchor = event.target.closest?.('a[href]');
+      if (!anchor || !host.contains(anchor) || !current() || typeof options.onLink !== 'function') return;
+      if (options.onLink(anchor.href, view) === true) {
+        event.preventDefault(); event.stopImmediatePropagation();
+      }
+    };
+    host.addEventListener('click', onLink, { capture: true });
+    host.addEventListener('auxclick', onLink, { capture: true });
     const pageLabel = el('span', { className: 'report-view-page', textContent: 'Pagina —' });
     const zoomLabel = el('span', { className: 'report-view-zoom', textContent: '— %' });
-    let blobUrl = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-    view.scope.own(() => URL.revokeObjectURL(blobUrl));
+    let blobUrl = null;
+    view.scope.own(() => { if (blobUrl) URL.revokeObjectURL(blobUrl); });
     let currentPage = 1, printing = false, rendered = false;
     const controls = [];
     const button = (icon, run, accessible, tooltip) => {
@@ -55,7 +80,8 @@ export async function openPdfReport(title, source, owner, details = {}) {
     let resolveRendered;
     const firstPage = new Promise(resolve => { resolveRendered = resolve; });
     view.scope.own(() => resolveRendered(false));
-    const pdf = createPdfView(host, { initialScale: 'page-actual', onState: state => {
+    const pdf = createPdfView(host, { initialScale: 'page-actual',
+      docBaseUrl: options.resolveRelativeLinks || typeof options.onLink === 'function' ? window.location.href : undefined, onState: state => {
       if (!current()) return;
       currentPage = state.page; pageLabel.textContent = `Pagina ${state.page} / ${state.pages}`;
       zoomLabel.textContent = `${Math.round(state.scale * 100)} %`;
@@ -71,6 +97,7 @@ export async function openPdfReport(title, source, owner, details = {}) {
     view.replaceReport = async replacement => {
       if (!current() || replacing) return false;
       replacing = true;
+      host.inert = true;
       controls.forEach(node => { node.disabled = true; });
       closeExportMenu?.();
       view.dialog.setAttribute('aria-busy', 'true');
@@ -81,10 +108,11 @@ export async function openPdfReport(title, source, owner, details = {}) {
         const page = await nextPage;
         if (page?.error) throw page.error;
         if (!page?.ready || !current()) return false;
-        const nextUrl = URL.createObjectURL(new Blob([replacement.data], { type: 'application/pdf' }));
-        URL.revokeObjectURL(blobUrl); blobUrl = nextUrl;
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        blobUrl = null;
         data = replacement.data;
         Object.assign(options, replacement);
+        configureLinks();
         filename = options.filename || filename;
         view.setTitle(options.title || title, options);
         showMessage(status, '', 'info');
@@ -97,22 +125,32 @@ export async function openPdfReport(title, source, owner, details = {}) {
         throw error;
       } finally {
         replacing = false;
+        host.inert = false;
         if (current()) {
           controls.forEach(node => { node.disabled = false; });
           view.dialog.setAttribute('aria-busy', 'false');
         }
       }
     };
-    function print() {
+    async function print() {
       if (printing) return;
       printing = true;
-      const frame = el('iframe', { className: 'report-print-frame', title: 'Tipărire raport' });
-      frame.addEventListener('load', () => {
-        try { frame.contentWindow.focus(); frame.contentWindow.print(); }
-        catch (error) { console.error('[report-preview] printing failed', error); showMessage(status, 'Deschideți PDF-ul descărcat pentru tipărire.', 'error'); }
-        finally { printing = false; }
-      }, { once: true });
-      view.scope.own(() => frame.remove()); frame.src = blobUrl; document.body.append(frame);
+      const source = data;
+      try {
+        const bytes = await exportData();
+        if (!bytes || !current() || data !== source) { printing = false; return; }
+        if (!blobUrl) blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        const frame = el('iframe', { className: 'report-print-frame', title: 'Tipărire raport' });
+        frame.addEventListener('load', () => {
+          try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+          catch (error) { console.error('[report-preview] printing failed', error); showMessage(status, 'Deschideți PDF-ul descărcat pentru tipărire.', 'error'); }
+          finally { printing = false; }
+        }, { once: true });
+        view.scope.own(() => frame.remove()); frame.src = blobUrl; document.body.append(frame);
+      } catch (error) {
+        printing = false;
+        if (current()) showMessage(status, error.message || 'PDF-ul nu a putut fi pregătit pentru tipărire.', 'error');
+      }
     }
     let closeExportMenu = null;
     view.scope.own(() => closeExportMenu?.());

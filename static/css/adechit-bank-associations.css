@@ -18,9 +18,13 @@
 .ade-bank-extracts { display: flex; flex-direction: column; min-height: 0; flex: 1; border: 1px solid var(--line); }
 .ade-bank-extracts > .btn { align-self: flex-start; margin: 4px 8px; }
 .ade-bank-columns { display: grid; grid-template-columns: 220px 330px minmax(240px, 1fr) 260px; gap: 12px; min-height: 0; }
-.ade-bank-association { display: flex; flex-direction: column; align-self: start; gap: 12px; min-width: 0; width: 260px; }
+.ade-bank-association { display: flex; flex-direction: column; align-self: start; gap: 12px; min-width: 0; width: 260px; max-height: 100%; overflow: auto; }
 .ade-bank-association select, .ade-bank-association textarea { width: 100%; }
 .ade-bank-association textarea { resize: vertical; min-height: 84px; max-height: 180px; }
+.ade-bank-distribution { display: flex; flex-direction: column; gap: 6px; }
+.ade-bank-distribution ul { list-style: none; margin: 0; padding: 0; }
+.ade-bank-distribution li { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.ade-bank-distribution p { margin: 0; }
 .ade-bank-hidden { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 8px; border-top: 1px solid var(--line); }
 .ade-bank-hidden input { accent-color: var(--blue); }
 .ade-bank-window footer { box-sizing: border-box; min-height: 38px; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; padding: 4px 12px; }

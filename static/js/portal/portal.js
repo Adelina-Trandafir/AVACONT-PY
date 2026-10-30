@@ -7,11 +7,11 @@
 import sessionMonitoring from '../session/session-monitoring.js';
 import { createApp } from './app.js';
 import { createMenu } from './menu.js';
-import { isAccountant } from './access.js';
+import { isAccountant, canEnterKbot } from './access.js';
+import { createApplicationChoice } from './application-choice.js';
 import { installLayouts } from './layouts.js';
 import { createCertificate } from './certificat.js';
 import eventBus, { EVENTS } from '../event-bus/event-bus.js';
-import { Combobox } from '../components/combobox/combobox.js';
 import { showMessage } from './messages.js';
 import '../components/tooltip/tooltip-titles.js';
 
@@ -26,7 +26,7 @@ const nextPage = (() => {
   const wanted = new URLSearchParams(window.location.search).get('next') || '';
   return NEXT_PAGES.includes(wanted) ? wanted : '';
 })();
-// The application chosen on the sign-in card: K-BOT stays here, ADECHIT goes straight to its page (the portal never shows).
+// Explicit application destinations share the sign-in; otherwise choose after authentication.
 let chosenApp = nextPage === '/adechit' ? 'adechit' : nextPage === '/vercon' ? 'vercon' : 'kbot';
 const chosenPage = () => (chosenApp === 'adechit' ? '/adechit' : chosenApp === 'vercon' ? '/vercon' : '');
 function goNext() {
@@ -109,10 +109,10 @@ function say(id, text, level = 'error') {
 }
 
 function show(which) {
-  ['card-login', 'card-code', 'card-app'].forEach((id) => {
+  ['card-login', 'card-code', 'card-choice', 'card-app'].forEach((id) => {
     $(id).hidden = id !== which;
   });
-  $('user-info').hidden = which !== 'card-app';
+  $('user-info').hidden = !['card-choice', 'card-app'].includes(which);
   $('pmenu-nav').hidden = which !== 'card-app';
 }
 
@@ -166,17 +166,6 @@ $('form-login').addEventListener('submit', async (ev) => {
   $('p-cod').focus();
 });
 
-// ---- the application to open after signing in (only K-BOT and ADECHIT are live)
-const appCombo = new Combobox($('p-app-combo'), {
-  readonly: true, placeholder: 'Aplicația', allowHtml: true,
-  // the blue letter badge comes from CSS (data-letter), so the text shown in the field stays plain
-  staticData: [['kbot', 'K', 'K-BOT'], ['adechit', 'A', 'ADECHIT'], ['vercon', 'V', 'VERCON'], ['avacont', 'C', 'Avacont · în curând']]
-    .map(([value, letter, name]) => ({ value, label: `<span class="p-app" data-letter="${letter}">${name}</span>`, disabled: value === 'avacont' })),
-  onSelect: (value) => { chosenApp = value; },
-});
-appCombo.input.id = 'p-app-combo-input';
-appCombo.setValue(chosenApp, chosenApp === 'adechit' ? 'ADECHIT' : chosenApp === 'vercon' ? 'VERCON' : 'K-BOT');
-
 // ---- step 2: the code
 $('btn-code-back').addEventListener('click', () => {
   pending = '';
@@ -215,12 +204,42 @@ installLayouts(); // the grids ask layouts.js for their column order, visibility
 const app = createApp({
   call,
   callBytes,
-  onAccessChanged: (role) => menu.setVisible(isAccountant(role)),
+  onAccessChanged: (role) => {
+    menu.setVisible(isAccountant(role));
+    if (canEnterKbot(role)) return true;
+    show('card-choice');
+    void openApp();
+    return false;
+  },
   onUnitOpened: goNext,
   onUnauthorized: (message) => {
     writeToken('');
     say('msg-login', message || 'Sesiunea a expirat. Autentificați-vă din nou.');
     show('card-login');
+  },
+});
+
+const choice = createApplicationChoice({
+  call, say,
+  onUnauthorized: (message) => {
+    writeToken('');
+    show('card-login');
+    say('msg-login', message);
+  },
+  onOpen: async (current, application) => {
+    chosenApp = application;
+    if (chosenPage()) { goNext(); return; }
+    if (!current.db_name || !canEnterKbot(current.role)) return;
+    const entry = await call('GET', '/api/portal/kbot');
+    if (!entry.ok) {
+      await openApp();
+      say('msg-choice', entry.data.error || 'K-BOT nu poate fi deschis.');
+      return;
+    }
+    // The server returns only units in which this user may enter K-BOT.
+    me = entry.data;
+    show('card-app');
+    await app.open(me);
   },
 });
 
@@ -236,10 +255,12 @@ async function openApp() {
   // straight to the chosen page, the portal is never painted; ADECHIT asks for the unit itself when none is open yet
   if (chosenPage() && (me.db_name || chosenApp === 'adechit')) { goNext(); return; }
   $('user-email').textContent = me.email;
-  show('card-app');
+  choice.update(me, chosenApp);
+  show('card-choice');
+  if (chosenApp === 'kbot' && me.db_name && !canEnterKbot(me.role)) {
+    say('msg-choice', 'K-BOT este disponibil doar pentru rolurile Contabil și Director.');
+  }
   startMonitor();
-  await app.open(me);
-  if (me.db_name) goNext(); // a unit is already open (the only one, or from earlier): straight back
 }
 
 // ---- light / dark look (the saved choice is applied early by a script in portal.html)

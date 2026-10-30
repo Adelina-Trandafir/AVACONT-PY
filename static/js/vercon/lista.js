@@ -41,8 +41,8 @@ export function mountLista(host, opts) {
   const write = (method, path, body) => opts.api('/api/vercon/doc/lista' + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...opts.sel(), ...body }) });
   const editing = () => state.mode !== 'view';
   const fullEdit = () => editing() && state.mode !== 'portions';
-  const canModify = doc => !!doc && !doc.annulled && (!doc.order_locked || doc.portions_editable);
-  const editLabel = doc => doc?.order_locked && doc.portions_editable ? 'Modifică numărul copiilor' : 'Modifică';
+  const canModify = doc => !!doc && !doc.annulled && (!doc.order_locked || doc.portions_editable || doc.date_editable);
+  const editLabel = doc => doc?.order_locked ? doc.portions_editable ? 'Modifică data / numărul copiilor' : 'Modifică data' : 'Modifică';
   const dirty = () => state.dirty || headUi.dirty() || mealUi.dirty();
   const blankMeal = () => ({ P: '', VMD: '', D: '', items: [] });
   const fromDoc = (doc) => ({ header: { Numar: doc.number, Data: doc.header.Data, Comentarii: doc.header.Comentarii || '' },
@@ -66,20 +66,24 @@ export function mountLista(host, opts) {
     if (!canModify(state.doc)) { say(state.doc.portions_message || state.doc.order_message, true); return; }
     ++generation; state.mode = state.doc.order_locked ? 'portions' : 'edit';
     state.draft = fromDoc(state.doc); state.dirty = false; state.request = null;
-    say(state.mode === 'portions' ? 'Modificați numai numărul copiilor / porțiilor. La salvare se recalculează depășirile și economiile.' : ''); paint();
+    say(state.mode === 'portions' ? 'Puteți modifica data între listele vecine, păstrând ordinea listelor.' + (state.doc.portions_editable ? ' Puteți modifica și numărul copiilor / porțiilor.' : '') : ''); paint();
   }
   async function discard() { if (!await allowDiscard()) return; ++generation; state.mode = 'view'; state.draft = null; state.dirty = false; state.request = null; say(); paint(); }
   function paint() {
-    const v = value(); title.textContent = editing() ? 'Listă de alimente • ' + (state.mode === 'add' ? 'listă nouă' : state.mode === 'portions' ? 'modificare număr copii' : 'modificare') : state.doc ? 'Listă de alimente • nr. ' + state.doc.number : 'Liste de alimente';
+    const v = value(); title.textContent = editing() ? 'Listă de alimente • ' + (state.mode === 'add' ? 'listă nouă' : state.mode === 'portions' ? 'modificare dată / număr copii' : 'modificare') : state.doc ? 'Listă de alimente • nr. ' + state.doc.number : 'Liste de alimente';
     pill.textContent = editing() ? 'Ciornă' : state.doc ? state.doc.annulled ? 'Anulată' : 'Salvată' : ''; pill.hidden = !pill.textContent;
     pill.dataset.state = editing() ? 'draft' : state.doc?.annulled ? 'annulled' : 'saved';
     headUi.clear(); inputs.clear(); head.replaceChildren(); totalsWrap.replaceChildren(); totalsWrap.hidden = !v; openingBalance = null;
     if (v) for (const spec of [{ key: 'Numar', label: 'Număr listă', type: 'int', min: 1 }, { key: 'Data', label: 'Data', type: 'date', required: true }, { key: 'Comentarii', label: 'Comentarii', type: 'text' }]) {
-      const f = field(spec, v.header[spec.key], fullEdit(), (raw) => {
+      const f = field(spec, v.header[spec.key], fullEdit() || state.mode === 'portions' && spec.key === 'Data' && state.doc?.date_editable, (raw) => {
         state.draft.header[spec.key] = raw; state.dirty = true;
         if (spec.key === 'Data') void refreshPriorTotals();
       }, headUi);
       if (spec.key === 'Numar') { f.input.placeholder = 'Automat'; f.input.title = 'Lăsați gol pentru numerotare automată.'; }
+      if (spec.key === 'Data' && state.mode === 'portions') {
+        f.input._picker.field.title = 'Data permisă: ' + (state.doc.date_minimum ? dateText(state.doc.date_minimum) : 'începutul anului')
+          + ' – ' + (state.doc.date_maximum ? dateText(state.doc.date_maximum) : 'sfârșitul anului') + ', păstrând ordinea listelor.';
+      }
       inputs.set(spec.key, f); head.append(f.node);
     } else head.append(el('p', { className: 'vc-nom__empty', textContent: 'Alegeți o listă salvată sau adăugați una nouă.' }));
     if (v) {
@@ -254,7 +258,7 @@ export function mountLista(host, opts) {
       label: month ? MONTHS[Number(month.slice(5)) - 1] + '/' + month.slice(0, 4) : 'Fără dată',
       sortType: 'date', sortValue: month ? `${month}-01` : null, sortDirection: 'desc',
       children: rows.map(row => ({ ...docNode(row, 'Lista ' + row.number + ' • ' + dateText(row.date) + (row.annulled ? ' • anulată' : ''), formatMoney(row.total)),
-        sortType: 'date', sortValue: row.date, sortDirection: 'desc', sortThen: [{ type: 'number', value: row.number }, { type: 'number', value: row.id }] })),
+        sortType: 'date', sortValue: row.date, sortDirection: 'desc', sortThen: [{ type: 'number', value: row.number }] })),
     }));
     paintTree(treeHost, nodes, { title: 'Liste salvate', showSearchBox: false, collapsed: true, selected: state.doc?.id, onSelect: (id) => openDoc(id).catch(report), onAction: (id, anchor) => openMenu(anchor, [
       { label: 'Deschide', run: () => openDoc(id) },
@@ -315,13 +319,18 @@ export function mountLista(host, opts) {
   function freezePending() { head.inert = meals.inert = bons.inert = !!state.request; }
   function collectPortions() {
     const portions = {}, errors = [];
+    const parsedDate = parse(state.draft.header.Data, { type: 'date', required: true });
+    inputs.get('Data').error.textContent = parsedDate.ok ? '' : parsedDate.message;
+    if (!parsedDate.ok) errors.push(parsedDate.message);
+    if (!state.doc.portions_editable) return { errors, body: { date: parsedDate.value } };
     for (const [id, label] of MEALS) {
       const raw = state.draft.meals[id].P;
       const result = parse(raw == null || raw === '' ? 0 : raw, { type: 'int', min: 0, required: true });
       if (!result.ok) errors.push(label + ': ' + result.message);
       else portions[id] = result.value;
     }
-    return { errors, body: { portions } };
+    const changed = MEALS.some(([id]) => number(portions[id]) !== number(state.doc.meals[id].P));
+    return { errors, body: { date: parsedDate.value, ...(changed ? { portions } : {}) } };
   }
   async function save() {
     if (!state.canWrite || !editing() || !await commit()) return;

@@ -92,6 +92,23 @@ def pdf_bytes(data):
     label = ParagraphStyle('receipt-label', parent=style, fontSize=8, leading=11)
     def p(text, kind=style):
         return Paragraph(escape(str(text)), kind)
+    def address_block():
+        # SLICE-AD16-01: reserve two full-width lines and fit the complete saved address.
+        width = 180 * mm - 24  # The receipt box has 12 pt padding on either side.
+        height = 2 * style.leading
+        for quarter_points in range(40, 3, -1):
+            address_style = ParagraphStyle('receipt-address', parent=style,
+                                           fontSize=quarter_points / 4, spaceAfter=0)
+            paragraph = p('Adresa: ' + data['address'], address_style)
+            if paragraph.wrap(width, height)[1] <= height:
+                break
+        field = Table([[paragraph]], colWidths=[width], rowHeights=[height])
+        field.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0),
+                                   ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                                   ('TOPPADDING', (0, 0), (-1, -1), 0),
+                                   ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                                   ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+        return field
     copies = []
     for copy in ('Exemplarul plătitorului', 'Exemplarul unității'):
         block = [p(data['issuer']['name']), p('Cod fiscal: ' + data['issuer']['tax_code']), p(data['issuer']['address'])]
@@ -101,7 +118,7 @@ def pdf_bytes(data):
             block.append(p('ANULATĂ', title))
         block += [Spacer(1, 3 * mm), p(f"CHITANȚĂ {data['series']} / {data['number']}", title), p('Data: ' + data['date']),
                   *([p('Subunitate: ' + data['subunit'])] if data.get('subunit') else []),
-                  p('Am primit de la: ' + data['payer']), p('Adresa: ' + data['address']),
+                  p('Am primit de la: ' + data['payer']), address_block(), Spacer(1, style.spaceAfter),
                   p('Suma de: ' + data['amount'] + ' lei'), p('Adică: ' + data['words']),
                   p('Reprezentând: ' + data['explanation']), Spacer(1, 7 * mm), p('Casier: ____________________'),
                   Spacer(1, 2 * mm), p(copy + ' · Cod 14-4-1', label)]

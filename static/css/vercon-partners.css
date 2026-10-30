@@ -1,0 +1,43 @@
+/* SLICE-VC06-22: use the bounded nomenclature workspace and shared controls. */
+.vc-page .vc-main .vc-work > .vc-partners {
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.vc-partners .vc-nom__bar { grid-column: 1; grid-row: 1; margin: 0; min-width: 0; }
+.vc-partners__search { flex: 0 1 290px; min-width: 0; margin-left: auto; }
+.vc-partners__body {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.vc-partners__list { display: flex; min-width: 0; min-height: 0; height: auto; overflow: hidden; }
+.vc-partners__list > .dgv { flex: 1 1 0; min-width: 0; min-height: 0; }
+/* Match the existing nomenclature grids: header padding must fit the fixed 36px action column. */
+.vc-partners__list .dgv__hc, .vc-partners__list .dgv__cell { box-sizing: border-box; min-width: 0; }
+.vc-partners__list .dgv__hc[data-key="actions"] { padding: 0; }
+.vc-partners__card { min-width: 0; min-height: 0; overflow: auto; }
+.vc-partners__card h4 { margin: 0 0 8px; overflow-wrap: anywhere; font-size: var(--fs-ms); }
+.vc-partners__details { grid-template-columns: minmax(0, 1fr); }
+.vc-partners__details .vc-field { min-width: 0; }
+.vc-partners__details [data-field="DenumirePartener"],
+.vc-partners__details [data-field="Adresa"],
+.vc-partners__details [data-field="ContIBAN"],
+.vc-partners__details [data-field="Banca"] { grid-column: 1 / -1; }
+.vc-partners__details .tb { width: 100%; min-width: 0; }
+.vc-partners .vc-actions { grid-column: 1 / -1; grid-row: 3; margin: 0; }
+@media (max-width: 760px) {
+  .vc-page .vc-main .vc-work > .vc-partners { grid-template-columns: minmax(0, 1fr); }
+  .vc-partners__body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 1fr) minmax(0, 1fr); }
+  .vc-partners__search { flex-basis: 100%; }
+  .vc-partners .vc-status-bar { grid-template-columns: minmax(0, 1fr); }
+  .vc-partners .vc-status-bar__end { flex-wrap: wrap; }
+}

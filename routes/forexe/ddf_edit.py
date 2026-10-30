@@ -114,6 +114,7 @@ from utils.database import get_kbot_connection, get_kbot_comun_connection
 
 from . import forexe_bp, partner_links
 from .budget_on_day import BudgetByDay
+from .ddf_flux_core import rol_pentru_revizie_noua
 from .ddf_parteneri import ParteneriInvalizi, citeste_parteneri, sincronizeaza_parteneri
 from .ddf_program import program_pentru_angajament
 from .marcaj import LOCK_IDREV, consuma_lacatul, id_marcaj_utilizabil, idrev_tinut
@@ -472,8 +473,11 @@ _SQL_ARE_ISTORIC = (
 # Receptions BEFORE the revision date, per indicator -- the port of the ad-hoc QueryDef in
 # `FX_Adaugare_DDF`. Note this is a DIFFERENT rule from the one in `cmbClsf_AfterUpdate`,
 # which sums ALL receptions for a classification; both are ported, each where it belongs.
+# It sums `DIF` (the delta of each snapshot), never `Valoare` (the snapshot's full value):
+# every re-posted reception adds a new `FX_Receptii` row, so `SUM(Valoare)` counts the same
+# money several times -- the same rule as Sumar (`sumar.py`) and the ordonantare.
 _SQL_RECEPTII_PANA_LA = (
-    "SELECT CodIndicator, SUM(Valoare) AS TotalReceptii "
+    "SELECT CodIndicator, SUM(DIF) AS TotalReceptii "
     "  FROM FX_Receptii "
     " WHERE CodAngajament = %s AND DATE(Data) < %s "
     " GROUP BY CodIndicator"
@@ -1039,7 +1043,7 @@ def get_ddf_draft(iddf, idrev):
         # which is what the value rule in the grid compares against.
         if linii_a:
             cursor.execute(
-                "SELECT CodIndicator, SUM(Valoare) AS T FROM FX_Receptii "
+                "SELECT CodIndicator, SUM(DIF) AS T FROM FX_Receptii "
                 " WHERE CodAngajament = %s GROUP BY CodIndicator", (cod,))
             receptii = {_txt(r["CodIndicator"]): _num(r["T"]) for r in cursor.fetchall()}
             for a in linii_a:
@@ -2092,6 +2096,18 @@ def _scrie_graf(cursor, sarcina: dict, token: str) -> dict:
              1 if revizie.get("incarcat") else 0,
              1 if revizie.get("preluat") else 0,
              dc, idrev))
+
+    # ---- 4b: the signing flow (slice 0124-03) ---------------------------------------------
+    # A revision created in K-BOT (not one that comes from FOREXE) enters the flow when it is CREATED: DeSemnat = the role the
+    # document's compartment names, the one that generates the document and signs section A. A compartment with no role stops the
+    # save with a message naming it; a unit without the flow (sql/0124 not carried there) saves the old way.
+    if rev_noua and not revizie.get("incarcat") and not revizie.get("preluat"):
+        in_flux, rol_a = rol_pentru_revizie_noua(cursor, g.session.db_name, _txt(antet.get("comp")))
+        if in_flux:
+            if not rol_a:
+                raise DateInvalide(f"Compartimentul «{_txt(antet.get('comp')).strip()}» nu are un rol de semnare stabilit. "
+                                   f"Stabiliți-l din Setări › Semnare DDF și salvați din nou.")
+            cursor.execute("UPDATE FX_DDF_REV SET DeSemnat = %s WHERE IDREV = %s", (rol_a, idrev))
 
     # ---- 5: FX_DDF_REV_SA ----------------------------------------------------------------
     harta_a = {}

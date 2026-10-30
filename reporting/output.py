@@ -20,7 +20,7 @@ def tokens(text, values):
     return text
 
 
-def pdf(model):
+def pdf(model, *, underline_links=True, product_row_links=False):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib import colors
@@ -30,6 +30,9 @@ def pdf(model):
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, PageBreak, Flowable, TopPadder
     from reportlab.pdfgen.canvas import Canvas
+    if product_row_links:
+        from . import pdf_row_links
+        Table = pdf_row_links.table_type(Table)
     with FONT_LOCK:
         if 'SharedReport' not in pdfmetrics.getRegisteredFontNames():
             if not FONT.is_file():
@@ -52,11 +55,21 @@ def pdf(model):
             self.canv.translate(.22, 0)
             super().draw()
             self.canv.restoreState()
-    def para(value, align=TA_LEFT, point=None, bold=False):
+    def para(value, align=TA_LEFT, point=None, bold=False, href=None, link_columns=None):
         style = ParagraphStyle('vc', fontName='SharedReport', fontSize=point or size,
                                leading=(point or size) * 1.22, alignment=align, spaceAfter=0)
         paragraph = EmphasizedParagraph if bold else Paragraph
-        return paragraph(escape(str(value if value is not None else '')).replace('\n', '<br/>'), style)
+        text = escape(str(value if value is not None else '')).replace('\n', '<br/>')
+        # Optional application-relative links; all other cell text remains escaped.
+        if isinstance(href, str) and href.startswith('/') and not href.startswith('//'):
+            if product_row_links:
+                text = '<font color="#175da8">' + text + '</font>'
+            else:
+                if underline_links:
+                    text = '<u>' + text + '</u>'
+                text = '<link href="' + escape(href, quote=True) + '" color="#175da8">' + text + '</link>'
+        result = paragraph(text, style)
+        return pdf_row_links.mark(result, href, link_columns) if product_row_links else result
     class PositionedBand(Flowable):
         def __init__(self, elements, available):
             super().__init__()
@@ -131,9 +144,12 @@ def pdf(model):
                 offset += len(child['cols'])
             rows = []
             for index in range(max(len(child['rows']) for child in children)):
-                cells = []
+                cells, column_offset = [], 0
                 for child in children:
-                    cells.extend(child['rows'][index]['cells'] if index < len(child['rows']) else [''] * len(child['cols']))
+                    part = child['rows'][index]['cells'] if index < len(child['rows']) else [''] * len(child['cols'])
+                    cells.extend({**cell, 'link_columns': (column_offset, column_offset + len(child['cols']))}
+                                 if isinstance(cell, dict) and cell.get('href') else cell for cell in part)
+                    column_offset += len(child['cols'])
                 rows.append({'cells': cells})
             return render({'t': 'table', 'cols': columns, 'rows': rows,
                            'show_column_header': any(child.get('show_column_header', True) for child in children),
@@ -172,7 +188,9 @@ def pdf(model):
                     col = cols[index]
                     cells.append(para(value, {'r': TA_RIGHT, 'c': TA_CENTER}.get(col.get('align'), TA_LEFT),
                                       col.get('size'), col.get('bold', False) or row.get('cls') in ('total', 'grand')
-                                      or isinstance(cell, dict) and cell.get('bold', False)))
+                                      or isinstance(cell, dict) and cell.get('bold', False),
+                                      href=cell.get('href') if isinstance(cell, dict) and row.get('cls') not in ('total', 'grand') else None,
+                                      link_columns=cell.get('link_columns') if isinstance(cell, dict) else None))
                     if isinstance(cell, dict) and cell.get('background'):
                         commands.append(('BACKGROUND', (index, len(data)), (index + span - 1, len(data)),
                                          colors.HexColor(cell['background'])))

@@ -36,6 +36,7 @@ from . import forexe_bp
 from .prelucrare_helpers import SNAPSHOT_COUNTS_SQL
 from .rezervari_legaturi import gaseste_legaturi_gresite, sir_pentru_arbore
 from .ddf_program import gaseste_programe_gresite, sir_pentru_arbore as sir_program_pentru_arbore
+from .receptii_cumulat import gaseste_receptii_nepotrivite, sir_pentru_arbore as sir_receptii_pentru_arbore
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +260,7 @@ def get_tree():
     DataCreare, DataDefinitivare, Incarcat, Preluat, Salarii, Ascuns, DataActualizare, Surse, DataAngajamentNou,
     AreIndicatori, AreIstoric, AreRevizii, AreRezervari, AreReceptii, ArePlati,
     AreDDF, ArePartener, AreOrd, AreExtrase, AreNoteCab, Alias, LantNeinchis,
-    RezervariGresite, LegaturiGresite, ProgramGresit}, ... ] }.
+    RezervariGresite, LegaturiGresite, ProgramGresit, ReceptiiNepotrivite}, ... ] }.
     """
     an_raw = request.args.get("an")
     if an_raw is None or str(an_raw).strip() == "":
@@ -305,6 +306,8 @@ def get_tree():
         legaturi_gresite = gaseste_legaturi_gresite(conn.cursor(dictionary=True))
         # Slice 0114-27: documents whose program is not the one of their indicators' SS (one query).
         programe_gresite = gaseste_programe_gresite(conn.cursor(dictionary=True))
+        # Slice 0122-10: receptions that do not add up to the reservations on a day when both exist (two queries).
+        receptii_nepotrivite = gaseste_receptii_nepotrivite(conn.cursor(dictionary=True))
         rows = []
         for (cod, iddf, descriere, stare, data_creare, data_def, incarcat, preluat,
              salarii, ascuns, data_actualizare, surse, data_ang_nou, are_indicatori, are_istoric, are_revizii,
@@ -350,6 +353,8 @@ def get_tree():
                 "LegaturiGresite": sir_pentru_arbore(legaturi_gresite.get(str(cod), [])),
                 # Slice 0114-27: NULL = the document's program is right (shape in ddf_program.sir_pentru_arbore).
                 "ProgramGresit": sir_program_pentru_arbore(programe_gresite.get(str(cod))),
+                # Slice 0122-10: NULL = receptions add up to the reservations (shape in receptii_cumulat.sir_pentru_arbore).
+                "ReceptiiNepotrivite": sir_receptii_pentru_arbore(receptii_nepotrivite.get(str(cod))),
             })
         logger.info("[forexe.tree] %s: an=%s ss=%s include_hidden=%s -> %s randuri",
                     db_name, an, ss, include_hidden, len(rows))

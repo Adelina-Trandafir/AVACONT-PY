@@ -98,6 +98,10 @@ _SQL_NAMES_F = (
 _SQL_NAMES_ARTICOL = (
     f"SELECT Articol, MAX(Denumire) AS Denumire FROM {COMMON_DB}.DefaArticol GROUP BY Articol"
 )
+_SQL_NAMES_TITLU = (
+    f"SELECT Titlu, MAX(Denumire) AS Denumire FROM {COMMON_DB}.DefaTitlu "
+    " WHERE Titlu IS NOT NULL AND Titlu <> '' GROUP BY Titlu"
+)
 _SQL_NAMES_SS = f"SELECT SursaSector, Denumire FROM {COMMON_DB}.DefaSursaSector"
 
 _SQL_ONE = (
@@ -191,11 +195,13 @@ def read_names(cursor) -> dict:
     cursor.execute(_SQL_NAMES_F)
     f_names = {_text(r["ClsfF"]): _text(r["Denumire"]) for r in cursor.fetchall()}
     capitol = {code[:2]: name for code, name in f_names.items() if code.endswith("0000")}
+    cursor.execute(_SQL_NAMES_TITLU)
+    titlu = {_text(r["Titlu"]): _text(r["Denumire"]) for r in cursor.fetchall()}
     cursor.execute(_SQL_NAMES_ARTICOL)
     articol = {_text(r["Articol"]): _text(r["Denumire"]) for r in cursor.fetchall()}
     cursor.execute(_SQL_NAMES_SS)
     ss = {_text(r["SursaSector"]): _text(r["Denumire"]) for r in cursor.fetchall()}
-    return {"capitol": capitol, "subcapitol": f_names, "articol": articol, "ss": ss}
+    return {"capitol": capitol, "subcapitol": f_names, "titlu": titlu, "articol": articol, "ss": ss}
 
 
 @forexe_bp.route("/api/forexe/nomenclatoare/clasificatii", methods=["GET"])
@@ -518,10 +524,16 @@ def get_clasificatii_nomenclator():
         cursor.execute(_SQL_NAMES_SS)
         ss_names = {_text(r["SursaSector"]): _text(r["Denumire"]) for r in cursor.fetchall()}
         ss = [{"code": code, "name": ss_names.get(code) or code} for code in sorted(units)]
+        # The functional chapter (65, ...) each source already works in: the window shows only what hangs under it.
+        cursor.execute("SELECT DISTINCT SS, LEFT(Capitol, 2) AS Cap FROM Clasificatii "
+                       " WHERE Capitol IS NOT NULL AND Capitol <> '' ORDER BY SS, Cap")
+        capitole = [{"ss": _text(r["SS"]), "capitol": _text(r["Cap"])} for r in cursor.fetchall()
+                    if _text(r["SS"]) and _text(r["Cap"])]
         f_codes = registration_lists.read_clasificatii(conn, "F")
         e_codes = registration_lists.read_clasificatii(conn, "E")
         return _json_utf8({
             "ss": ss,
+            "capitole": capitole,
             "f": {"codes": [{"code": c["cod"], "name": c["denumire"]} for c in f_codes],
                   "groups": registration_lists.read_group_captions(conn, "F")},
             "e": {"codes": [{"code": c["cod"], "name": c["denumire"]} for c in e_codes],

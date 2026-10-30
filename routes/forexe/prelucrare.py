@@ -137,6 +137,7 @@ from .prelucrare_asociere import (
 # regulile de blocare si platile stau acolo, iar aici se imprumuta. Nu se face ciclu --
 # `asociere.py` nu importa fisierul asta.
 from .asociere import apply_download_corrections, citeste_blocaje, citeste_plati
+from .receptii_cumulat import gaseste_receptii_nepotrivite, text_avertisment
 
 logger = logging.getLogger(__name__)
 
@@ -922,6 +923,14 @@ def post_prelucrare():
 
         # --- pasul 4d, per receptie atinsa ------------------------------------
         _pas4d_pe_receptiile_atinse(cursor, cod)
+
+        # Slice 0122-10: receptiile (suma DIF) comparate cu rezervarile, dupa ce DIF e la zi. O versiune
+        # asezata pe receptia gresita nu da nicio eroare, dar ordonantarile ar vedea receptii gresite;
+        # doar avertisment, nu blocheaza salvarea (arborele arata acelasi lucru in tooltip).
+        with timing.stage("receptii vs rezervari"):
+            nepotrivite = gaseste_receptii_nepotrivite(cursor, cod).get(cod)
+        if nepotrivite:
+            warnings.append(text_avertisment(nepotrivite))
 
         # COMMIT-ul e masurat separat fiindca poate fi cel mai lung pas din toata
         # cererea: aici asteapta InnoDB dupa jurnalul lui, iar timpul nu apartine

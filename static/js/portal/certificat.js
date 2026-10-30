@@ -82,6 +82,12 @@ export function createCertificate({ call, say, onSignedIn }) {
     say('msg-login', (r.data.error || 'Autentificarea cu certificat nu a reușit.') + ' Poți intra cu parola și codul.');
   });
 
+  return { enabled: true, ...createCertificateManager({ call, say }) };
+}
+
+// The same enrolment dialog is also used by the Administrator's dedicated page.
+export function createCertificateManager({ call, say, path = CERT_PATH }) {
+  const url = (name) => certOrigin() + path + name;
   // ---- the dialog: is this certificate enrolled, enrol it, switch one off
   const dlg = $('dlg-cert');
   let here = false;
@@ -149,10 +155,11 @@ export function createCertificate({ call, say, onSignedIn }) {
     await refresh();
   }
 
-  $('btn-cert').addEventListener('click', async () => {
+  async function open() {
     dlg.showModal();
     await refresh();
-  });
+  }
+  $('btn-cert').addEventListener('click', open);
   $('btn-cert-close').addEventListener('click', () => dlg.close());
   $('btn-cert-enrol').addEventListener('click', async () => {
     say('msg-cert', '');
@@ -167,5 +174,5 @@ export function createCertificate({ call, say, onSignedIn }) {
     await refresh();
   });
 
-  return { enabled: true };
+  return { open };
 }

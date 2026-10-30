@@ -1,5 +1,5 @@
-/* Sign-in card: the application combobox is as wide as the other fields, with a larger arrow and room to its right. */
-#p-app-combo.combobox-container { max-width: none; display: block; width: 100%; }
+/* Authenticated application choice: comboboxes fill the card. */
+#p-app-combo.combobox-container, #p-unit-choice.combobox-container { max-width: none; display: block; width: 100%; }
 #p-app-combo .combobox-input { padding-right: 46px; }
 #p-app-combo .combobox-arrow { right: 16px; font-size: calc(var(--fs-base) + 8px); }
 .p-app { display: flex; align-items: center; gap: 12px; font-size: var(--fs-xl); }
@@ -14,12 +14,12 @@
 
 /* A small desktop window still needs access to the whole sign-in form. */
 @media (max-width: 900px) {
-  html:has(body.portal #card-login:not([hidden]), body.portal #card-code:not([hidden])) {
+  html:has(body.portal #card-login:not([hidden]), body.portal #card-code:not([hidden]), body.portal #card-choice:not([hidden])) {
     height: auto;
     min-height: 100dvh;
     overflow-y: auto;
   }
-  body.portal:has(#card-login:not([hidden]), #card-code:not([hidden])) {
+  body.portal:has(#card-login:not([hidden]), #card-code:not([hidden]), #card-choice:not([hidden])) {
     height: auto;
     min-height: 100dvh;
     overflow: visible;

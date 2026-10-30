@@ -4,6 +4,8 @@ import { snapshotPdf } from './snapshot-pdf.js';
 import { reportPeriodAction } from './report-period-action.js';
 import { voucherHeader } from './voucher-header.js';
 import { generateReport } from './report-request.js';
+import { stockCardLinks } from './report-stock-card.js';
+import { reportPdfSource } from './report-pdf-source.js';
 
 const names = { nir: 'NIR', storno: 'NIR_Storno', bc: 'Bon_Consum', br: 'BonRetur', lista: 'ListaAlimente2015',
   bp: 'OI_Bon_BP', bt: 'OI_Bon_BT', bs: 'OI_Bon_BS' };
@@ -30,8 +32,9 @@ export async function documentReport({ api, selection, family, document, header 
       try {
         const model = await generateReport(api, name, params);
         if (!current()) return null;
-        const data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${new URLSearchParams(selection)}`, { responseType: 'arrayBuffer' });
-        return current() ? { data, title: model.title, filename: model.filename + '.pdf',
+        const pdfSource = await reportPdfSource(api, model, selection, current);
+        return current() ? { ...pdfSource, title: model.title, filename: model.filename + '.pdf',
+          onLink: stockCardLinks(api, model, current),
           toolbarActions: [reportPeriodAction({ api, name, params, isCurrent: current })] } : null;
       } catch (error) {
         // A reader without the report right may still print the document already loaded.

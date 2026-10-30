@@ -1,7 +1,7 @@
-"""Portion corrections on any active list in the latest food-list month."""
+"""Restricted date corrections and portion corrections in the latest food-list month."""
 from decimal import Decimal
 
-from . import numeric, protocol
+from . import food_list_dates, numeric, protocol
 from .documents import _int, _iso, _one, _scope
 from .nomenclatoare import NomError
 
@@ -26,7 +26,7 @@ def annotate(cursor, ctx, rows):
         allowed = not row.get('annulled') and bool(month) and day[:7] == month
         row.update({'portions_editable': allowed, 'portions_month': month,
                     'portions_message': '' if allowed else message(month)})
-    return rows
+    return food_list_dates.annotate(cursor, ctx, rows)
 
 
 def require_month(cursor, ctx, *days):
@@ -48,7 +48,12 @@ def update(cursor, repo, ctx, doc_id, body, request_id):
     version = _int(body.get('version'))
     if version is None or version != before['Version']:
         raise NomError('CONFLICT', 'Lista a fost modificată. Reîncărcați lista.', 409)
-    require_month(cursor, ctx, before['DATALA'])
+    day = food_list_dates.clean(cursor, ctx, before, body)
+    if 'portions' not in body:
+        if 'date' not in body:
+            raise NomError('INVALID', 'Completați data listei sau numărul copiilor.', 422)
+        return food_list_dates.update(cursor, repo, ctx, before, day, request_id)
+    require_month(cursor, ctx, before['DATALA'], day)
     raw = body.get('portions')
     if not isinstance(raw, dict) or set(raw) != set(MEALS):
         raise NomError('INVALID', 'Completați numărul copiilor pentru fiecare masă.', 422)
@@ -78,7 +83,7 @@ def update(cursor, repo, ctx, doc_id, body, request_id):
     except numeric.NumericError as error:
         raise NomError('INVALID', str(error), 422) from error
     bons_total = _bons_total(cursor, ctx, doc_id)
-    header = {'ValoareLista': total, 'ValoareBon': bons_total, 'DEP': total - bons_total}
+    header = {'DATALA': day, 'ValoareLista': total, 'ValoareBon': bons_total, 'DEP': total - bons_total}
     prior_balances = recalculation_audit.food_snapshot(cursor, ctx)
     repo.update('VC_ListaAlimente', values, {'IDLISTA': doc_id})
     if repo.update('VC_LABC', header, {'IdLista': doc_id, 'Version': version}, bump_version=True) != 1:
@@ -86,7 +91,7 @@ def update(cursor, repo, ctx, doc_id, body, request_id):
     protocol.audit(cursor, ctx, 'lista.portions_update', 'VC_LABC', doc_id,
                    {'meals': previous, **{key: before[key] for key in header}},
                    {'meals': values, **header}, None, request_id)
-    origin = recalculation_audit.cause('lista', doc_id, before['NumarLA'], before['DATALA'], version + 1)
+    origin = recalculation_audit.cause('lista', doc_id, before['NumarLA'], day, version + 1)
     recalculation_audit.record(cursor, ctx, prior_balances, recalculation_audit.food_snapshot(cursor, ctx),
                                origin, 'lista.balance_recalculated', 'VC_LABC', request_id)
     return {'id': doc_id, 'number': before['NumarLA']}

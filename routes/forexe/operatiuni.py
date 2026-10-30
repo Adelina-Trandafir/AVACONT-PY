@@ -22,6 +22,12 @@ The «Operatiuni necorectate» of the FOREXE landing page (slice 0084).
         The «ERRRRRRRRRR» operations (NULL = saved before 0088, taken as ERR) that no CAB
         correction note covers yet (FX_NoteCAB_Corectii on ReferintaTrezor + NrDoc). This is
         what the menu «Operatiuni necorelate» shows -- FOREXE is not read again for it.
+        Slice 0088-06: the operations the operator omitted (FX_Operatiuni.Omis = 1) are left
+        out; `?omise=1` returns only those (the menu «Operatiuni omise»).
+
+    POST /api/forexe/operatiuni/omitere         (slice 0088-06)
+        { "idfxp": [12, 15], "omis": true | false }  -> 200 { "actualizate": n }
+        Omits / brings back ERR operations. 409 until sql/0088_06 added the Omis column.
 
 K-BOT reads the table right after every FOREXE login and sends every row it saw. Only rows
 that are NOT in FX_Operatiuni yet are inserted; the key is (ReferintaTrezor, NrDoc) --
@@ -84,8 +90,16 @@ _SQL_NECORELATE = (
     " WHERE (O.CodAngajament IS NULL OR O.CodAngajament = %s) "
     "   AND NOT EXISTS (SELECT 1 FROM FX_NoteCAB_Corectii K "
     "                    WHERE K.ReferintaTrezor = O.ReferintaTrezor AND K.NrDoc = O.NrDoc) "
+    "{filtru_omis}"
     " ORDER BY O.DataPlata, O.IDFXP"
 )
+# Slice 0088-06: the column exists only after sql/0088_06 ran on the database.
+_SQL_ARE_OMIS = (
+    "SELECT COUNT(*) AS n FROM information_schema.COLUMNS "
+    " WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'FX_Operatiuni' AND COLUMN_NAME = 'Omis'"
+)
+# One request omits / brings back at most this many operations.
+_MAX_OMITERE = 500
 
 
 def _json_utf8(payload, status):
@@ -251,16 +265,29 @@ def post_operatiuni_necorectate():
             conn.close()
 
 
+def _are_coloana_omis(cursor) -> bool:
+    cursor.execute(_SQL_ARE_OMIS)
+    return int(cursor.fetchone()["n"]) == 1
+
+
 @forexe_bp.route("/api/forexe/operatiuni/necorelate", methods=["GET"])
 @require_session
 def get_operatiuni_necorelate():
-    """The ERR operations no correction note covers yet (slice 0088)."""
+    """The ERR operations no correction note covers yet (slice 0088). Slice 0088-06: the omitted
+    ones are left out; `?omise=1` returns ONLY the omitted ones."""
     db_name = g.session.db_name
+    doar_omise = request.args.get("omise", "0") == "1"
     conn = None
     try:
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute(_SQL_NECORELATE, (_ERR,))
+        are_omis = _are_coloana_omis(cursor)
+        if doar_omise and not are_omis:
+            return _json_utf8({"operatiuni": []}, 200)
+        filtru = ""
+        if are_omis:
+            filtru = f"   AND O.Omis = {1 if doar_omise else 0} "
+        cursor.execute(_SQL_NECORELATE.format(filtru_omis=filtru), (_ERR,))
         rows = []
         for r in cursor.fetchall():
             ss = r["SS"] or ""
@@ -277,6 +304,58 @@ def get_operatiuni_necorelate():
     except Exception as e:
         logger.error("[forexe.operatiuni] necorelate %s: %s", db_name, e, exc_info=True)
         return _json_utf8({"error": f"Eroare la citirea operațiunilor necorelate: {e}"}, 500)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+@forexe_bp.route("/api/forexe/operatiuni/omitere", methods=["POST"])
+@require_session
+def post_operatiuni_omitere():
+    """Slice 0088-06: omit (`omis` true) or bring back (`omis` false) ERR operations.
+
+        { "idfxp": [12, 15], "omis": true }  ->  200 { "actualizate": 2 }
+
+    An omitted operation is left out of GET .../necorelate (so out of the correction window and
+    the menu / ribbon count) until it is brought back. 409 while the database lacks the column."""
+    sarcina = request.get_json(silent=True)
+    if (not isinstance(sarcina, dict) or not isinstance(sarcina.get("idfxp"), list)
+            or not isinstance(sarcina.get("omis"), bool)):
+        return _json_utf8({"error": "Corp JSON lipsă sau nevalid (se așteaptă «idfxp» și «omis»)."}, 400)
+    ids = sarcina["idfxp"]
+    if not ids or len(ids) > _MAX_OMITERE or any(
+            not isinstance(i, int) or isinstance(i, bool) or i <= 0 for i in ids):
+        return _json_utf8({"error": f"«idfxp» trebuie să conțină între 1 și {_MAX_OMITERE} numere întregi pozitive."}, 400)
+
+    db_name = g.session.db_name
+    conn = None
+    try:
+        conn = get_kbot_connection(db_name)
+        cursor = conn.cursor(dictionary=True)
+        if not _are_coloana_omis(cursor):
+            return _json_utf8({"error": "Baza de date nu are încă coloana «Omis» "
+                                        "(sql/0088_06_fx_operatiuni_omis.sql): rândul nu poate fi omis."}, 409)
+        conn.autocommit = False
+        if not conn.in_transaction:
+            conn.start_transaction()
+        semne = ", ".join(["%s"] * len(ids))
+        cursor.execute(
+            f"UPDATE FX_Operatiuni SET Omis = %s WHERE IDFXP IN ({semne}) "
+            "AND (CodAngajament IS NULL OR CodAngajament = %s)",
+            (1 if sarcina["omis"] else 0, *ids, _ERR))
+        actualizate = cursor.rowcount
+        conn.commit()
+        logger.info("[forexe.operatiuni] %s: omitere %s pe %s operatiuni (actualizate %s)",
+                    db_name, sarcina["omis"], len(ids), actualizate)
+        return _json_utf8({"actualizate": actualizate}, 200)
+    except Exception as e:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                logger.warning("[forexe.operatiuni] rollback esuat", exc_info=True)
+        logger.error("[forexe.operatiuni] omitere %s: %s", db_name, e, exc_info=True)
+        return _json_utf8({"error": f"Eroare la omiterea operațiunilor: {e}"}, 500)
     finally:
         if conn is not None:
             conn.close()

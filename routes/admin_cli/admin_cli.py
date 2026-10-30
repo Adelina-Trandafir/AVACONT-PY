@@ -395,6 +395,16 @@ def _c_oi_semne_repara(conn, db):
     return repair_signs(conn, db, _block)
 
 
+def _c_storno_preturi(conn, db):
+    from routes.admin_cli.vercon_storno_prices import check
+    return check(conn, db, _block)
+
+
+def _c_storno_preturi_repara(conn, db):
+    from routes.admin_cli.vercon_storno_prices import repair
+    return repair(conn, db, _block)
+
+
 # name -> (title, description, writes, handler)
 COMMANDS = {
     "ping": ("Conexiune", "Versiune, cont, charset si timpul de raspuns al bazei.", False, _c_ping),
@@ -413,6 +423,10 @@ COMMANDS = {
                  "pe gestiune. Doar citire; merge si pe toate bazele.", False, _c_oi_semne),
     "oi_semne_repara": ("Repara semne registru OI", "Pune valoarea negativa pe randurile din registrul OI care au cantitatea negativa si valoarea "
                         "pozitiva. SCRIE in baza aleasa (cere confirmare), apoi arata ce a ramas.", True, _c_oi_semne_repara),
+    "storno_preturi": ("Preturi storno si retur VERCON", "Verifica in intreaga baza selectata preturile cu TVA din storno si bonuri retur fata de variantele "
+                       "aceleiasi gestiuni. Separa rotunjirile Access reparabile de diferentele care cer analiza. Doar citire.", False, _c_storno_preturi),
+    "storno_preturi_repara": ("Repara preturi storno si retur VERCON", "Recupereaza zecimalele pierdute din preturile storno si retur eligibile in intreaga "
+                              "baza selectata. SCRIE pretul liniilor si reviziile liniilor/documentelor; audit si Jurnal. Arata diferentele ramase.", True, _c_storno_preturi_repara),
 }
 
 # Commands that need one typed value besides the database: name -> label of that value. They run on ONE database only.
@@ -421,12 +435,13 @@ COMMAND_PARAMS = {
     "profil_produs": "IdProdus",
 }
 
-# Commands that WRITE and are never run on all databases at once: the operator picks the one database to repair.
-SINGLE_DB_COMMANDS = {"oi_semne_repara"}
+# Commands restricted to one selected database (including database-wide VERCON checks).
+SINGLE_DB_COMMANDS = {"oi_semne_repara", "storno_preturi", "storno_preturi_repara"}
 
 
 def cmd_commands(args):
-    return {"commands": [{"name": k, "title": v[0], "description": v[1], "writes": v[2], "param": COMMAND_PARAMS.get(k, "")}
+    return {"commands": [{"name": k, "title": v[0], "description": v[1], "writes": v[2], "param": COMMAND_PARAMS.get(k, ""),
+                          "single_db": k in SINGLE_DB_COMMANDS}
                          for k, v in COMMANDS.items()]}
 
 

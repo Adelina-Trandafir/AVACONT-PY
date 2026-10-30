@@ -13,7 +13,7 @@
 <script type="module" src="/static/js/chat/bootstrap.js"></script></head>
 <body class="portal ade-page"><header class="header ade-header">
 <div class="ade-header__left"><button class="brand ade-brand" id="ade-apps" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Aplicații"><svg class="ade-brand__icon" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#309eff"/><text x="16" y="24" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="800" fill="#fff">A</text></svg><span class="ade-brand__name">ADECHIT</span></button><button class="pmenu__top ade-main-menu" id="ade-menu" type="button" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 14 12" width="14" height="12" aria-hidden="true"><path d="M0 1h14M0 6h14M0 11h14" stroke="currentColor" stroke-width="2" fill="none"/></svg><span>Meniu</span></button></div>
-<div class="ade-header__center"><span id="ade-month-tax" class="ade-month-tax" title="Taxa zilnică a lunii alese" hidden>Taxa zilnică: <b></b></span><div id="ade-unit" class="ade-subunit" hidden><div id="ade-unit-combo" class="ade-picker"></div></div><div id="ade-subunit" class="ade-subunit" hidden><div id="ade-subunit-combo" class="ade-picker"></div></div><div class="ade-search" id="ade-child-search"></div></div>
+<div class="ade-header__center"><div id="ade-month-tax" class="ade-month-tax" title="Taxa zilnică a lunii alese" hidden><label for="ade-month-tax-input">Taxa zilnică:</label><div id="ade-month-tax-combo" class="ade-picker"></div></div><div id="ade-unit" class="ade-subunit" hidden><div id="ade-unit-combo" class="ade-picker"></div></div><div id="ade-subunit" class="ade-subunit" hidden><div id="ade-subunit-combo" class="ade-picker"></div></div><div class="ade-search" id="ade-child-search"></div></div>
 <div class="ade-header__right"><span id="ade-context" class="ade-header__context"></span><span id="ade-session-timer" class="ade-session-timer" role="timer" hidden>⏱ <b>05:00</b></span><button class="btn ade-menu-btn ade-help-btn" id="ade-help" type="button" aria-label="Ajutor" title="Ajutor"><b>?</b></button></div>
 <div class="ade-header__hidden" hidden><button id="ade-payers" type="button">Plătitori</button><button id="ade-taxes" type="button">Taxe</button></div></header>
 <main class="ade-main">
@@ -87,7 +87,14 @@
       <section class="ade-list-panel ade-bank-manual"><h3>Grupe</h3><div id="ade-bank-groups" class="ade-list-grid"></div><label class="ade-bank-hidden"><input id="ade-bank-show-hidden" type="checkbox"><span>Arată ascunse</span></label></section>
       <section class="ade-list-panel ade-bank-manual"><h3>Copii</h3><div id="ade-bank-children" class="ade-list-grid"></div></section>
       <section class="ade-list-panel ade-bank-manual"><h3>Plătitori · istoricul copilului</h3><div id="ade-bank-payers" class="ade-list-grid"></div></section>
-      <div class="ade-bank-association"><label>Luna înregistrării <select id="ade-bank-month" aria-label="Luna înregistrării"><option value="">Alegeți luna</option></select></label><label class="ade-bank-explanation ade-bank-manual">Explicație document <textarea id="ade-bank-explanation" rows="3" maxlength="255" placeholder="Generată automat; poate fi editată"></textarea></label></div>
+      <div class="ade-bank-association"><label>Luna înregistrării <select id="ade-bank-month" aria-label="Luna înregistrării"><option value="">Alegeți luna</option></select></label><label class="ade-bank-explanation ade-bank-manual">Explicație document <textarea id="ade-bank-explanation" rows="3" maxlength="255" placeholder="Generată automat; poate fi editată"></textarea></label>
+        <section class="ade-bank-distribution ade-bank-manual" aria-label="Repartizarea încasării">
+          <label>Suma pentru copil (lei) <input id="ade-bank-amount" type="number" min="1" max="2147483647" step="1"></label>
+          <button id="ade-bank-add-child" class="btn" type="button" disabled>Adaugă copil la repartizare</button>
+          <ul id="ade-bank-allocations" aria-label="Copii și sume repartizate"></ul>
+          <p id="ade-bank-total" role="status"></p>
+        </section>
+      </div>
     </div>
   </div>
   <footer><nav class="ade-bank-modes" aria-label="Mod asociere"><button id="ade-bank-manual-mode" class="btn" type="button" aria-pressed="true" hidden>Asociere manuală</button><button id="ade-bank-auto-mode" class="btn" type="button" aria-pressed="false">Previzualizare automată</button></nav><p id="ade-bank-message" class="msg" role="status" hidden></p><button id="ade-bank-save" class="btn ade-bank-manual" type="button" disabled>Asociază și înregistrează în Alte plăți</button><button id="ade-bank-auto-save" class="btn" type="button" hidden disabled>Generează documentele bifate</button></footer>

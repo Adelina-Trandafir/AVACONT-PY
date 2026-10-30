@@ -52,6 +52,7 @@ from routes.auth.auth import log_action, verify_operator
 from routes.auth.ratelimit import LIMITER
 from routes.auth.session_store import STORE
 from routes.portal import drepturi
+from routes.portal.policy import can_enter_kbot
 from routes.portal.session_settings import SESSION_SECONDS
 from utils.database import get_kbot_comun_connection
 
@@ -152,6 +153,8 @@ def _cert_cors(response):
     if site and request.path.startswith("/api/portal/certificat/") \
             and request.headers.get("Origin") == site:
         response.headers["Access-Control-Allow-Origin"] = site
+        # Chrome sends the client certificate on a cross-site call only when the call is made with credentials
+        response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Portal-Token"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Vary"] = "Origin"
@@ -454,6 +457,23 @@ def portal_unit():
     _slide(token, note)
     log_action(note["email"], db_name, "PORTAL_UNIT", ip=_ip())
     return _json({"db_name": db_name, "role": mine["Rol"], "periods": periods, "sections": sections})
+
+
+@portal_bp.route("/api/portal/kbot", methods=["GET"])
+@require_portal_session
+def portal_kbot():
+    """SLICE-WB01-01: the K-BOT web entry, separate from shared application sign-in."""
+    try:
+        units = _user_units(g.portal["email"])
+        active = next((unit for unit in units if unit["DC"] == g.portal["db_name"]), None)
+        if not active or not can_enter_kbot(active.get("Rol")):
+            return _fail("ROL_INTERZIS", "K-BOT este disponibil doar pentru rolurile Contabil și Director.", 403)
+        periods = _unit_periods(active["DC"])
+    except mysql.connector.Error:
+        logger.exception("portal K-BOT: cannot read current unit rights")
+        return _fail("DB_ERROR", "Drepturile contului nu au putut fi citite.", 500)
+    return _json({"email": g.portal["email"], "db_name": active["DC"], "role": active["Rol"],
+                  "periods": periods, "units": [unit for unit in units if can_enter_kbot(unit.get("Rol"))]})
 
 
 def _remaining_idle(note):

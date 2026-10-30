@@ -1,7 +1,6 @@
 // VC08-01: balances and warehouse statements from the same server stock engine.
 import { el, scope, field, grid, column, paintTree, preview, showMessage, CheckBox } from './ui.js';
 import { decimalText as numberText } from './decimal-text.js';
-import { receiptTotal } from './receipt-reconciliation.js';
 
 const months = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie', 'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
 const titles = { nir: 'Intrare', bc: 'Consum / Predare', br: 'Retur', storno: 'Storno', bp: 'Predare', bt_in: 'Transfer primit', bt_out: 'Transfer predat', bs: 'Casare' };
@@ -41,7 +40,7 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
     column({ key: 'category_name', label: 'Cont' }, { editable: false, width: 160 }),
     column({ key: 'um', label: 'UM' }, { editable: false, width: 65 }),
     column({ key: 'holder_name', label: 'Deținător' }, { editable: false, width: 180, visible: ['OI', 'MF'].includes(sel().type) }),
-    numericColumn('opening', 'Stoc inițial'), numericColumn('in', 'Intrări + retur'), numericColumn('out', 'Ieșiri + storno'),
+    numericColumn('opening', 'Stoc inițial'), numericColumn('in', 'Intrări'), numericColumn('out', 'Ieșiri'),
     numericColumn('closing', 'Stoc final'), numericColumn('price', 'Preț cu TVA'), numericColumn('value', 'Valoare stoc', 145)];
   const stockGrid = grid(tableHost, { columns, rows: [], rowKey: 'key', layoutId: 'vercon.stock.balance',
     onSelect: (row) => { state.selected = row; paintDetails(); } }, owner);
@@ -64,7 +63,9 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
   const balanceButton = el('button', { type: 'button', textContent: 'Previzualizare balanță', disabled: true });
   balanceButton.addEventListener('click', () => {
     if (!state.data) return;
-    preview('Balanță produse', [{ title: `${state.data.start} — ${state.data.end}`, columns, rows: dataRows() }], owner, { period: state.data });
+    const rows = dataRows().filter(row => ['opening', 'in', 'out', 'closing']
+      .some(key => !/^[-+]?0(?:\.0*)?$/.test(row[key])));
+    preview('Balanță produse', [{ title: `${state.data.start} — ${state.data.end}`, columns, rows }], owner, { period: state.data });
   });
   commands.append(sheetButton, balanceButton);
   for (const [key, label] of [['nir', '+ NIR nou'], ['bc', '+ Bon de consum']]) {
@@ -79,12 +80,8 @@ export function mountStock(host, { api, sel, signal, openForm, canOpen }) {
   }
   function dataRows() {
     return (state.data?.rows || []).map((row) => ({ ...row, key: `${row.holder ?? 'warehouse'}:${row.category ?? ''}:${row.variant}`,
-      opening: row.quantities.opening, in: add(row.quantities.entries, row.quantities.returns, row.quantities.transfers_in),
-      out: add(row.quantities.issues, row.quantities.storno, row.quantities.transfers_out, row.quantities.scrapping),
+      opening: row.quantities.opening, in: row.quantities.incoming, out: row.quantities.outgoing,
       closing: row.quantities.closing, value: row.values.closing }));
-  }
-  function add(...values) {
-    return receiptTotal(values.map(value => ({ quantity: value ?? '0' })), 'quantity', state.data?.scale ?? 4);
   }
   function selectedMovements() {
     return (state.data?.statement || []).filter((row) => row.variant === state.selected?.variant && row.holder === state.selected?.holder && row.category === state.selected?.category)

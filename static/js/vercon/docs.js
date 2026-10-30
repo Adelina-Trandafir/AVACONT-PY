@@ -497,7 +497,15 @@ export function mountDocuments(host, opts) {
           && String(value) === String(state.draft.header[spec.key === 'IDC_OLD' ? 'IDC_BT' : 'IDC_OLD'])) {
           paintHeader(); say('Primitorul și predătorul trebuie să fie persoane diferite.', true); return;
         }
-        const previous = state.draft.header[spec.key]; state.draft.header[spec.key] = value; state.dirty = true;
+        const previous = state.draft.header[spec.key];
+        const previousDates = family === 'nir' && ['Data', 'DataFc'].includes(spec.key)
+          ? { Data: state.draft.header.Data, DataFc: state.draft.header.DataFc } : null;
+        const syncNirDate = family === 'nir' && spec.key === 'DataFc' && previous !== value;
+        state.draft.header[spec.key] = value; state.dirty = true;
+        if (syncNirDate) {
+          state.draft.header.Data = value;
+          inputs.get('Data')?._picker?.setValue(value ? new Date(value + 'T00:00:00') : null, false);
+        }
         if (family === 'storno' && spec.key === 'Numar') state.draft.autoNumber = false;
         if (family === 'nir' && spec.key === 'Valoare') syncInvoiceValue();
         if (status.textContent.startsWith('Completați mai întâi antetul') && !headerLock()) say('');
@@ -513,7 +521,7 @@ export function mountDocuments(host, opts) {
           if (offer) draft.header.Numar = '';
           try { await checkNumber(offer); } catch (error) { report(error); }
         }
-        if (spec.key === 'Data') {
+        if (spec.key === 'Data' || syncNirDate) {
           availability();
           if (family === 'bp' && previous !== value) { state.available = {}; try { await loadWarehouseStock(); paintLines(); } catch (error) { report(error); } }
           if (config.holder && previous !== value) { try { await eligible(); paintLines(); } catch (error) { report(error); throw error; } }
@@ -527,9 +535,9 @@ export function mountDocuments(host, opts) {
               paintLines(); await checkNumber(state.mode === 'add' && draft.autoNumber);
             }
             catch (error) { report(error); }
-          } else if (family === 'nir') { try { await checkNumber(); } catch (error) { state.draft.header.Data = previous; paintHeader(); report(error); return; } }
+          } else if (family === 'nir') { try { await checkNumber(); } catch (error) { Object.assign(state.draft.header, previousDates); paintHeader(); report(error); return; } }
         }
-        if (family === 'nir' && ['Data', 'DataFc'].includes(spec.key)) { try { await validateDraft(); } catch (error) { state.draft.header[spec.key] = previous; paintHeader(); report(error); return; } }
+        if (family === 'nir' && ['Data', 'DataFc'].includes(spec.key)) { try { await validateDraft(); } catch (error) { Object.assign(state.draft.header, previousDates); paintHeader(); report(error); return; } }
         side?.refresh(); custodySide?.refresh();
       }, headerUi);
       inputs.set(spec.key, item.input); errors.set(`h.${spec.key}`, item.error); if (spec.hint && editing()) item.input.title = spec.hint;

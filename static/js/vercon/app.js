@@ -20,6 +20,7 @@ import { mountMf } from "./mf.js";
 import { mountStock } from "./stock.js";
 import { mountReports } from "./reports.js";
 import { mountNomenclator, mountSettings } from "./nomenclatoare.js";
+import { mountPartners } from "./partners.js";
 import { createLock } from "./lock.js";
 import { createSaver } from "./save.js";
 import { writePreference } from "./documents.js";
@@ -472,6 +473,17 @@ async function openForm(k_key, { reload = false } = {}) {
     paintMenu(state.ctx);
     const k_work = $("vc-work");
     k_work.hidden = false;
+    if (k_key === "parteneri") {
+      state.editor = mountPartners(k_work, {
+        api,
+        sel: () => state.ctx.selection,
+        ensureWrite: async () => {
+          if (!lock.holds(k_sel)) await lock.acquire(k_sel);
+        },
+      });
+      await state.editor.ready;
+      return;
+    }
     if (k_key === "rapoarte") {
       state.editor = mountReports(k_work, { api, sel: () => state.ctx.selection });
       return;

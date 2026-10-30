@@ -11,7 +11,7 @@ from io import BytesIO
 
 from flask import Blueprint, Response, current_app, g, jsonify, request, send_file, send_from_directory
 
-from . import capabilities, diagnostics, doc_routes, nom_routes, operations
+from . import capabilities, diagnostics, doc_routes, nom_routes, operations, partners
 from .capabilities import FormUnavailable
 from .connection import connection  # noqa: F401  re-exported for the repositories of VC03+
 from .context import SelectionInvalid, resolve
@@ -50,7 +50,10 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
     if rights is None:
         def rights(context):
             from routes.portal import drepturi
-            return drepturi.operations_of(context["email"], context["db_name"], SECTION)
+            granted = drepturi.operations_of(context["email"], context["db_name"], SECTION)
+            if 'read' in granted:
+                granted.add(partners.OPERATION)
+            return granted
 
     def guard(operation):
         def decorate(function):
@@ -232,6 +235,7 @@ def create_blueprint(authenticate=None, rights=None, preview=False, provider=Non
         return response
 
     nom_routes.register(bp, guard, scoped, open_db)
+    partners.register(bp, guard, scoped, open_db)
     doc_routes.register(bp, guard, scoped, open_db)
     bp.scoped = scoped   # the door business routes (VC06+) use
     return bp

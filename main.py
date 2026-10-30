@@ -43,6 +43,7 @@ from routes.pdf_inteligent.pdf_inteligent import pdf_inteligent_bp  # public art
 from routes.portal.portal import portal_bp  # slice 0110-03: GET /portal + /api/portal/*
 import routes.portal.date  # noqa: F401  slice 0110-06: registers /api/portal/date/* on portal_bp
 import routes.portal.certificat  # noqa: F401  slice 0110-04: registers /api/portal/certificat/* on portal_bp
+import routes.portal.certificat_admin  # noqa: F401  SLICE-WB02-01: Administrator's own certificate
 from routes.logs import logs_bp  # slice 0089: the caller's own server / timing journal lines
 from routes.help_feedback import help_feedback_bp  # slice 0000-21: help questions + ratings (nothing about who)
 from routes.error_report import error_report_bp  # slice 0112-04: POST /api/errors/report (error sent from the message window)

@@ -15,6 +15,8 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
   let extract = null; let group = null; let child = null; let payer = null;
   let busy = false; let automatic = false; let touched = false; let next = null; let chosenMonth = '';
   let savedRequest = null; let listSequence = 0; let searchTimer = null; let queuedSearch = false; let lastSearch = '';
+  let allocations = [];
+  const amountInput = $('ade-bank-amount');
   const canSave = () => ['collect', 'catalog'].every((right) => context()?.permissions.includes(right));
   const selectedMonth = () => data.months.find((row) => String(row.IDL) === month.value);
   const message = (value, kind = 'info') => showMessage($('ade-bank-message'), value, kind);
@@ -34,13 +36,48 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
   }
   const auto = bindBankPreview({ api, context, month: selectedMonth, filters, refresh, run, message });
   const periods = bindBankPeriods({ api, onChange: () => run(async () => {
+    if (!automatic && !await discardAllocations()) return false;
     clearTimeout(searchTimer);
     return automatic ? auto.load() : loadExtracts();
   }) });
 
   function update() {
-    $('ade-bank-save').disabled = busy || !canSave() || !extract || !child || !payer?.Activ || !selectedMonth();
+    $('ade-bank-save').disabled = busy || !canSave() || !extract || !selectedMonth()
+      || (!allocations.length && (!child || !payer?.Activ));
+    $('ade-bank-add-child').disabled = busy || !canSave() || !extract || !child || !payer?.Activ || !selectedMonth();
     $('ade-bank-more').hidden = next == null;
+  }
+  const allocatedTotal = () => allocations.reduce((total, item) => total + item.amount, 0);
+  function renderAllocations() {
+    const list = $('ade-bank-allocations'); list.replaceChildren();
+    [...allocations].sort((a, b) => a.child.localeCompare(b.child, 'ro', { sensitivity: 'base' })).forEach((item) => {
+      const row = document.createElement('li');
+      const label = document.createElement('span'); label.textContent = `${item.child} · ${money(item.amount)} lei`;
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn'; remove.textContent = 'Șterge';
+      remove.setAttribute('aria-label', `Șterge repartizarea pentru ${item.child}`);
+      remove.addEventListener('click', () => {
+        if (busy) return;
+        allocations = allocations.filter((entry) => entry !== item); renderAllocations(); update();
+      });
+      row.append(label, remove); list.append(row);
+    });
+    const remaining = Number(extract?.suma_credit || 0) - allocatedTotal();
+    amountInput.value = extract && remaining > 0 ? String(remaining) : '';
+    $('ade-bank-total').textContent = extract
+      ? `Repartizat: ${money(allocatedTotal())} / ${money(extract.suma_credit)} lei · rămas: ${money(remaining)} lei` : '';
+  }
+  async function discardAllocations() {
+    if (allocations.length && !await confirmBox('Se va șterge repartizarea nesalvată a încasării.', {
+      title: 'Repartizare nesalvată', yes: 'Continuă', no: 'Păstrează repartizarea' })) return false;
+    allocations = []; renderAllocations(); return true;
+  }
+  function currentAllocation() {
+    const period = selectedMonth();
+    if (!extract || !child || !payer?.Activ || !period) throw new Error('Alegeți extrasul, copilul, plătitorul activ și luna.');
+    if (!amountInput.value.trim() || !amountInput.reportValidity()) throw new Error('Completați suma pentru copil în lei întregi.');
+    return { child: child.Nume, child_id: child.IDP, child_version: child.Version,
+      payer_id: payer.IDS, payer_version: payer.Version, month_id: period.IDL, month_version: period.Version,
+      amount: Number(amountInput.value), explanation: explanation.value.trim() };
   }
   async function suggestExplanation() {
     if (touched || !selectedMonth()) return;
@@ -62,7 +99,11 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
       text('platitor_cui', 'Cod fiscal', 90), text('platitor_iban', 'Cont plătitor', 210),
       { ...text('suma_credit', 'Încasare', 80), valueType: ValueType.Number, align: 'right' },
       text('Explicatii', 'Detalii extras', 200)], 'IDFXE', (row) => {
-      if (busy) return; extract = row; update();
+      if (busy || row.IDFXE === extract?.IDFXE && row.fingerprint === extract?.fingerprint) return;
+      run(async () => {
+        if (!await discardAllocations()) { if (extract) grids[0].selectRow(extract.IDFXE); return; }
+        extract = row; renderAllocations(); update();
+      });
     }, 'Explicatii');
     createGrid('ade-bank-groups', [text('Grupa', 'Grupa', 200)], 'IDG', (row) => run(async () => {
       group = row; child = null; payer = null; data.children = []; data.payers = [];
@@ -119,11 +160,12 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
     if (background && busy) { queuedSearch = true; return false; }
     if (!more) {
       const retained = background && extract ? result.rows.find((row) => row.IDFXE === extract.IDFXE) : null;
-      extract = retained?.fingerprint === extract?.fingerprint ? retained : null;
+      extract = background && allocations.length ? extract : retained?.fingerprint === extract?.fingerprint ? retained : null;
     }
     data.extracts = more ? [...data.extracts, ...result.rows] : result.rows;
     next = result.next; grids[0].setRows(data.extracts);
     if (extract) grids[0].selectRow(extract.IDFXE);
+    if (!allocations.length) renderAllocations();
     update(); return true;
   }
   function requestSearch() {
@@ -133,6 +175,7 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
     action.catch(report);
   }
   async function setMode(value) {
+    if (!automatic && value && !await discardAllocations()) return;
     listSequence += 1;
     automatic = value; dialog.dataset.mode = value ? 'auto' : 'manual';
     dialog.querySelectorAll('.ade-bank-manual').forEach((item) => { item.hidden = value; });
@@ -148,6 +191,7 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
   async function open() {
     if (dialog.open || !context()?.subunit) return;
     extract = null; group = null; child = null; payer = null; touched = false; savedRequest = null;
+    allocations = []; renderAllocations();
     data = { extracts: [], groups: [], children: [], payers: [], months: [] };
     auto.invalidate(); explanation.value = ''; search.value = ''; lastSearch = ''; queuedSearch = false;
     $('ade-bank-show-hidden').checked = false;
@@ -156,23 +200,36 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
   }
   $('ade-bank-save').addEventListener('click', () => run(async () => {
     const period = selectedMonth();
-    if (!extract || !child || !payer?.Activ || !period || !canSave()) return;
+    if (!extract || !period || !canSave()) return;
+    const items = (allocations.length ? [...allocations] : [currentAllocation()])
+      .sort((a, b) => a.child.localeCompare(b.child, 'ro', { sensitivity: 'base' }));
+    if (items.reduce((total, item) => total + item.amount, 0) !== Number(extract.suma_credit))
+      throw new Error('Totalul sumelor repartizate trebuie să fie egal cu încasarea din extras.');
     const body = JSON.stringify({ extract_id: extract.IDFXE, fingerprint: extract.fingerprint,
-      payer_id: payer.IDS, payer_version: payer.Version, child_id: child.IDP, child_version: child.Version,
-      month_id: period.IDL, month_version: period.Version, explanation: explanation.value.trim() });
+      allocations: items.map(({ child: name, ...item }) => item) });
     if (!savedRequest || savedRequest.body !== body) savedRequest = { body, key: crypto.randomUUID() };
-    if (!await confirmBox(`${money(extract.suma_credit)} lei · ${extract.platitor_nume} → ${child.Nume}\n`
-      + `${period.LunaT} ${period.Anul} · ${context().subunit.name}\nExplicație: ${explanation.value.trim()}`, {
+    if (!await confirmBox(`${money(extract.suma_credit)} lei · ${extract.platitor_nume}\n`
+      + `${period.LunaT} ${period.Anul} · ${context().subunit.name}\n`
+      + items.map((item) => `${item.child}: ${money(item.amount)} lei · ${item.explanation}`).join('\n'), {
       title: 'Asociere extras', yes: 'Asociază și înregistrează', no: 'Renunță' })) return;
     await api('/api/adechit/bank-extracts/associate', { method: 'POST', ...savedRequest });
     extract = null; savedRequest = null; touched = false;
+    allocations = []; renderAllocations();
     try { await refresh(); await loadCatalogs(); await loadExtracts(); }
     catch (error) { throw new Error(`Asocierea a fost salvată. Reîncărcați listele: ${error.message}`); }
     message('Asociere salvată.');
   }));
+  $('ade-bank-add-child').addEventListener('click', () => run(async () => {
+    const item = currentAllocation();
+    if (allocations.some((entry) => entry.child_id === item.child_id)) throw new Error('Copilul este deja în repartizare. Ștergeți rândul pentru a modifica suma.');
+    if (allocations.length >= 50) throw new Error('Se pot repartiza cel mult 50 de copii.');
+    if (allocatedTotal() + item.amount > Number(extract.suma_credit)) throw new Error('Sumele repartizate depășesc încasarea din extras.');
+    allocations.push(item); renderAllocations(); update();
+  }));
   $('ade-bank-manual-mode').addEventListener('click', () => run(() => setMode(false)));
   $('ade-bank-auto-mode').addEventListener('click', () => run(() => setMode(true)));
   $('ade-bank-reload').addEventListener('click', () => run(async () => {
+    if (!automatic && !await discardAllocations()) return;
     clearTimeout(searchTimer);
     if (automatic) await auto.load();
     else { await periods.open({ preserve: true }); await loadCatalogs(); await loadExtracts(); }
@@ -185,6 +242,7 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
   });
   search.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); clearTimeout(searchTimer); requestSearch(); } });
   month.addEventListener('change', () => run(async () => {
+    if (!await discardAllocations()) { month.value = chosenMonth; return; }
     if (!await auto.discardChanges()) { month.value = chosenMonth; return; }
     chosenMonth = month.value; auto.invalidate(); await suggestExplanation(); if (automatic) await auto.load();
   }));
@@ -196,9 +254,9 @@ export function bindBankAssociations({ api, context, refresh, monthId }) {
     clearTimeout(searchTimer); listSequence += 1; queuedSearch = false;
     grids.forEach((instance) => instance.destroy()); grids = []; auto.invalidate(); periods.destroy();
   }
-  function close() { if (!busy) { dialog.close(); cleanup(); } }
-  $('ade-bank-close').addEventListener('click', close);
-  dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(); });
+  async function close() { if (!busy && await discardAllocations()) { dialog.close(); cleanup(); } }
+  $('ade-bank-close').addEventListener('click', () => close().catch(report));
+  dialog.addEventListener('cancel', (event) => { event.preventDefault(); close().catch(report); });
   addEventListener('pagehide', cleanup, { once: true });
   return { open };
 }

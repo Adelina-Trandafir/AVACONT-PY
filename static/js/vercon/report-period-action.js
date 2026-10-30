@@ -2,6 +2,8 @@
 import { el, field, modal, showMessage } from './ui.js';
 import { reportPeriod } from './report-period.js';
 import { generateReport, reportContext } from './report-request.js';
+import { stockCardLinks } from './report-stock-card.js';
+import { reportPdfSource } from './report-pdf-source.js';
 
 export function reportPeriodAction({ api, name, params, catalog, dateOnly = false, isCurrent = () => true }) {
   let activeParams = new URLSearchParams(params), popup = null;
@@ -81,18 +83,19 @@ export function reportPeriodAction({ api, name, params, catalog, dateOnly = fals
     const context = reportContext(changed).toString();
     let model = await generate();
     if (!alive()) return null;
-    let data;
+    let pdfSource;
     try {
-      data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${context}`, { responseType: 'arrayBuffer' });
+      pdfSource = await reportPdfSource(api, model, context, isCurrent);
     } catch (error) {
       if (error.reason !== 'REPORT_EXPIRED' || !alive()) throw error;
       model = await generate();
       if (!alive()) return null;
-      data = await api(`/api/vercon/reports/export/${model.snapshot}/pdf?${context}`, { responseType: 'arrayBuffer' });
+      pdfSource = await reportPdfSource(api, model, context, isCurrent);
     }
     if (!alive()) return null;
     const snapshot = model.snapshot, filename = model.filename, selection = context;
-    return { data, title: model.title, filename: filename + '.pdf',
+    return { ...pdfSource, title: model.title, filename: filename + '.pdf',
+      onLink: stockCardLinks(api, model, isCurrent),
       date: dateOnly ? changed.get('end') : null,
       period: { start: changed.get('start'), end: changed.get('end') },
       exportExcel: async (preview, progress) => {

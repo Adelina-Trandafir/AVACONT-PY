@@ -78,6 +78,7 @@ from flask import request, g, current_app
 from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 
+from .ddf_flux_core import are_de_semnat, filtreaza_ddf
 from .ddf_stare import are_stare_trimitere
 from .print_count_column import ddf_print_sql
 
@@ -126,7 +127,9 @@ _SQL_REVIZII = (
     "{stare} AS StareTrimitere, "
     "EXISTS (SELECT 1 FROM FX_Rezervari rz WHERE rz.IDREV = r.IDREV) AS AreRezervari, "
     # Slice 0099: total prints (PDF row + document row); the literal 0 where sql/0099 has not run.
-    "{prints} AS PrintCount "
+    "{prints} AS PrintCount, "
+    # Slice 0124: the role that signs next; NULL (the literal) where sql/0124 has not been carried to the unit.
+    "{desemnat} AS DeSemnat "
     "FROM FX_DDF_REV r "
     "LEFT JOIN FX_DDF_PDF p ON p.IDREV = r.IDREV "
     "WHERE r.IDDF IN (SELECT IDDF FROM FX_DDF WHERE CodAngajament = %s) "
@@ -287,11 +290,14 @@ def get_ddf():
 
         # --- revizii: FX_DDF_REV, cu SUM(ValCur) real ----------------------------------
         stare_sql = "r.StareTrimitere" if are_stare_trimitere(cursor, db_name) else "0"
-        cursor.execute(_SQL_REVIZII.format(stare=stare_sql, prints=ddf_print_sql(cursor, db_name)), (cod,))
+        desemnat_sql = "r.DeSemnat" if are_de_semnat(cursor, db_name) else "NULL"
+        cursor.execute(_SQL_REVIZII.format(stare=stare_sql, prints=ddf_print_sql(cursor, db_name),
+                                           desemnat=desemnat_sql), (cod,))
         revizii = []
         for (idrev, iddf, numar_rev, data_rev, desc_scurta, desc_lunga,
              tip, incarcat, preluat, semnatura, total_revizie,
-             pdf_sha, pdf_dim, pdf_modif, stare_trimitere, are_rezervari, print_count) in cursor.fetchall():
+             pdf_sha, pdf_dim, pdf_modif, stare_trimitere, are_rezervari, print_count,
+             de_semnat) in cursor.fetchall():
             revizii.append({
                 "idrev": int(idrev) if idrev is not None else None,
                 "iddf": int(iddf) if iddf is not None else None,
@@ -319,6 +325,8 @@ def get_ddf():
                 "pdf_data_modif": _iso_dt(pdf_modif),
                 # Slice 0099: how many times the document was printed (PDF row + document row).
                 "print_count": int(print_count or 0),
+                # Slice 0124: the role that signs next (NULL = the revision is not in the K-BOT flow).
+                "de_semnat": de_semnat,
             })
 
         # --- linii: FX_DDF_REV_SA ------------------------------------------------------
@@ -382,6 +390,8 @@ def get_ddf():
                     "sectiuneb=%s atasamente=%s (generare=%s)",
                     db_name, cod, len(antet), len(revizii), len(linii),
                     len(sectiuneb), len(atasamente), pentru_generare)
+        # Slice 0124-03: a Secretar / Administrator gets only the revisions addressed to their role.
+        revizii, linii, sectiuneb, atasamente = filtreaza_ddf(revizii, linii, sectiuneb, atasamente)
         return _json_utf8(
             {"cod": cod, "antet": antet, "revizii": revizii, "linii": linii,
              "sectiuneb": sectiuneb, "atasamente": atasamente}, 200)

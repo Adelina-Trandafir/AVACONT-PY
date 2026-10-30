@@ -7,6 +7,7 @@ const OPERATIONS = {
   'lista.bc_update': 'Recalculare după modificare BC',
   'lista.balance_recalculated': 'Recalculare automată DEP/EC',
   'lista.portions_update': 'Modificare număr copii / porții',
+  'lista.date_update': 'Modificare dată listă de alimente',
   'lista.update': 'Modificare listă de alimente',
 };
 const LABELS = { number: 'Număr', date: 'Data', name: 'Produs', variant: 'Variantă', quantity: 'Cantitate',

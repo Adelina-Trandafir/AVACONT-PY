@@ -1,4 +1,4 @@
-"""Bank rows are shared by the DC and explicitly assigned to one scoped ADE child.
+"""Bank rows are shared by the DC and explicitly assigned to scoped ADE children.
 
 The caller owns AD_Lock(0), the subunit lock and the transaction. No DDL.
 AD_EXTRASE_ASOCIERI reserves each IDFXE across ALL subunits of the current DC.
@@ -159,8 +159,8 @@ def editable_source(source, body):
 
 
 def associate(repo, db_name, body, email):
-    for key in ('extract_id', 'payer_id'):
-        require(type(body.get(key)) is int and body[key] > 0, 'REQUEST', 'Selecție incompletă sau invalidă.', 400)
+    require(type(body.get('extract_id')) is int and body['extract_id'] > 0,
+            'REQUEST', 'Selecție incompletă sau invalidă.', 400)
     try:
         assigned = repo.query('SELECT IDFXE FROM AD_EXTRASE_ASOCIERI WHERE IDFXE=%s', (body['extract_id'],))
         require(not assigned, 'BANK_ALREADY_ASSIGNED',
@@ -179,8 +179,59 @@ def associate(repo, db_name, body, email):
             'Rândul de extras nu reprezintă o încasare.', 400)
     require(body.get('fingerprint') == fingerprint(original), 'BANK_CHANGED',
             'Datele extrasului s-au schimbat. Reîncărcați lista înainte de asociere.', 409)
+    if 'allocations' in body:
+        return associate_allocations(repo, db_name, original, body, email)
+    require(type(body.get('payer_id')) is int and body['payer_id'] > 0,
+            'REQUEST', 'Alegeți plătitorul activ al copilului.', 400)
     source = editable_source(original, body)
-    child, month, previous, attendance = reviewed_target(repo, body)
+    return write_association(repo, db_name, original, source, body, reviewed_target(repo, body), email)
+
+
+def associate_allocations(repo, db_name, original, body, email):
+    """Save the complete distribution atomically under the caller's unit/subunit locks."""
+    allocations = body.get('allocations')
+    require(isinstance(allocations, list) and 1 <= len(allocations) <= 50
+            and all(isinstance(item, dict) for item in allocations),
+            'ALLOCATION', 'Adăugați între 1 și 50 de copii la repartizare.', 400)
+    require(not body.get('values'), 'ALLOCATION', 'Datele extrasului repartizat nu se modifică.', 400)
+    # Keep single-child requests compatible with AD_11; multiple children require manual AD_15.
+    if len(allocations) > 1:
+        primary = repo.query("SHOW INDEX FROM AD_EXTRASE_ASOCIERI WHERE Key_name='PRIMARY'")
+        require({row['Column_name'] for row in primary} == {'IDFXE', 'IDP'},
+                'BANK_SPLIT_SCHEMA_REQUIRED',
+                'Repartizarea necesită instalarea manuală a SQL-ului AD_15_extrase_repartizare.sql în baza unității.', 409)
+    reviewed = []
+    children = set()
+    months = set()
+    total = 0
+    for item in allocations:
+        require(type(item.get('amount')) is int and 0 < item['amount'] <= 2147483647,
+                'ALLOCATION_AMOUNT', 'Suma fiecărui copil trebuie să fie pozitivă, în lei întregi.', 400)
+        require(type(item.get('payer_id')) is int and item['payer_id'] > 0,
+                'REQUEST', 'Alegeți plătitorul activ pentru fiecare copil.', 400)
+        target = reviewed_target(repo, item)
+        child, month, _, _ = target
+        require(child['IDP'] not in children, 'DUPLICATE', 'Același copil apare de două ori în repartizare.', 400)
+        children.add(child['IDP'])
+        months.add(month['IDL'])
+        total += item['amount']
+        reviewed.append((item, target))
+    require(len(months) == 1, 'ALLOCATION_MONTH', 'Alegeți aceeași lună pentru întreaga repartizare.', 400)
+    require(total == amount_of(original), 'ALLOCATION_TOTAL',
+            'Totalul sumelor repartizate trebuie să fie egal cu încasarea din extras.', 400)
+    saved = []
+    # All target versions are checked before payer renewal can update related portal identities.
+    for item, (child, month, previous, attendance) in reviewed:
+        previous = repo.get('Platitori_sub', previous['IDS'])
+        require(bool(previous.get('Activ')), 'CONFLICT', 'Plătitorul s-a modificat. Reîncărcați selecția.', 409)
+        source = {**original, 'suma_credit': item['amount']}
+        saved.append(write_association(repo, db_name, original, source, item,
+                                       (child, month, previous, attendance), email))
+    return {'extract_id': original['IDFXE'], 'rows': saved, 'count': len(saved)}
+
+
+def write_association(repo, db_name, original, source, body, target, email):
+    child, month, previous, attendance = target
     service.temporal(repo, month['IDL'])
     day = service.document_date(str(source.get('DataDoc') or '')[:10], month)
     amount = amount_of(source)

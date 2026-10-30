@@ -74,7 +74,7 @@ from routes.auth.guard import require_session
 from utils.database import get_kbot_connection
 from utils import pdf_chunks
 
-from . import forexe_bp
+from . import ddf_flux_core, forexe_bp
 
 logger = logging.getLogger(__name__)
 
@@ -610,6 +610,9 @@ def _incarca(spec, cheie: int, nume_fisier_fn):
             cursor.execute(
                 f"UPDATE {spec['parinte']} SET Semnatura = %s WHERE {spec['cheie']} = %s",
                 (semnatura, cheie))
+            # Slice 0124-03: a DDF in the K-BOT flow passes on to the next signer, same transaction.
+            if spec is _DDF:
+                ddf_flux_core.avanseaza(cursor, db_name, cheie, semnatura)
 
         # 8. Slice 0079: the signature log, same transaction -- no PDF without its record.
         inregistrate = 0
