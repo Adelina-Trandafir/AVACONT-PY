@@ -430,6 +430,19 @@ def _c_ddf_antete_repara(conn, db, param):
     return repair(conn, db, param, _block)
 
 
+def _c_receptii_lanturi(conn, db):
+    """Read only: reception chains that do not close, sorted by cause (routes/admin_cli/receptii_lanturi.py)."""
+    from routes.admin_cli.receptii_lanturi import check
+    return check(conn, db, _block)
+
+
+def _c_receptii_lanturi_repara(conn, db, param):
+    """WRITES: moves snapshots / puts a reception back for ONE code and moves the stored reception totals of its ordonantari
+    (routes/admin_cli/receptii_lanturi.py); the button «Repara receptiile» of KBotAdmin runs it after the check."""
+    from routes.admin_cli.receptii_lanturi import repair
+    return repair(conn, db, param, _block)
+
+
 # name -> (title, description, writes, handler)
 COMMANDS = {
     "ping": ("Conexiune", "Versiune, cont, charset si timpul de raspuns al bazei.", False, _c_ping),
@@ -461,6 +474,14 @@ COMMANDS = {
                           "aceeasi data si aceeasi suma ca o revizie a antetului principal se sterg (rezervarile lor, unice, trec pe revizia ramasa), "
                           "celelalte se muta sub antetul spre care arata angajamentul; antetele ramase goale se sterg. SCRIE in baza aleasa, intr-o singura "
                           "tranzactie, cu Jurnal. Refuza tot ce nu e clar. Se porneste din butonul «Repara» de dupa «Explica».", True, _c_ddf_antete_repara),
+    "receptii_lanturi": ("Verificare lanturi de receptii", "Semnaleaza receptiile al caror ultim instantaneu nu are valoarea receptiei si le "
+                         "desparte pe cauze: instantaneu pe alta receptie, receptie rescrisa de gemena din aceeasi zi, alt caz. Doar citire; cere o singura baza.",
+                         False, _c_receptii_lanturi),
+    "receptii_lanturi_repara": ("Repara lanturile de receptii ale unui cod", "Muta instantaneele de pe receptia gresita pe a lor si pune receptia "
+                                "rescrisa la valorile din lantul ei, apoi recalculeaza DIF si muta cifrele salvate ale ordonantarilor (total receptii si "
+                                "ramas), ca ordonantarile sa se listeze din nou, nu sa se genereze din nou. SCRIE in baza aleasa, intr-o singura tranzactie, "
+                                "cu Jurnal. Refuza tot ce nu e clar. Se porneste din butonul «Repara receptiile» de dupa verificare.",
+                                True, _c_receptii_lanturi_repara),
 }
 
 # Commands that need one typed value besides the database: name -> label of that value. They run on ONE database only.
@@ -469,10 +490,12 @@ COMMAND_PARAMS = {
     "profil_produs": "IdProdus",
     "ddf_antete_explica": "Cod angajament",
     "ddf_antete_repara": "Cod angajament",
+    "receptii_lanturi_repara": "Cod angajament",
 }
 
 # Commands restricted to one selected database (including database-wide VERCON checks).
-SINGLE_DB_COMMANDS = {"oi_semne_repara", "storno_preturi", "storno_preturi_repara", "ddf_antete", "ddf_antete_explica", "ddf_antete_repara"}
+SINGLE_DB_COMMANDS = {"oi_semne_repara", "storno_preturi", "storno_preturi_repara", "ddf_antete", "ddf_antete_explica", "ddf_antete_repara",
+                     "receptii_lanturi", "receptii_lanturi_repara"}
 
 
 def cmd_commands(args):
