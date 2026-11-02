@@ -22,6 +22,7 @@ REQUIRED = {
     'FX_Angajamente': 'CodAngajament IDDF',
     'FX_DDF': 'IDDF CodAngajament CUAL DataCreare DC Program Stare',
     'FX_DDF_REV': 'IDREV IDDF CodAngajament NumarRev DataRev Desc_Scurta',
+    'FX_DDF_REV_SA': 'IDREV ValCur',
 }
 
 # (table, what the operator calls its rows). Order = order of the lines shown.
@@ -49,6 +50,8 @@ def _blocks(table, rules):
 STAY_BEHIND = ('FX_ORD', 'FX_DDF_Parteneri', 'EF_PrimiteAsocieri')
 # Tables that carry both IDDF and IDREV: moving a revision means changing their IDDF too.
 MOVE_WITH_REVISION = ('FX_DDF_REV_SA', 'FX_DDF_REV_SB', 'FX_DDF_REV_PRT', 'FX_DDF_REV_ATT')
+# What hangs on a single revision besides its A/B/PRT lines (those are copies of the revision and go with it).
+BY_REVISION = ('FX_DDF_REV_ATT', 'FX_DDF_REV_ATT_IMG', 'FX_DDF_PDF', 'FX_PDF_SEMNATURI', 'FX_Rezervari')
 REPAIRABLE_MARK = 'REPARABIL'
 
 _RX_COD = re.compile(r'^[A-Za-z0-9_./-]{1,60}$')
@@ -69,6 +72,10 @@ def _missing(columns, required):
 
 def _day(value):
     return value.strftime('%d.%m.%Y') if hasattr(value, 'strftime') else ('' if value is None else str(value))
+
+
+def _money(value):
+    return '{:,.2f}'.format(float(value or 0)).replace(',', ' ')
 
 
 def _plural(n, one, many):
@@ -212,8 +219,12 @@ def _load_code(conn, db, columns, cod):
     for r in _rows(conn, 'SELECT * FROM FX_DDF WHERE CodAngajament=%s ORDER BY IDDF,CUAL', (cod,)):
         heads.setdefault(r['IDDF'], []).append(r)
     revs = defaultdict(list)
-    for r in _rows(conn, 'SELECT IDREV,IDDF,NumarRev,DataRev,Desc_Scurta FROM FX_DDF_REV '
-                         'WHERE IDDF IN (SELECT IDDF FROM FX_DDF WHERE CodAngajament=%s) ORDER BY IDDF,NumarRev,IDREV', (cod,)):
+    # Suma = the revision total the application itself shows (TotalRevizie = SUM(ValCur) over section A), NLinii = its section A lines.
+    for r in _rows(conn, 'SELECT r.IDREV,r.IDDF,r.NumarRev,r.DataRev,r.Desc_Scurta,'
+                         'COALESCE((SELECT ROUND(SUM(sa.ValCur),2) FROM FX_DDF_REV_SA sa WHERE sa.IDREV=r.IDREV),0) AS Suma,'
+                         '(SELECT COUNT(*) FROM FX_DDF_REV_SA sa WHERE sa.IDREV=r.IDREV) AS NLinii '
+                         'FROM FX_DDF_REV r WHERE r.IDDF IN (SELECT IDDF FROM FX_DDF WHERE CodAngajament=%s) '
+                         'ORDER BY r.IDDF,r.NumarRev,r.IDREV', (cod,)):
         revs[r['IDDF']].append(r)
     return {'cod': cod, 'ang': ang[0], 'pointer': ang[0]['IDDF'], 'heads': heads, 'revs': revs,
             'rules': _delete_rules(conn, db), 'columns': columns}
@@ -230,32 +241,70 @@ def _impact(conn, ctx, iddf):
     return counts
 
 
+def _same_revision(a, b):
+    """The operator's key: same date and same total (over section A lines that really exist) = the same revision."""
+    return (a['DataRev'] is not None and a['DataRev'] == b['DataRev'] and a['NLinii'] > 0 and b['NLinii'] > 0
+            and round(float(a['Suma']), 2) == round(float(b['Suma']), 2))
+
+
+def _rev_attached(conn, columns, idrev):
+    """label -> rows of what hangs on ONE revision and would go with it (`FX_Rezervari` is listed too: its rows are re-pointed, not lost)."""
+    found = OrderedDict()
+    for table, label in DEPENDENTS:
+        if table not in BY_REVISION or table not in columns:
+            continue
+        if table == 'FX_DDF_REV_ATT_IMG':
+            n = _rows(conn, 'SELECT COUNT(*) AS n FROM FX_DDF_REV_ATT_IMG i JOIN FX_DDF_REV_ATT a ON a.IdRevAtt=i.IdRevAtt '
+                            'WHERE a.IDREV=%s', (idrev,))[0]['n']
+        elif 'IDREV' in columns[table]:
+            n = _rows(conn, 'SELECT COUNT(*) AS n FROM ' + table + ' WHERE IDREV=%s', (idrev,))[0]['n']
+        else:
+            continue
+        if n:
+            found[table] = (label, n)
+    return found
+
+
 def _eligibility(conn, ctx):
-    """(main, extras, reasons, impact): `reasons` empty = the automatic repair applies (move the revisions of the extra headers
-    under the one the angajament points to, then delete the headers left empty). Anything unclear is a reason, never a guess."""
-    heads, revs, pointer, rules = ctx['heads'], ctx['revs'], ctx['pointer'], ctx['rules']
+    """(main, extras, reasons, impact, plan): `reasons` empty = the automatic repair applies. Per revision of an extra header:
+    the same date AND the same total as ANY revision of the main header = the same revision -> it is dropped (its reservations are
+    re-pointed to the revision that stays); otherwise it moves under the main header. Anything unclear is a reason, never a guess.
+    plan = {'drop': [(revision, kept revision, reservations)], 'move': [revision]}"""
+    heads, revs, pointer, rules, columns = ctx['heads'], ctx['revs'], ctx['pointer'], ctx['rules'], ctx['columns']
     impact = {iddf: _impact(conn, ctx, iddf) for iddf in heads}
+    plan = {'drop': [], 'move': []}
     if len(heads) < 2:
-        return None, [], ['are un singur antet sau niciunul: nu e nimic de unit aici.'], impact
+        return None, [], ['are un singur antet sau niciunul: nu e nimic de unit aici.'], impact, plan
     if pointer not in heads:
-        return None, [], ['angajamentul nu arata spre niciunul dintre antete (FX_Angajamente.IDDF = %s): nu se stie care este cel principal.' % pointer], impact
+        return None, [], ['angajamentul nu arata spre niciunul dintre antete (FX_Angajamente.IDDF = %s): nu se stie care este cel principal.' % pointer], impact, plan
     reasons = []
     extras = [i for i in heads if i != pointer]
     if len({str(rows[0]['DC']) for rows in heads.values()}) > 1:
         reasons.append('antetele au DC diferit.')
-    taken = {x['NumarRev'] for x in revs.get(pointer, []) if x['NumarRev'] is not None}
+    main_revs = revs.get(pointer, [])
+    taken = {x['NumarRev'] for x in main_revs if x['NumarRev'] is not None}
     for iddf in extras:
         for table, (label, n) in impact[iddf].items():
             if n and (table in STAY_BEHIND or _blocks(table, rules)):
                 reasons.append('IDDF %s are %d %s, care nu se muta odata cu reviziile.' % (iddf, n, label))
         for x in revs.get(iddf, []):
+            kept = next((m for m in main_revs if _same_revision(x, m)), None)
+            if kept is not None:
+                attached = _rev_attached(conn, columns, x['IDREV'])
+                lost = [(label, n) for t, (label, n) in attached.items() if t != 'FX_Rezervari']
+                if lost:
+                    reasons.append('IDDF %s: revizia IDREV %s seamana cu IDREV %s din antetul principal (aceeasi data si suma), dar are %s, care s-ar pierde.'
+                                   % (iddf, x['IDREV'], kept['IDREV'], ', '.join('%d %s' % (n, label) for label, n in lost)))
+                plan['drop'].append((x, kept, attached.get('FX_Rezervari', ('', 0))[1]))
+                continue
+            plan['move'].append(x)
             if x['NumarRev'] is None:
                 reasons.append('IDDF %s: revizia IDREV %s nu are NumarRev.' % (iddf, x['IDREV']))
             elif x['NumarRev'] in taken:
-                reasons.append('IDDF %s: NumarRev %s (IDREV %s) exista deja in documentul principal sau in alt antet de mutat.' % (iddf, x['NumarRev'], x['IDREV']))
+                reasons.append('IDDF %s: NumarRev %s (IDREV %s) exista deja in documentul principal sau in alt antet de mutat si revizia nu are aceeasi data si suma ca una din ele.' % (iddf, x['NumarRev'], x['IDREV']))
             else:
                 taken.add(x['NumarRev'])
-    return pointer, extras, reasons, impact
+    return pointer, extras, reasons, impact, plan
 
 
 def explain(conn, db, param, block):
@@ -266,7 +315,7 @@ def explain(conn, db, param, block):
         raise AdminError('Explicatia nu poate rula: lipsesc ' + ', '.join(missing) + '.')
     ctx = _load_code(conn, db, columns, cod)
     ang, pointer, heads, revs, rules = ctx['ang'], ctx['pointer'], ctx['heads'], ctx['revs'], ctx['rules']
-    main, extras, reasons, impact = _eligibility(conn, ctx)
+    main, extras, reasons, impact, plan = _eligibility(conn, ctx)
 
     # ---- 1: what the database holds ------------------------------------------------------
     found = ['Angajament %s%s.' % (cod, (' - ' + str(ang['Stare'])) if ang.get('Stare') else '')]
@@ -286,7 +335,8 @@ def explain(conn, db, param, block):
         rv = revs.get(iddf, [])
         found.append('  Revizii: %d%s.' % (len(rv), (' (NumarRev ' + _ranges([x['NumarRev'] for x in rv if x['NumarRev'] is not None]) + ')') if rv else ''))
         for x in rv:
-            found.append('    IDREV %s - NumarRev %s - %s - %s' % (x['IDREV'], x['NumarRev'], _day(x['DataRev']), x['Desc_Scurta'] or ''))
+            found.append('    IDREV %s - NumarRev %s - %s - suma %s (%d linii) - %s' % (
+                x['IDREV'], x['NumarRev'], _day(x['DataRev']), _money(x['Suma']), x['NLinii'], x['Desc_Scurta'] or ''))
     first = block(db, 'Ce are baza pentru %s' % cod, ['text'], [[line] for line in found],
                   'Citit din baza %s; nimic nu a fost schimbat.' % db, raw=True)
 
@@ -323,6 +373,7 @@ def explain(conn, db, param, block):
     if len(heads) > 1 and pointer in heads:
         main_numbers = {x['NumarRev'] for x in revs.get(pointer, []) if x['NumarRev'] is not None}
         gaps = sorted(set(range(min(main_numbers), max(main_numbers) + 1)) - main_numbers) if main_numbers else []
+        dropped = {x['IDREV']: (kept, resv) for x, kept, resv in plan['drop']}
         for iddf in heads:
             if iddf == pointer:
                 continue
@@ -332,23 +383,22 @@ def explain(conn, db, param, block):
             if stop:
                 verdict.append('IDDF %s: NU se poate sterge - are %s.' % (iddf, ', '.join('%d %s' % (n, label) for label, n in stop)))
                 continue
-            others = [(label, n) for t, (label, n) in counts.items() if n and t != 'FX_DDF_REV' and not _blocks(t, rules)]
-            if not rv and not others:
+            if not rv and not any(n for t, (label, n) in counts.items() if t != 'FX_DDF_REV'):
                 verdict.append('IDDF %s: antet gol (fara revizii si fara nimic legat de el) - se poate sterge fara pierderi.' % iddf)
                 continue
-            clash = sorted({x['NumarRev'] for x in rv if x['NumarRev'] in main_numbers})
-            fits = sorted({x['NumarRev'] for x in rv if x['NumarRev'] in gaps})
-            line = 'IDDF %s: NU se sterge simplu - ar disparea %s' % (iddf, _plural(len(rv), 'revizie', 'revizii'))
-            if others:
-                line += ' si ' + ', '.join('%d %s' % (n, label) for label, n in others)
-            line += '. Reviziile lui trebuie mutate sub IDDF %s inainte.' % pointer
-            verdict.append(line)
-            if clash:
-                verdict.append('  Mutarea s-ar lovi: NumarRev %s exista in ambele antete (de analizat de mana).' % _ranges(clash))
-            else:
-                verdict.append('  Mutarea nu se loveste de nicio revizie a lui IDDF %s (niciun NumarRev comun).' % pointer)
-            if fits:
-                verdict.append('  NumarRev %s lipseste din IDDF %s si se afla in IDDF %s - se potriveste exact in gol.' % (_ranges(fits), pointer, iddf))
+            verdict.append('IDDF %s are %s. Fiecare revizie a lui e comparata cu TOATE reviziile din IDDF %s '
+                           '(aceeasi data + aceeasi suma = aceeasi revizie):' % (iddf, _plural(len(rv), 'revizie', 'revizii'), pointer))
+            for x in rv:
+                if x['IDREV'] in dropped:
+                    kept, resv = dropped[x['IDREV']]
+                    verdict.append('  - IDREV %s (NumarRev %s, %s, suma %s) EXISTA DEJA in IDDF %s, ca IDREV %s (NumarRev %s): se STERGE, nu se muta nicaieri.'
+                                   % (x['IDREV'], x['NumarRev'], _day(x['DataRev']), _money(x['Suma']), pointer, kept['IDREV'], kept['NumarRev']))
+                    if resv:
+                        verdict.append('    Cele %s legate de ea NU se sterg (sunt unice): raman si se leaga de IDREV %s.' % (_plural(resv, 'rezervare', 'rezervari'), kept['IDREV']))
+                else:
+                    note = ' (NumarRev %s lipsea din IDDF %s si se potriveste in gol)' % (x['NumarRev'], pointer) if x['NumarRev'] in gaps else ''
+                    verdict.append('  - IDREV %s (NumarRev %s, %s, suma %s) nu seamana cu nicio revizie din IDDF %s: se muta sub IDDF %s%s.'
+                                   % (x['IDREV'], x['NumarRev'], _day(x['DataRev']), _money(x['Suma']), pointer, pointer, note))
     elif len(heads) > 1:
         verdict.append('Sunt %d antete, iar angajamentul nu arata spre niciunul: mai intai trebuie hotarat care este documentul principal.' % len(heads))
     elif not heads:
@@ -368,10 +418,18 @@ def explain(conn, db, param, block):
         if reasons:
             verdict.append('Nu se poate repara automat: ' + ' '.join(reasons))
         else:
-            verdict.append(REPAIRABLE_MARK + ': reviziile antetelor in plus (IDDF %s) se pot muta sub IDDF %s, apoi antetele ramase goale se sterg. '
-                           'Butonul «Repara» face asta intr-o singura tranzactie.' % (', '.join(map(str, extras)), main))
+            resv_total = sum(r for _x, _k, r in plan['drop'])
+            parts = []
+            if plan['drop']:
+                parts.append('se sterg %s (exista deja in IDDF %s)' % (_plural(len(plan['drop']), 'revizie', 'revizii'), main))
+            parts.append('se muta %s sub IDDF %s' % (_plural(len(plan['move']), 'revizie', 'revizii'), main) if plan['move']
+                         else 'nu se muta nicio revizie')
+            if resv_total:
+                parts.append('%s ramane si se leaga de revizia care a ramas' % _plural(resv_total, 'rezervare', 'rezervari'))
+            parts.append('antetele ramase goale (IDDF %s) se sterg' % ', '.join(map(str, extras)))
+            verdict.append(REPAIRABLE_MARK + ': ' + '; '.join(parts) + '. Butonul «Repara codul» face asta intr-o singura tranzactie.')
     third = block(db, 'Concluzie pentru %s' % cod, ['text'], [[line] for line in verdict],
-                  'Aceasta comanda nu repara nimic.', raw=True)
+                  'Aceasta explicatie nu schimba nimic in baza.', raw=True)
     return [first, second, third]
 
 
@@ -400,13 +458,31 @@ def repair(conn, db, param, block):
         _rows(conn, 'SELECT IDDF FROM FX_DDF WHERE CodAngajament=%s FOR UPDATE', (cod,))
         _rows(conn, 'SELECT CodAngajament FROM FX_Angajamente WHERE CodAngajament=%s FOR UPDATE', (cod,))
         ctx = _load_code(conn, db, columns, cod)
-        main, extras, reasons, _unused = _eligibility(conn, ctx)
+        main, extras, reasons, _unused, plan = _eligibility(conn, ctx)
         if reasons:
             raise AdminError('Codul %s nu se repara automat: %s Nu s-a schimbat nimic.' % (cod, ' '.join(reasons)))
-        moved, removed = [], []
+        moved, removed, dropped, resv_moved = [], [], [], 0
         for iddf in extras:
-            idrevs = [x['IDREV'] for x in ctx['revs'].get(iddf, [])]
-            if _exec(conn, 'UPDATE FX_DDF_REV SET IDDF=%s WHERE IDDF=%s', (main, iddf)) != len(idrevs):
+            # 1: the revisions that are the same as one of the main header (same date and total) are dropped; their reservations stay,
+            #    re-pointed to the revision that remains (a reservation is unique, never deleted). What the dropped revision held is written to the Jurnal first.
+            for x, kept, _resv in [d for d in plan['drop'] if d[0]['IDDF'] == iddf]:
+                snapshot = [str(dict(r)) for r in _rows(conn, 'SELECT * FROM FX_DDF_REV WHERE IDREV=%s', (x['IDREV'],))]
+                for table in ('FX_DDF_REV_SA', 'FX_DDF_REV_SB'):
+                    if table in columns:
+                        snapshot.extend(table + ' ' + str(dict(r)) for r in _rows(conn, 'SELECT * FROM ' + table + ' WHERE IDREV=%s', (x['IDREV'],)))
+                if 'FX_Rezervari' in columns and 'IDREV' in columns['FX_Rezervari']:
+                    # A reservation exists once (FX_Rezervari.IDH is unique): it is NOT deleted with the duplicate revision (ON DELETE CASCADE)
+                    # but re-pointed to the revision that stays. Its row goes to the Jurnal first.
+                    rez = _rows(conn, 'SELECT * FROM FX_Rezervari WHERE IDREV=%s', (x['IDREV'],))
+                    snapshot.extend('FX_Rezervari ' + str(dict(r)) for r in rez)
+                    resv_moved += _exec(conn, 'UPDATE FX_Rezervari SET IDREV=%s WHERE IDREV=%s', (kept['IDREV'], x['IDREV']))
+                if _exec(conn, 'DELETE FROM FX_DDF_REV WHERE IDREV=%s AND IDDF=%s', (x['IDREV'], iddf)) != 1:
+                    raise AdminError('Datele s-au schimbat in timpul repararii. Nu s-a aplicat nimic; reluati verificarea.')
+                dropped.append('IDREV %s (identica cu IDREV %s): %s' % (x['IDREV'], kept['IDREV'], ' / '.join(snapshot)[:8000]))
+            # 2: the others move under the main header, together with the lines that carry their IDDF.
+            idrevs = [x['IDREV'] for x in plan['move'] if x['IDDF'] == iddf]
+            if idrevs and _exec(conn, 'UPDATE FX_DDF_REV SET IDDF=%s WHERE IDDF=%s AND IDREV IN (' +
+                                ','.join(['%s'] * len(idrevs)) + ')', tuple([main, iddf] + idrevs)) != len(idrevs):
                 raise AdminError('Datele s-au schimbat in timpul repararii. Nu s-a aplicat nimic; reluati verificarea.')
             for table in MOVE_WITH_REVISION:
                 if table not in columns:
@@ -429,11 +505,14 @@ def repair(conn, db, param, block):
             moved.extend(idrevs)
             removed.append('IDDF %s: %s' % (iddf, '; '.join(str(dict(r)) for r in ctx['heads'][iddf])))
         _journal(conn, 'ddf_antete_repara', db, cod,
-                 ('Revizii mutate sub IDDF %s: IDREV %s. Antete sterse (valorile de dinainte): %s.'
-                  % (main, ', '.join(map(str, moved)) or '-', ' | '.join(removed)))[:60000])
+                 ('Revizii mutate sub IDDF %s: IDREV %s. Revizii identice sterse (aceeasi data si suma), cu continutul lor: %s. '
+                  'Rezervari mutate pe revizia ramasa: %d. Antete sterse (valorile de dinainte): %s.'
+                  % (main, ', '.join(map(str, moved)) or '-', ' | '.join(dropped) or '-', resv_moved, ' | '.join(removed)))[:60000])
         done = block(db, 'Reparare documente de fundamentare', ['rezultat'],
-                     [['%s: %s mutate sub IDDF %s, %s sters(e).' % (cod, _plural(len(moved), 'revizie', 'revizii'), main, _plural(len(removed), 'antet', 'antete'))]],
-                     'Mutarea si stergerea sunt in Jurnal, cu valorile antetelor sterse. Mai jos, starea de acum.', raw=True)
+                     [['%s: %s identice sterse, %s mutate sub IDDF %s, %s mutate pe revizia ramasa, %s sters(e).'
+                       % (cod, _plural(len(dropped), 'revizie', 'revizii'), _plural(len(moved), 'revizie', 'revizii'), main,
+                          _plural(resv_moved, 'rezervare', 'rezervari'), _plural(len(removed), 'antet', 'antete'))]],
+                     'Tot ce s-a facut este in Jurnal, cu continutul reviziilor sterse si valorile antetelor sterse. Mai jos, starea de acum.', raw=True)
         after = explain(conn, db, cod, block)
         conn.commit()
         return [done] + after

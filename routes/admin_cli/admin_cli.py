@@ -51,6 +51,7 @@ Commands (all read-only unless marked WRITE):
     db-rows --db D --table T --offset O --limit N    a further page of rows
     db-cell --db D --table T --column C (--key-json J | --offset O)    the whole content of one cell (text or blob)
     db-distinct --db D --table T --column C [--where-json J] [--like S]    the values a column holds (pick list of the linked-table jump)
+    query-run --db D --sql-b64 B [--params-b64 P] [--limit N]    run one read-only query text of the KBotAdmin catalog «_Interogari» (admin_query.py)
     backups [--db D]                   the dump files and schema plans (of one database when D is given), with the reason of each dump
     backup-text --path P               the text of one dump / plan file (first 2 MB)
     backup --db D|ALL --reason T       WRITE  dump one database, or every unit database but 000_DEMO, to backup/ (admin_backup.py)
@@ -456,8 +457,9 @@ COMMANDS = {
     "ddf_antete_explica": ("Explica un cod (documente de fundamentare)", "Ce are baza pentru un cod de angajament si ce ar strica "
                            "stergerea fiecarui antet FX_DDF. Doar citire; cere o baza anume si codul. Se porneste din butonul «Explica» "
                            "de la comanda de verificare.", False, _c_ddf_antete_explica),
-    "ddf_antete_repara": ("Repara antetele multiple ale unui cod (documente de fundamentare)", "Muta reviziile antetelor FX_DDF in plus ale unui cod sub "
-                          "antetul spre care arata angajamentul, apoi sterge antetele ramase goale. SCRIE in baza aleasa, intr-o singura "
+    "ddf_antete_repara": ("Repara antetele multiple ale unui cod (documente de fundamentare)", "Reviziile antetelor FX_DDF in plus ale unui cod: cele cu "
+                          "aceeasi data si aceeasi suma ca o revizie a antetului principal se sterg (rezervarile lor, unice, trec pe revizia ramasa), "
+                          "celelalte se muta sub antetul spre care arata angajamentul; antetele ramase goale se sterg. SCRIE in baza aleasa, intr-o singura "
                           "tranzactie, cu Jurnal. Refuza tot ce nu e clar. Se porneste din butonul «Repara» de dupa «Explica».", True, _c_ddf_antete_repara),
 }
 
@@ -889,6 +891,8 @@ def _parser():
     admin_source.register(sub)
     from routes.admin_cli import admin_dbview
     admin_dbview.register(sub)
+    from routes.admin_cli import admin_query
+    admin_query.register(sub)
     return parser
 
 
