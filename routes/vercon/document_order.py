@@ -3,8 +3,6 @@
 The route holds the gestiune row lock for writes. Cancelled records are skipped;
 within one day the larger primary key is the last record. No transaction is opened here.
 """
-from datetime import date
-
 from .nomenclatoare import NomError
 from . import consumption_period
 
@@ -41,12 +39,31 @@ def require_latest(cursor, ctx, family, doc_id):
         raise NomError('DOCUMENT_ORDER', message(family, last), 409)
 
 
+def number_neighbours(cursor, ctx, family, doc_id):
+    """The records just before and just after doc_id in number order (None at either end)."""
+    table, pk, day, number, extra, _ = SPECS[family]
+    cursor.execute(f'SELECT {pk} AS id, DATE({day}) AS day, {number} AS number FROM {table} '
+                   'WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND Anulat=0' + extra +
+                   f' ORDER BY {number}, {pk}', (ctx['subunit'], ctx['gestiune'], ctx['exercitiu']))
+    rows = cursor.fetchall()
+    for index, row in enumerate(rows):
+        if row['id'] == doc_id:
+            return (rows[index - 1] if index else None,
+                    rows[index + 1] if index + 1 < len(rows) else None)
+    return None, None
+
+
 def require_position(cursor, ctx, family, doc_id, day):
-    """Changing the latest record's date must not move it before its predecessor."""
-    previous = latest(cursor, ctx, family, exclude=doc_id)
-    if previous and (day, doc_id) < (previous['day'] or date.min, previous['id']):
-        raise NomError('DOCUMENT_ORDER', 'Data modificată trebuie să păstreze documentul ultimul în ordine cronologică.',
-                       422, {'h.Data': 'Data este înaintea documentului precedent.'})
+    """A changed date must stay between the dates of the neighbours in number order (same day allowed).
+
+    The number is the order: a document dated far out of line (e.g. 31.10 between 19.10 and 21.10) can be
+    moved to any day in the gap, even though by its current date it is the last one."""
+    previous, following = number_neighbours(cursor, ctx, family, doc_id)
+    if (previous and previous['day'] and day < previous['day']) or (following and following['day'] and day > following['day']):
+        low = previous['day'].strftime('%d.%m.%Y') if previous and previous['day'] else 'începutul anului'
+        high = following['day'].strftime('%d.%m.%Y') if following and following['day'] else 'sfârșitul anului'
+        message = 'Data trebuie să fie între %s și %s, păstrând ordinea numerelor.' % (low, high)
+        raise NomError('DOCUMENT_ORDER', message, 422, {'h.Data': message})
 
 
 def annotate_rows(cursor, ctx, family, rows):

@@ -7,25 +7,31 @@ from .nomenclatoare import NomError
 
 
 def active_month(cursor, ctx):
+    # The active month is the latest month with consumption data, never the
+    # calendar month. Compare both sources: an older food list must not hide BCs.
+    # Search all exercises so selecting an old year cannot reopen its month.
+    scope = (ctx['subunit'], ctx['gestiune'])
+    days = []
     if ctx['type'] == 'ALIMENTE':
         cursor.execute('SELECT MAX(DATE(DATALA)) AS day FROM VC_LABC '
                        'WHERE SubunitId=%s AND GestiuneId=%s AND Anulat=0',
-                       (ctx['subunit'], ctx['gestiune']))
+                       scope)
         row = cursor.fetchone()
         if row and row['day']:
-            return str(row['day'])[:7]
-    # Materiale, or an Alimente gestiune with no active food list yet.
-    # Search all exercises so selecting an old year cannot reopen its month.
+            days.append(row['day'])
     cursor.execute('SELECT MAX(DATE(DataBC)) AS day FROM VC_Iesiri_H '
                    'WHERE SubunitId=%s AND GestiuneId=%s AND Anulat=0 AND COALESCE(Retur,0)=0',
-                   (ctx['subunit'], ctx['gestiune']))
+                   scope)
     row = cursor.fetchone()
-    return str(row['day'])[:7] if row and row['day'] else None
+    if row and row['day']:
+        days.append(row['day'])
+    return str(max(days))[:7] if days else None
 
 
 def month_message(month):
     suffix = ' (%s)' % month if month else ''
-    return 'Bonurile de consum se pot modifica numai în luna activă%s.' % suffix
+    return ('Bonurile de consum se pot modifica numai în ultima lună cu date%s '
+            '(luna activă).' % suffix)
 
 
 def later_exercise(cursor, ctx):
@@ -105,4 +111,4 @@ def require_date(cursor, ctx, day):
     month = active_month(cursor, ctx)
     if not month or str(day)[:7] != month:
         raise NomError('BC_MONTH', month_message(month), 422,
-                       {'h.Data': 'Data bonului trebuie să rămână în luna activă.'})
+                       {'h.Data': 'Data bonului trebuie să rămână în ultima lună cu date (luna activă).'})

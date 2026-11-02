@@ -20,6 +20,9 @@ dar de la zero (nicio valoare anterioara data), in ordinea (zi, Rez_Ord, ID). Ap
   * `FX_Rezervari` (dupa `IDH`, doar randurile care NU sunt initiale): `R_Anterioara` si
     `R_Valoare` iau valorile noi, iar `EMarire` / `EMicsorare` urmeaza semnul lui
     `R_Valoare`, ca la pasul 3d. Randurile initiale (`R_Valoare = Val_AngLeg`) nu se ating.
+    `R_Definitiva` (31.10.2026) ia `Val_AngLeg` al randului de istoric -- valoarea la care se opreste
+    rezervarea; arborele (`tree.py`, `_REZERVARI_GRESITE`) o compara cu `R_Anterioara` a randului urmator,
+    deci daca ramanea veche arborele ramanea rosu desi lantul `R_Anterioara` era reparat.
 
 Ce NU face: nu insereaza si nu sterge randuri de `FX_Rezervari`, nu atinge `IDREV` /
 `AreDDF`. Un rand al carui `TipRand` s-ar muta intre initiala/definitiva si influenta se
@@ -75,7 +78,7 @@ _ISTORIC_SQL = (
 )
 _ORDINE_SQL = "SELECT CodAI, NrCrt FROM FX_Indicatori WHERE CodAngajament = %s"
 _REZ_SQL = (
-    "SELECT IDRZ, IDH, IDREV, AreDDF, EInitiala, R_Anterioara, R_Valoare, EMarire, EMicsorare "
+    "SELECT IDRZ, IDH, IDREV, AreDDF, EInitiala, R_Anterioara, R_Valoare, R_Definitiva, EMarire, EMicsorare "
     "FROM FX_Rezervari WHERE CodAngajament = %s AND IDH IS NOT NULL"
 )
 # Months in which the angajament has DDF revisions (operator, 12.10.2026: a month with revisions is
@@ -90,7 +93,7 @@ _UPD_ISTORIC_SQL = (
     "Val_Rezervare_Dif = %s WHERE ID = %s"
 )
 _UPD_REZ_SQL = (
-    "UPDATE FX_Rezervari SET R_Anterioara = %s, R_Valoare = %s, "
+    "UPDATE FX_Rezervari SET R_Anterioara = %s, R_Valoare = %s, R_Definitiva = %s, "
     "EMarire = %s, EMicsorare = %s WHERE IDRZ = %s"
 )
 
@@ -186,6 +189,9 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
         descr = r["Descriere"] or ""
         cod_ind = (r["CodIndicator"] or "").strip()
         tip, ant, dif = None, r["Val_Rezervare_Ant"], r["Val_Rezervare_Dif"]
+        # The figure the reservation ENDS on (FX_Rezervari.R_Definitiva = the history row's Val_AngLeg, as the
+        # ingestion writes it). None = not a contract row, so nothing says what it should be and it is left alone.
+        def_noua = None
 
         if descr == "sume nemodificate":
             tip = "Rez_Zero"
@@ -193,6 +199,7 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
             k = f"{cod}|{cod_ind}"
             val_curent = float(r["Val_AngLeg"] or 0)
             val_anterior = float(last_ang.get(k, 0))
+            def_noua = round(val_curent, 2)
             if r_init:
                 tip, ant, dif = "Rez_Initiala", 0, 0
             elif r_def:
@@ -218,7 +225,7 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
                 tip = "Rez_Derulare+"
             else:
                 tip = r["TipRand"]
-        noi[rid] = {"rez_ord": r["RezOrdNou"], "tip": tip, "ant": ant, "dif": dif, "rand": r}
+        noi[rid] = {"rez_ord": r["RezOrdNou"], "tip": tip, "ant": ant, "dif": dif, "def": def_noua, "rand": r}
 
     # --- FX_Rezervari existente -----------------------------------------------
     cursor.execute(_REZ_SQL, (cod,))
@@ -263,7 +270,12 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
             continue
         val_noua = float(n["dif"] or 0)
         ant_noua = float(n["ant"] or 0)
-        if _diferit(rz["R_Valoare"], val_noua) or _diferit(rz["R_Anterioara"], ant_noua):
+        # Slice-less fix (operator, 31.10.2026): R_Definitiva was never rewritten, so after a repair the next row's
+        # R_Anterioara (right) no longer matched it (wrong) and the tree stayed red while the probe found nothing.
+        def_gasita = n["def"] is not None
+        def_de_scris = float(n["def"]) if def_gasita else float(rz["R_Definitiva"] or 0)
+        if (_diferit(rz["R_Valoare"], val_noua) or _diferit(rz["R_Anterioara"], ant_noua)
+                or (def_gasita and _diferit(rz["R_Definitiva"], def_de_scris))):
             rez["rezervari_de_corectat"] += 1
             luni_atinse.add(_luna_cod(r["DataFX"]))
             if rz["IDREV"] is not None or bool(rz["AreDDF"]):
@@ -274,9 +286,10 @@ def reanalizeaza_rezervari(cursor, cod: str, aplica: bool) -> dict:
                     "valoare_veche": float(rz["R_Valoare"] or 0), "valoare_noua": val_noua,
                     "anterioara_veche": float(rz["R_Anterioara"] or 0),
                     "anterioara_noua": ant_noua,
+                    "definitiva_veche": float(rz["R_Definitiva"] or 0), "definitiva_noua": def_de_scris,
                 })
             actiuni_rez.append((
-                ant_noua, val_noua,
+                ant_noua, val_noua, def_de_scris,
                 1 if val_noua > 0 else 0, 1 if val_noua < 0 else 0, int(rz["IDRZ"])))
 
     # --- luni cu revizii: nu se repara -------------------------------------------

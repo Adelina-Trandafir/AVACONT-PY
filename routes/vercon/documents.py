@@ -183,7 +183,7 @@ def get_document(cursor, repo, ctx, family, doc_id):
             from .receipt_mf_edit import annotate
             annotate(cursor, ctx, out_lines)
             from .receipt_adjustment import annotate as annotate_adjustment
-            stock_day = h['DataFc'] or h['Data']
+            stock_day = h['Data']
             annotate_adjustment(cursor, ctx, out_lines, stock_day.date() if hasattr(stock_day, 'date') else stock_day)
         else:
             lines = _all(cursor, 'SELECT s.ID, s.IdProdus, pr.DenumireP, pr.UM, s.Cant, s.PUTVA FROM VC_IntrariStorno s ' + _name_join('s') +

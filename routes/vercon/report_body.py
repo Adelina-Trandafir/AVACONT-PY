@@ -44,7 +44,7 @@ def doc_heading(spec, row, unit, committees, ctx, gestiune_name):
         header = report_model.table([('fiscal_code', 'Cod furnizor', 'text', 1000), ('invoice', 'Nr. factură /\nAviz expediere', 'text', 1700),
             ('dispatch', 'Data expedierii', 'text', 1000), ('number', 'Nota recepție\nNumăr', 'text', 900),
             ('received', 'Data', 'text', 1000), ('order', 'Nr. comandă', 'text', 1000)],
-            [{**row, 'number': abs(row['number']) if isinstance(row['number'], int) else row['number'], 'dispatch': date(row.get('movement_date')), 'received': date(row['date']), 'order': row.get('order') or ''}], 0)
+            [{**row, 'number': abs(row['number']) if isinstance(row['number'], int) else row['number'], 'dispatch': date(row.get('invoice_date')), 'received': date(row['date']), 'order': row.get('order') or ''}], 0)
         return [header, {'t': 'box', 'rows': [('Furnizor', row.get('party') or ''), ('Adresă', row.get('address') or '')]},
             text('Subsemnații, membrii comisiei de recepție, am procedat la recepționarea valorilor materiale furnizate de ' + (row.get('party') or '')),
             text('Documente însoțitoare: ' + (row.get('invoice') or '')),

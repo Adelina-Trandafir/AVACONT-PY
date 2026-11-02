@@ -126,13 +126,13 @@ def simulate(cursor, repo, ctx, parsed, exclude=None):
     history. No writes, including price variants: new ones get synthetic identities.
     """
     from .documents import _all, _scope
-    old = _all(cursor, 'SELECT i.IdProdus, i.Cant, DATE(COALESCE(n.DataFc,n.Data)) AS day '
+    old = _all(cursor, 'SELECT i.IdProdus, i.Cant, DATE(n.Data) AS day '
                'FROM VC_Intrari i JOIN VC_NIR n ON n.SubunitId=i.SubunitId AND n.GestiuneId=i.GestiuneId '
                'AND n.ExercitiuId=i.ExercitiuId AND n.IdIntrare=i.IdIntrare '
                'WHERE i.SubunitId=%s AND i.GestiuneId=%s AND i.ExercitiuId=%s AND i.IdIntrare=%s',
                (*_scope(ctx), exclude)) if exclude else []
     drafts, synthetic = [], {}
-    on = parsed['cols']['DataFc'] or parsed['cols']['Data']
+    on = parsed['cols']['Data']
     for line in parsed['lines']:
         variant = line.get('variant')
         if ctx['type'] != 'MF' and not line.get('preserve'):

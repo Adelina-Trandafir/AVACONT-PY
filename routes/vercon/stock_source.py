@@ -11,14 +11,14 @@ from .nomenclatoare import NomError
 
 WAREHOUSE = (
     ('nir', 'VC_Intrari', 'i', 'VC_NIR', 'n', 'IdIntrare',
-     'DATE(COALESCE(n.DataFc,n.Data))', 'n.NrFact', suppliers.sql('n.CodPartener'),
+     'DATE(n.Data)', 'n.NrFact', suppliers.sql('n.CodPartener'),
      'n.Anulat=0 AND COALESCE(n.Storno,0)=0', 1),
     ('br', 'VC_IesiriRetur', 'r', 'VC_Iesiri_H', 'h', 'IdBonConsum',
      'DATE(h.DataBC)', 'h.NumarBC', 'NULL', 'h.Anulat=0', 1),
     ('bc', 'VC_Iesiri', 'o', 'VC_Iesiri_H', 'h', 'IdBonConsum',
      'DATE(h.DataBC)', 'h.NumarBC', 'NULL', 'h.Anulat=0', -1),
     ('storno', 'VC_IntrariStorno', 's', 'VC_NIR', 'n', 'IdIntrare',
-     'DATE(COALESCE(n.DataFc,n.Data))', 'n.NrFact', suppliers.sql('n.CodPartener'),
+     'DATE(n.Data)', 'n.NrFact', suppliers.sql('n.CodPartener'),
      'n.Anulat=0 AND s.Anulat=0', -1),
 )
 

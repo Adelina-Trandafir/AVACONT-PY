@@ -51,11 +51,11 @@ def supplier_statement(cursor, ctx, supplier, on):
         raise NomError('NOT_FOUND', 'Furnizorul nu mai există.', 404)
     # Every document and every picker uses the same fiscal identity.
     rows = _all(cursor,
-        'SELECT n.IdIntrare AS id, COALESCE(n.DataFc,n.Data) AS day, n.NrFact AS invoice, '
+        'SELECT n.IdIntrare AS id, n.Data AS day, n.NrFact AS invoice, '
         'n.Valoare AS amount, COALESCE(n.Storno,0) AS storno '
         'FROM VC_NIR n '
         'WHERE n.SubunitId=%s AND n.GestiuneId=%s AND n.ExercitiuId=%s '
-        'AND n.Anulat=0 AND DATE(COALESCE(n.DataFc,n.Data))<=%s '
+        'AND n.Anulat=0 AND DATE(n.Data)<=%s '
         'AND n.CodPartener=%s '
         'ORDER BY day,n.Numar,n.NumarSub', (*_scope(ctx), on, supplier))
     total = Decimal(0)

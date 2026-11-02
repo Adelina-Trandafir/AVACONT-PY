@@ -5,6 +5,16 @@ La generarea unui raport/document sau la export, fereastra apare imediat cu indi
 
 Directorul `queries/` conține interogările SELECT folosite la generarea rapoartelor. Aceste fișiere sunt resurse ale aplicației: se copiază pe server, nu se execută separat și nu instalează/modifică schema bazei de date.
 
+## Data intrării în stoc — SLICE-VC06-29, 02.11.2026
+
+Data efectivă de stoc este **data NIR-ului**, păstrată în `VC_NIR.Data`. Pentru FCS se folosește data propriului document din același câmp. `DataFc` rămâne data facturii și nu este fallback pentru o dată NIR lipsă. Registrul comun, disponibilul, simulările, fișele, balanțele, prima intrare a variantei și evenimentele de recepție/storno ale MF folosesc data documentului.
+
+În sursa de rapoarte `receipts`, `date` și `movement_date` reprezintă data NIR/FCS, iar `invoice_date` reprezintă data facturii afișată în antet. Selecțiile și filtrarea pe perioadă folosesc `date`. Datele acestor rânduri sunt preluate din antetul real al documentului, în contextul raportului, inclusiv pentru surse personalizate vechi fără `invoice_date`.
+
+`report_receipt_dates.py` adaptează în memorie sursele SQL vechi salvate: referințele `DataFc` ale registrului `ledger`, expresiile uzuale `COALESCE/IFNULL(DataFc,Data)` și proiecțiile `movement_date` ale recepțiilor folosesc `Data`. Fișierele de configurare ale proprietarului nu sunt rescrise. Snapshot-urile dependente de recepții/registru și cele de amortizare cer regenerare la export dacă preced această regulă.
+
+Implementare locală, fără teste, compilare, execuție SQL, browser, randări, publicare sau modificări ale datelor istorice în acest slice.
+
 Fiecare marker de tabel trebuie urmat de un alias, de exemplu `FROM {{TABLE:VC_ComisieNIR}} c`. La rulare, markerul devine un subquery limitat la contextul utilizatorului, iar MariaDB cere aliasul acestuia. Pentru configurări personalizate salvate anterior, aliasurile se corectează în editorul de rapoarte; publicarea nu suprascrie acele configurări.
 
 La publicarea arborelui `PYTHON` către `/root/AVACONT` se păstrează:

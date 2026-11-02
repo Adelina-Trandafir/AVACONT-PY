@@ -126,7 +126,7 @@ def pdf(model):
              paragraph('Număr comandă', TA_CENTER)],
             ['', '', '', paragraph('Număr', TA_CENTER), paragraph('Data', TA_CENTER), ''],
             [paragraph(row.get('fiscal_code'), TA_CENTER), paragraph(row.get('invoice'), TA_CENTER),
-             paragraph(day(row.get('movement_date')), TA_CENTER), paragraph(receipt_number(row), TA_CENTER),
+             paragraph(day(row.get('invoice_date')), TA_CENTER), paragraph(receipt_number(row), TA_CENTER),
              paragraph(day(row.get('date')), TA_CENTER), paragraph(row.get('order') or row.get('account'), TA_CENTER)],
         ]
         header_table = table(heading, [1.12, 1.40, .92, .84, .98, 2.70], [

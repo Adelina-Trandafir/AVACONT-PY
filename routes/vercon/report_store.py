@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from . import report_catalog, report_layouts, report_query, report_validation
+from . import report_catalog, report_layouts, report_query, report_validation, report_receipt_dates
 from .nomenclatoare import NomError
 
 BASE = Path(__file__).resolve().parents[2]
@@ -58,6 +58,7 @@ def read(unit, part, key=''):
     data = json.loads(raw)['value'] if raw else _default(unit, part, key)
     if part == 'query':
         data = report_query.fiscal_sources(data)
+        data = report_receipt_dates.query(data, key)
     version_source = raw or json.dumps(data, ensure_ascii=False, sort_keys=True).encode('utf-8')
     return {'value': data, 'version': hashlib.sha256(version_source).hexdigest(), 'custom': bool(raw)}
 

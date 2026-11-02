@@ -18,6 +18,13 @@ CAND SE APLICA (ca sa nu strige degeaba la un contract rezervat integral dinaint
   * ziua are un singur capat de lant de rezervari (`R_Anterioara` -> `R_Definitiva`); altfel e sarita;
   * indicatorul are cel putin DOUA zile de felul asta in care cifrele se potrivesc exact -- adica se vede
     ca la el rezervarea chiar urmeaza receptiile. Fara asta, nimic nu e raportat.
+  * (31.10.2026) o zi cu diferenta NU se arata daca receptia a venit doar mai tarziu: suma lipsa
+    (rezervat - receptionat) o aduce EXACT, intr-o singura zi cu receptii, urmatoarea zi cu receptii, iar
+    aceasta cade INAINTE de urmatoarea zi cu rezervare a indicatorului. Atunci rezervarea a precedat
+    receptia (cazul AAB2MAACHXB: rezervarea din 07.02 a urcat cu 136.514,44, receptia de 136.158,58 s-a
+    inregistrat pe 15.02) si ordonantarile din zilele dintre ele n-aveau ce receptie sa vada. Versiunea pusa
+    pe antetul gresit (AAB2FH3R3FF) ramane aratata: acolo ziua urmatoare cu receptii nu aduce suma lipsa
+    (65.476 fata de 99.764) si cade chiar intr-o zi cu rezervare.
 `DIF` se aduna ca in ordonantare (`ord_edit._SQL_REC_ANT`): fara versiunile sterse.
 
 NEVERIFICAT: nu a rulat pe MariaDB si nu a trecut prin niciun test. Pe jurnalul AAB2FH3R3FF (un singur
@@ -74,6 +81,22 @@ def _capat_de_zi(randuri: List[dict]) -> Optional[dict]:
     return capete[0] if len(capete) == 1 else None
 
 
+def _vine_mai_tarziu(zi: date, lipsa: float, zile_rec: Dict[date, float], zile_rezervare: List[date]) -> bool:
+    """True when the missing amount (reserved - received on `zi`) arrives whole, in ONE later day of receptions, which is
+    the next such day and falls before the next reservation day: the reception was booked after the reservation, it was not
+    put on the wrong header. A negative or zero amount is never excused."""
+    if lipsa < TOLERANTA:
+        return False
+    urmatoare = [z for z in zile_rec if z > zi]
+    if not urmatoare:
+        return False
+    zi_receptie = min(urmatoare)
+    urmatoarea_rezervare = min((z for z in zile_rezervare if z > zi), default=None)
+    if urmatoarea_rezervare is not None and zi_receptie >= urmatoarea_rezervare:
+        return False
+    return abs(zile_rec[zi_receptie] - lipsa) < TOLERANTA
+
+
 def gaseste_receptii_nepotrivite(cursor, cod: Optional[str] = None) -> Dict[str, List[dict]]:
     """
     Angajamente whose receptions (sum of `DIF`) do not add up to their reservations on a day when both exist.
@@ -120,8 +143,9 @@ def gaseste_receptii_nepotrivite(cursor, cod: Optional[str] = None) -> Dict[str,
             verificari.append((zi, capat["def"], cumulat, abs(cumulat - capat["def"]) < TOLERANTA))
         if sum(1 for v in verificari if v[3]) < MIN_ZILE_POTRIVITE:
             continue
+        zile_rezervare = [zi for zi, _ in lista]
         for zi, rezervat, cumulat, potrivit in verificari:
-            if not potrivit:
+            if not potrivit and not _vine_mai_tarziu(zi, round(rezervat - cumulat, 2), zile_rec, zile_rezervare):
                 rezultat[cod_ang].append(
                     {"zi": zi, "indicator": indicator, "rezervat": rezervat, "receptionat": cumulat})
     for lista in rezultat.values():

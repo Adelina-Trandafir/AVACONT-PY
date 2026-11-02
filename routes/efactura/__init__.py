@@ -26,6 +26,8 @@ the bottom, so `efactura_bp` must exist BEFORE that import (same pattern as rout
     primite_ke_routes.py /api/efactura/primite/<id>/ke..., /api/efactura/ke/...                (slices KE01..KE07)
     primite_vercon.py    a received invoice SENT to VERCON: accounts per line, states, history     (slice 00EF-45 = EV01)
     primite_vercon_routes.py /api/efactura/vercon/..., /api/efactura/primite/<id>/vercon...    (slice 00EF-45 = EV01)
+    primite_contari.py / primite_contari_routes.py  calculation of the «Contari» of received invoices (no write)           (slice 01EF-02)
+    primite_arhiva.py / primite_arhiva_routes.py   archive of the received invoices: list, archive, take out                 (slice 01EF-03)
     primite_access.py / primite_access_legare.py / primite_access_routes.py  preluare from and trimitere to the Access store (slice 00EF-43)
 
 SECRETS: the client secret, the encryption key and both tokens exist on this server only. No route
@@ -42,3 +44,5 @@ from . import primite_routes  # noqa: E402,F401  registers the received-invoice 
 from . import primite_ke_routes  # noqa: E402,F401  registers the invoice <-> reception links (slices KE01..KE07)
 from . import primite_vercon_routes  # noqa: E402,F401  registers the sending of a received invoice to VERCON (slice 00EF-45 = EV01)
 from . import primite_access_routes  # noqa: E402,F401  registers the exchange with the Access e-invoice store (slice 00EF-43)
+from . import primite_arhiva_routes  # noqa: E402,F401  registers the archive of the received invoices (slice 01EF-03)
+from . import primite_contari_routes  # noqa: E402,F401  registers the calculation of the «Contari» (slice 01EF-02)

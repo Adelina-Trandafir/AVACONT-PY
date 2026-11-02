@@ -14,6 +14,9 @@ EDITABLE = {
 EDITABLE = {table: fields.split() for table, fields in EDITABLE.items()}
 
 
+FOREIGN_BORN_CODES = (80, 81)
+
+
 class DomainError(ValueError):
     def __init__(self, reason, message, status=409, details=None):
         super().__init__(message)
@@ -31,9 +34,12 @@ def cnp_code(value):
     """Port vercnp/UltimaCifra: preserve VBA bounds, without calendar reinterpretation."""
     if not isinstance(value, str) or len(value) != 13 or not value.isascii() or not value.isdigit():
         return 0
-    for start, limit, code in ((3, 12, 2), (5, 31, 3), (7, 52, 4)):
+    for start, limit, code in ((3, 12, 2), (5, 31, 3)):
         if int(value[start:start + 2]) > limit:
             return code
+    # Counties 80 and 81 are not a county: persons born abroad who later got a Romanian CNP.
+    if int(value[7:9]) > 52 and int(value[7:9]) not in FOREIGN_BORN_CODES:
+        return 4
     check = sum(int(digit) * int(weight) for digit, weight in zip(value[:12], '279146358279')) % 11
     if check == 10:
         check = 1

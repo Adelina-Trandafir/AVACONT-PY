@@ -24,7 +24,7 @@ async function call(method, path, body) {
     const headers = { Accept: 'application/json', 'X-Portal-Token': token };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const response = await fetch(path, {
-      method, headers, cache: 'no-store', credentials: 'include',
+      method, headers, cache: 'no-store',
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const data = await response.json();
@@ -67,8 +67,8 @@ async function start() {
   }
   $('certificate-account').textContent = 'Cont: ' + access.data.email;
   $('btn-cert').hidden = false;
-  const manager = createCertificateManager({ call, say, path: PATH });
-  await manager.open();
+  // Like the portal: the request to the certificate host leaves only when the user presses the button.
+  createCertificateManager({ call, say, path: PATH });
 }
 
 start().catch((error) => {

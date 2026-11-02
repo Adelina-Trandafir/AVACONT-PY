@@ -20,6 +20,11 @@ session's database, the yearly budget of one classification and its corrections.
                               "corrections": {"trim1".."trim4"}|null } ] }
            (the last budget version and the corrections total, for the non-leaf nodes of the tree)
 
+    POST /api/forexe/nomenclatoare/clasificatii/angajamente      (slice 0126-01, read only)
+        { "ids": [IDClsf, ...] }
+        -> 200 { "items": [ { "cod_angajament", "descriere", "cod_indicator", "total_rezervari", "total_receptii", "total_plati" } ] }
+           (one row per indicator of an angajament that leads to one of the classifications)
+
     POST /api/forexe/nomenclatoare/clasificatii/<id_clsf>/buget
         { "an": 2026,
           "budgets": [ {"id": null|n, "data_inceput": "yyyy-mm-dd", "trim1".."trim4"} ],
@@ -334,6 +339,70 @@ def get_clasificatii_sumar_buget():
     except Exception as e:
         logger.error("[forexe.clasificatii_edit] summary %s: %s", db_name, e, exc_info=True)
         return _json_utf8({"error": f"Eroare la citirea sumarului de buget: {e}"}, 500)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+# Slice 0126-01: what goes into a classification -- every angajament that has an indicator on it, with the same three totals the
+# angajament summary (routes/forexe/sumar.py) shows per indicator: reservations = SUM(R_Valoare), receptions = SUM(DIF) (the
+# DELTA, not Valoare), payments = SUM(Suma). The three tables hang on FX_Indicatori.CodAI (a real foreign key), so one
+# indicator row = one output row; hidden angajamente are left out, like in the tree. No year filter: the totals are the ones of
+# the angajament, as in the summary.
+_MAX_CLASSIFICATIONS = 5000
+_SQL_ANGAJAMENTE = (
+    "SELECT I.CodAngajament, A.Descriere, I.CodIndicator, "
+    "       COALESCE((SELECT SUM(R.R_Valoare) FROM FX_Rezervari R WHERE R.CodAI = I.CodAI), 0) AS TotalRezervari, "
+    "       COALESCE((SELECT SUM(R.DIF) FROM FX_Receptii R WHERE R.CodAI = I.CodAI), 0) AS TotalReceptii, "
+    "       COALESCE((SELECT SUM(P.Suma) FROM FX_Plati P WHERE P.CodAI = I.CodAI), 0) AS TotalPlati "
+    "  FROM FX_Indicatori I "
+    "  JOIN FX_Angajamente A ON A.CodAngajament = I.CodAngajament "
+    " WHERE COALESCE(A.Ascuns, 0) = 0 AND I.IdClsf IN ({marks}) "
+    " ORDER BY I.CodAngajament, I.CodIndicator"
+)
+
+
+def _read_angajamente(cursor, ids: list) -> list:
+    """{"cod_angajament", "cod_indicator", "total_rezervari", "total_receptii", "total_plati"} per indicator on the classifications."""
+    if not ids:
+        return []
+    cursor.execute(_SQL_ANGAJAMENTE.format(marks=", ".join(["%s"] * len(ids))), tuple(ids))
+    return [{
+        "cod_angajament": _text(r["CodAngajament"]),
+        "descriere": _text(r["Descriere"]),
+        "cod_indicator": _text(r["CodIndicator"]),
+        "total_rezervari": round(float(r["TotalRezervari"] or 0), 2),
+        "total_receptii": round(float(r["TotalReceptii"] or 0), 2),
+        "total_plati": round(float(r["TotalPlati"] or 0), 2),
+    } for r in cursor.fetchall()]
+
+
+@forexe_bp.route("/api/forexe/nomenclatoare/clasificatii/angajamente", methods=["POST"])
+@require_session
+def post_clasificatii_angajamente():
+    """The angajamente that lead to the given classifications, with their totals (read only; POST because a tree node
+    can name hundreds of classifications). Body: {"ids": [IDClsf, ...]}."""
+    db_name = g.session.db_name
+    conn = None
+    try:
+        body = request.get_json(silent=True) or {}
+        raw = body.get("ids")
+        if not isinstance(raw, list):
+            raise _Refused("Lista de clasificații lipsește.")
+        try:
+            ids = sorted({int(v) for v in raw})
+        except (TypeError, ValueError):
+            raise _Refused("Lista de clasificații nu conține numere.")
+        if len(ids) > _MAX_CLASSIFICATIONS:
+            raise _Refused(f"Prea multe clasificații deodată ({len(ids)}); cel mult {_MAX_CLASSIFICATIONS}.")
+        conn = get_kbot_connection(db_name)
+        cursor = conn.cursor(dictionary=True, buffered=True)
+        return _json_utf8({"items": _read_angajamente(cursor, ids)}, 200)
+    except _Refused as e:
+        return _json_utf8({"error": str(e)}, 400)
+    except Exception as e:
+        logger.error("[forexe.clasificatii_edit] angajamente %s: %s", db_name, e, exc_info=True)
+        return _json_utf8({"error": f"Eroare la citirea angajamentelor clasificației: {e}"}, 500)
     finally:
         if conn is not None:
             conn.close()

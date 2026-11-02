@@ -3,7 +3,9 @@ export function cnpCode(value) {
   if (!/^\d{13}$/.test(value)) return 0;
   if (Number(value.slice(3, 5)) > 12) return 2;
   if (Number(value.slice(5, 7)) > 31) return 3;
-  if (Number(value.slice(7, 9)) > 52) return 4;
+  // 80 and 81 are not a county: persons born abroad who later got a Romanian CNP.
+  const county = Number(value.slice(7, 9));
+  if (county > 52 && county !== 80 && county !== 81) return 4;
   let check = [...value.slice(0, 12)].reduce((sum, digit, index) => sum + Number(digit) * Number('279146358279'[index]), 0) % 11;
   if (check === 10) check = 1;
   return Number(value[12]) === check ? -1 : 5;

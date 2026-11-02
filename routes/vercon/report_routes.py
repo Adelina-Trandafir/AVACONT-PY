@@ -7,6 +7,7 @@ from .nomenclatoare import NomError
 from . import report_identity
 from . import report_balance
 from . import report_mf
+from . import report_receipt_dates
 from .stock_routes import optional_id
 
 
@@ -177,7 +178,7 @@ def register(bp, guard, scoped, session, build):
                         suppliers[row['supplier']] = row['party'] or str(row['supplier'])
                     if row.get('receiver') is not None:
                         receivers[row['receiver']] = row['party'] or str(row['receiver'])
-                    day = row.get('movement_date') or row['date']
+                    day = row['date']
                     if day is not None and params['start'] <= stock.day_of(day) <= params['end']:
                         documents[row['document']] = f"{row['family'].upper()} {row['number']} / {day} / {row.get('party') or ''}"
         def options(items):
@@ -222,6 +223,10 @@ def register(bp, guard, scoped, session, build):
             if model.get('letterhead_version') != report_identity.VERSION:
                 raise NomError('REPORT_EXPIRED', 'Generați din nou raportul pentru antetul actualizat.', 409)
             spec = report_catalog.spec_of(model['report_name'], ctx['type'])
+            if (({'ledger', 'receipts'} & set(model.get('versions', {}).get('queries', {}))
+                 or spec['kind'] == 'depreciation')
+                    and model.get('receipt_stock_date_version') != report_receipt_dates.VERSION):
+                raise NomError('REPORT_EXPIRED', 'Generați din nou raportul pentru calculul după data NIR-ului.', 409)
             if (spec.get('ledger') != 'custody' and spec['kind'] in ('balance', 'product', 'accounts')
                     and model.get('warehouse_balance_version') != report_balance.VERSION):
                 raise NomError('REPORT_EXPIRED', 'Generați din nou raportul pentru rulajele actualizate ale balanței.', 409)

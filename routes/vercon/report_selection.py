@@ -93,7 +93,7 @@ def document_suppliers(source, node_id):
             raise NomError('REPORT_BRANCH', 'Furnizor invalid.', 422)
     groups, documents, ordering = {}, {}, {}
     for row in source.rows('receipts'):
-        day = row.get('movement_date') or row['date']
+        day = row['date']
         if row['annulled'] or day is None or not source.params['start'] <= stock.day_of(day) <= source.params['end']:
             continue
         supplier = str(row['supplier']) if row.get('supplier') is not None else 'none'
@@ -170,7 +170,7 @@ def selection_branch(source, spec, node_id, *, recursive=False, documents=False,
                 if row.get(key) is not None:
                     items[row[key]] = row['party'] or str(row[key])
             else:
-                day = row.get('movement_date') or row['date']
+                day = row['date']
                 if day is not None and source.params['start'] <= stock.day_of(day) <= source.params['end']:
                     items[row['document']] = f"{row['family'].upper()} {row['number']} / {day} / {row.get('party') or ''}"
                     ordering[f"document:{row['document']}"] = document_order(day, row['number'], row['document'])

@@ -153,8 +153,6 @@ def _cert_cors(response):
     if site and request.path.startswith("/api/portal/certificat/") \
             and request.headers.get("Origin") == site:
         response.headers["Access-Control-Allow-Origin"] = site
-        # Chrome sends the client certificate on a cross-site call only when the call is made with credentials
-        response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Portal-Token"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Vary"] = "Origin"

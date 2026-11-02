@@ -46,6 +46,10 @@ Commands (all read-only unless marked WRITE):
     source-queries                     the queries that ran on AVACONT_SURSA, with the objects each touches and the units that hold it
     source-check --name N              the objects of query N against the real structure of AVACONT_SURSA
     source-dump                        the structure of AVACONT_SURSA as dump text (SHOW CREATE TABLE of every table)
+    db-tables --db D                   the tables and views of one unit database (admin_dbview.py)
+    db-table --db D --table T          one table: columns, keys, indexes, references and the first page of rows
+    db-rows --db D --table T --offset O --limit N    a further page of rows
+    db-cell --db D --table T --column C (--key-json J | --offset O)    the whole content of one cell (text or blob)
     backups [--db D]                   the dump files and schema plans (of one database when D is given), with the reason of each dump
     backup-text --path P               the text of one dump / plan file (first 2 MB)
     backup --db D|ALL --reason T       WRITE  dump one database, or every unit database but 000_DEMO, to backup/ (admin_backup.py)
@@ -405,6 +409,25 @@ def _c_storno_preturi_repara(conn, db):
     return repair(conn, db, _block)
 
 
+def _c_ddf_antete(conn, db):
+    """Read only: codes whose FX_DDF documents look wrong (routes/admin_cli/ddf_headers.py)."""
+    from routes.admin_cli.ddf_headers import check
+    return check(conn, db, _block)
+
+
+def _c_ddf_antete_explica(conn, db, param):
+    """Read only: what the database holds for one code and what deleting each header would do (routes/admin_cli/ddf_headers.py)."""
+    from routes.admin_cli.ddf_headers import explain
+    return explain(conn, db, param, _block)
+
+
+def _c_ddf_antete_repara(conn, db, param):
+    """WRITES: moves the revisions of the extra FX_DDF headers of ONE code under the main one and deletes the emptied headers
+    (routes/admin_cli/ddf_headers.py); the button «Repara» of KBotAdmin runs it after «Explica»."""
+    from routes.admin_cli.ddf_headers import repair
+    return repair(conn, db, param, _block)
+
+
 # name -> (title, description, writes, handler)
 COMMANDS = {
     "ping": ("Conexiune", "Versiune, cont, charset si timpul de raspuns al bazei.", False, _c_ping),
@@ -427,16 +450,26 @@ COMMANDS = {
                        "aceleiasi gestiuni. Separa rotunjirile Access reparabile de diferentele care cer analiza. Doar citire.", False, _c_storno_preturi),
     "storno_preturi_repara": ("Repara preturi storno si retur VERCON", "Recupereaza zecimalele pierdute din preturile storno si retur eligibile in intreaga "
                               "baza selectata. SCRIE pretul liniilor si reviziile liniilor/documentelor; audit si Jurnal. Arata diferentele ramase.", True, _c_storno_preturi_repara),
+    "ddf_antete": ("Verificare documente de fundamentare", "Semnaleaza codurile de angajament cu mai multe antete FX_DDF, indicator "
+                   "gresit spre document, numar de revizie dublat sau revizie cu alt cod. Doar citire; cere o singura baza.", False, _c_ddf_antete),
+    "ddf_antete_explica": ("Explica un cod (documente de fundamentare)", "Ce are baza pentru un cod de angajament si ce ar strica "
+                           "stergerea fiecarui antet FX_DDF. Doar citire; cere o baza anume si codul. Se porneste din butonul «Explica» "
+                           "de la comanda de verificare.", False, _c_ddf_antete_explica),
+    "ddf_antete_repara": ("Repara antetele multiple ale unui cod (documente de fundamentare)", "Muta reviziile antetelor FX_DDF in plus ale unui cod sub "
+                          "antetul spre care arata angajamentul, apoi sterge antetele ramase goale. SCRIE in baza aleasa, intr-o singura "
+                          "tranzactie, cu Jurnal. Refuza tot ce nu e clar. Se porneste din butonul «Repara» de dupa «Explica».", True, _c_ddf_antete_repara),
 }
 
 # Commands that need one typed value besides the database: name -> label of that value. They run on ONE database only.
 COMMAND_PARAMS = {
     "fisa_angajament": "Cod angajament",
     "profil_produs": "IdProdus",
+    "ddf_antete_explica": "Cod angajament",
+    "ddf_antete_repara": "Cod angajament",
 }
 
 # Commands restricted to one selected database (including database-wide VERCON checks).
-SINGLE_DB_COMMANDS = {"oi_semne_repara", "storno_preturi", "storno_preturi_repara"}
+SINGLE_DB_COMMANDS = {"oi_semne_repara", "storno_preturi", "storno_preturi_repara", "ddf_antete", "ddf_antete_explica", "ddf_antete_repara"}
 
 
 def cmd_commands(args):
@@ -853,6 +886,8 @@ def _parser():
     admin_demo.register(sub)
     from routes.admin_cli import admin_source
     admin_source.register(sub)
+    from routes.admin_cli import admin_dbview
+    admin_dbview.register(sub)
     return parser
 
 

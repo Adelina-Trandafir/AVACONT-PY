@@ -46,7 +46,7 @@ def load(cursor, ctx, variant=None):
         ('receipt', 'VC_Intrari', 'COALESCE(n.Storno,0)=0'),
         ('storno', 'VC_IntrariStorno', 'i.Anulat=0'),
     ):
-        parts.append("SELECT i.IdProdus,'{kind}' AS kind,DATE(COALESCE(n.DataFc,n.Data)) AS `date`,"
+        parts.append("SELECT i.IdProdus,'{kind}' AS kind,DATE(n.Data) AS `date`,"
                      "i.Cant AS quantity,n.IdIntrare AS document_id,i.ID AS line_id FROM {table} i "
                      "JOIN VC_NIR n ON n.SubunitId=i.SubunitId AND n.GestiuneId=i.GestiuneId "
                      "AND n.ExercitiuId=i.ExercitiuId AND n.IdIntrare=i.IdIntrare "

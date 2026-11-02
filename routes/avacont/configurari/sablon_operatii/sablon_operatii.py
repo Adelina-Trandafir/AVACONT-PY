@@ -6,10 +6,11 @@ button OCI, form Operatii2020). Named SablonOperatii by the operator (27.10.2026
 A template = a HEADER (journal, type M/A, kind E/P/A, explanation, department, payment text, classification key) + LINES (debit account, credit account,
 who the partner is on each side, three flags). The accounts of a line are BASE accounts (AVACONT_COMUN.DefaCont); the full account is composed when the
 template is used (stage 2). The sector+source of a template is the one of its journal: the window shows the templates whose journal has the sector+source of the
-title bar, or all of them on «Toate».
+title bar, or all of them on «Toate». Since AV01-18 a template also belongs to a SUBUNIT (`idsubunitate`; as in Access nothing is common between subunits for
+now): the window shows the ones of the subunit in force, and the server refuses a subunit whose sector+source is not the one of the journal.
 
     GET  /api/avacont/sabloane-operatii
-        -> 200 { "sabloane": [ { "idsablon", "idjurnal", "tip", "fel", "explicatie", "compartiment", "felop", "cheie",
+        -> 200 { "sabloane": [ { "idsablon", "idjurnal", "idsubunitate", "tip", "fel", "explicatie", "compartiment", "felop", "cheie",
                                  "linii": [ { "idlinie", "forma", "contdebit", "contcredit", "partdebitmod", "idpartdebit",
                                               "partcreditmod", "idpartcredit", "pa", "ordonantare", "chelt",
                                               "idclsf", "analiticdebit", "analiticcredit" } ] } ],
@@ -69,12 +70,13 @@ def get_sabloane_operatii():
     try:
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor()
-        cursor.execute("SELECT IdSablon, IdJurnal, Tip, Fel, Explicatie, Compartiment, FelOP, Cheie "
+        cursor.execute("SELECT IdSablon, IdJurnal, Tip, Fel, Explicatie, Compartiment, FelOP, Cheie, IdSubunitate "
                        "  FROM TZ_SablonOperatii ORDER BY Tip, Fel, Explicatie, IdSablon")
         sabloane = {}
         for r in cursor.fetchall():
             sabloane[int(r[0])] = {"idsablon": int(r[0]), "idjurnal": int(r[1]), "tip": r[2], "fel": r[3], "explicatie": r[4] or "",
-                                   "compartiment": r[5] or "", "felop": r[6] or "", "cheie": r[7] or "", "linii": []}
+                                   "compartiment": r[5] or "", "felop": r[6] or "", "cheie": r[7] or "",
+                                   "idsubunitate": int(r[8]) if r[8] is not None else None, "linii": []}
         cursor.execute("SELECT IdLinie, IdSablon, Forma, ContDebit, ContCredit, PartDebitMod, IdPartDebit, PartCreditMod, IdPartCredit, "
                        "       PA, Ordonantare, Chelt, IdClsf, AnaliticDebit, AnaliticCredit "
                        "  FROM TZ_SablonOperatiiLinie ORDER BY IdSablon, Forma, IdLinie")
@@ -201,10 +203,13 @@ def _valideaza_sablon(brut, nr: int):
     try:
         idsablon = _intreg(brut.get("idsablon"))
         idjurnal = _intreg(brut.get("idjurnal"))
+        idsubunitate = _intreg(brut.get("idsubunitate"))
     except (TypeError, ValueError):
         return None, f"Șablonul «{explicatie}»: număr nevalid."
     if idjurnal is None:
         return None, f"Șablonul «{explicatie}»: alegeți jurnalul."
+    if idsubunitate is None:
+        return None, f"Șablonul «{explicatie}»: alegeți subunitatea în bara de titlu."
     tip = str(brut.get("tip") or "").strip().upper()
     fel = str(brut.get("fel") or "").strip().upper()
     if tip not in ("M", "A"):
@@ -222,7 +227,7 @@ def _valideaza_sablon(brut, nr: int):
         return None, f"Șablonul «{explicatie}»: cheia clasificației poate avea doar cifre, X și puncte (de ex. 65.01.XX.XX.57.02.02)."
     if tip == "M" and not cheie:
         return None, f"Șablonul «{explicatie}»: o operație cu clasificație (tip M) cere cheia clasificației."
-    sablon = {"idsablon": idsablon, "idjurnal": idjurnal, "tip": tip, "fel": fel, "explicatie": explicatie,
+    sablon = {"idsablon": idsablon, "idjurnal": idjurnal, "idsubunitate": idsubunitate, "tip": tip, "fel": fel, "explicatie": explicatie,
               "compartiment": compartiment or None, "felop": felop or None, "cheie": cheie or None, "linii": []}
     linii_brut = brut.get("linii")
     if not isinstance(linii_brut, list) or not linii_brut:
@@ -263,8 +268,10 @@ def _valideaza(corp: dict):
 
 def _verifica_referinte(cursor, sabloane):
     """The error message for the first journal / account / partner a template points at that does not exist; None when all exist."""
-    cursor.execute("SELECT IdJurnal FROM TZ_Jurnale")
-    jurnale = {int(r[0]) for r in cursor.fetchall()}
+    cursor.execute("SELECT IdJurnal, SursaSector FROM TZ_Jurnale")
+    jurnale = {int(r[0]): r[1] for r in cursor.fetchall()}
+    cursor.execute("SELECT IdSubunitate, SursaSector FROM TZ_Subunitati")
+    subunitati = {int(r[0]): r[1] for r in cursor.fetchall()}
     cursor.execute("SELECT Simbol FROM AVACONT_COMUN.DefaCont")
     conturi = {int(r[0]) for r in cursor.fetchall()}
     cursor.execute("SELECT IdPartener FROM Parteneri")
@@ -276,6 +283,10 @@ def _verifica_referinte(cursor, sabloane):
     for s in sabloane:
         if s["idjurnal"] not in jurnale:
             return f"Șablonul «{s['explicatie']}»: jurnalul ales nu există."
+        if s["idsubunitate"] not in subunitati:
+            return f"Șablonul «{s['explicatie']}»: subunitatea aleasă nu există."
+        if subunitati[s["idsubunitate"]] != jurnale[s["idjurnal"]]:
+            return f"Șablonul «{s['explicatie']}»: sursa subunității nu este sursa jurnalului ales."
         for l in s["linii"]:
             if l["idclsf"] is not None and l["idclsf"] not in clasificatii:
                 return f"Șablonul «{s['explicatie']}»: o clasificație aleasă nu mai există."
@@ -328,14 +339,14 @@ def post_sabloane_operatii():
         for s in sabloane:
             if s["idsablon"] is None:
                 cursor.execute(
-                    "INSERT INTO TZ_SablonOperatii (IdJurnal, Tip, Fel, Explicatie, Compartiment, FelOP, Cheie) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (s["idjurnal"], s["tip"], s["fel"], s["explicatie"], s["compartiment"], s["felop"], s["cheie"]))
+                    "INSERT INTO TZ_SablonOperatii (IdJurnal, IdSubunitate, Tip, Fel, Explicatie, Compartiment, FelOP, Cheie) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (s["idjurnal"], s["idsubunitate"], s["tip"], s["fel"], s["explicatie"], s["compartiment"], s["felop"], s["cheie"]))
                 s["idsablon"] = int(cursor.lastrowid)
             else:
                 cursor.execute(
-                    "UPDATE TZ_SablonOperatii SET IdJurnal = %s, Tip = %s, Fel = %s, Explicatie = %s, Compartiment = %s, FelOP = %s, Cheie = %s "
+                    "UPDATE TZ_SablonOperatii SET IdJurnal = %s, IdSubunitate = %s, Tip = %s, Fel = %s, Explicatie = %s, Compartiment = %s, FelOP = %s, Cheie = %s "
                     "WHERE IdSablon = %s",
-                    (s["idjurnal"], s["tip"], s["fel"], s["explicatie"], s["compartiment"], s["felop"], s["cheie"], s["idsablon"]))
+                    (s["idjurnal"], s["idsubunitate"], s["tip"], s["fel"], s["explicatie"], s["compartiment"], s["felop"], s["cheie"], s["idsablon"]))
                 if cursor.rowcount == 0:
                     cursor.execute("SELECT 1 FROM TZ_SablonOperatii WHERE IdSablon = %s", (s["idsablon"],))
                     if not cursor.fetchone():

@@ -32,7 +32,7 @@ def eligible(cursor, ctx, nir_id, exclude=None, on=None, balances=None):
     source = _one(cursor,
         'SELECT IdIntrare FROM VC_NIR WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s '
         'AND IdIntrare=%s AND Anulat=0 AND COALESCE(Storno,0)=0 '
-        'AND DATE(Data)<=%s AND DATE(COALESCE(DataFc,Data))<=%s', (*_scope(ctx), nir_id, on, on))
+        'AND DATE(Data)<=%s', (*_scope(ctx), nir_id, on))
     if not source:
         return []
     rows = source_lines(cursor, ctx, nir_id)
@@ -65,8 +65,8 @@ def sources(cursor, ctx, on, exclude=None):
         'SELECT i.IdIntrare, i.IdProdus, SUM(i.Cant) AS qty FROM VC_Intrari i JOIN VC_NIR n '
         'ON n.SubunitId=i.SubunitId AND n.GestiuneId=i.GestiuneId AND n.ExercitiuId=i.ExercitiuId AND n.IdIntrare=i.IdIntrare '
         'WHERE i.SubunitId=%s AND i.GestiuneId=%s AND i.ExercitiuId=%s AND n.Anulat=0 AND COALESCE(n.Storno,0)=0 '
-        'AND DATE(n.Data)<=%s AND DATE(COALESCE(n.DataFc,n.Data))<=%s GROUP BY i.IdIntrare,i.IdProdus',
-        (*_scope(ctx), on, on))
+        'AND DATE(n.Data)<=%s GROUP BY i.IdIntrare,i.IdProdus',
+        (*_scope(ctx), on))
     done = {(row['source'], row['variant']): Decimal(row['qty'] or 0) for row in _all(cursor,
         'SELECT n.IdStorno AS source, x.IdProdus AS variant, SUM(x.Cant) AS qty FROM VC_IntrariStorno x JOIN VC_NIR n '
         'ON n.SubunitId=x.SubunitId AND n.GestiuneId=x.GestiuneId AND n.ExercitiuId=x.ExercitiuId AND n.IdIntrare=x.IdIntrare '

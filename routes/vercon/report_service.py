@@ -9,6 +9,7 @@ from .nomenclatoare import NomError
 from . import report_voucher
 from . import report_statement
 from . import report_stock_card
+from . import report_receipt_dates
 from reporting.snapshots import Snapshots as ReportSnapshots
 
 
@@ -109,6 +110,7 @@ def build(cursor, unit, ctx, name, params, gestiune_name, *, source=None, issuer
     model = {'title': title, 'report_name': spec['id'], 'layout': layout['value'], 'identity': identity['value'],
              'letterhead_version': report_identity.VERSION,
              'warehouse_balance_version': report_balance.VERSION,
+             'receipt_stock_date_version': report_receipt_dates.VERSION,
              'gestiune_name': gestiune_name, 'period_text': period,
              'filename': spec['id'].replace(' ', '_') + '_' + params['end'].isoformat(),
              'blocks': heading + band('before') + blocks + band('after'),

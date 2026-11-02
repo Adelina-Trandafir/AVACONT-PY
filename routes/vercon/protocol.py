@@ -119,8 +119,8 @@ def raise_counter(cursor, ctx, kind, number):
 
 # ---- the stock timeline ----------------------------------------------------------------------------------------------
 # Every movement of a variant, signed, with the date it counts from. Cancelled documents do not count. Receipts count
-# from the invoice date (DataFc, as the Access query did), returns and consumption from the bon date, a storno from
-# its own DataFc (falling back to Data). stock_source is shared by previews, validation and reports.
+# from the NIR date (VC_NIR.Data), returns and consumption from the bon date, a storno from
+# its own document date (Data). Invoice dates never determine stock. stock_source is shared by previews, validation and reports.
 def movements(cursor, ctx, products=None, exclude=None):
     """[(product, date, signed quantity)]. `exclude` = ('bc'|'br'|'nir'|'storno', id): a document left out of the sum (the one
     being edited: its draft is validated separately and must not count twice)."""

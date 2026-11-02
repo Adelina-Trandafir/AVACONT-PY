@@ -1,7 +1,7 @@
 """Report data from owner-editable SQL. Exact decimals until the output boundary."""
 from collections import defaultdict
 from decimal import Decimal, localcontext
-from . import numeric, report_query, report_store, stock, oi_accounts, stock_valuation
+from . import numeric, report_query, report_store, stock, oi_accounts, stock_valuation, report_receipt_dates
 from .nomenclatoare import NomError
 
 REQUIRED_FIELDS = {
@@ -39,6 +39,8 @@ class Source:
                 missing = required - row.keys()
                 if missing:
                     raise NomError('REPORT_SOURCE', 'Sursa SQL ' + key + ' nu întoarce câmpurile obligatorii: ' + ', '.join(sorted(missing)) + '.', 422)
+            if key == 'receipts':
+                self.cache[cache_key] = report_receipt_dates.rows(self.cursor, self.ctx, self.cache[cache_key])
             if key in ('custody_ledger', 'oi_documents') and self.cache[cache_key]:
                 if '_oi_line_accounts' not in self.cache:
                     self.cache['_oi_line_accounts'] = oi_accounts.line_accounts(self.cursor, self.ctx)
@@ -109,7 +111,7 @@ def documents(source, family=None, *, include_returns=False):
         if info is None:
             raise NomError('REPORT_SOURCE', 'Linia de document nu are o variantă în contextul raportului.', 409)
         row = {**info, **raw}
-        if not accepted(row, source.params, day='movement_date' if kind == 'receipts' else 'date'):
+        if not accepted(row, source.params):
             continue
         value = raw['value']
         if value is None and raw['family'] in ('storno', 'br'):

@@ -108,7 +108,7 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
       // A snapshot survives temporary invalid edits, including clearing the current price.
       remembered = { ...line };
     } else line = remembered;
-    const date = parse((family === 'storno' || consumption ? draft.header.Data : draft.header.DataFc || draft.header.Data) || '', { type: 'date', required: true });
+    const date = parse(draft.header.Data || '', { type: 'date', required: true });
     const base = new URLSearchParams(Object.entries(selection()).filter(([, value]) => value != null && value !== ''));
     if (date.ok) base.set('date', date.value);
     if (consumption) {
@@ -119,13 +119,13 @@ export function receiptContext(host, { root, main, headerHost, linesHost, treeHo
         load('supplier', supplier, partyTitle, params, renderReceiver);
       }
     } else if (draft.tip === 'STOC_INITIAL' || !draft.header.CodFiscal || !date.ok) {
-      stop('supplier'); message(supplier, 'Fișă furnizor', draft.tip === 'STOC_INITIAL' ? 'Stoc inițial • fără furnizor.' : !date.ok ? `Completați data ${family === 'storno' ? 'FCS' : 'facturii'}.` : family === 'storno' ? 'Alegeți recepția stornată.' : 'Alegeți furnizorul.');
+      stop('supplier'); message(supplier, 'Fișă furnizor', draft.tip === 'STOC_INITIAL' ? 'Stoc inițial • fără furnizor.' : !date.ok ? `Completați data ${family === 'storno' ? 'FCS' : 'NIR'}.` : family === 'storno' ? 'Alegeți recepția stornată.' : 'Alegeți furnizorul.');
     } else {
       const params = new URLSearchParams(base); params.set('supplier', draft.header.CodFiscal);
       load('supplier', supplier, 'Fișă furnizor', params, renderSupplier);
     }
     if (!line || !validLine(line) || !date.ok) {
-      stop('product'); message(product, productTitle, !date.ok ? `Completați data ${consumption ? 'bonului' : family === 'storno' ? 'FCS' : 'facturii'}.` : consumption ? 'Selectați produsul de pe rândul curent.' : family === 'storno' ? 'Selectați un produs din recepția stornată.' : 'Selectați un rând validat, cu produs, cantitate, preț și TVA.');
+      stop('product'); message(product, productTitle, !date.ok ? `Completați data ${consumption ? 'bonului' : family === 'storno' ? 'FCS' : 'NIR'}.` : consumption ? 'Selectați produsul de pe rândul curent.' : family === 'storno' ? 'Selectați un produs din recepția stornată.' : 'Selectați un rând validat, cu produs, cantitate, preț și TVA.');
     } else {
       const params = new URLSearchParams(lineSelection ? Object.entries(lineSelection(line)).filter(([, value]) => value != null && value !== '') : base);
       if (date.ok) params.set('date', date.value);

@@ -23,7 +23,7 @@ def product_statement(cursor, vctx, product):
                    'WHERE SubunitId=%s AND GestiuneId=%s AND ID=%s ORDER BY IdProdus DESC',
                    (subunit, gestiune, product))
     variants = cursor.fetchall()
-    cursor.execute('SELECT i.IdProdus, MIN(DATE(COALESCE(n.DataFc,n.Data))) AS first_date '
+    cursor.execute('SELECT i.IdProdus, MIN(DATE(n.Data)) AS first_date '
                    'FROM VC_Intrari i JOIN VC_NIR n ON n.SubunitId=i.SubunitId AND n.GestiuneId=i.GestiuneId '
                    'AND n.ExercitiuId=i.ExercitiuId AND n.IdIntrare=i.IdIntrare '
                    'JOIN VC_ProduseP p ON p.SubunitId=i.SubunitId AND p.GestiuneId=i.GestiuneId AND p.IdProdus=i.IdProdus '

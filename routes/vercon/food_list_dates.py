@@ -1,16 +1,15 @@
 """Food-list date corrections that retain the list's chronological position."""
-from datetime import date
-
 from . import protocol
 from .documents import _all, _iso, _scope
 from .nomenclatoare import NomError
 
 
 def neighbours(cursor, ctx):
-    # The list number is the explicit numeric tie-breaker, never the internal ID.
+    # The list number is the order (the internal ID never is): a list may sit anywhere between the dates of
+    # the lists just before and after it by number, even when its current date is out of line.
     rows = _all(cursor, 'SELECT IdLista AS id, DATE(DATALA) AS day, NumarLA AS number FROM VC_LABC '
                 'WHERE SubunitId=%s AND GestiuneId=%s AND ExercitiuId=%s AND Anulat=0 '
-                'ORDER BY DATE(DATALA), NumarLA', _scope(ctx))
+                'ORDER BY NumarLA, IdLista', _scope(ctx))
     return {row['id']: (rows[index - 1] if index else None,
                         rows[index + 1] if index + 1 < len(rows) else None)
             for index, row in enumerate(rows)}
@@ -34,13 +33,11 @@ def clean(cursor, ctx, before, body):
     if before['IdLista'] not in bounds:
         raise NomError('CONFLICT', 'Lista nu mai este activă. Reîncărcați lista.', 409)
     previous, following = bounds[before['IdLista']]
-    proposed = (day, before['NumarLA'])
-    if (previous and proposed < (previous['day'] or date.min, previous['number'])
-            or following and proposed > (following['day'] or date.min, following['number'])):
+    if (previous and previous['day'] and day < previous['day']
+            or following and following['day'] and day > following['day']):
         low = previous['day'].strftime('%d.%m.%Y') if previous and previous['day'] else 'începutul anului'
         high = following['day'].strftime('%d.%m.%Y') if following and following['day'] else 'sfârșitul anului'
-        message = ('Data listei trebuie să fie între %s și %s, păstrând ordinea numerelor '
-                   'pentru listele din aceeași zi.') % (low, high)
+        message = 'Data listei trebuie să fie între %s și %s, păstrând ordinea numerelor.' % (low, high)
         raise NomError('DOCUMENT_ORDER', message, 422, {'h.Data': message})
     return day
 
