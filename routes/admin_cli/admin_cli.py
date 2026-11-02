@@ -50,6 +50,7 @@ Commands (all read-only unless marked WRITE):
     db-table --db D --table T          one table: columns, keys, indexes, references and the first page of rows
     db-rows --db D --table T --offset O --limit N    a further page of rows
     db-cell --db D --table T --column C (--key-json J | --offset O)    the whole content of one cell (text or blob)
+    db-distinct --db D --table T --column C [--where-json J] [--like S]    the values a column holds (pick list of the linked-table jump)
     backups [--db D]                   the dump files and schema plans (of one database when D is given), with the reason of each dump
     backup-text --path P               the text of one dump / plan file (first 2 MB)
     backup --db D|ALL --reason T       WRITE  dump one database, or every unit database but 000_DEMO, to backup/ (admin_backup.py)

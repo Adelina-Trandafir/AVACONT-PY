@@ -2,8 +2,13 @@
 admin_dbview.py -- the verbs of KBotAdmin's page «Tabele» (sliceless). All of them only READ.
 
     db-tables --db D                        the tables and views of one unit database (name, engine, estimated rows, sizes)
-    db-table  --db D --table T [--limit N]  one table: its columns, keys, indexes, what refers to it, and the first page of rows
-    db-rows   --db D --table T --offset O --limit N     a further page of rows
+    db-table  --db D --table T [--limit N] [--where-json J]
+                                            one table: its columns, keys, indexes, what refers to it, and the first page of rows
+    db-rows   --db D --table T --offset O --limit N [--where-json J]     a further page of rows
+    db-distinct --db D --table T --column C [--where-json J] [--like S] [--limit N]
+                                            the values column C holds (no NULL, no repeats), for a pick list; with --like only the
+                                            values that contain S, those that start with it first; else sorted
+        --where-json: a JSON object {column: value}; only the rows where every column equals its value (the linked-table jump of the page)
     db-cell   --db D --table T --column C (--key-json J | --offset O)   the WHOLE content of one cell (text or blob)
 
 A cell in a page is shown short on purpose (a page travels over SSH as one JSON line):
@@ -26,6 +31,7 @@ from routes.schema_sync.schema_common import connect
 
 MAX_PAGE = 5000
 DEFAULT_PAGE = 1000
+DISTINCT_LIMIT = 2000         # values of a pick list (db-distinct)
 TEXT_PREVIEW = 32000          # characters of a long text that travel inside a page
 CELL_TEXT_CAP = 4000000       # characters of one text cell db-cell returns
 CELL_BLOB_CAP = 8 * 1024 * 1024   # bytes of one blob cell db-cell returns
@@ -198,12 +204,37 @@ def _order_by(pk):
     return (" ORDER BY " + ", ".join(_q(c) for c in pk)) if pk else ""
 
 
-def _page(conn, db, table, columns, pk, offset, limit):
-    sql = "SELECT %s FROM %s.%s%s LIMIT %d OFFSET %d" % (
-        _select_list(columns), _q(db), _q(table), _order_by(pk), limit + 1, offset)
+def _where(columns, where_json):
+    """The optional filter of a page: a JSON object {column: value}, rows where EVERY column equals its value (the linked-table
+    jump: the cell the operator double-clicked, plus the other columns of a composite key). Every column is checked against the
+    real columns before it reaches SQL; the values travel as parameters."""
+    if not where_json:
+        return "", []
+    try:
+        filters = json.loads(where_json)
+    except ValueError as err:
+        raise AdminError("Filtrul nu poate fi citit: %s" % err)
+    if not isinstance(filters, dict) or not filters:
+        raise AdminError("Filtrul trebuie să fie un obiect «coloană: valoare».")
+    names = {c["name"] for c in columns}
+    parts, params = [], []
+    for col, value in filters.items():
+        if col not in names:
+            raise AdminError("Coloana «%s» nu există în tabelul cerut." % col)
+        if value is None or isinstance(value, (dict, list)):
+            raise AdminError("Filtrul acceptă doar valori simple (text, număr, dată).")
+        parts.append("%s = %%s" % _q(col))
+        params.append(value)
+    return " WHERE " + " AND ".join(parts), params
+
+
+def _page(conn, db, table, columns, pk, offset, limit, where_json=""):
+    where, params = _where(columns, where_json)
+    sql = "SELECT %s FROM %s.%s%s%s LIMIT %d OFFSET %d" % (
+        _select_list(columns), _q(db), _q(table), where, _order_by(pk), limit + 1, offset)
     cur = conn.cursor()
     try:
-        cur.execute(sql)
+        cur.execute(sql, params or None)
         fetched = cur.fetchall()
     finally:
         cur.close()
@@ -257,7 +288,8 @@ def cmd_db_table(args):
                 "collation": _s(row["table_collation"]), "comment": _s(row["comment"]) or ""}
         return {"db": db, "info": info, "columns": columns, "primary_key": pk,
                 "foreign_keys": _foreign_keys(conn, db, table), "referenced_by": _referenced_by(conn, db, table),
-                "indexes": _indexes(conn, db, table), "page": _page(conn, db, table, columns, pk, 0, limit)}
+                "indexes": _indexes(conn, db, table),
+                "page": _page(conn, db, table, columns, pk, 0, limit, args.where_json)}
     finally:
         if conn.is_connected():
             conn.close()
@@ -271,7 +303,48 @@ def cmd_db_rows(args):
     try:
         db = _one_db(conn, args.db)
         table = _s(_table_row(conn, db, args.table)["name"])
-        return {"page": _page(conn, db, table, _columns(conn, db, table), _primary_key(conn, db, table), args.offset, limit)}
+        return {"page": _page(conn, db, table, _columns(conn, db, table), _primary_key(conn, db, table), args.offset, limit,
+                              args.where_json)}
+    finally:
+        if conn.is_connected():
+            conn.close()
+
+
+def cmd_db_distinct(args):
+    """The values a column of a table really holds (no NULL, no repeats, sorted), optionally only in the rows that match
+    --where-json and only the values that contain --like: what the page offers to choose from while the operator types, so a
+    linked-table jump can never ask for a value that is not there."""
+    limit = _check_limit(args.limit)
+    conn = connect()
+    try:
+        db = _one_db(conn, args.db)
+        table = _s(_table_row(conn, db, args.table)["name"])
+        columns = _columns(conn, db, table)
+        wanted = [c for c in columns if c["name"] == args.column]
+        if not wanted:
+            raise AdminError("Coloana «%s» nu există în tabelul «%s»." % (args.column, table))
+        data_type = wanted[0]["data_type"]
+        if data_type in BLOB_TYPES or data_type in LONG_TEXT_TYPES:
+            raise AdminError("Coloana «%s» (%s) e prea mare ca să se aleagă dintr-o listă." % (args.column, data_type))
+        where, params = _where(columns, args.where_json)
+        q = _q(args.column)
+        where += (" AND " if where else " WHERE ") + q + " IS NOT NULL"
+        order = q
+        if args.like:
+            # Only the values that CONTAIN the typed text, those that START with it first (the pick list that follows the typing).
+            escaped = args.like.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where += " AND CAST(%s AS CHAR) LIKE %%s" % q
+            order = "(CAST(%s AS CHAR) LIKE %%s) DESC, %s" % (q, q)
+            params = list(params) + ["%" + escaped + "%", escaped + "%"]
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT %s FROM %s.%s%s GROUP BY %s ORDER BY %s LIMIT %d" % (q, _q(db), _q(table), where, q, order, limit + 1),
+                        params or None)
+            fetched = cur.fetchall()
+        finally:
+            cur.close()
+        return {"column": args.column, "values": [_cell(row[0], data_type) for row in fetched[:limit]],
+                "has_more": len(fetched) > limit}
     finally:
         if conn.is_connected():
             conn.close()
@@ -341,6 +414,7 @@ def register(sub):
     p.add_argument("--db", required=True)
     p.add_argument("--table", required=True)
     p.add_argument("--limit", type=int, default=DEFAULT_PAGE)
+    p.add_argument("--where-json", default="")
     p.set_defaults(fn=cmd_db_table)
 
     p = sub.add_parser("db-rows")
@@ -348,7 +422,17 @@ def register(sub):
     p.add_argument("--table", required=True)
     p.add_argument("--offset", type=int, default=0)
     p.add_argument("--limit", type=int, default=DEFAULT_PAGE)
+    p.add_argument("--where-json", default="")
     p.set_defaults(fn=cmd_db_rows)
+
+    p = sub.add_parser("db-distinct")
+    p.add_argument("--db", required=True)
+    p.add_argument("--table", required=True)
+    p.add_argument("--column", required=True)
+    p.add_argument("--where-json", default="")
+    p.add_argument("--like", default="")
+    p.add_argument("--limit", type=int, default=DISTINCT_LIMIT)
+    p.set_defaults(fn=cmd_db_distinct)
 
     p = sub.add_parser("db-cell")
     p.add_argument("--db", required=True)
