@@ -142,7 +142,8 @@ export function receiptProductEntry({ host, root, allocation, draft, api, select
         Object.assign(item, { cc: choice.code, dnf_min: choice.detail.dnf_min, dnf_max: choice.detail.dnf_max, dnf: num(choice.detail.dnf_min) * 12 });
         Object.assign(row.new_product, { CC: item.cc, DNF: item.dnf }); row.DNF = item.dnf; defaults(row);
       }
-      const cpv = row.new_product.CPV ? { code: row.new_product.CPV } : await pick(row);   // VC06-35: a CPV taken from the e-Factura is not asked again
+      // VC06-35: a CPV taken from the e-Factura is not asked again; VC06-38: neither when the operator already agreed to «fără CPV» in the e-Factura window
+      const cpv = row.new_product.CPV ? { code: row.new_product.CPV } : row._cpvDeclined ? null : await pick(row);
       if (disposed) return;
       row.new_product.CPV = cpv?.code ?? null; row._productReady = true;
       item.new_product = { ...row.new_product }; item.ready = true; changed();

@@ -143,11 +143,12 @@ export class ComboTree extends TreeView {
   }
 
   // Parent selection is opt-in; expanders always only expand/collapse.
+  // A `pinned` node (an action row such as «FOLOSEȘTE DENUMIREA DIN EFACTURA») is a top-level leaf that can be chosen.
   canSelectComboItem(item) {
     const node = this._checkIndex.get(item.dataset.value);
     const hasChildren = node ? !!node.children?.length : item.dataset.hasChildren === 'true';
     return item.dataset.selectable !== 'false'
-      && (this.options.selectParents || (Number(item.dataset.level) > 1 && !hasChildren))
+      && (this.options.selectParents || ((Number(item.dataset.level) > 1 || !!node?.pinned) && !hasChildren))
       && (this.options.selectableLevel === null || Number(item.dataset.level) === this.options.selectableLevel);
   }
 

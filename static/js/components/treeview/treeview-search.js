@@ -211,7 +211,10 @@ export const treeViewSearchMixin = {
       }, []);
     };
 
-    return filterRecursive(nodes);
+    // A `pinned` node is always the first row, whatever is typed in the search box.
+    const pinned = nodes.filter((node) => node.pinned);
+    const found = filterRecursive(nodes.filter((node) => !node.pinned));
+    return pinned.length ? [...pinned.map((node) => ({ ...node, children: [], _isMatched: false, _hasMatchedChildren: false })), ...found] : found;
   },
 
   findMatchingNodes(nodes, query, parentPath = []) {

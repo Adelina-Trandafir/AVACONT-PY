@@ -74,7 +74,9 @@ export const treeViewRenderMixin = {
   renderNodes(nodes, query, level, parentPath, asParent = false) {
     let html = '';
 
-    orderItems(nodes, this.options).forEach((node) => {
+    const ordered = orderItems(nodes, this.options);
+    // A `pinned` node (an action row) keeps the first place; the others stay in their sorted order.
+    [...ordered.filter((node) => node.pinned), ...ordered.filter((node) => !node.pinned)].forEach((node) => {
       const nodeLabel = node.label || node.name || node.text || `Item ${node.id}`;
       const nodeIdStr = String(node.id);
       const hasChildren = node.children && node.children.length > 0;

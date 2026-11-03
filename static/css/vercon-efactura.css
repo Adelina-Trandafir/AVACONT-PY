@@ -46,3 +46,19 @@
 .vc-efi--association .dgv__hc { min-width: 0; }
 .vc-efi--association .dgv__hc:is([data-key="_move"], [data-key="_action"]) { padding-inline: 0; gap: 0; }
 @media (max-width: 760px) { .vc-efi__panels { grid-template-columns: minmax(0, 1fr); } }
+
+/* VC06-38: «Produs din eFactura» window (js/vercon/efactura-line-dialog.js); box, caption, footer and buttons come from .vc-efi and ModalFrame. */
+.vc-efl.kmodal { display: flex; flex-direction: column; }
+.vc-efl__body { flex: 1 1 auto; overflow: auto; }
+.vc-efl .vc-field { display: flex; flex-direction: column; min-width: 0; gap: 4px; }
+.vc-efl__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
+.vc-efl__cpv { display: flex; gap: 6px; min-width: 0; }
+.vc-efl__cpv > input { flex: 1 1 auto; min-width: 0; }
+.vc-efl__cpv > button { flex: 0 0 auto; padding: 4px 12px; color: inherit; background: var(--sky-2, #eaf2fb); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); font: inherit; font-weight: 650; cursor: pointer; }
+.vc-efl__cpv > button:hover:not(:disabled) { background: var(--sky-1, #f3f8fe); }
+.vc-efl :is(input, textarea) { box-sizing: border-box; width: 100%; padding: 6px 8px; color: inherit; background: var(--card, #fff); border: 1px solid var(--line, #cdd5e0); border-radius: var(--radius-sm, 6px); font: inherit; }
+.vc-efl textarea { resize: vertical; }
+.vc-efl :is(input, textarea):read-only { background: var(--sky-1, #f3f8fe); }
+.vc-efl :is(input, textarea):focus { border-color: var(--blue, #309eff); outline: 1px solid var(--blue, #309eff); }
+.vc-efl__cpv > input { width: auto; }
+@media (max-width: 760px) { .vc-efl__row { grid-template-columns: minmax(0, 1fr); } }

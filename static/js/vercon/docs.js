@@ -31,6 +31,7 @@ import { oiContext } from './oi-context.js';
 import { orphanStorno } from './orphan-storno.js'; import { repairRegister } from './oi-register-repair.js';
 import { receiptProductEntry, mfColumns, mfMonthly } from './receipt-product-entry.js';
 import { efacturaIntake } from './efactura-intake.js';
+import { efacturaLineDialog } from './efactura-line-dialog.js';
 import { associateEfactura } from './efactura-association.js';
 import { showReceiptEfactura } from './efactura-view.js';
 import { headerFit } from './header-fit.js';
@@ -123,6 +124,7 @@ export function mountDocuments(host, opts) {
   if (['nir', 'bc'].includes(family)) headerFit({ box: main, header: headerHost, lines: linesHost, minRows: 10, signal: abort.signal });
   const productEntry = family === 'nir' ? receiptProductEntry({ host, root, allocation, draft: () => state.draft,
     api: opts.api, selection: opts.sel, changed: () => { state.dirty = true; }, note: () => state.draft?.efactura ? state.draft.efactura_note || '' : null }) : null;
+  const efLineDialog = family === 'nir' ? efacturaLineDialog({ host, api: opts.api, sel: opts.sel, note: () => state.draft?.efactura_note || '' }) : null;   // VC06-38
   const treeHost = inline ? el('div', { className: 'vc-receipt-tree' }) : savedHost;
   if (treeHost !== savedHost) savedHost.append(treeHost);
   const mfInfo = family === 'nir' ? receiptMfInfo(savedHost) : null;
@@ -634,7 +636,7 @@ export function mountDocuments(host, opts) {
         ...(family === 'nir' && spec.editable ? { editable: row => editing() && !row.external && row.calc_mode !== 'GROSS' && (!spec.mfOnly || allocation.isMF(row)) && (spec.key !== 'um' || !!row.new_product) && (spec.key !== 'Cant' || !allocation.isMF(row)) } : {}),
         ...(spec.type === 'ref' ? { editor: 'list', searchable: true, options: choices, formatter: (value) => family === 'nir' && spec.key === 'IDTVA' ? allocation.tax(value)?.percent || '' : spec.product && (!editing() || spec.key === 'name') ? rows.find((row) => row[spec.key] === value)?.name || String(value ?? '') : choices().find((item) => String(item.value) === String(value))?.label || '', validate: (value) => value == null || value === '' ? 'Alegeți o valoare din listă.' : null } : {}),
         ...(family === 'nir' && spec.key === 'IDTVA' ? { formatter: value => allocation.tax(value)?.percent ?? rows.find(row => String(row.IDTVA) === String(value))?.vat_percent ?? '' } : {}),
-        ...(family === 'nir' && spec.product ? { editor: 'tree', allowCustom: true, nodes: row => row?.ef_name && state.draft?.efactura ? [{ id: EF_NAME_NODE, label: 'FOLOSEȘTE DENUMIREA DIN EFACTURA' }, ...allocation.nodes()] : allocation.nodes(), selectParents: false, dropDownMinWidth: 300, focusAfterSelect: row => row.new_product && !row._efUsed ? 'um' : allocation.isMF(row) ? 'Pret' : 'Cant', formatter: value => rows.find(row => String(row.product) === String(value))?.name || product(value)?.name || '' } : {}),
+        ...(family === 'nir' && spec.product ? { editor: 'tree', allowCustom: true, nodes: row => row?.ef_name && state.draft?.efactura ? [{ id: EF_NAME_NODE, label: 'FOLOSEȘTE DENUMIREA DIN EFACTURA', pinned: true }, ...allocation.nodes()] : allocation.nodes(), selectParents: false, dropDownMinWidth: 300, focusAfterSelect: row => row.new_product && !row._efUsed ? 'um' : allocation.isMF(row) ? 'Pret' : 'Cant', formatter: value => rows.find(row => String(row.product) === String(value))?.name || product(value)?.name || '' } : {}),
         ...(family === 'nir' && spec.key === 'ef_name' ? { editable: row => editing() && !row.external, readOnlyEditor: true } : {}),   // VC06-36: click opens the text read-only, to copy part of it
         ...(family === 'nir' && spec.key === 'data_intrarii' ? { align: 'center' } : {}),
         ...(family === 'nir' && ['DNF', 'DF', 'ValoareLuna'].includes(spec.key) ? { width: 100, minWidth: 100, fixedWidth: true } : {}),
@@ -659,6 +661,9 @@ export function mountDocuments(host, opts) {
       ...(!inline ? { footerAction: { label: '➕ Adaugă rând', span: 2, disabled: !editing() || !!config.source }, onFooterAction: () => addLine().catch(report) } : {}),
       onCellSave: async ({ row, key: name, value }) => {
         const line = state.draft.lines.find((item) => item.key === row.key); if (!line) throw new Error('Linia nu mai este în document.');
+        // VC06-38: «FOLOSEȘTE DENUMIREA DIN EFACTURA» opens a small window (name, UM, CPV, accountant's note); «Renunță» leaves the line as it was.
+        let efEdit = null;
+        if (family === 'nir' && name === 'product' && value === EF_NAME_NODE) { efEdit = await efLineDialog.edit(line); if (!efEdit) return { ...line }; }
         const before = structuredClone(line); let efNew = false;
         if (family === 'nir' && ['product', 'Cant', 'Pret', 'IDTVA'].includes(name)) clearCorrection(line);
         if (family === 'storno' && name === 'variant') {
@@ -668,10 +673,11 @@ export function mountDocuments(host, opts) {
           Object.assign(line, item, { id: line.variant === item.variant ? line.id : null });
         } else if (name === '_choice') { const item = state.eligible[Number(value)]; if (!item) throw new Error('Alegeți un produs al predătorului.'); if (state.draft.lines.some((other) => other !== line && other.variant === item.variant && (other.origin ?? other.batch) === item.origin && other.IdMasina === item.IdMasina && other.PUTVA === item.PUTVA)) throw new Error('Produsul din acest lot, cont și preț este deja în document.'); const id = line.variant === item.variant && (line.origin ?? line.batch) === item.origin && line.IdMasina === item.IdMasina && line.PUTVA === item.PUTVA ? line.id : null; Object.assign(line, { ...item, _choice: Number(value), id }); }
         else if (family === 'nir' && name === 'product') {
-          // VC06-35: «FOLOSEȘTE DENUMIREA DIN EFACTURA» = a new product with the name and the UM of the invoice line (and its CPV, if it has one), as if typed in the row.
-          const fromInvoice = value === EF_NAME_NODE;
-          line._efUsed = efNew = fromInvoice && !!String(line.ef_um ?? '').trim();   // no UM on the invoice line: the normal new-product flow asks for it
-          productEntry.selectProduct(fromInvoice ? { newName: line.ef_name, um: line.ef_um, cpv: line.ef_cpv } : value, line);
+          // VC06-35 / VC06-38: «FOLOSEȘTE DENUMIREA DIN EFACTURA» = a new product with the name, UM and CPV confirmed in the window, as if typed in the row.
+          const fromInvoice = !!efEdit;
+          line._efUsed = efNew = fromInvoice;   // the window requires the UM
+          line._cpvDeclined = fromInvoice && !efEdit.cpv;   // the window already asked «fără CPV?»: the CPV window is not opened again
+          productEntry.selectProduct(fromInvoice ? { newName: efEdit.name, um: efEdit.um, cpv: efEdit.cpv } : value, line);
         }
         else { line[name] = ['variant', 'product', 'IDTVA', 'invoice_line'].includes(name) ? value == null || value === '' ? null : Number(value) : value; if (['variant', 'product'].includes(name)) { const item = family === 'nir' ? product(value) : variant(value); line.name = item?.name || ''; line.um = item?.um || ''; if (name === 'product') line.variant = null; } }
         if (family === 'nir' && name === 'product') {
@@ -1083,5 +1089,5 @@ export function mountDocuments(host, opts) {
     if (!state.canWrite) { say('Nu aveți dreptul să adăugați documente în această gestiune.', true); return; }
     await fromEfactura();
   }
-  return { ready, reloadContext, pauseContext, canChangeContext, startEfactura, startAdd: async () => { await ready; if (abort.signal.aborted) return; if (state.canWrite) await add(); else say('Nu aveți dreptul să adăugați documente în această gestiune.', true); }, isDirty: () => state.dirty || headerUi.dirty() || linesUi.dirty(), search: (text) => { const input = savedHost.querySelector('.treeview-search-input'); if (input) { input.value = text; input.dispatchEvent(new Event('input')); } }, destroy: () => { productEntry?.destroy(); frame?.destroy(); side?.destroy(); custodySide?.destroy(); mfInfo?.destroy(); abort.abort(); pauseContext(); [headerUi, linesUi, treeUi, dialogs].forEach((owner) => owner.clear()); host.replaceChildren(); } };
+  return { ready, reloadContext, pauseContext, canChangeContext, startEfactura, startAdd: async () => { await ready; if (abort.signal.aborted) return; if (state.canWrite) await add(); else say('Nu aveți dreptul să adăugați documente în această gestiune.', true); }, isDirty: () => state.dirty || headerUi.dirty() || linesUi.dirty(), search: (text) => { const input = savedHost.querySelector('.treeview-search-input'); if (input) { input.value = text; input.dispatchEvent(new Event('input')); } }, destroy: () => { productEntry?.destroy(); efLineDialog?.destroy(); frame?.destroy(); side?.destroy(); custodySide?.destroy(); mfInfo?.destroy(); abort.abort(); pauseContext(); [headerUi, linesUi, treeUi, dialogs].forEach((owner) => owner.clear()); host.replaceChildren(); } };
 }
