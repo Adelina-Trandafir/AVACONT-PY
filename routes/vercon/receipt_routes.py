@@ -4,7 +4,7 @@ from utils import vercon_suppliers as suppliers
 
 from flask import request
 
-from . import documents as d, receipts, receipt_rules, receipt_number, receipt_auto, receipt_adjustment, invoices, protocol
+from . import documents as d, receipts, receipt_rules, nir_number, receipt_auto, receipt_adjustment, invoices, protocol
 from .nomenclatoare import NomError
 
 
@@ -45,11 +45,11 @@ def register(bp, guard, scoped, session, build, repo_of, need):
                 parsed['declared'] = Decimal(str(target)) - external
             header = data.get('header') or {}
             if parsed['cols']['TipDoc'] != 'STOC_INITIAL':
-                changed = not previous or (str(header.get('Data')), str(header.get('Numar')), d._int(header.get('NumarSub')) or 0) != (
-                    previous['header']['Data'], str(previous['number']), previous.get('sub_number') or 0)
+                changed = not previous or (str(header.get('Data')), str(header.get('DataFc')), str(header.get('Numar')), d._int(header.get('NumarSub')) or 0) != (
+                    previous['header']['Data'], previous['header']['DataFc'], str(previous['number']), previous.get('sub_number') or 0)
                 if changed:
-                    verdict = receipt_number.check(cursor, ctx, header.get('Numar'), doc_id,
-                                                   d._int(header.get('NumarSub')) or 0, header.get('Data'))
+                    verdict = nir_number.check(cursor, ctx, header.get('Numar'), doc_id,
+                                               d._int(header.get('NumarSub')) or 0, header.get('Data'))
                     if not verdict['valid'] or verdict['duplicate']:
                         raise NomError('INVALID', 'Numărul NIR este invalid sau deja folosit.', 422,
                                        {'h.Numar': 'Numărul NIR este invalid sau deja folosit.'})

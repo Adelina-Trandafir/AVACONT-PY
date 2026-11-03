@@ -499,14 +499,15 @@ export function mountDocuments(host, opts) {
         }
         const previous = state.draft.header[spec.key];
         const previousDates = family === 'nir' && ['Data', 'DataFc'].includes(spec.key)
-          ? { Data: state.draft.header.Data, DataFc: state.draft.header.DataFc } : null;
+          ? { Data: state.draft.header.Data, DataFc: state.draft.header.DataFc, Numar: state.draft.header.Numar, NumarSub: state.draft.header.NumarSub } : null;
+        const previousNumberLock = state.draft.nirNumberLocked;
         const syncNirDate = family === 'nir' && spec.key === 'DataFc' && previous !== value;
         state.draft.header[spec.key] = value; state.dirty = true;
         if (syncNirDate) {
           state.draft.header.Data = value;
           inputs.get('Data')?._picker?.setValue(value ? new Date(value + 'T00:00:00') : null, false);
         }
-        if (family === 'storno' && spec.key === 'Numar') state.draft.autoNumber = false;
+        if (receipt && spec.key === 'Numar' && String(previous ?? '') !== String(value ?? '')) state.draft.autoNumber = false;
         if (family === 'nir' && spec.key === 'Valoare') syncInvoiceValue();
         if (status.textContent.startsWith('Completați mai întâi antetul') && !headerLock()) say('');
         if (spec.key === config.holder && String(previous) !== String(value)) {
@@ -535,9 +536,9 @@ export function mountDocuments(host, opts) {
               paintLines(); await checkNumber(state.mode === 'add' && draft.autoNumber);
             }
             catch (error) { report(error); }
-          } else if (family === 'nir') { try { await checkNumber(); } catch (error) { Object.assign(state.draft.header, previousDates); paintHeader(); report(error); return; } }
+          } else if (family === 'nir') { try { await checkNumber(true); } catch (error) { Object.assign(state.draft.header, previousDates); state.draft.nirNumberLocked = previousNumberLock; paintHeader(); report(error); return; } }
         }
-        if (family === 'nir' && ['Data', 'DataFc'].includes(spec.key)) { try { await validateDraft(); } catch (error) { Object.assign(state.draft.header, previousDates); paintHeader(); report(error); return; } }
+        if (family === 'nir' && ['Data', 'DataFc'].includes(spec.key)) { try { await validateDraft(); } catch (error) { Object.assign(state.draft.header, previousDates); state.draft.nirNumberLocked = previousNumberLock; paintHeader(); report(error); return; } }
         side?.refresh(); custodySide?.refresh();
       }, headerUi);
       inputs.set(spec.key, item.input); errors.set(`h.${spec.key}`, item.error); if (spec.hint && editing()) item.input.title = spec.hint;
@@ -552,6 +553,7 @@ export function mountDocuments(host, opts) {
         const stock = headerUi.own(new CheckBox(stockHost, { label: 'Stoc inițial (fără furnizor)', labelSide: 'left', className: 'vc-nir-stock', checked: state.draft.tip === 'STOC_INITIAL',
           onChange: (checked) => {
             state.draft.tip = checked ? 'STOC_INITIAL' : 'NIR'; state.dirty = true;
+            state.draft.nirNumberLocked = false; subnumber.setLocked(false);
             if (checked) { state.draft.invoice = null; state.draft.header.FacturaId = null; }
             for (const name of ['CodFiscal', 'NrFact']) { const input = inputs.get(name); input?._setRequired(!checked); if (checked) { input?._clearValue(); state.draft.header[name] = null; } }
             stockHidden();

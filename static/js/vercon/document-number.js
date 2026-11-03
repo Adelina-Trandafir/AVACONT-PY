@@ -7,18 +7,31 @@ export function documentNumbers({ family, state, allocation, selection, api, abo
     invalidate() { ++sequence; },
     async check(offer = false) {
       if (!['nir', 'storno', 'bc', 'bp', 'bt', 'bs'].includes(family) || state.mode === 'view' || allocation?.multi()) return;
-      const draft = state.draft, automatic = family === 'storno' && offer;
+      const draft = state.draft, receipt = ['nir', 'storno'].includes(family);
+      const nir = family === 'nir' && draft.tip !== 'STOC_INITIAL';
       // A blur of the empty number field (it fires while the new form is being drawn) must not cancel the automatic offer
       // that is already in flight: on a fresh draft an empty number is always answered with the next free one.
-      if (family !== 'storno' && state.mode === 'add' && draft.autoNumber && !draft.header.Numar) offer = true;
+      if (state.mode === 'add' && draft.autoNumber && !draft.header.Numar) offer = true;
+      const automatic = !nir && receipt && state.mode === 'add' && offer;
+      if (automatic) draft.autoNumber = true;
       const currentNumber = draft.header.Numar || '', currentSub = Number(draft.header.NumarSub) || 0;
       const raw = automatic ? '' : currentNumber, sub = automatic ? 0 : currentSub, token = ++sequence;
       const day = draft.header.Data || '';
       const context = state.mode === 'add' && allocation ? allocation.numberSelection() : selection();
-      const answer = await track(api(`/api/vercon/doc/${family}/number?${new URLSearchParams(context)}&number=${encodeURIComponent(raw)}&sub=${sub}&date=${encodeURIComponent(day)}${family === 'bc' && draft.header.IdMasina ? `&account=${encodeURIComponent(draft.header.IdMasina)}` : ''}${state.mode === 'edit' ? `&exclude=${state.doc.id}` : ''}`, { headers: { 'X-Vercon-Version': '' } }));
-      if (aborted() || draft !== state.draft || token !== sequence || draft.header.Data !== day || String(draft.header.Numar || '') !== String(currentNumber) || (Number(draft.header.NumarSub) || 0) !== currentSub) return;
-      const { input, subGroup, subBox } = controls();
-      if (offer && !raw) {
+      const answer = await track(api(`/api/vercon/doc/${family}/number?${new URLSearchParams(context)}&number=${encodeURIComponent(raw)}&sub=${sub}&date=${encodeURIComponent(day)}${family === 'nir' ? `&initial=${draft.tip === 'STOC_INITIAL' ? '1' : '0'}` : ''}${family === 'bc' && draft.header.IdMasina ? `&account=${encodeURIComponent(draft.header.IdMasina)}` : ''}${state.mode === 'edit' ? `&exclude=${state.doc.id}` : ''}`, { headers: { 'X-Vercon-Version': '' } }));
+      if (aborted() || draft !== state.draft || token !== sequence || draft.header.Data !== day || String(draft.header.Numar || '') !== String(currentNumber) || (Number(draft.header.NumarSub) || 0) !== currentSub || automatic && !draft.autoNumber) return;
+      const { input, subGroup, subBox, setLocked } = controls();
+      if (nir) {
+        draft.nirNumberLocked = !!answer.number_locked;
+        if (draft.nirNumberLocked || !raw && answer.valid && !answer.duplicate) {
+          draft.header.Numar = String(answer.suggested);
+          draft.header.NumarSub = Number(answer.suggested_sub) || 0;
+          if (input?._box) input._box.setValue(draft.header.Numar); else if (input) input.value = draft.header.Numar;
+          subBox?.setValue(subText(draft.header.NumarSub));
+        }
+        if (subGroup) subGroup.hidden = !draft.nirNumberLocked && !draft.header.NumarSub;
+        setLocked?.(draft.nirNumberLocked);
+      } else if (offer && !raw) {
         draft.header.Numar = String(answer.suggested);
         if (input?._box) input._box.setValue(draft.header.Numar); else if (input) input.value = draft.header.Numar;
       }
@@ -30,7 +43,7 @@ export function documentNumbers({ family, state, allocation, selection, api, abo
       const custody = ['bc', 'bp', 'bt', 'bs'].includes(family);
       const message = !answer.valid ? custody ? 'Introduceți un număr întreg pozitiv.' : 'Introduceți un număr întreg pozitiv (și un sub-număr de cel mult 2 cifre).' : answer.duplicate ? 'Numărul este deja folosit. Alegeți alt număr.' : '';
       const sink = error(); if (sink) sink.textContent = message;
-      if (input && !message) input.title = offer && !raw ? 'Propus automat. Verificat din nou la salvare.' : !raw ? `Următorul număr disponibil: ${answer.suggested}.` : answer.valid && !answer.duplicate ? 'Număr disponibil. Verificat din nou la salvare.' : `Număr disponibil propus: ${answer.suggested}.`;
+      if (input && !message) input.title = nir && draft.nirNumberLocked ? 'Număr zecimal calculat automat după Data NIR. Câmpurile sunt dezactivate.' : offer && !raw ? 'Propus automat. Verificat din nou la salvare.' : !raw ? `Următorul număr disponibil: ${answer.suggested}.` : answer.valid && !answer.duplicate ? 'Număr disponibil. Verificat din nou la salvare.' : `Număr disponibil propus: ${answer.suggested}.`;
     },
   };
 }

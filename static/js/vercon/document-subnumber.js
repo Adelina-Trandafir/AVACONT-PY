@@ -3,41 +3,53 @@ import { subText, subHundredths } from './receipt-number.js';
 
 // The optional fractional NIR/FCS number stays inside the number field.
 export function documentSubnumber({ family, owner, state, check, report }) {
-  let subBox = null, subGroup = null;
+  let subBox = null, subGroup = null, mainBox = null;
+  const locked = () => family === 'nir' && !!state.draft?.nirNumberLocked;
+  function setLocked(value) {
+    mainBox?.setEnabled(!value);
+    subBox?.setEnabled(!value);
+    if (value && subGroup) subGroup.hidden = false;
+  }
   function open(text = '') {
-    if (!subGroup) return;
+    if (!subGroup || locked()) return;
     subGroup.hidden = false;
     if (text) { subBox.setValue(text); state.draft.header.NumarSub = subHundredths(text); state.draft.autoNumber = false; state.dirty = true; }
     subBox.focus();
   }
   function close() {
-    if (!subGroup) return;
+    if (!subGroup || locked()) return;
     subGroup.hidden = true; subBox.setValue(''); state.draft.header.NumarSub = 0;
     state.draft.autoNumber = false; state.dirty = true;
   }
   return {
-    controls: () => ({ subBox, subGroup }),
+    controls: () => ({ subBox, subGroup, setLocked }),
+    setLocked,
     leave(text, box, event) {
+      if (locked()) return;
       if (subGroup && !subGroup.hidden && event?.relatedTarget === subBox.input) return;
       check().catch(report);
     },
     attach(item, header) {
       const main = item.input._box, input = item.input, row = el('div', { className: 'vc-number-row' });
+      mainBox = main;
       main.element.replaceWith(row); row.append(main.element);
       subGroup = el('div', { className: 'vc-number-sub' }, el('span', { textContent: ',' }));
       subBox = owner.own(new TextBox(subGroup, { type: 'text', maxLength: 2,
         ariaLabel: `Sub-număr ${family === 'storno' ? 'FCS' : 'NIR'}`, textAlign: 'right',
         onInput: (text, box) => {
+          if (locked()) return;
           const digits = text.replace(/\D/g, ''); if (digits !== text) box.setValue(digits);
           state.draft.header.NumarSub = subHundredths(digits); state.draft.autoNumber = false; state.dirty = true;
         }, onLeave: text => { if (!text) close(); check().catch(report); } }));
       row.append(subGroup); subGroup.hidden = !(Number(header.NumarSub) > 0);
       if (!subGroup.hidden) subBox.setValue(subText(header.NumarSub));
+      setLocked(locked());
       input.addEventListener('keydown', event => {
         if (event.key !== ',' && event.key !== '.') return;
         event.preventDefault(); if (/\d/.test(input.value)) open();
       });
       input.addEventListener('input', () => {
+        if (locked()) return;
         const at = input.value.search(/[.,]/); if (at < 0) return;
         const base = input.value.slice(0, at).replace(/\D/g, ''), fraction = input.value.slice(at + 1).replace(/\D/g, '');
         main.setValue(base); state.draft.header.Numar = main.text;

@@ -5,6 +5,8 @@ La generarea unui raport/document sau la export, fereastra apare imediat cu indi
 
 Directorul `queries/` conține interogările SELECT folosite la generarea rapoartelor. Aceste fișiere sunt resurse ale aplicației: se copiază pe server, nu se execută separat și nu instalează/modifică schema bazei de date.
 
+SLICE-VC06-32, 03.11.2026, înlocuiește comportamentul intermediar VC06-31: la schimbarea Datei NIR ori Datei facturii, existența unui alt NIR cu dată ulterioară impune calculul următorului subnumăr zecimal disponibil, afișarea casetei zecimale și dezactivarea ambelor câmpuri ale numărului. Regula se aplică și numerelor introduse manual și editării unui NIR salvat. Fără NIR ulterior, valorile curente ale numărului și subnumărului rămân neschimbate; numai formularul nou cu număr gol primește o propunere inițială. Prin urmare, numărul păstrat în cazul fără NIR ulterior nu mai este refuzat pentru ordinea numerică față de documente cu date anterioare. Unicitatea în seria comună NIR/FCS și limita de două zecimale rămân obligatorii. Numărul și subnumărul sunt reverificate la salvare sub blocarea gestiunii; FCS și stocul inițial își păstrează traseele distincte. Corecție locală, fără teste sau publicare.
+
 ## Data intrării în stoc — SLICE-VC06-29, 02.11.2026
 
 Data efectivă de stoc este **data NIR-ului**, păstrată în `VC_NIR.Data`. Pentru FCS se folosește data propriului document din același câmp. `DataFc` rămâne data facturii și nu este fallback pentru o dată NIR lipsă. Registrul comun, disponibilul, simulările, fișele, balanțele, prima intrare a variantei și evenimentele de recepție/storno ale MF folosesc data documentului.

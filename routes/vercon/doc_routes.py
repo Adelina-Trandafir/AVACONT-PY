@@ -207,6 +207,9 @@ def register(bp, guard, scoped, open_db):
             if family in oi.FAMILIES_OI:
                 from .oi_number import check
                 return check(cursor, ctx, family, request.args.get('number'), exclude)
+            if family == 'nir' and request.args.get('initial') != '1':
+                from .nir_number import check
+                return check(cursor, ctx, request.args.get('number'), exclude, documents._int(request.args.get('sub')) or 0, request.args.get('date'))
             return receipt_number.check(cursor, ctx, request.args.get('number'), exclude, documents._int(request.args.get('sub')) or 0, request.args.get('date'), insert=family == 'storno')
 
     @bp.get('/api/vercon/doc/<family>/sources')

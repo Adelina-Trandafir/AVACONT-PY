@@ -4,13 +4,13 @@ from .nomenclatoare import NomError
 
 
 def series(cursor, ctx, day):
-    return d._all(cursor, 'SELECT IdIntrare, ABS(Numar) AS Numar, COALESCE(NumarSub,0) AS sub, DATE(Data) AS day FROM VC_NIR '
+    return d._all(cursor, 'SELECT IdIntrare, ABS(Numar) AS Numar, COALESCE(NumarSub,0) AS sub, DATE(Data) AS day, COALESCE(Storno,0) AS storno FROM VC_NIR '
                   "WHERE SubunitId=%s AND GestiuneId=%s AND YEAR(Data)=%s AND Numar<>0 AND TipDoc<>'STOC_INITIAL'",
                   (ctx['subunit'], ctx['gestiune'], day.year))
 
 
 def suggestion(rows, day):
-    """Place an inserted FCS after the last earlier number, using hundredths."""
+    """Place an inserted NIR/FCS after the last earlier number, using hundredths."""
     before = [r for r in rows if r['day'] and r['day'] <= day]
     after = [r for r in rows if r['day'] and r['day'] > day]
     if not after:
@@ -47,7 +47,7 @@ def check(cursor, ctx, raw=None, exclude=None, sub=0, on=None, insert=False):
 
 
 def assign_pair(cursor, ctx, raw, sub, day, exclude=None):
-    """FCS auto-allocation includes the fractional part in the same locked series."""
+    """NIR/FCS auto-allocation includes the fractional part in the same locked series."""
     d._one(cursor, 'SELECT GestiuneId FROM VC_Gestiuni WHERE SubunitId=%s AND GestiuneId=%s FOR UPDATE',
            (ctx['subunit'], ctx['gestiune']))
     result = check(cursor, ctx, raw, exclude, sub, day.isoformat(), insert=raw in (None, ''))

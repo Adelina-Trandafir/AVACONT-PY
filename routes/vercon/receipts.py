@@ -3,7 +3,7 @@ from utils.clock import utc_now
 from decimal import Decimal
 from utils import vercon_suppliers as suppliers
 
-from . import numeric, protocol, receipt_choices, receipt_rules, receipt_number, receipt_auto, receipt_products
+from . import numeric, protocol, receipt_choices, receipt_rules, receipt_number, nir_number, receipt_auto, receipt_products
 from .nomenclatoare import NomError
 from .documents import (_int, _dec, _text, _one, _all, _fail, _exists, _scope,
                         _line_key, _account_of_product, _account_of_variant,
@@ -268,7 +268,10 @@ def create_nir(cursor, repo, ctx, exercise, body, request_key, request_id, parse
         errors['h.Numar'] = 'Sub-numerele NIR nu sunt disponibile în această bază de date.'
     number = None
     if not errors:
-        number = receipt_number.assign(cursor, ctx, header.get('Numar'), sub, parsed['cols']['Data'])
+        if parsed['cols']['TipDoc'] == 'STOC_INITIAL':
+            number = receipt_number.assign(cursor, ctx, header.get('Numar'), sub, parsed['cols']['Data'])
+        else:
+            number, sub = nir_number.assign(cursor, ctx, header.get('Numar'), sub, parsed['cols']['Data'])
     _fail(errors)
     total_int = _nir_total(ctx, parsed)
     invoice_id, current = invoices.prepare_receipt(cursor, ctx, None, header)
@@ -348,10 +351,15 @@ def edit_nir(cursor, repo, ctx, exercise, doc_id, body, request_id):
     old_day = before['Data'].date() if hasattr(before['Data'], 'date') else before['Data']
     changed_number = _int(str(wanted)) != number or sub != before_sub
     changed_day = parsed['cols']['Data'] != old_day
+    changed_invoice_day = str(header.get('DataFc') or '')[:10] != str(previous['header']['DataFc'] or '')[:10]
     if changed_day and old_day and parsed['cols']['Data'].year != old_day.year:
         errors['h.Data'] = 'Data NIR nu poate muta documentul în altă serie anuală.'
-    if not errors and (changed_number or changed_day):
-        number = receipt_number.assign(cursor, ctx, wanted, sub, parsed['cols']['Data'], doc_id)
+    if not errors and (changed_number or changed_day or changed_invoice_day):
+        if parsed['cols']['TipDoc'] == 'STOC_INITIAL':
+            number = receipt_number.assign(cursor, ctx, wanted, sub, parsed['cols']['Data'], doc_id)
+        else:
+            number, sub = nir_number.assign(cursor, ctx, wanted, sub, parsed['cols']['Data'], doc_id)
+        changed_number = number != abs(before['Numar'] or 0) or sub != before_sub
     _fail(errors)
     economic = len(parsed['lines']) != len(old_lines) or any(not r.get('preserve') for r in parsed['lines'])
     same_declared = parsed['declared'] == before['Valoare']
@@ -393,8 +401,8 @@ def edit_nir(cursor, repo, ctx, exercise, doc_id, body, request_id):
     if economic or changed_day:
         protocol.check_timeline(cursor, ctx, touched & stock_reductions)
     invoices.receipt_saved(cursor, ctx, doc_id, parsed, invoice_id, current, request_id)
-    protocol.audit(cursor, ctx, 'nir.update', 'VC_NIR', doc_id, {'Numar': before['Numar'], 'Valoare': before['Valoare'], 'NrFact': before['NrFact']},
-                   {'header': parsed['cols'], 'total': total_int, 'lines': len(parsed['lines'])}, None, request_id)
+    protocol.audit(cursor, ctx, 'nir.update', 'VC_NIR', doc_id, {'Numar': before['Numar'], 'NumarSub': before_sub, 'Valoare': before['Valoare'], 'NrFact': before['NrFact']},
+                   {'header': parsed['cols'], 'Numar': number, 'NumarSub': sub, 'total': total_int, 'lines': len(parsed['lines'])}, None, request_id)
     return {'id': doc_id, 'number': number}
 
 

@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from flask import request
 
-from . import receipt_destinations as destinations, receipts, receipt_rules, receipt_auto, receipt_number, receipt_adjustment, invoices, protocol, efactura_queue
+from . import receipt_destinations as destinations, receipts, receipt_rules, receipt_auto, nir_number, receipt_adjustment, invoices, protocol, efactura_queue
 from .documents import _dec, _int, _scope
 from .nomenclatoare import NomError
 
@@ -34,8 +34,8 @@ def parse_groups(cursor, anchor, groups, data):
         group['body'] = local
         group['parsed'] = receipts._clean_nir(cursor, group['repo'], ctx, group['exercise'], local, 'nir', allow_empty=True)
         if header.get('TipDoc') != 'STOC_INITIAL':
-            verdict = receipt_number.check(cursor, ctx, None if len(groups) > 1 else header.get('Numar'),
-                                           sub=0 if len(groups) > 1 else _int(header.get('NumarSub')) or 0, on=header.get('Data'))
+            verdict = nir_number.check(cursor, ctx, None if len(groups) > 1 else header.get('Numar'),
+                                       sub=0 if len(groups) > 1 else _int(header.get('NumarSub')) or 0, on=header.get('Data'))
             if not verdict['valid'] or verdict['duplicate']:
                 raise NomError('INVALID', 'Numărul NIR nu este disponibil în destinația selectată.', 422, {'h.Numar': 'Număr invalid sau deja folosit.'})
     return header
