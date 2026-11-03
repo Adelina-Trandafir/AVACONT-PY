@@ -7,12 +7,13 @@ are committed together or not at all. Rules shared by the four families:
     gestiune's ZEC (CONTRACT_CALCULE section 2.2) and stored directly as DECIMAL(20,4); nothing the page computed is trusted;
   * a NIR's declared total must equal the lines exactly (receipt_rules); other document families retain their
     existing header-total rules. Historical unchanged values are preserved;
-  * a price is never negative and a quantity is always positive; stock never goes negative (protocol.check_timeline);
+  * a price is never negative and a quantity is always positive; stock validation uses protocol.check_timeline,
+    except BC edits, which start from the closing stock of the month before the active month;
   * a saved document is edited only while its period is open, with the revision the page saw, and is never deleted: it is
     cancelled with a reason and stays visible as cancelled;
   * a document another one depends on (a receipt with a storno, a bon with a return, an asset already in
     the OI/MF register) is not edited or cancelled until that dependency is cancelled first. Editing a BC in the active
-    month validates the full stock timeline and recalculates its food list atomically; cancellation still requires unlinking it.
+    month validates stock from that month's opening and recalculates its food list atomically; cancellation still requires unlinking it.
 Numbers: automatic, unique per gestiune + kind + exercise; a manual number is accepted only when free. A MATERIALE gestiune
 can number its BC separately for every account (consumption_numbering).
 """
@@ -644,7 +645,7 @@ def _clean_bon_lines(repo, ctx, raw_lines, errors, account=None):
 
 
 def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
-    from . import recalculation_audit
+    from . import consumption_timeline, recalculation_audit
 
     table, pk, before = _load_for_write(repo, ctx, 'bc', doc_id, body.get('version'))
     _guard_dependents(cursor, ctx, 'bc', doc_id, 'edit')
@@ -682,7 +683,7 @@ def edit_bc(cursor, repo, ctx, exercise, doc_id, body, request_id):
     total = numeric.to_stored(total_of(total_lines, ctx['scale']), ctx['scale'])
     if repo.update('VC_Iesiri_H', {**cols, 'NumarBC': text, 'ValoareBC': total, 'DataSalvare': now}, {'IdBonConsum': doc_id, 'Version': before['Version']}, bump_version=True) != 1:
         raise NomError('CONFLICT', 'Documentul a fost modificat de altcineva. Reîncărcați documentul.', 409)
-    protocol.check_timeline(cursor, ctx, variants)
+    consumption_timeline.require_month(cursor, ctx, variants, cols['DataBC'].replace(day=1))
     from .food_list_recalculation import refresh_for_bon
     recalculated = refresh_for_bon(cursor, repo, ctx, doc_id, request_id)
     origin = recalculation_audit.cause('bc', doc_id, text, cols['DataBC'], before['Version'] + 1)

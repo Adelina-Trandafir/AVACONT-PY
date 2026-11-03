@@ -139,6 +139,25 @@ def _closes(ctx, idrr, chain):
     return all(v == 0 or round(snap.get(ind, 0.0), 2) == v for ind, v in ctx['rec_lines'].get(idrr, {}).items())
 
 
+def _with_snapshots(chain, extra):
+    """The chain with `extra` snapshots added, in the order the chain is read (DataH, then IDRH)."""
+    return sorted(chain + extra, key=lambda h: (h['DataH'] or datetime.min, h['IDRH']))
+
+
+def _day_of(value):
+    return value.date() if isinstance(value, datetime) else value
+
+
+def _near(data_r, snapshots):
+    """True when every snapshot lies at most PRAG_ZILE_SUGESTIE days from the reception date (the association form's window)."""
+    from routes.forexe.prelucrare_asociere import PRAG_ZILE_SUGESTIE
+    day_r = _day_of(data_r)
+    try:
+        return all(abs((day_r - _day_of(h['DataH'])).days) <= PRAG_ZILE_SUGESTIE for h in snapshots)
+    except (TypeError, AttributeError):         # a missing or unreadable date: not near
+        return False
+
+
 def _nonzero(lines):
     return {k: v for k, v in lines.items() if round(v, 2) != 0}
 
@@ -172,18 +191,27 @@ def _findings(ctx):
                 groups.setdefault(name, []).append(h)
         for name, hs in groups.items():
             targets = [o for o in by_cod[rec['CodAngajament']] if o != idrr and _norm(ctx['recs'][o]['Descriere']) == name]
+            probe = {'recs': ctx['recs'], 'rec_lines': ctx['rec_lines'], 'snap_lines': ctx['snap_lines']}
+            # Several receptions carry the name (03.11.2026: AAB2K43X2C4, IDRH 31 «PLATA FACT» sat on 28; 27, 30, 31 and 243 all
+            # bear that name). Narrowed in two steps, each applied only to what is left: the chain must CLOSE with the snapshots
+            # added, and the snapshots must lie within the days a snapshot is trusted to sit from its reception's date (the
+            # window the association form suggests with). Exactly one left = the reception they belong to; none or several:
+            # left alone, as before.
+            if len(targets) > 1:
+                targets = [o for o in targets if _closes(probe, o, _with_snapshots(chains.get(o, []), hs))]
+            if len(targets) > 1:
+                targets = [o for o in targets if _near(ctx['recs'][o]['DataR'], hs)]
             if len(targets) != 1:
                 continue
             target = targets[0]
             moved = {h['IDRH'] for h in hs}
             left = [h for h in chain if h['IDRH'] not in moved]
-            joined = sorted(chains.get(target, []) + hs, key=lambda h: (h['DataH'] or datetime.min, h['IDRH']))
+            joined = _with_snapshots(chains.get(target, []), hs)
             reasons = []
             if not left:
                 reasons.append('%s ar ramas fara niciun instantaneu.' % _describe(ctx, idrr))
             elif not _closes(ctx, idrr, left):
                 reasons.append('dupa mutare lantul receptiei %s tot nu se inchide.' % idrr)
-            probe = {'recs': ctx['recs'], 'rec_lines': ctx['rec_lines'], 'snap_lines': ctx['snap_lines']}
             if not _closes(probe, target, joined):
                 reasons.append('dupa mutare lantul receptiei %s nu se inchide.' % target)
             text = ('instantaneele %s (%s, numele «%s») stau pe %s, dar numele lor este cel al lui %s.'
@@ -198,6 +226,8 @@ def _findings(ctx):
             handled.update((idrr, target))
 
     # ---- 2: a reception overwritten by its same-day twin ------------------------------------------------------------------
+    # The twin may carry the SAME name (03.11.2026: AAB3P85NKAX 15/16, AAB2DF4BC3P 65/66); what tells the two apart is the
+    # chain: the open one disagrees with its own newest snapshot, the twin's chain closes.
     for idrr in open_ids:
         if idrr in handled:
             continue
@@ -207,7 +237,7 @@ def _findings(ctx):
         if not mine or _norm(last['Descriere']) != mine:
             continue
         twins = [o for o in by_cod[rec['CodAngajament']]
-                 if o != idrr and ctx['recs'][o]['DataR'] == rec['DataR'] and _norm(ctx['recs'][o]['Descriere']) != mine
+                 if o != idrr and ctx['recs'][o]['DataR'] == rec['DataR']
                  and round(float(ctx['recs'][o]['SumaAntet'] or 0), 2) == round(float(rec['SumaAntet'] or 0), 2)
                  and _nonzero(ctx['rec_lines'].get(o, {})) == _nonzero(ctx['rec_lines'].get(idrr, {}))
                  and chains.get(o) and _closes(ctx, o, chains[o])]
