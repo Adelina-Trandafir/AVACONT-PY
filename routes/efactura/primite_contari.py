@@ -23,17 +23,15 @@ from decimal import Decimal
 
 from . import facturi as F
 from . import primite_ke
+from .primite_parteneri import activeaza as activeaza_partener, leaga as leaga_partener, rezolva as rezolva_partener
 from .tokens import EfEroare
 
 logger = logging.getLogger(__name__)
 
-CONTARI_SQL = "sql/00EF_27_primite_operatii.sql, sql/AV01_14_sablon_operatii.sql"
+CONTARI_SQL = "sql/00EF_27_primite_operatii.sql, sql/AV01_14_sablon_operatii.sql, sql/00EF_55_furnizor_partener.sql"
 MAX_FACTURI = 200
 MAX_EXPLICATIE_OP = 254
 EXPLICATIE_OP_GALBEN = 69
-
-# The CUI of a partner, normalised like EF_Primite.CuiNormalizat (same expression as primite_vercon.py).
-_PARTENER_CUI = "UPPER(REGEXP_REPLACE(REGEXP_REPLACE(p.CodFiscal, '[^[:alnum:]]', ''), '^RO([0-9])', '\\\\1'))"
 
 _dec = primite_ke._dec
 _num = primite_ke._num
@@ -93,18 +91,6 @@ def _facturi(cursor, ids, blocheaza=False):
 def _salvat(cursor, ids):
     cursor.execute("SELECT IdPrimita, SUM(Suma) AS Salvat FROM EF_PrimiteOperatii WHERE IdPrimita IN (%s) GROUP BY IdPrimita" % _marks(len(ids)), tuple(ids))
     return {r["IdPrimita"]: _dec(r["Salvat"]) for r in cursor.fetchall()}
-
-
-def _partener(cursor, cui):
-    if not cui:
-        return None
-    cursor.execute("SELECT p.IdPartener, p.CodPartener, p.DenumirePartener, p.ContIBAN, p.Banca FROM Parteneri p WHERE " + _PARTENER_CUI + " = %s "
-                   "AND COALESCE(p.Ascuns, 0) = 0 AND NULLIF(TRIM(p.CodFiscal), '') IS NOT NULL ORDER BY p.IdPartener LIMIT 1", (cui,))
-    row = cursor.fetchone()
-    if row is None:
-        return None
-    return {"IdPartener": row["IdPartener"], "CodPartener": row["CodPartener"], "Denumire": row["DenumirePartener"] or "",
-            "ContIBAN": row["ContIBAN"] or "", "Banca": row["Banca"] or ""}
 
 
 def _sabloane(cursor, id_subunitate=None):
@@ -207,7 +193,7 @@ def _conexiune(dc, conn=None):
 
 
 def calcul(dc, body, role, conn=None, interne=None, blocheaza=False, fara_plata=False):
-    """Everything the page «Contari» shows for the ticked invoices. body: {ids, idClsf?, idSablonE?, idSablonP?, platit?: {id: value}, an?, idSubunitate?}.
+    """Everything the page «Contari» shows for the ticked invoices. body: {ids, idClsf?, idSablonE?, idSablonP?, platit?: {id: value}, an?, idSubunitate?, idPartener?}.
     The save (01EF-04) calls it with its own connection (`conn`), `blocheaza` (the invoices are locked), `fara_plata` (no payment template, no payment warnings) and an
     `interne` dict that receives the objects it needs (invoices, exact rests, partner, classification, subunit, dates)."""
     ids = _ids(body.get("ids"))
@@ -223,7 +209,9 @@ def calcul(dc, body, role, conn=None, interne=None, blocheaza=False, fara_plata=
         facturi = _facturi(cursor, ids, blocheaza)
         salvat = _salvat(cursor, ids)
         cui = (facturi[0]["CuiNormalizat"] or "").strip()
-        partener = _partener(cursor, cui)
+        # The partner is found by TAX CODE ONLY (hidden ones too): the one named in the body (`idPartener`), else the one kept for the code, else the only one;
+        # several and none kept: None and the operator chooses.
+        candidati, partener = rezolva_partener(cursor, cui, _opt_int(body, "idPartener"))
         # The subunit in force (chosen in the title bar; the booking belongs to it): only ITS templates and the classifications of ITS sector+source are offered.
         subunitate = None
         id_subunitate = _opt_int(body, "idSubunitate")
@@ -238,9 +226,12 @@ def calcul(dc, body, role, conn=None, interne=None, blocheaza=False, fara_plata=
             oferite = [c for c in oferite if c["SS"] == subunitate["SursaSector"]]
         sugerata, ale_partenerului = _sugestie(cursor, partener, oferite)
         avertismente = []
-        if partener is None:
+        if not candidati:
             avertismente.append({"Cod": "PARTENER_LIPSA", "Grav": "eroare",
-                                 "Text": "Furnizorul nu este în lista de parteneri a unității. Asociați-l întâi."})
+                                 "Text": "Nu există niciun partener cu codul fiscal al furnizorului. Adăugați-l întâi în lista de parteneri."})
+        elif partener is None:
+            avertismente.append({"Cod": "PARTENER_DE_ALES", "Grav": "eroare",
+                                 "Text": "Mai mulți parteneri au codul fiscal al furnizorului. Alegeți unul."})
         clsf = next((c for c in oferite if c["IdClsf"] == id_clsf), None) if id_clsf else None
         if id_clsf and clsf is None:
             raise EfEroare("Clasificația aleasă nu are șabloane de operații în sursa subunității în vigoare.", "CLASIFICATIE_FARA_SABLON", 409)
@@ -362,7 +353,7 @@ def calcul(dc, body, role, conn=None, interne=None, blocheaza=False, fara_plata=
         data_minima = max((f["DataFact"] for f in facturi if f["DataFact"] is not None), default=None)
         rezultat = {
             "poate_scrie": (role or "").strip().lower() == primite_ke.ROL_CONTABIL.lower(),
-            "furnizor": {"Cui": cui, "Denumire": facturi[0]["DenumireP"] or "", "Partener": partener},
+            "furnizor": {"Cui": cui, "Denumire": facturi[0]["DenumireP"] or "", "Partener": partener, "Parteneri": candidati},
             "clasificatii": [{"IdClsf": c["IdClsf"], "Clsf": c["Clsf"], "Denumire": c["Denumire"], "Forma": c["Forma"],
                               "AlePartenerului": c["IdClsf"] in ale_partenerului} for c in oferite],
             "clasificatie": ({"IdClsf": clsf["IdClsf"], "Clsf": clsf["Clsf"], "Denumire": clsf["Denumire"], "Forma": clsf["Forma"]} if clsf else None),
@@ -440,6 +431,8 @@ def salveaza(dc, body, role, user):
             cursor.execute("SELECT COALESCE(MAX(IdOperatiePrimita), 0) AS M FROM EF_PrimiteOperatii FOR UPDATE")
             urmator = int(cursor.fetchone()["M"]) + 1
             partener = interne["partener"]
+            activeaza_partener(cursor, partener["IdPartener"])   # the partner the evidence is booked for enters the flow (not hidden) and is kept for the tax code, in this transaction
+            leaga_partener(cursor, interne["facturi"][0]["CuiNormalizat"], partener["IdPartener"], user)
             operatii = []
             for f, ramas in randuri:
                 suma = primite_ke._cent(ramas)

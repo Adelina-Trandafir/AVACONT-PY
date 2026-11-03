@@ -7,7 +7,7 @@ Parteneri_Angajamente / Parteneri_Angajamente_Indicatori, see partner_links.py).
     GET    /api/forexe/nomenclatoare/parteneri
         -> 200 { "partners": [ { "id_partener", "id_unitate", "ss", "cod_partener", "denumire",
                                  "cod_fiscal", "cont_iban", "banca", "adresa", "tip", "ascuns",
-                                 "activ", "coduri": [ { "id", "id_leg", "id_clsf", "clsf", "denumire_clsf",
+                                 "activ", "anaf_sincronizat": "yyyy-mm-dd hh:mm:ss" | null (slice 0093-02), "coduri": [ { "id", "id_leg", "id_clsf", "clsf", "denumire_clsf",
                                                         "cont_bancar", "cod_ang", "cod_ind" } ] } ],
                  "clasificatii": [ { "id_clsf", "clsf", "denumire", "ss", "id_unitate" } ],
                  "units": [ { "id_unitate", "ss" } ],
@@ -111,6 +111,9 @@ _SQL_CLSF = (
     "SELECT IDClsf, Clsf, Denumire, SS, IdUnitate FROM Clasificatii ORDER BY Clsf, SS"
 )
 _SQL_UNITS = "SELECT IdUnitate, SursaSector FROM Unitati ORDER BY IdUnitate"
+# Slice 0093-02: the partners synchronised with ANAF (sql/0093_02_Parteneri_Anaf.sql).
+_SQL_SYNCED = "SELECT IdPartener, DataSincronizare FROM Parteneri_Anaf"
+_ER_NO_TABLE = 1146
 
 _SQL_ONE = "SELECT IdPartener, IdUnitate, CodPartener, CodFiscal FROM Parteneri WHERE IdPartener = %s"
 # ById / ByCf: the two kinds of activity; Altele: how many OTHER Parteneri rows have the same normalized CodFiscal.
@@ -188,6 +191,20 @@ def _comun_lookups(db_name: str):
             conn.close()
 
 
+def _synced_at(cursor) -> dict:
+    """{IdPartener: 'yyyy-mm-dd hh:mm:ss'} of the partners synchronised with ANAF. {} while the table does not exist yet
+    (the list must keep working before the script 0093_02 is run: every partner is then «nesincronizat»)."""
+    try:
+        cursor.execute(_SQL_SYNCED)
+    except mysql.connector.Error as e:
+        if getattr(e, "errno", None) == _ER_NO_TABLE:
+            logger.warning("[forexe.parteneri_edit] Parteneri_Anaf does not exist: no partner counts as synchronised")
+            return {}
+        raise
+    return {int(r["IdPartener"]): r["DataSincronizare"].strftime("%Y-%m-%d %H:%M:%S")
+            for r in cursor.fetchall() if r["DataSincronizare"] is not None}
+
+
 def _bank_from_iban(iban, bic: dict) -> str:
     """The bank of a Romanian IBAN (RO + 2 check digits + 4-letter BIC code), or ''."""
     compact = "".join(_text(iban).split()).upper()
@@ -207,6 +224,7 @@ def get_parteneri():
         conn = get_kbot_connection(db_name)
         cursor = conn.cursor(dictionary=True, buffered=True)
         codes = partner_links.read_links(cursor)
+        synced = _synced_at(cursor)
         cursor.execute(_SQL_PARTNERS)
         rows = []
         seen_cf = set()
@@ -229,6 +247,7 @@ def get_parteneri():
             "tip": _text(r["Tip"]),
             "ascuns": bool(r["Ascuns"]),
             "activ": bool(r["Activ"]),
+            "anaf_sincronizat": synced.get(int(r["IdPartener"])),
             "coduri": codes.get(partner_links.normalize_cui(r["CodFiscal"]), []),
         } for r in rows]
         cursor.execute(_SQL_CLSF)
@@ -277,6 +296,32 @@ def _check_fiscal_code(cursor, cf: str, id_partener, unit_cf: str):
                            f"Poate exista un singur partener pentru un cod fiscal.")
 
 
+def propagate_to_same_cf(cursor, id_partener: int, cod_fiscal, denumire, adresa, iban=None, banca=None) -> int:
+    """
+    Slice 0093-03: the other Parteneri rows of the SAME supplier (the same CodFiscal in another unit, or written another
+    way: «RO 123» = «123») get what was just saved. The window shows one row per CodFiscal, but the rest of K-BOT (the DDF
+    editor, the summary...) groups by CodFiscal over all the rows, so a row left with the old name made the old name come
+    back. Name and address always; IBAN and bank only when the saved ones are not empty (an empty one must not wipe the
+    others). CodPartener, Tip, Ascuns and the fiscal code text stay each row's own. Returns how many rows were changed.
+    """
+    key = partner_links.normalize_cui(cod_fiscal)
+    if not key:
+        return 0
+    sets = ["DenumirePartener = %s", "Adresa = %s"]
+    values = [denumire, adresa]
+    if iban:
+        sets.append("ContIBAN = %s")
+        values.append(iban)
+    if banca:
+        sets.append("Banca = %s")
+        values.append(banca)
+    cursor.execute(
+        f"UPDATE Parteneri SET {', '.join(sets)} WHERE IdPartener <> %s AND COALESCE(CodFiscal, '') <> '' "
+        f"AND {partner_links.fiscal_sql('CodFiscal')} = %s",
+        (*values, id_partener, key))
+    return cursor.rowcount
+
+
 def _save(cursor, body: dict, unit_cf: str, bic: dict) -> int:
     partner = body.get("partner")
     if not isinstance(partner, dict):
@@ -309,6 +354,7 @@ def _save(cursor, body: dict, unit_cf: str, bic: dict) -> int:
         if anaf.normalize_cf(stored["CodFiscal"]) != cf:
             _check_fiscal_code(cursor, cf, id_partener, unit_cf)
         cursor.execute(_SQL_UPDATE, (*values, id_partener))
+        propagate_to_same_cf(cursor, id_partener, cod_fiscal, denumire, values[5], iban, banca)
     else:
         _check_fiscal_code(cursor, cf, None, unit_cf)
         id_unitate = _unit_for_new(cursor, _text(partner.get("ss")))

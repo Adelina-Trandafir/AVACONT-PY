@@ -924,7 +924,7 @@ export class DataGrid {
     if (this._edit) return;
     if (ev.key === 'Escape') { if (this.cancelPendingRow()) ev.preventDefault(); return; }
     if (ev.key === 'Enter' && this._selected) {
-      if (this.beginEdit(this._selected, this._activeKey || this._visibleColumns().find((c) => this.canEdit(this._selected, c))?.key)) ev.preventDefault();
+      if (this.beginEdit(this._selected, this._activeKey || this._visibleColumns().find((c) => this._canTraverse(this._selected, c))?.key)) ev.preventDefault();
       return;
     }
     if (this._popup) return;

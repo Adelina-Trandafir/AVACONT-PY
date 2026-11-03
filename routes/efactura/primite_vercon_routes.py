@@ -7,10 +7,15 @@ the session's. The rules are in primite_vercon.py. Every WRITE needs the role «
                                                               the tree of accounts of every active gestiune (MF and OI too)
   GET    /api/efactura/vercon/stari                         -> { trimiteri: [{ IdPrimita, IdTrimitere, Stare, Revenita, MotivReturnare, Nir: [{ Gestiune, Numar, NumarSub }] }] }
                                                               one short line per invoice that was ever sent (for the tree of the received invoices)
-  GET    /api/efactura/primite/<id>/vercon                  -> { poate_scrie, poate_trimite, motiv, factura, partener, duplicate, trimitere, istoric,
-                                                                 linii: [{ IdLinie, NrLinie, Denumire, Cpv, Unit, Cant, Pret, Valoare, ValoareCuTVA, IdMasina, Cont, Gestiune }] }
-  POST   /api/efactura/primite/<id>/vercon                  body { conturi: [{ IdLinie, IdMasina | null }], observatie? } -> 201, the state as GET
-                                                              ALL the lines are sent; a line not named in `conturi` has no proposed account
+  GET    /api/efactura/primite/<id>/vercon                  -> { poate_scrie, poate_trimite, motiv, factura, partener, parteneri, duplicate, trimitere, istoric,
+                                                                 linii: [{ IdLinie, NrLinie, Denumire, Cpv, Unit, Cant, Pret, Valoare, ValoareCuTVA, IdMasina, NuSeTrimite, Cont, Gestiune }] }
+                                                              The supplier is looked up by TAX CODE ONLY (hidden partners count). `parteneri` = every partner with that
+                                                              code [{ IdPartener, Denumire, Adresa, ContIBAN, Ascuns }]; `partener` = the one when there is exactly one.
+  POST   /api/efactura/primite/<id>/vercon                  body { conturi: [{ IdLinie, IdMasina | null, NuSeTrimite? }], observatie?, id_partener? } -> 201, the state as GET
+                                                              ALL the lines are sent, except those with NuSeTrimite = true (slice 00EF-56: VERCON never sees them;
+                                                              at least one must go, 409 NICIO_LINIE_TRIMISA); a line not named in `conturi` has no proposed account.
+                                                              `id_partener` is required (409 PARTENER_DE_ALES) when several partners have the tax code; the partner
+                                                              of the invoice is made visible (Ascuns = 0) in the same transaction.
   PUT    /api/efactura/primite/<id>/vercon/conturi          body { conturi } -> the state as GET   (only while the sending waits)
   DELETE /api/efactura/primite/<id>/vercon/<idTrimitere>    -> the state as GET   (takes it back, only while it waits)
 
@@ -54,10 +59,11 @@ def vercon_starea(id_primita):
 @_guarded("vercon/trimite")
 def vercon_trimite(id_primita):
     body = _body()
-    if set(body) - {"conturi", "observatie"}:
-        raise EfEroare("Corpul poate conține doar «conturi» și «observatie».", "CAMP_NEPERMIS", 400)
-    state = primite_vercon.trimite(g.session.db_name, id_primita, _role(), g.session.username, body.get("conturi"), body.get("observatie"))
-    _audit("EF_VC_TRIMITE", str(id_primita), "linii=%d" % len(state["linii"]))
+    if set(body) - {"conturi", "observatie", "id_partener"}:
+        raise EfEroare("Corpul poate conține doar «conturi», «observatie» și «id_partener».", "CAMP_NEPERMIS", 400)
+    state = primite_vercon.trimite(g.session.db_name, id_primita, _role(), g.session.username, body.get("conturi"), body.get("observatie"),
+                                   body.get("id_partener"))
+    _audit("EF_VC_TRIMITE", str(id_primita), "linii=%d partener=%s" % (len(state["linii"]), body.get("id_partener")))
     return _json(state, 201)
 
 

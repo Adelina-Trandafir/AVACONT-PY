@@ -92,7 +92,8 @@ def detail(cursor, ctx, sending_id, nir_id):
     compatible(cursor, nir, ef)
     legacy_guard(cursor, ctx, sending_id, nir_id)
     links, used_ef, used_nir = budgets(cursor, ctx, sending_id, nir_id)
-    source = _all(cursor, 'SELECT IdLinie,Denumire,Unit,Cpv,Cant FROM EF_PrimiteLinii WHERE IdPrimita=%s', (ef['IdPrimita'],))
+    source = _all(cursor, 'SELECT l.IdLinie,l.Denumire,l.Unit,l.Cpv,l.Cant FROM EF_PrimiteLinii l WHERE l.IdPrimita=%s AND ' + shared.sent_line_sql('%s', 'l.IdLinie'),
+                  (ef['IdPrimita'], sending_id))
     target = nir_lines(cursor, ctx, nir_id)
     memory = _all(cursor, 'SELECT NUME_HASH,PRODUS_ID FROM EF_VERCON_CORELARI WHERE CUI=%s AND SUBUNIT_ID=%s AND GESTIUNE_ID=%s',
                   (ef['CuiNormalizat'], ctx['subunit'], ctx['gestiune']))
@@ -141,7 +142,8 @@ def save(cursor, ctx, sending_id, nir_id, data):
         raise NomError('CONFLICT', 'NIR-ul s-a modificat. Redeschideți asocierea.', 409)
     legacy_guard(cursor, ctx, sending_id, nir_id)
     _, used_ef, used_nir = budgets(cursor, ctx, sending_id, nir_id)
-    source = {l['IdLinie']: l for l in _all(cursor, 'SELECT IdLinie,Denumire,Cpv,Cant FROM EF_PrimiteLinii WHERE IdPrimita=%s', (ef['IdPrimita'],))}
+    source = {l['IdLinie']: l for l in _all(cursor, 'SELECT l.IdLinie,l.Denumire,l.Cpv,l.Cant FROM EF_PrimiteLinii l WHERE l.IdPrimita=%s AND ' + shared.sent_line_sql('%s', 'l.IdLinie'),
+                                            (ef['IdPrimita'], sending_id))}
     target = {l['ID']: l for l in nir_lines(cursor, ctx, nir_id)}
     raw = data.get('allocations')
     if not isinstance(raw, list) or len(raw) > 1000:

@@ -53,6 +53,8 @@ export const editing = {
     return !!this._opts.editable && !!column?.editable
       && (typeof column.editable !== 'function' || column.editable(row));
   },
+  // A readOnlyEditor column opens a read-only input on click (to select and copy part of the text) but is never a stop of Tab / Enter / Up / Down.
+  _canTraverse(row, column) { return this.canEdit(row, column) && !column.readOnlyEditor; },
   beginNewRowEdit(row, key, onCancelRow) {
     return this.beginEdit(row, key, { onCancelRow });
   },
@@ -99,7 +101,7 @@ export const editing = {
         else { Object.assign(k_e.row, k_e.snapshot); this._refresh(); this._emit('onCellSaved', { row: k_e.row, key: null }); }
         return true;
       }
-      const k_columns = this._visibleColumns().filter((k_c) => this.canEdit(k_e.row, k_c));
+      const k_columns = this._visibleColumns().filter((k_c) => this._canTraverse(k_e.row, k_c));
       const k_column = k_columns.find((k_c) => k_e.row[k_c.key] == null || String(k_e.row[k_c.key]).trim() === '') || k_columns[0];
       if (k_column) this.beginEdit(k_e.row, k_column.key);
       return false;
@@ -111,8 +113,12 @@ export const editing = {
     if (this._destroyed || this._leaving || owns(ev.relatedTarget)) return;
     setTimeout(async () => {
       if (this._destroyed || this._leaving || this._edit?.pending || !document.hasFocus() || owns(document.activeElement)) return;
+      // A list / tree editor puts a click-catching overlay over the page while its drop-down is open: a click on another cell of this very
+      // grid lands on the overlay, the focus goes to the page, and that is not the operator leaving the row. The cell is saved, the row is
+      // judged later, when the operator really moves to another row (or saves the document).
+      const overlay = !!this._edit?.combo;
       if (this._edit) { if (!await this.commitEdit() && this._edit && !this._edit.pending) this.cancelEdit(true); }
-      if (!this._destroyed && !this._edit) await this._leaveRow(null);
+      if (!overlay && !this._destroyed && !this._edit) await this._leaveRow(null);
     }, 0);
   },
   // A new row (made by beginNewRowEdit, or the new-row slot once the operator starts on it) stays "not validated" until the operator
@@ -213,6 +219,7 @@ export const editing = {
       state.input = document.createElement('input');
       state.input.type = column.editor === 'checkbox' ? 'checkbox' : column.editor === 'date' ? 'date' : 'text';
       if (column.editor === 'number') state.input.inputMode = 'decimal';
+      if (column.readOnlyEditor) state.input.readOnly = true;
       state.input.value = state.raw;
       if (!['checkbox', 'date', 'monthYear'].includes(column.editor)) {
         // Use exactly the cell's display text, while retaining its canonical value.
@@ -351,7 +358,7 @@ export const editing = {
         const rows = this._items.filter((item) => item.kind === 'row').map((item) => item.row);
         const at = rows.indexOf(state.row);
         for (let index = at + (direction === 'down' ? 1 : -1); at >= 0 && index >= 0 && index < rows.length; index += direction === 'down' ? 1 : -1) {
-          if (this.canEdit(rows[index], state.column)) {
+          if (this._canTraverse(rows[index], state.column)) {
             if (!await this._leaveRow(rows[index])) return false;
             if (await this._opts.onRowValidate?.({ row: state.row }) === false) return false;
             this.beginEdit(rows[index], state.key); return true;
@@ -366,7 +373,7 @@ export const editing = {
         const current = cells.findIndex((cell) => cell.row === state.row && cell.column.key === state.key);
         for (let index = current + direction; current >= 0 && index >= 0 && index < cells.length; index += direction) {
           const next = cells[index];
-          if (this.canEdit(next.row, next.column)) {
+          if (this._canTraverse(next.row, next.column)) {
             if (next.row !== state.row && !await this._leaveRow(next.row)) return false;
             if (next.row !== state.row && await this._opts.onRowValidate?.({ row: state.row }) === false) return false;
             this.beginEdit(next.row, next.column.key); return true;

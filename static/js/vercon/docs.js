@@ -48,6 +48,7 @@ const families = {
   bs: { title: 'Bon de casare', number: 'Număr BS', lines: 'Produse casate', groups: ['holder', 'date'], holder: 'IDC_BC' },
 };
 const key = () => crypto.randomUUID();
+const EF_NAME_NODE = 'ef:name';
 const number = (value) => value == null || value === '' ? null : Number(String(value).replace(',', '.'));
 const fixed = (value, decimals) => value == null || !Number.isFinite(value) ? '' : value.toFixed(decimals);
 const dateText = (value) => format(value, { type: 'date' });
@@ -121,7 +122,7 @@ export function mountDocuments(host, opts) {
   const root = el('section', { className: `vc-doc vc-doc--${family}` }, main, savedHost); host.replaceChildren(root);
   if (['nir', 'bc'].includes(family)) headerFit({ box: main, header: headerHost, lines: linesHost, minRows: 10, signal: abort.signal });
   const productEntry = family === 'nir' ? receiptProductEntry({ host, root, allocation, draft: () => state.draft,
-    api: opts.api, selection: opts.sel, changed: () => { state.dirty = true; } }) : null;
+    api: opts.api, selection: opts.sel, changed: () => { state.dirty = true; }, note: () => state.draft?.efactura ? state.draft.efactura_note || '' : null }) : null;
   const treeHost = inline ? el('div', { className: 'vc-receipt-tree' }) : savedHost;
   if (treeHost !== savedHost) savedHost.append(treeHost);
   const mfInfo = family === 'nir' ? receiptMfInfo(savedHost) : null;
@@ -230,7 +231,7 @@ export function mountDocuments(host, opts) {
     Object.assign(state, { doc, draft: null, mode: 'view', dirty: false, requestKey: null, pendingBody: null, returnSource: null }); say(''); paint();
   }
   function draftFromDoc(doc) { return { source: doc.header.source ?? null, tip: doc.doc_type || 'NIR', invoice: doc.invoice, header: { ...doc.header, Numar: String(doc.number ?? '').replace(/\D/g, ''), NumarSub: Number(doc.sub_number) || 0 }, lines: doc.lines.map((line) => newLine({ ...line, _savedCode: line.code })) }; }
-  async function add() { if (!await allowDiscard()) return; allocation?.clearDraftProducts(); const today = state.lookups.today; Object.assign(state, { mode: 'add', dirty: false, requestKey: null, pendingBody: null, draft: { source: null, tip: 'NIR', vat: null, autoNumber: true, header: { Data: today, DataFc: today, NumarSub: 0 }, lines: config.source && family !== 'storno' || config.holder ? [] : [newLine()] } }); say(''); if (family === 'bp') await loadWarehouseStock(); paint(); if (family === 'storno') await refreshStornoSources(); if (receipt || custody || bc) await checkNumber(true); }
+  async function add() { if (!await allowDiscard()) return; allocation?.clearDraftProducts(); const today = state.lookups.today; Object.assign(state, { mode: 'add', dirty: false, requestKey: null, pendingBody: null, draft: { source: null, tip: 'NIR', vat: null, autoNumber: true, header: { Data: today, DataFc: today, NumarSub: 0, ...(family === 'nir' && (state.lookups.commissions || []).length === 1 ? { IdComisie: state.lookups.commissions[0].id } : {}) }, lines: config.source && family !== 'storno' || config.holder ? [] : [newLine()] } }); say(''); if (family === 'bp') await loadWarehouseStock(); paint(); if (family === 'storno') await refreshStornoSources(); if (receipt || custody || bc) await checkNumber(true); }
   async function edit() { if (!state.doc || !state.canWrite || state.doc.annulled || state.busy || state.pendingBody || pendingCancel || pendingLink) return; if (editLocked(state.doc)) { say(editMessage(state.doc)); return; } if (orphanReturn()) { say('Returul nu are bon sursă. Alegeți Bonul returnat și folosiți Asociază cu un bon de consum, apoi puteți modifica returul.', true); inputs.get('source')?._combo?.input.focus(); return; } allocation?.clearDraftProducts(); state.mode = 'edit'; state.draft = draftFromDoc(state.doc); state.dirty = false; say(family === 'bc' ? 'La salvare se verifică stocul pe toate datele ulterioare bonului și se recalculează lista asociată.' : ''); if (family === 'storno') await refreshStornoSources(); if (config.source || config.holder) await eligible(); if (family === 'bp') await loadWarehouseStock(); paint(); }
   async function discard() { if (!await allowDiscard()) return; allocation?.clearDraftProducts(); state.mode = 'view'; state.draft = null; state.dirty = false; state.requestKey = null; state.pendingBody = null; say(''); paint(); }
   // VC06-07: the NIR starts from an invoice the accountant sent from K-BOT (efactura-intake.js fills the draft; the Administrator picks the product of each line).
@@ -239,8 +240,8 @@ export function mountDocuments(host, opts) {
     const detail = await intake.pick(); if (!detail) return;
     if (state.mode === 'add') { if (state.dirty && !await confirmBox('Ciorna începută se înlocuiește cu factura aleasă. Continuați?', { title: 'Factură din e-Factura', yes: 'Înlocuiește', no: 'Renunță' })) return; allocation.clearDraftProducts(); }
     else { await add(); if (state.mode !== 'add') return; }
-    const missing = intake.apply(detail, { draft: state.draft, allocation, newLine }); state.dirty = true; paint();
-    say(`Factura ${detail.number} (${detail.supplier || detail.cui || ''}) din e-Factura este în ciornă: alegeți produsul fiecărui rând.${detail.note ? ' Notă contabil: ' + detail.note : ''}${detail.partner ? '' : ' Furnizorul nu este în lista de parteneri: alegeți-l.'}${missing.length ? ' Unele conturi propuse sunt în altă gestiune și nu au putut fi bifate.' : ''}`);
+    intake.apply(detail, { draft: state.draft, allocation, newLine }); state.dirty = true; paint();
+    say(detail.note ? 'Notă contabil: ' + detail.note : '');   // VC06-35: only the accountant's note is shown
   }
   let sourceSequence = 0;
   function refreshStornoSources() {
@@ -633,7 +634,8 @@ export function mountDocuments(host, opts) {
         ...(family === 'nir' && spec.editable ? { editable: row => editing() && !row.external && row.calc_mode !== 'GROSS' && (!spec.mfOnly || allocation.isMF(row)) && (spec.key !== 'um' || !!row.new_product) && (spec.key !== 'Cant' || !allocation.isMF(row)) } : {}),
         ...(spec.type === 'ref' ? { editor: 'list', searchable: true, options: choices, formatter: (value) => family === 'nir' && spec.key === 'IDTVA' ? allocation.tax(value)?.percent || '' : spec.product && (!editing() || spec.key === 'name') ? rows.find((row) => row[spec.key] === value)?.name || String(value ?? '') : choices().find((item) => String(item.value) === String(value))?.label || '', validate: (value) => value == null || value === '' ? 'Alegeți o valoare din listă.' : null } : {}),
         ...(family === 'nir' && spec.key === 'IDTVA' ? { formatter: value => allocation.tax(value)?.percent ?? rows.find(row => String(row.IDTVA) === String(value))?.vat_percent ?? '' } : {}),
-        ...(family === 'nir' && spec.product ? { editor: 'tree', allowCustom: true, nodes: allocation.nodes, selectParents: false, dropDownMinWidth: 300, focusAfterSelect: row => row.new_product ? 'um' : allocation.isMF(row) ? 'Pret' : 'Cant', formatter: value => rows.find(row => String(row.product) === String(value))?.name || product(value)?.name || '' } : {}),
+        ...(family === 'nir' && spec.product ? { editor: 'tree', allowCustom: true, nodes: row => row?.ef_name && state.draft?.efactura ? [{ id: EF_NAME_NODE, label: 'FOLOSEȘTE DENUMIREA DIN EFACTURA' }, ...allocation.nodes()] : allocation.nodes(), selectParents: false, dropDownMinWidth: 300, focusAfterSelect: row => row.new_product && !row._efUsed ? 'um' : allocation.isMF(row) ? 'Pret' : 'Cant', formatter: value => rows.find(row => String(row.product) === String(value))?.name || product(value)?.name || '' } : {}),
+        ...(family === 'nir' && spec.key === 'ef_name' ? { editable: row => editing() && !row.external, readOnlyEditor: true } : {}),   // VC06-36: click opens the text read-only, to copy part of it
         ...(family === 'nir' && spec.key === 'data_intrarii' ? { align: 'center' } : {}),
         ...(family === 'nir' && ['DNF', 'DF', 'ValoareLuna'].includes(spec.key) ? { width: 100, minWidth: 100, fixedWidth: true } : {}),
         ...(family === 'nir' && spec.key === 'ValoareLuna' ? { formatter: value => value == null || value === '' ? '' : new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(number(value)) } : {}),
@@ -657,7 +659,7 @@ export function mountDocuments(host, opts) {
       ...(!inline ? { footerAction: { label: '➕ Adaugă rând', span: 2, disabled: !editing() || !!config.source }, onFooterAction: () => addLine().catch(report) } : {}),
       onCellSave: async ({ row, key: name, value }) => {
         const line = state.draft.lines.find((item) => item.key === row.key); if (!line) throw new Error('Linia nu mai este în document.');
-        const before = structuredClone(line);
+        const before = structuredClone(line); let efNew = false;
         if (family === 'nir' && ['product', 'Cant', 'Pret', 'IDTVA'].includes(name)) clearCorrection(line);
         if (family === 'storno' && name === 'variant') {
           const item = state.eligible.find(item => String(item.variant) === String(value));
@@ -665,7 +667,12 @@ export function mountDocuments(host, opts) {
           if (state.draft.lines.some(other => other !== line && other.variant != null && stornoProductKey(other) === stornoProductKey(item))) throw new Error('Produsul cu acest preț este deja în document. Modificați cantitatea pe rândul existent.');
           Object.assign(line, item, { id: line.variant === item.variant ? line.id : null });
         } else if (name === '_choice') { const item = state.eligible[Number(value)]; if (!item) throw new Error('Alegeți un produs al predătorului.'); if (state.draft.lines.some((other) => other !== line && other.variant === item.variant && (other.origin ?? other.batch) === item.origin && other.IdMasina === item.IdMasina && other.PUTVA === item.PUTVA)) throw new Error('Produsul din acest lot, cont și preț este deja în document.'); const id = line.variant === item.variant && (line.origin ?? line.batch) === item.origin && line.IdMasina === item.IdMasina && line.PUTVA === item.PUTVA ? line.id : null; Object.assign(line, { ...item, _choice: Number(value), id }); }
-        else if (family === 'nir' && name === 'product') productEntry.selectProduct(value, line);
+        else if (family === 'nir' && name === 'product') {
+          // VC06-35: «FOLOSEȘTE DENUMIREA DIN EFACTURA» = a new product with the name and the UM of the invoice line (and its CPV, if it has one), as if typed in the row.
+          const fromInvoice = value === EF_NAME_NODE;
+          line._efUsed = efNew = fromInvoice && !!String(line.ef_um ?? '').trim();   // no UM on the invoice line: the normal new-product flow asks for it
+          productEntry.selectProduct(fromInvoice ? { newName: line.ef_name, um: line.ef_um, cpv: line.ef_cpv } : value, line);
+        }
         else { line[name] = ['variant', 'product', 'IDTVA', 'invoice_line'].includes(name) ? value == null || value === '' ? null : Number(value) : value; if (['variant', 'product'].includes(name)) { const item = family === 'nir' ? product(value) : variant(value); line.name = item?.name || ''; line.um = item?.um || ''; if (name === 'product') line.variant = null; } }
         if (family === 'nir' && name === 'product') {
           const item = product(line.product), percent = allocation.tax(before.IDTVA)?.percent ?? allocation.tax(state.draft.vat)?.percent;
@@ -675,6 +682,7 @@ export function mountDocuments(host, opts) {
         }
         try {
           bc?.validate(line, name);
+          if (efNew && line.new_product) { await productEntry.finishProduct(line); line.IDTVA = allocation.defaultTax(line.product, allocation.tax(line.IDTVA)?.percent ?? allocation.tax(state.draft.vat)?.percent); productEntry.defaults(line); }
           if (family === 'nir' && name === 'um') { await productEntry.finishProduct(line); line.IDTVA = allocation.defaultTax(line.product, allocation.tax(line.IDTVA)?.percent ?? allocation.tax(state.draft.vat)?.percent); productEntry.defaults(line); }
           if (family === 'nir' && ['code', 'DNF', 'data_intrarii'].includes(name) && productEntry.issues(line).length) throw new Error(productEntry.issues(line).join('; '));
           if (family === 'bp' && name === 'variant' && state.draft.lines.some(other => other !== line && other.variant === line.variant)) throw new Error('Produsul este deja pe bon. Modificați cantitatea rândului existent.');

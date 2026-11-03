@@ -8,7 +8,10 @@ primite_contari.py. It only CALCULATES; it writes nothing.
              subunitate: { IdSubunitate, Denumire } | null, subunitati: [{ IdSubunitate, Denumire }]  (those with the sector+source of the classification),
              note: { An, Urmatoare, Existente: [{ NumarNC, DataNc, Documente }] } | null  (the notes of the subunit and year, to choose from or to type a new number),
              coduri, contIban, evidenta: [...], plata: {...}, operatii: [...], avertismente: [{ Cod, Grav, Text }] }
-        body fields: ids, idClsf, idSablonE, idSablonP, platit, an, idSubunitate (when several subunits share the sector+source), numarNC (save only)
+        body fields: ids, idClsf, idSablonE, idSablonP, platit, an, idSubunitate (when several subunits share the sector+source), numarNC (save only),
+        idPartener (the partner chosen when several have the supplier's tax code; the supplier is looked up by TAX CODE ONLY, hidden partners included; the partner kept for the code (EF_FurnizorPartener) or the only one is used without asking:
+        `furnizor.Parteneri` lists them, `furnizor.Partener` is the one in force or null; with several and none chosen the warning PARTENER_DE_ALES blocks
+        the booking). The save makes the partner visible (Ascuns = 0) and keeps it for the tax code in its transaction.
 
 POST /api/efactura/contari/salveaza  body as above + { confirmari: [codes], idSubunitate? } -> 201 { IdNota, NumarNC, An, Subunitate, Operatii: [...] }   (01EF-04: books the EVIDENCE, role «Contabil»)
         refusal 409 CONFIRMARE_NECESARA carries { confirmari_necesare: [{ Cod, Text }] }: the operator confirms them and the call is repeated with their codes in `confirmari`.
@@ -22,7 +25,7 @@ from .factura_routes import _audit, _body, _guarded, _json
 from .tokens import EfEroare
 from routes.auth.guard import require_session
 
-_CAMPURI = {"ids", "idClsf", "idSablonE", "idSablonP", "platit", "an", "idSubunitate", "numarNC"}
+_CAMPURI = {"ids", "idClsf", "idSablonE", "idSablonP", "platit", "an", "idSubunitate", "numarNC", "idPartener"}
 
 
 @efactura_bp.route("/api/efactura/contari/calcul", methods=["POST"])

@@ -16,6 +16,10 @@ counts as TRIMISA again. It is decided when READING, so it does not depend on ev
 
 AMOUNTS. The value of a line WITH VAT comes from primite_ke.valori_cu_tva (the same rule the receptions use); it needs KE_01_primite_receptii.sql.
 
+LINES THAT DO NOT GO (slice 00EF-56). On a line the accountant can choose «NU SE TRIMITE»: EF_PrimiteVerconLinii.NuSeTrimite = 1. The row is kept (so K-BOT still
+shows the line and the choice can be changed while the sending waits) but VERCON never reads it: not in the list of the Administrator's «Adaugare NIR», not in the
+association with a NIR, not in the quantity budget that decides PRELUATA. The line stays in EF_PrimiteLinii, i.e. in e-Factura, untouched. At least one line must go.
+
 NOT IN THIS SLICE: the invoices of kind credit note («NC», Semn -1) cannot be sent (decision D3); the VERCON side (list, return, take over) is EV04 / EV05.
 """
 import logging
@@ -23,16 +27,14 @@ from utils import vercon_efactura as associations
 
 from . import facturi as F
 from . import primite, primite_ke
+from .primite_parteneri import activeaza as activeaza_partener, alege as alege_partener, leaga as leaga_partener, rezolva as rezolva_partener
 from .tokens import EfEroare
 
 logger = logging.getLogger(__name__)
 
-EV_SQL = "sql/EV_01_primite_vercon.sql"
+EV_SQL = "sql/EV_01_primite_vercon.sql, sql/00EF_55_furnizor_partener.sql"
 STARI_ACTIVE = ("TRIMISA", "PRELUATA")
 MAX_OBSERVATIE = 500
-
-# The CUI of a partner, normalised the way EF_Primite.CuiNormalizat is (no spaces / signs, no leading «RO» before a digit); same expression as primite.py.
-_PARTENER_CUI = "UPPER(REGEXP_REPLACE(REGEXP_REPLACE(p.CodFiscal, '[^[:alnum:]]', ''), '^RO([0-9])', '\\\\1'))"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -133,30 +135,21 @@ def _trimitere_json(row, nirs):
         "nir": nirs}
 
 
-def _partener(cursor, cui):
-    """The VISIBLE partner of the unit with this normalised CUI, or None (VERCON's «Adaugare NIR» takes only visible partners that have a tax code)."""
-    if not cui:
-        return None
-    cursor.execute("SELECT p.IdPartener, p.DenumirePartener FROM Parteneri p WHERE " + _PARTENER_CUI + " = %s AND COALESCE(p.Ascuns, 0) = 0 "
-                   "AND NULLIF(TRIM(p.CodFiscal), '') IS NOT NULL ORDER BY p.IdPartener LIMIT 1", (cui,))
-    row = cursor.fetchone()
-    return {"IdPartener": row["IdPartener"], "Denumire": row["DenumirePartener"] or ""} if row else None
-
-
-def _duplicate(cursor, partner, nr_fact, data_fact):
-    """The NIRs already recorded for the same supplier, invoice number and date (a warning, not a refusal)."""
-    if partner is None or not nr_fact or data_fact is None:
+def _duplicate(cursor, partners, nr_fact, data_fact):
+    """The NIRs already recorded for the same supplier (any partner row with its tax code), invoice number and date (a warning, not a refusal)."""
+    if not partners or not nr_fact or data_fact is None:
         return []
+    ids = [p["IdPartener"] for p in partners]
     cursor.execute("SELECT v.SubunitId, v.GestiuneId, v.ExercitiuId, v.IdIntrare, v.Numar, v.NumarSub, v.Data, v.Anulat, g.Name AS Gestiune "
                    "FROM VC_NIR v LEFT JOIN VC_Gestiuni g ON g.SubunitId = v.SubunitId AND g.GestiuneId = v.GestiuneId "
-                   "WHERE v.IdPartener = %s AND v.NrFact = %s AND DATE(v.DataFc) = %s AND COALESCE(v.Anulat, 0) = 0 ORDER BY v.Data DESC LIMIT 10",
-                   (partner["IdPartener"], nr_fact, data_fact))
+                   "WHERE v.IdPartener IN (" + ", ".join(["%s"] * len(ids)) + ") AND v.NrFact = %s AND DATE(v.DataFc) = %s AND COALESCE(v.Anulat, 0) = 0 "
+                   "ORDER BY v.Data DESC LIMIT 10", tuple(ids) + (nr_fact, data_fact))
     return [{"Gestiune": r["Gestiune"] or "", "Numar": r["Numar"], "NumarSub": r["NumarSub"], "IdIntrare": r["IdIntrare"],
              "Data": r["Data"].isoformat() if r["Data"] is not None else None} for r in cursor.fetchall()]
 
 
 def _linii(conn, cursor, id_primita, gestiuni, conturi, proposals):
-    """The lines of the invoice with their values WITH VAT and, when a sending exists, the proposed account (`proposals` = {IdLinie: IdMasina})."""
+    """The lines of the invoice with their values WITH VAT and, when a sending exists, the proposed account (`proposals` = {IdLinie: (IdMasina, NuSeTrimite)})."""
     row, lines = primite_ke._factura_si_linii(conn, cursor, id_primita)
     cursor.execute("SELECT IdLinie, Unit, Cant, Pret FROM EF_PrimiteLinii WHERE IdPrimita = %s", (id_primita,))
     extra = {r["IdLinie"]: r for r in cursor.fetchall()}
@@ -164,13 +157,13 @@ def _linii(conn, cursor, id_primita, gestiuni, conturi, proposals):
     out = []
     for line in lines:
         more = extra.get(line["IdLinie"], {})
-        id_masina = proposals.get(line["IdLinie"])
+        id_masina, nu_se_trimite = proposals.get(line["IdLinie"], (None, False))
         account = conturi.get(id_masina) if id_masina is not None else None
         gestiune = gestiuni.get((account["SubunitId"], account["GestiuneId"])) if account else None
         out.append({"IdLinie": line["IdLinie"], "NrLinie": line["NrLinie"], "Denumire": line["Denumire"], "Cpv": line["Cpv"],
                     "Unit": more.get("Unit"), "Cant": primite_ke._num(more.get("Cant")), "Pret": primite_ke._num(more.get("Pret")),
                     "Valoare": primite_ke._num(line["Valoare"]), "ValoareCuTVA": primite_ke._num(line["ValoareCuTVA"] * sign),
-                    "IdMasina": id_masina, "Cont": account["Masina"] if account else None,
+                    "IdMasina": id_masina, "NuSeTrimite": nu_se_trimite, "Cont": account["Masina"] if account else None,
                     "Gestiune": ("%s / %s" % (gestiune["Subunitate"], gestiune["Gestiune"])) if gestiune else None})
     return row, out
 
@@ -191,10 +184,11 @@ def _starea(conn, cursor, id_primita, role):
     active = next((s for s, r in zip(sendings, rows) if r["Stare"] in STARI_ACTIVE), None)
     proposals = {}
     if active is not None:
-        cursor.execute("SELECT IdLinie, IdMasina FROM EF_PrimiteVerconLinii WHERE IdTrimitere = %s", (active["IdTrimitere"],))
-        proposals = {r["IdLinie"]: r["IdMasina"] for r in cursor.fetchall()}
+        cursor.execute("SELECT IdLinie, IdMasina, NuSeTrimite FROM EF_PrimiteVerconLinii WHERE IdTrimitere = %s", (active["IdTrimitere"],))
+        proposals = {r["IdLinie"]: (r["IdMasina"], bool(r["NuSeTrimite"])) for r in cursor.fetchall()}
     row, lines = _linii(conn, cursor, id_primita, gestiuni, conturi, proposals)
-    partner = _partener(cursor, row["CuiNormalizat"])
+    # The partner in force: the one kept for the tax code, or the only one; several and none kept: None and the accountant chooses (`parteneri`).
+    partners, partner = rezolva_partener(cursor, row["CuiNormalizat"])
     reason = None
     if row["Tip"] != "FC" or int(row["Semn"] or 1) != 1:
         reason = "Nota de credit (storno) nu se trimite la Vercon."
@@ -202,15 +196,15 @@ def _starea(conn, cursor, id_primita, role):
         reason = "Factura nu are linii."
     elif active is not None:
         reason = "Factura este deja trimisă la Vercon."
-    elif partner is None:
-        reason = "Furnizorul nu este în lista de parteneri a unității. Asociați-l întâi."
+    elif not partners:
+        reason = "Nu există niciun partener cu codul fiscal al furnizorului. Adăugați-l întâi în lista de parteneri."
     sign = int(row["Semn"] or 1)
     return {
         "poate_scrie": (role or "").strip().lower() == primite_ke.ROL_CONTABIL.lower(),
         "poate_trimite": reason is None, "motiv": reason,
         "factura": {"IdPrimita": id_primita, "NrFact": row["NrFact"], "DataFact": row["DataFact"].isoformat() if row["DataFact"] else None,
                     "Furnizor": row["DenumireP"], "CuiNormalizat": row["CuiNormalizat"], "Total": primite_ke._num(primite_ke._dec(row["Total"]) * sign)},
-        "partener": partner, "duplicate": _duplicate(cursor, partner, row["NrFact"], row["DataFact"]),
+        "partener": partner, "parteneri": partners, "duplicate": _duplicate(cursor, partners, row["NrFact"], row["DataFact"]),
         "trimitere": active, "istoric": [s for s in sendings if s is not active], "linii": lines}
 
 
@@ -240,8 +234,9 @@ def stari(dc):
 # writing
 # ---------------------------------------------------------------------------------------------
 def _verifica_conturi(cursor, id_primita, items):
-    """items = [{IdLinie, IdMasina | None}] -> {IdLinie: IdMasina | None} for EVERY line of the invoice (a line not named has no proposal).
-    Every line must belong to the invoice, appear once, and every account must be an active one the tree offers."""
+    """items = [{IdLinie, IdMasina | None, NuSeTrimite?}] -> {IdLinie: (IdMasina | None, NuSeTrimite)} for EVERY line of the invoice (a line not named has no proposal
+    and goes). Every line must belong to the invoice, appear once, and every account must be an active one the tree offers. A line marked «NU SE TRIMITE» has no
+    account, and at least one line of the invoice must go."""
     if items is None:
         items = []
     if not isinstance(items, list):
@@ -249,12 +244,16 @@ def _verifica_conturi(cursor, id_primita, items):
     cursor.execute("SELECT IdLinie FROM EF_PrimiteLinii WHERE IdPrimita = %s", (id_primita,))
     own = {r["IdLinie"] for r in cursor.fetchall()}
     _, conturi = _conturi(cursor)
-    chosen = {linie: None for linie in own}
+    chosen = {linie: (None, False) for linie in own}
     seen = set()
     for item in items:
-        if not isinstance(item, dict) or set(item) - {"IdLinie", "IdMasina"}:
-            raise EfEroare("Fiecare cont are doar «IdLinie» și «IdMasina».", "CAMP_NEPERMIS", 400)
-        id_linie, id_masina = item.get("IdLinie"), item.get("IdMasina")
+        if not isinstance(item, dict) or set(item) - {"IdLinie", "IdMasina", "NuSeTrimite"}:
+            raise EfEroare("Fiecare cont are doar «IdLinie», «IdMasina» și «NuSeTrimite».", "CAMP_NEPERMIS", 400)
+        id_linie, id_masina, nu_se_trimite = item.get("IdLinie"), item.get("IdMasina"), item.get("NuSeTrimite", False)
+        if not isinstance(nu_se_trimite, bool):
+            raise EfEroare("«NuSeTrimite» trebuie să fie adevărat sau fals.", "CAMP_INVALID", 400)
+        if nu_se_trimite:
+            id_masina = None
         if isinstance(id_linie, bool) or not isinstance(id_linie, int) or id_linie not in own:
             raise EfEroare("O linie nu aparține facturii.", "CAMP_INVALID", 400)
         if id_linie in seen:
@@ -265,7 +264,9 @@ def _verifica_conturi(cursor, id_primita, items):
                 raise EfEroare("Contul trebuie să fie un număr.", "CAMP_INVALID", 400)
             if id_masina not in conturi:
                 raise EfEroare("Un cont ales nu există sau nu este activ în Vercon.", "CONT_INVALID", 404)
-        chosen[id_linie] = id_masina
+        chosen[id_linie] = (id_masina, nu_se_trimite)
+    if chosen and all(nu for _, nu in chosen.values()):
+        raise EfEroare("Cel puțin o linie trebuie trimisă la Vercon.", "NICIO_LINIE_TRIMISA", 409)
     return chosen
 
 
@@ -293,8 +294,17 @@ def _incuie_factura(cursor, id_primita):
         raise EfEroare("Factura primită nu există.", "NU_EXISTA", 404)
 
 
-def trimite(dc, id_primita, role, username, conturi, observatie):
-    """Sends the invoice: ALL its lines, each with the proposed account (or none). Role «Contabil»."""
+def _alege_partener(state, id_partener):
+    """The partner row the sending is for: the one the accountant named, else the one in force (kept for the tax code, or the only one); none: a choice is required."""
+    partner = alege_partener(state["parteneri"], id_partener) if id_partener is not None else state["partener"]
+    if partner is None:
+        raise EfEroare("Mai mulți parteneri au codul fiscal al furnizorului. Alegeți unul.", "PARTENER_DE_ALES", 409)
+    return partner
+
+
+def trimite(dc, id_primita, role, username, conturi, observatie, id_partener=None):
+    """Sends the invoice: ALL its lines, each with the proposed account (or none). Role «Contabil». The partner of the supplier (found by tax code only;
+    `id_partener` is required when several have it and none is kept yet) becomes visible (Ascuns = 0) and is kept for the tax code (EF_FurnizorPartener) in the same transaction."""
     cere_contabil(role)
     note = _text_scurt(observatie, "observatie")
     with F._unit(dc, EV_SQL) as conn:
@@ -303,14 +313,17 @@ def trimite(dc, id_primita, role, username, conturi, observatie):
         state = _starea(conn, cursor, id_primita, role)
         if not state["poate_trimite"]:
             raise EfEroare(state["motiv"], "NETRIMISIBILA", 409)
+        partner = _alege_partener(state, id_partener)
         chosen = _verifica_conturi(cursor, id_primita, conturi)
         _incuie_factura(cursor, id_primita)
         if _activ(cursor, id_primita) is not None:  # another session sent it between the read and the lock
             raise EfEroare("Factura este deja trimisă la Vercon.", "NETRIMISIBILA", 409)
+        activeaza_partener(cursor, partner["IdPartener"])
+        leaga_partener(cursor, state["factura"]["CuiNormalizat"], partner["IdPartener"], username)
         cursor.execute("INSERT INTO EF_PrimiteVercon (IdPrimita, Stare, Observatie, UnTrimis) VALUES (%s, 'TRIMISA', %s, %s)", (id_primita, note, username))
         id_trimitere = cursor.lastrowid
-        cursor.executemany("INSERT INTO EF_PrimiteVerconLinii (IdTrimitere, IdLinie, IdMasina) VALUES (%s, %s, %s)",
-                           [(id_trimitere, linie, masina) for linie, masina in sorted(chosen.items())])
+        cursor.executemany("INSERT INTO EF_PrimiteVerconLinii (IdTrimitere, IdLinie, IdMasina, NuSeTrimite) VALUES (%s, %s, %s, %s)",
+                           [(id_trimitere, linie, masina, nu) for linie, (masina, nu) in sorted(chosen.items())])
         conn.commit()
         return _starea(conn, cursor, id_primita, role)
 
@@ -328,8 +341,9 @@ def schimba_conturi(dc, id_primita, role, conturi):
         if stare_efectiva(active["Stare"], nirs)[0] != "TRIMISA":
             raise EfEroare("Factura a fost deja preluată în Vercon; conturile nu se mai pot schimba.", "DEJA_PRELUATA", 409)
         chosen = _verifica_conturi(cursor, id_primita, conturi)
-        for linie, masina in chosen.items():
-            cursor.execute("UPDATE EF_PrimiteVerconLinii SET IdMasina = %s WHERE IdTrimitere = %s AND IdLinie = %s", (masina, active["IdTrimitere"], linie))
+        for linie, (masina, nu) in chosen.items():
+            cursor.execute("UPDATE EF_PrimiteVerconLinii SET IdMasina = %s, NuSeTrimite = %s WHERE IdTrimitere = %s AND IdLinie = %s",
+                           (masina, nu, active["IdTrimitere"], linie))
         conn.commit()
         return _starea(conn, cursor, id_primita, role)
 

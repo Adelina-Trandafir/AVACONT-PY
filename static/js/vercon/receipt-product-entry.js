@@ -32,7 +32,7 @@ export const mfColumns = [
 ].map(spec => ({ ...spec, mfOnly: true }));
 
 // All new product identities are local, negative numbers. Only saving the NIR creates them.
-export function receiptProductEntry({ host, root, allocation, draft, api, selection, changed }) {
+export function receiptProductEntry({ host, root, allocation, draft, api, selection, changed, note = () => null }) {
   let popup = null, busy = false, disposed = false;
   const sameRoot = (a, b) => allocation.product(a.product)?.destination === allocation.product(b.product)?.destination;
   function nextCode(row, after = null) {
@@ -55,7 +55,7 @@ export function receiptProductEntry({ host, root, allocation, draft, api, select
   function selectProduct(value, row) {
     let item;
     if (value?.newName != null) {
-      const name = value.newName.trim();
+      const name = value.newName.trim(), um = String(value.um ?? '').trim().slice(0, 50);
       if (!name || name.length > 255) throw new Error('Introduceți o denumire de produs de maximum 255 de caractere.');
       const matches = allocation.selectedAccounts().flatMap(account => allocation.productsForAccount(account.id))
         .filter(product => text(product.name) === text(name));
@@ -65,8 +65,8 @@ export function receiptProductEntry({ host, root, allocation, draft, api, select
         const accounts = allocation.selectedAccounts(), account = accounts.length === 1 ? accounts[0] : null;
         const destination = account?.destination || `${selection().subunit}:${selection().gestiune}`;
         const type = allocation.destination(destination)?.type || selection().type;
-        const values = { DenumireP: name, UM: '', IdMasina: account?.id ?? null, CPV: null, CC: null, DNF: null };
-        item = allocation.addProduct({ id: allocation.nextProductId(), name, um: '', category: account?.id ?? null,
+        const values = { DenumireP: name, UM: um, IdMasina: account?.id ?? null, CPV: value.cpv ?? null, CC: null, DNF: null };
+        item = allocation.addProduct({ id: allocation.nextProductId(), name, um, category: account?.id ?? null,
           destination, type, new_product: values });
       }
     } else item = allocation.product(value);
@@ -107,7 +107,7 @@ export function receiptProductEntry({ host, root, allocation, draft, api, select
   function pick(row, classification = false) {
     return new Promise(resolve => {
       let picked = null;
-      popup = mountCpvPicker(host, { api, sel: () => allocation.selectionForProduct(row.product), name: row.name,
+      popup = mountCpvPicker(host, { api, sel: () => allocation.selectionForProduct(row.product), name: row.name, note: note(),
         ...(classification ? { catalogName: 'Clasificare MF', catalogEndpoint: '/api/vercon/mf/classifications' } : {}),
         onPick: (code, detail) => {
           if (classification && (!(num(detail.dnf_min) > 0) || num(detail.dnf_max) < num(detail.dnf_min))) throw new Error('Alegeți o clasificare cu limite DNF valide.');
@@ -142,7 +142,7 @@ export function receiptProductEntry({ host, root, allocation, draft, api, select
         Object.assign(item, { cc: choice.code, dnf_min: choice.detail.dnf_min, dnf_max: choice.detail.dnf_max, dnf: num(choice.detail.dnf_min) * 12 });
         Object.assign(row.new_product, { CC: item.cc, DNF: item.dnf }); row.DNF = item.dnf; defaults(row);
       }
-      const cpv = await pick(row);
+      const cpv = row.new_product.CPV ? { code: row.new_product.CPV } : await pick(row);   // VC06-35: a CPV taken from the e-Factura is not asked again
       if (disposed) return;
       row.new_product.CPV = cpv?.code ?? null; row._productReady = true;
       item.new_product = { ...row.new_product }; item.ready = true; changed();

@@ -17,6 +17,12 @@ def ready(cursor):
     return len(found) == 3
 
 
+def sent_line_sql(sending, line):
+    """SQL condition (no placeholders of its own) true for a line of the invoice that WENT to VERCON: not marked «NU SE TRIMITE» (EF_PrimiteVerconLinii.NuSeTrimite,
+    slice 00EF-56) in the sending. `sending` and `line` are SQL expressions, e.g. '%s' / 't.IdTrimitere' and 'l.IdLinie'. A line with no row in the table goes."""
+    return ('NOT EXISTS (SELECT 1 FROM EF_PrimiteVerconLinii x WHERE x.IdTrimitere=' + sending + ' AND x.IdLinie=' + line + ' AND x.NuSeTrimite=1)')
+
+
 def name_hash(value):
     name = ' '.join(unicodedata.normalize('NFKC', value or '').casefold().split())
     return hashlib.sha256(name.encode('utf-8')).hexdigest()
@@ -64,7 +70,7 @@ def progress(cursor, sending_id):
     if not ready(cursor) or not rows(cursor, 'SELECT 1 FROM EF_VERCON_ASOCIERI WHERE ID_TRIMITERE=%s', (sending_id,)):
         return None
     lines = rows(cursor, 'SELECT l.IdLinie,l.Cant FROM EF_PrimiteLinii l JOIN EF_PrimiteVercon t ON t.IdPrimita=l.IdPrimita '
-                 'WHERE t.IdTrimitere=%s', (sending_id,))
+                 'WHERE t.IdTrimitere=%s AND ' + sent_line_sql('t.IdTrimitere', 'l.IdLinie'), (sending_id,))
     used = {}
     links = allocations(cursor, sending_id)
     for link in links:
@@ -80,7 +86,7 @@ def progress_states(cursor):
         return {}
     source = rows(cursor, 'SELECT a.ID_TRIMITERE,l.IdLinie,l.Cant FROM EF_VERCON_ASOCIERI a '
                   'JOIN EF_PrimiteVercon t ON t.IdTrimitere=a.ID_TRIMITERE '
-                  'LEFT JOIN EF_PrimiteLinii l ON l.IdPrimita=t.IdPrimita')
+                  'LEFT JOIN EF_PrimiteLinii l ON l.IdPrimita=t.IdPrimita AND ' + sent_line_sql('t.IdTrimitere', 'l.IdLinie'))
     if not source:
         return {}
     lines, used = {}, {}

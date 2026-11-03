@@ -15,7 +15,8 @@ export function mountCpvPicker(host, opts) {
   const status = el('p', { className: 'vc-save-status', role: 'status' });
   const description = el('p', { className: 'vc-cpv-page__description', role: 'status', hidden: !opts.current,
     textContent: opts.current ? `Se încarcă descrierea ${catalog}…` : '' });
-  const searches = el('div', { className: 'vc-cpv-page__search' });
+  // VC06-37: a product added from an e-Factura NIR shows the accountant's note next to the (smaller) search boxes; read-only, never auto-selected, so part of it can be copied.
+  const searches = el('div', { className: 'vc-cpv-page__search' + (opts.note != null ? ' vc-cpv-page__search--note' : '') });
   const treeHost = el('div', { className: 'vc-cpv-page__tree' });
   const root = el('section', { className: 'vc-cpv-page', 'aria-label': 'Selectare ' + catalog },
     el('div', { className: 'vc-cpv-page__summary' },
@@ -31,6 +32,8 @@ export function mountCpvPicker(host, opts) {
   const name = field({ key: 'cpvName', label: 'Căutare după denumire', type: 'text', max: 160 }, '', true, schedule, controls);
   const code = field({ key: 'cpvCode', label: 'Căutare după cod', type: 'text', max: 160 }, '', true, schedule, controls);
   searches.append(name.node, code.node);
+  if (opts.note != null) searches.append(el('label', { className: 'vc-field vc-cpv-page__note' }, el('span', { textContent: 'Notă contabil' }),
+    el('textarea', { readOnly: true, rows: 2, value: opts.note, placeholder: 'Contabilul nu a scris nicio notă.' })));
   const say = (message = '', bad = false) => { if (!disposed) showMessage(status, message, bad ? 'error' : 'info'); };
   const read = (params, path = endpoint) => {
     const query = new URLSearchParams(Object.entries(opts.sel()).filter(([, value]) => value != null && value !== ''));

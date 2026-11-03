@@ -70,6 +70,7 @@ _LABELS = {
     ("POST", "/api/forexe/nomenclatoare/clasificatii/<int:id_clsf>/buget"): "Modificat bugetul unei clasificații",
     ("POST", "/api/forexe/nomenclatoare/parteneri"): "Salvat un partener",
     ("POST", "/api/forexe/nomenclatoare/parteneri/preia-access"): "Preluați parteneri din Access",
+    ("POST", "/api/forexe/nomenclatoare/parteneri/<int:id_partener>/anaf-sync"): "Sincronizat un partener cu ANAF",
     ("POST", "/api/forexe/parteneri/angajament"): "Legat un furnizor de un angajament",
     ("POST", "/api/forexe/parteneri/angajament/scoate"): "Scoasă legătura unui furnizor cu un angajament",
     ("DELETE", "/api/forexe/nomenclatoare/parteneri/<int:id_partener>"): "Șters un partener",

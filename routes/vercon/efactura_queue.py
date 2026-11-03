@@ -1,7 +1,7 @@
 """SLICE-VC06-07 / VC06-08 (EV04, EV05, plan docs/EV_PLAN.md): the received e-invoices an accountant SENT to VERCON from K-BOT.
 
-K-BOT writes EF_PrimiteVercon (the sending), EF_PrimiteVerconLinii (ALL the lines of the invoice, each with the account the accountant proposes, NULL = the
-Administrator chooses) and, here, EF_PrimiteVerconNir (the NIRs made from it). They live in the same unit database as the VC_* tables, so nothing is called
+K-BOT writes EF_PrimiteVercon (the sending), EF_PrimiteVerconLinii (the lines of the invoice, each with the account the accountant proposes, NULL = the
+Administrator chooses; a line marked NuSeTrimite = 1 («NU SE TRIMITE», slice 00EF-56) is never read here: VERCON does not see it) and, here, EF_PrimiteVerconNir (the NIRs made from it). They live in the same unit database as the VC_* tables, so nothing is called
 between systems. This module only READS the queue, RETURNS an invoice with a reason, and CLOSES a sending when the NIR made from it is saved.
 
     GET  /api/vercon/doc/nir/efactura                        the sendings that wait (state TRIMISA, or PRELUATA whose NIRs are all cancelled / gone)
@@ -49,6 +49,19 @@ def _text(value):
     return None if value is None else format(Decimal(value), 'f')
 
 
+def sent_total(cursor, sending_id, invoice_id, total):
+    """The total WITH VAT of the invoice WITHOUT the lines marked «NU SE TRIMITE»: what VERCON may show (the full total would give those lines away and would not match the
+    NIR). The VAT of a line is the rule of K-BOT's own screens (primite_ke.valori_cu_tva, rounding cents included). Without marked lines it is `total` as it is."""
+    marked = {r['IdLinie'] for r in _all(cursor, 'SELECT IdLinie FROM EF_PrimiteVerconLinii WHERE IdTrimitere = %s AND NuSeTrimite = 1', (sending_id,))}
+    if not marked:
+        return total
+    from routes.efactura import primite_ke  # lazy: no import-time coupling between the two packages
+    lines = _all(cursor, 'SELECT IdLinie, Valoare, CotaTVA FROM EF_PrimiteLinii WHERE IdPrimita = %s ORDER BY IdLinie', (invoice_id,))
+    rates = _all(cursor, 'SELECT CotaTVA, Baza, TVA FROM EF_PrimiteTVA WHERE IdPrimita = %s', (invoice_id,))
+    primite_ke.valori_cu_tva(lines, rates)
+    return total - sum((line['ValoareCuTVA'] for line in lines if line['IdLinie'] in marked), Decimal(0))
+
+
 def listing(cursor, summary=False, ctx=None):
     """Pending shared sendings; an inactive invoice is hidden for the entire unit."""
     if not available(cursor):
@@ -85,7 +98,7 @@ def listing(cursor, summary=False, ctx=None):
         params.append(suppliers.code(request.args['fiscal_code']))
     rows = _all(cursor,
                 "SELECT t.IdTrimitere, t.IdPrimita, t.Stare, t.Observatie, t.UnTrimis, t.DataTrimis, p.NrFact, p.DataFact, p.DenumireP, p.CuiNormalizat, p.Total, p.Semn, "
-                "(SELECT COUNT(*) FROM EF_PrimiteVerconLinii l WHERE l.IdTrimitere = t.IdTrimitere) AS Linii, "
+                "(SELECT COUNT(*) FROM EF_PrimiteVerconLinii l WHERE l.IdTrimitere = t.IdTrimitere AND l.NuSeTrimite = 0) AS Linii, "
                 + _PENDING + ' AS PendingLegacy '
                 + "FROM EF_PrimiteVercon t JOIN EF_Primite p ON p.IdPrimita = t.IdPrimita WHERE t.Stare IN ('TRIMISA','PRELUATA') "
                 + ('AND ' + ' AND '.join(filters) + ' ' if filters else '')
@@ -106,7 +119,7 @@ def listing(cursor, summary=False, ctx=None):
         # Hidden invoices must remain reachable for restoration even if meanwhile completed.
         rows = [r for r in rows if r['effective'] != 'PRELUATA' or r['IdTrimitere'] in hidden]
     items = [{'id': r['IdTrimitere'], 'invoice_id': r['IdPrimita'], 'number': r['NrFact'], 'date': _iso(r['DataFact']), 'supplier': r['DenumireP'],
-              'cui': r['CuiNormalizat'], 'total': _text(Decimal(r['Total'] or 0) * int(r['Semn'] or 1)), 'lines': r['Linii'], 'note': r['Observatie'] or '',
+              'cui': r['CuiNormalizat'], 'total': _text(sent_total(cursor, r['IdTrimitere'], r['IdPrimita'], Decimal(r['Total'] or 0)) * int(r['Semn'] or 1)), 'lines': r['Linii'], 'note': r['Observatie'] or '',
               'sent_by': r['UnTrimis'] or '', 'sent_at': _iso(r['DataTrimis']), 'again': r['Stare'] == 'PRELUATA' and r['effective'] == 'TRIMISA',
               'state': r['effective'], 'manual_links': r['manual_links'], 'inactive': r['IdTrimitere'] in hidden} for r in rows]
     return {'available': True, 'visibility_available': visibility_ready, 'items': items, 'pending_count': pending_count}
@@ -151,19 +164,26 @@ def detail(cursor, sending_id):
     biggest = max(rates, key=lambda r: Decimal(r['Baza'] or 0), default=None)
     fallback = Decimal(biggest['CotaTVA']) if biggest else None
     lines = _all(cursor,
-                 'SELECT l.IdLinie, l.NrLinie, l.Denumire, l.Unit, l.Cant, l.Pret, l.Valoare, l.CotaTVA, v.IdMasina FROM EF_PrimiteLinii l '
-                 'LEFT JOIN EF_PrimiteVerconLinii v ON v.IdTrimitere = %s AND v.IdLinie = l.IdLinie WHERE l.IdPrimita = %s ORDER BY l.IdLinie',
+                 'SELECT l.IdLinie, l.NrLinie, l.Denumire, l.Unit, l.Cant, l.Pret, l.Valoare, l.CotaTVA, l.Cpv, v.IdMasina FROM EF_PrimiteLinii l '
+                 'LEFT JOIN EF_PrimiteVerconLinii v ON v.IdTrimitere = %s AND v.IdLinie = l.IdLinie WHERE l.IdPrimita = %s AND COALESCE(v.NuSeTrimite, 0) = 0 ORDER BY l.IdLinie',
                  (sending_id, invoice['IdPrimita']))
+    # VC06-35: the invoice CPV as the catalogue writes it (8 digits + check digit), so a new product can take it without asking; None = none / not in the catalogue.
+    wanted = sorted({association.cpv(line['Cpv']) for line in lines} - {None})
+    catalogue = {}
+    if wanted:
+        cursor.execute('SELECT CPV FROM AVACONT_COMUN.CPV WHERE LEFT(CPV,8) IN (' + ','.join(['%s'] * len(wanted)) + ')', tuple(wanted))
+        for row in cursor.fetchall():
+            catalogue.setdefault(association.cpv(row['CPV']), row['CPV'])
     out = []
     for line in lines:
         own = line['CotaTVA']
         rate = Decimal(own) if own is not None else fallback
         out.append({'line_id': line['IdLinie'], 'nr': line['NrLinie'] or '', 'name': line['Denumire'] or '', 'um': line['Unit'] or '', 'qty': _text(line['Cant']),
                     'price': _text(line['Pret']), 'value': _text(line['Valoare']), 'rate': _text(rate), 'rate_guessed': own is None and len(rates) > 1,
-                    'account': line['IdMasina']})
+                    'account': line['IdMasina'], 'cpv': catalogue.get(association.cpv(line['Cpv']))})
     sign = int(invoice['Semn'] or 1)
     return {'id': sending['IdTrimitere'], 'invoice_id': invoice['IdPrimita'], 'number': invoice['NrFact'], 'date': _iso(invoice['DataFact']),
-            'supplier': invoice['DenumireP'], 'cui': invoice['CuiNormalizat'], 'total': _text(Decimal(invoice['Total'] or 0) * sign),
+            'supplier': invoice['DenumireP'], 'cui': invoice['CuiNormalizat'], 'total': _text(sent_total(cursor, sending['IdTrimitere'], invoice['IdPrimita'], Decimal(invoice['Total'] or 0)) * sign),
             'partner': {'cf': partner['CodFiscal'], 'name': partner['DenumirePartener']} if partner else None,
             'note': sending['Observatie'] or '', 'sent_by': sending['UnTrimis'] or '', 'sent_at': _iso(sending['DataTrimis']),
             'again': sending['Stare'] == 'PRELUATA', 'lines': out, 'accounts': sorted({line['IdMasina'] for line in lines if line['IdMasina'] is not None})}

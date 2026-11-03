@@ -16,6 +16,8 @@
 .vc-cpv-page__description { margin: 4px 0 0; line-height: 1.35; overflow-wrap: anywhere; max-height: 4.05em; overflow: auto; }
 .vc-cpv-page__product { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vc-cpv-page__search { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.vc-cpv-page__search--note { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); }
+.vc-cpv-page__note textarea { box-sizing: border-box; width: 100%; resize: none; font: inherit; padding: 6px 8px; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
 .vc-cpv-page__search .vc-field { display: flex; flex-direction: column; min-width: 0; gap: 4px; }
 .vc-cpv-page__tree { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .vc-cpv-page__tree > h4 { display: none; }

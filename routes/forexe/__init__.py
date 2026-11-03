@@ -131,6 +131,9 @@ from . import parteneri_edit  # noqa: E402,F401
 # parteneri_access.py = POST /api/forexe/nomenclatoare/parteneri/preia-access: the new partners of an
 # Access unit file, added to Parteneri (the «Preia date din Access» button of the window, slice 0093-01).
 from . import parteneri_access  # noqa: E402,F401
+# parteneri_anaf_sync.py = POST /api/forexe/nomenclatoare/parteneri/<id>/anaf-sync: one partner's name and address read again
+# from ANAF (the «Sincronizeaza ANAF» button of the window, slice 0093-02).
+from . import parteneri_anaf_sync  # noqa: E402,F401
 # capturi.py = the captures K-BOT takes out of the FOREXE page while the operator works
 # there (operator, 28.09.2026): PUT /api/forexe/capturi/rezervare/<idrev> and
 # /api/forexe/capturi/receptie/<idrh> -> FX_Rezervarii_IMG / FX_Receptii_IMG.
