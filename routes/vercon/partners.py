@@ -1,4 +1,4 @@
-"""SLICE-VC06-22/26: partner list and restricted ANAF updates for every VR reader.
+"""SLICE-VC06-22/26/33: one displayed partner per fiscal code and restricted ANAF updates.
 
 Only existing Parteneri rows are updated. The client supplies a fiscal code, never
 the name/address to save. A manual save repeats the ANAF lookup and changes only
@@ -42,7 +42,27 @@ def _version(row):
 
 def _present(row):
     return {'id': row['IdPartener'], 'version': _version(row),
-            **{key: row[key] or '' for key in ('CodPartener', 'DenumirePartener', 'CodFiscal', 'Adresa', 'ContIBAN', 'Banca')}}
+            **{key: row[key] or '' for key in ('CodPartener', 'DenumirePartener', 'Adresa', 'ContIBAN', 'Banca')},
+            'CodFiscal': suppliers.code(row['CodFiscal'])}
+
+
+def _display_rows(rows):
+    """Group fiscal identities without merging stored rows or exposing unit copies.
+
+    Keep one complete, stable source row for the existing update/version contract.
+    The internal ID chooses a representative only; displayed rows are sorted by
+    Romanian text keys. Missing fiscal identities must remain separate.
+    """
+    grouped = {}
+    for row in rows:
+        fiscal = suppliers.code(row['CodFiscal'])
+        key = ('fiscal', fiscal) if fiscal else ('missing', row['IdPartener'])
+        previous = grouped.get(key)
+        if previous is None or row['IdPartener'] < previous['IdPartener']:
+            grouped[key] = row
+    return sorted(grouped.values(), key=lambda row: (
+        suppliers.name_key(row['DenumirePartener']), suppliers.name_key(row['CodPartener']),
+        suppliers.name_key(suppliers.code(row['CodFiscal']))))
 
 
 def _one(cursor, row_id, version, locked=False):
@@ -105,9 +125,7 @@ def register(bp, guard, scoped, open_db):
             # Include partners without CF so their fiscal identity can be completed.
             cursor.execute(_SELECT + ' WHERE ' + _VISIBLE)
             rows = cursor.fetchall()
-        rows.sort(key=lambda row: (suppliers.name_key(row['DenumirePartener']),
-                                   suppliers.name_key(row['CodPartener']), suppliers.name_key(row['CodFiscal'])))
-        return {'rows': [_present(row) for row in rows], 'can_update': OPERATION in g.vercon_operations}
+        return {'rows': [_present(row) for row in _display_rows(rows)], 'can_update': OPERATION in g.vercon_operations}
 
     @bp.post('/api/vercon/partners/<int:row_id>/anaf')
     @guard(OPERATION)

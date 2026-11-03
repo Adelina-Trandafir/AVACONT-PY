@@ -84,7 +84,7 @@ export function mountPartners(host, opts) {
   async function load() {
     const answer = await opts.api(endpoint + '?' + query());
     if (disposed) return;
-    const previous = selected?.id;
+    const previous = selected && { id: selected.id, fiscal: selected.CodFiscal };
     rows = answer.rows;
     canUpdate = answer.can_update;
     if (!dataGrid) dataGrid = grid(list, { layoutId: 'vercon.partners', rowKey: 'id', editable: false,
@@ -97,7 +97,7 @@ export function mountPartners(host, opts) {
           filter: false, sortable: false, display: 'button', actionText: '⋮' },
       ], onSelect: (row) => { void choose(row).catch(report); },
       onCellAction: ({ row, key }) => { if (key === 'actions') actions(row); } }, ui);
-    show(rows.find((row) => row.id === previous) || null); paintRows();
+    show(rows.find((row) => previous && (previous.fiscal ? row.CodFiscal === previous.fiscal : row.id === previous.id)) || null); paintRows();
   }
   async function run(mode) {
     if (busy || choosing || !canUpdate || !selected) return;
