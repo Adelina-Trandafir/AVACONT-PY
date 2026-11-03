@@ -8,10 +8,10 @@ const active = new WeakMap();
 const journals = new WeakMap();
 const titles = { info: 'Informare', success: 'Operație finalizată', warning: 'Atenție', error: 'Eroare' };
 
-function present(text, level, { source = null, title, ownerDocument = source?.ownerDocument || document } = {}) {
+function present(text, level, { source = null, title, action = null, ownerDocument = source?.ownerDocument || document } = {}) {
   active.get(ownerDocument)?.box.close();
   const box = messageBox(text, { title: title || titles[level] || titles.info,
-    warning: level === 'error' || level === 'warning', ownerDocument });
+    warning: level === 'error' || level === 'warning', action, ownerDocument });
   const entry = { box, source };
   active.set(ownerDocument, entry);
   // Closing a screen also closes its message; global notices have their own lifecycle.

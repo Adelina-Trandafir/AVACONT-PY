@@ -87,7 +87,7 @@ const report = (k_error) => {
     "error",
   );
 };
-const invoiceNotice = efacturaNotice({ api, context: () => state.ctx, onError: report });
+const invoiceNotice = efacturaNotice({ api, context: () => state.ctx, onError: report, onResolve: openEfactura });
 const query = (k_sel) =>
   new URLSearchParams(
     Object.entries(k_sel)

@@ -28,3 +28,4 @@
 .confirm-box__list button { width: 100%; min-height: 44px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirm-box--pick footer { justify-content: flex-start; }
 .confirm-box--message footer { justify-content: flex-end; }
+.confirm-box--message footer .confirm-box__action { margin-right: auto; }

@@ -8,8 +8,8 @@ function ensureStyle(doc = document) {
   doc.head.append(k_link);
 }
 
-// One-button notice, using the same custom dialog as confirmations.
-export function messageBox(text, { title = 'Mesaj', button = 'Am înțeles', warning = false, className = '', ownerDocument = document } = {}) {
+// Notice with an optional left-hand action, using the same custom dialog as confirmations.
+export function messageBox(text, { title = 'Mesaj', button = 'Am înțeles', action = null, warning = false, className = '', ownerDocument = document } = {}) {
   ensureStyle(ownerDocument);
   const dialog = ownerDocument.createElement('dialog');
   dialog.className = `confirm-box confirm-box--message${warning ? ' confirm-box--warning' : ''}${className ? ` ${className}` : ''}`;
@@ -22,6 +22,12 @@ export function messageBox(text, { title = 'Mesaj', button = 'Am înțeles', war
   let finish, done = false;
   const closed = new Promise(resolve => { finish = resolve; });
   const close = () => { if (done) return; done = true; if (dialog.open) dialog.close(); dialog.remove(); finish(); };
+  if (action) {
+    const actionButton = ownerDocument.createElement('button');
+    actionButton.type = 'button'; actionButton.className = 'confirm-box__action'; actionButton.textContent = action.label;
+    actionButton.addEventListener('click', () => { if (done) return; close(); action.run(); });
+    footer.prepend(actionButton);
+  }
   acknowledge.addEventListener('click', close);
   dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
   dialog.addEventListener('close', close);

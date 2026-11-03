@@ -1,7 +1,7 @@
 import { notify } from './messages.js';
 
 // Check on entering a warehouse, even when no NIR screen has been opened yet.
-export function efacturaNotice({ api, context, onError }) {
+export function efacturaNotice({ api, context, onError, onResolve }) {
   let warehouse = null, checked = false, controller = null, sequence = 0, notice = null;
   const clearOwnMessage = () => {
     notice?.close(); notice = null;
@@ -23,7 +23,13 @@ export function efacturaNotice({ api, context, onError }) {
         checked = true;
         if (result.pending_count > 0) {
           const text = `Există ${result.pending_count} ${result.pending_count === 1 ? 'factură activă de preluat sau de asociat' : 'facturi active de preluat sau de asociat'}.\n\nDeschideți Intrări → NIR din e-Factura… pentru listă sau Asociază eFactura… dintr-un NIR salvat.`;
-          notice = notify(text, 'info', { title: 'Facturi eFactura de preluat' });
+          notice = notify(text, 'info', {
+            title: 'Facturi eFactura de preluat',
+            action: { label: 'Rezolvă Acum', run: async () => {
+              if (own !== sequence || context()?.version !== ctx.version) return;
+              try { await onResolve(); } catch (error) { onError(error); }
+            } },
+          });
         }
       } catch (error) {
         if (own === sequence && context()?.version === ctx.version && error.name !== 'AbortError') onError(error);
