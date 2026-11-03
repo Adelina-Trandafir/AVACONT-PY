@@ -38,8 +38,9 @@ MAPPING (MariaDB_Schema/AVACONT_SURSA.sql)
     leaves the links: they belong to the CodFiscal, other units' partner rows may share it.
   * Slice 0093 (operator, 29.09.2026) -- the list shows ONLY partners with Tip = '1', a
     non-empty CodFiscal that is not the unit's own (AVACONT_COMUN.Unitati.CF of the session's
-    DC) and Ascuns = 0; partners sharing a fiscal code are shown once, the first one found
-    (lowest IdPartener). Codes compare as digits only (normalize_cf: "RO 123" = "123").
+    DC); hidden ones (Ascuns = 1) are sent too, flagged "ascuns", so the partners without activity
+    that the query 0122_08 hid still show when the window's «fara activitate» choice is ticked;
+    partners sharing a fiscal code are shown once, the first one found (visible first, then lowest IdPartener). Codes compare as digits only (normalize_cf: "RO 123" = "123").
   * Tip is always '1' on save; the window no longer shows it.
   * Banca, when left empty, comes from the IBAN: characters 5-8 are the BIC code of
     AVACONT_COMUN.BIC.
@@ -88,7 +89,9 @@ _ACTIVE_BY_CF = (
 )
 _ACTIVE = "(" + _ACTIVE_BY_ID + " OR " + _ACTIVE_BY_CF + ")"
 # The fiscal-code filters that need normalizing (unit CF, grouping) are applied in Python.
-# Ordered by IdPartener so the first row of each fiscal code is the one kept.
+# Hidden rows (Ascuns = 1) are sent too: the query 0122_08 hides every partner nothing uses, and the window must still
+# list those when «Arata partenerii fara activitate» is ticked. Ordered visible-first, then by IdPartener, so the first
+# row of each fiscal code (the one kept) is a visible one when the code has one.
 _SQL_PARTNERS = (
     "SELECT P.IdPartener, P.IdUnitate, U.SursaSector, P.CodPartener, P.DenumirePartener, "
     "       P.CodFiscal, P.ContIBAN, P.Banca, P.Adresa, P.Tip, P.Ascuns, "
@@ -96,8 +99,7 @@ _SQL_PARTNERS = (
     "  FROM Parteneri P LEFT JOIN Unitati U ON U.IdUnitate = P.IdUnitate "
     " WHERE TRIM(COALESCE(P.Tip, '')) = '1' "
     "   AND TRIM(COALESCE(P.CodFiscal, '')) <> '' "
-    "   AND COALESCE(P.Ascuns, 0) = 0 "
-    " ORDER BY P.IdPartener"
+    " ORDER BY (COALESCE(P.Ascuns, 0) <> 0), P.IdPartener"
 )
 _SQL_UNIT_CF = "SELECT CF FROM Unitati WHERE DC = %s"
 _SQL_BIC = "SELECT Cod, Banca FROM BIC"

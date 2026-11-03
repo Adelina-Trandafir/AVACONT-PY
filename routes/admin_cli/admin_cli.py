@@ -436,6 +436,19 @@ def _c_receptii_lanturi(conn, db):
     return check(conn, db, _block)
 
 
+def _c_clasificatii_dubluri(conn, db):
+    """Read only: duplicate Clasificatii rows and which of them nothing points to (routes/admin_cli/clasificatii_dubluri.py)."""
+    from routes.admin_cli.clasificatii_dubluri import check
+    return check(conn, db, _block)
+
+
+def _c_clasificatii_dubluri_repara(conn, db):
+    """WRITES: deletes the duplicate Clasificatii rows that no other table holds (routes/admin_cli/clasificatii_dubluri.py);
+    the button «Repara» of KBotAdmin runs it after the check."""
+    from routes.admin_cli.clasificatii_dubluri import repair
+    return repair(conn, db, _block)
+
+
 def _c_vercon_golire(conn, db, param):
     """VERCON, WRITES, IRREVERSIBLE: empties every VC_ table and the Vercon-only EF_ tables of ONE database so it can be migrated again
     (routes/admin_cli/vercon_wipe.py); the typed value must be the database name."""
@@ -489,6 +502,11 @@ COMMANDS = {
                                 "ramas), ca ordonantarile sa se listeze din nou, nu sa se genereze din nou. SCRIE in baza aleasa, intr-o singura tranzactie, "
                                 "cu Jurnal. Refuza tot ce nu e clar. Se porneste din butonul «Repara receptiile» de dupa verificare.",
                                 True, _c_receptii_lanturi_repara),
+    "clasificatii_dubluri": ("Clasificatii dublate", "Randurile din Clasificatii repetate (aceeasi unitate si acelasi cod Capitol.Subcapitol.Articol.Alineat), "
+                             "cu ce le leaga de alte tabele. Doar citire; merge si pe toate bazele.", False, _c_clasificatii_dubluri),
+    "clasificatii_dubluri_repara": ("Repara clasificatii dublate", "Sterge dublurile din Clasificatii pe care nu le tine nicio alta tabela "
+                                    "(un grup fara niciun rand legat pastreaza unul). Cele legate nu se ating. SCRIE in baza aleasa, intr-o singura "
+                                    "tranzactie, cu Jurnal. Se porneste din butonul «Repara» de dupa verificare.", True, _c_clasificatii_dubluri_repara),
     "vercon_golire": ("Golire VERCON (VC_ si trimiteri EF)", "Goleste TOATE tabelele VC_ ale bazei alese si tabelele EF_ de trimitere catre Vercon "
                       "(EF_PrimiteVercon*, EF_VERCON_*), ca baza sa poata fi migrata din nou. FX_, AD_, TZ_ si Parteneri nu se ating. "
                       "SCRIE si NU se poate anula; cere o baza anume si numele ei scris ca confirmare.", True, _c_vercon_golire),
@@ -506,7 +524,7 @@ COMMAND_PARAMS = {
 
 # Commands restricted to one selected database (including database-wide VERCON checks).
 SINGLE_DB_COMMANDS = {"oi_semne_repara", "storno_preturi", "storno_preturi_repara", "ddf_antete", "ddf_antete_explica", "ddf_antete_repara",
-                     "receptii_lanturi", "receptii_lanturi_repara", "vercon_golire"}
+                     "receptii_lanturi", "receptii_lanturi_repara", "vercon_golire", "clasificatii_dubluri_repara"}
 
 
 def cmd_commands(args):

@@ -1,6 +1,7 @@
 // VERCON v2: shared document controls. Cell edits update a draft; Save writes the entire document.
 import { confirmBox, reasonBox } from '../utils/confirm-box.js';
 import { format, parse } from './fields.js';
+import { anySignal } from './api.js';
 import { documentReport } from './document-report.js';
 import { editLocked, editMessage } from './document-permissions.js';
 import { showDocumentHistory } from './document-history.js';
@@ -66,7 +67,7 @@ export function mountDocuments(host, opts) {
   const sourceOptions = opts;
   let currentContext = { ...opts.sel() }, contextAbort = new AbortController(), loadGeneration = 0;
   opts = { ...opts, sel: () => currentContext,
-    api: (path, options = {}) => sourceOptions.api(path, { ...options, signal: AbortSignal.any([abort.signal, contextAbort.signal]) }) };
+    api: (path, options = {}) => sourceOptions.api(path, { ...options, signal: anySignal([abort.signal, contextAbort.signal]) }) };
   const state = { docs: [], lookups: null, doc: null, draft: null, mode: 'view', dirty: false, requestKey: null, pendingBody: null, canWrite: false, closed: false, zec: 4, eligible: [], sources: [], available: {}, busy: false, returnSource: null };
   let pendingLink = null;
   const orphanReturn = () => family === 'br' && state.doc && state.doc.header.source == null;
@@ -303,6 +304,14 @@ export function mountDocuments(host, opts) {
     const old = state.doc.lines.find(item => item.id === line.id); if (!old) return false;
     return ['product', 'IDTVA', 'Cant', 'Pret', 'calc_mode', 'gross_total', 'input_price', ...(mf() ? ['code', 'data_intrarii', 'DNF', 'DF'] : [])]
       .every(name => normalized(line[name]) === normalized(old[name]));
+  }
+  // VC06-34: a line taken from the e-Factura keeps the net value of the invoice line (ef_net). When the Administrator changes the quantity RECEIVED,
+  // the price is recalculated so the line still adds up to the invoiced value; a price typed by hand stays as typed (ef_price_manual).
+  function efacturaPrice(line, name) {
+    if (name === 'Pret') { line.ef_price_manual = true; return; }
+    if (name !== 'Cant' || line.ef_price_manual) return;
+    const qty = number(line.Cant), net = number(line.ef_net);
+    if (qty > 0 && net != null && Number.isFinite(net)) { line.Pret = fixed(net / qty, 4); say('Prețul a fost recalculat din valoarea facturii și cantitatea primită. Îl puteți modifica.'); }
   }
   function clearCorrection(line) {
     if (line.calc_mode === 'GROSS' && line.input_price != null) line.Pret = line.input_price;
@@ -669,9 +678,12 @@ export function mountDocuments(host, opts) {
           if (family === 'nir' && name === 'um') { await productEntry.finishProduct(line); line.IDTVA = allocation.defaultTax(line.product, allocation.tax(line.IDTVA)?.percent ?? allocation.tax(state.draft.vat)?.percent); productEntry.defaults(line); }
           if (family === 'nir' && ['code', 'DNF', 'data_intrarii'].includes(name) && productEntry.issues(line).length) throw new Error(productEntry.issues(line).join('; '));
           if (family === 'bp' && name === 'variant' && state.draft.lines.some(other => other !== line && other.variant === line.variant)) throw new Error('Produsul este deja pe bon. Modificați cantitatea rândului existent.');
+          // VC06-35: the stock is already loaded for the draft, so the Disponibil cell is filled when the product is chosen, not after the quantity cell is left.
+          if (family === 'bp' && name === 'variant') { const base = state.available[String(line.variant)]; line.avail = base != null ? bpAvailable(line, state.draft.lines, base) : ''; }
           if (custody && !(number(line.Cant) > 0) && name === 'Cant') throw new Error('Cantitatea trebuie să fie pozitivă.');
           if (config.holder && name === 'Cant' && number(line.Cant) > number(line.left ?? 0)) throw new Error('Cantitatea depășește disponibilul lotului la data bonului.');
           if (family === 'storno' && name === 'Cant' && number(line.Cant) > number(state.eligible.find(item => item.variant === line.variant)?.left ?? 0)) throw new Error('Cantitatea depășește stocul disponibil pentru stornare la data FCS.');
+          if (family === 'nir' && line.ef_net != null) efacturaPrice(line, name);
           calculate(line); if (family === 'nir') await validateDraft();
         }
         catch (error) { Object.keys(line).forEach(key => delete line[key]); Object.assign(line, before); throw error; }
@@ -755,6 +767,8 @@ export function mountDocuments(host, opts) {
     note.hidden = editing() || !difference;
     note.textContent = note.hidden ? '' : `Valoare în antet: ${format(invoiceValue(invoiceDoc(), state.doc.header), { type: 'decimal' })} lei. Diferență față de liniile documentului: ${format(fixed(difference, state.zec), { type: 'decimal' })} lei.`;
   }
+  // VC06-35: what is left of the product for a BP line: the warehouse stock minus the quantities of the other lines with the same product.
+  const bpAvailable = (line, lines, base) => receiptTotal([{ quantity: base }, ...lines.filter(other => other !== line && other.variant === line.variant && number(other.Cant) > 0).map(other => ({ quantity: '-' + other.Cant }))], 'quantity', 4);
   function availability() {
     if (bc) { bc.syncDate(); void bc.load().catch(report); return; }
     clearTimeout(availabilityTimer); const sequence = ++availabilitySequence;
@@ -776,9 +790,7 @@ export function mountDocuments(host, opts) {
         state.available = result.available;
         document.lines.forEach(line => {
           const base = result.available[String(line.variant)];
-          line.avail = family === 'bp' && base != null
-            ? receiptTotal([{ quantity: base }, ...document.lines.filter(other => other !== line && other.variant === line.variant && number(other.Cant) > 0).map(other => ({ quantity: '-' + other.Cant }))], 'quantity', 4)
-            : base ?? '';
+          line.avail = family === 'bp' && base != null ? bpAvailable(line, document.lines, base) : base ?? '';
         });
         if (linesGrid && !linesGrid.hasEdit) {
           const rows = inEdit ? draftRows() : document.lines.map((line, index) => ({ ...line, key: `saved:${line.id}`, _index: index + 1 }));

@@ -24,7 +24,7 @@ export function efacturaIntake({ api, sel }) {
     if (usable.length) draft.accounts = [...usable]; else delete draft.accounts;
     draft.efactura = detail.id;
     draft.lines = detail.lines.map((line) => newLine({
-      ef_name: line.name, Cant: line.qty, Pret: line.price,
+      ef_name: line.name, ef_net: line.value, Cant: line.qty, Pret: line.price,
       IDTVA: allocation.taxOptions({}).find((item) => Number(item.percent) === Number(line.rate))?.id ?? null,
     }));
     return wanted.filter((id) => !usable.includes(id));

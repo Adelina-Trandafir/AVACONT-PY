@@ -128,6 +128,9 @@ from . import operatiuni  # noqa: E402,F401
 # codes (slice 0087).
 from . import clasificatii_edit  # noqa: E402,F401
 from . import parteneri_edit  # noqa: E402,F401
+# parteneri_access.py = POST /api/forexe/nomenclatoare/parteneri/preia-access: the new partners of an
+# Access unit file, added to Parteneri (the «Preia date din Access» button of the window, slice 0093-01).
+from . import parteneri_access  # noqa: E402,F401
 # capturi.py = the captures K-BOT takes out of the FOREXE page while the operator works
 # there (operator, 28.09.2026): PUT /api/forexe/capturi/rezervare/<idrev> and
 # /api/forexe/capturi/receptie/<idrh> -> FX_Rezervarii_IMG / FX_Receptii_IMG.

@@ -1272,6 +1272,9 @@ def get_ddf_clasificatii():
 # indicators yet, so the unit predicate matched nothing and the combo came up empty. With no
 # indicator to scope by, every unit of this database is offered (the database is one DC).
 #
+# Hidden partners (Parteneri.Ascuns = 1) are offered too: the query 0122_08 hides every partner with no activity, and a
+# partner without activity is exactly the one a DDF needs to pick for the first time (operator, 03.11.2026).
+#
 # `CodFiscal` is authoritative, not `CodPartener`: one CodFiscal can map to several
 # IdUnitate, hence to several CodPartener / IdPartener rows. `FX_DDF` stores only CodFiscal
 # and NumePartener -- it has no IdPartener column at all.
@@ -1281,7 +1284,6 @@ _SQL_PARTENERI = (
     "       COUNT(*) AS Randuri "
     "  FROM Parteneri P "
     " WHERE P.Tip = '1' "
-    "   AND COALESCE(P.Ascuns, 0) = 0 "
     "   AND COALESCE(P.CodFiscal, '') <> '' "
     "   AND (P.IdUnitate IN (SELECT DISTINCT I.IdUnitate FROM FX_Indicatori I "
     "                         WHERE I.CodAngajament = %s AND I.IdUnitate IS NOT NULL) "

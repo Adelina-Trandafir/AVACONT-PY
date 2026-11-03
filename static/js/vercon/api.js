@@ -19,11 +19,23 @@ function requestId() {
   return globalThis.crypto?.randomUUID?.().replaceAll('-', '') || `${Date.now()}${Math.random().toString(16).slice(2)}`;
 }
 
+// One signal that aborts when any of the given ones does. AbortSignal.any is missing in browsers older than
+// Chrome 116 / Firefox 124 / Safari 17.4 («AbortSignal.any is not a function»), so fall back to a linked controller.
+export function anySignal(k_signals) {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(k_signals);
+  const k_controller = new AbortController();
+  for (const k_item of k_signals) {
+    if (k_item.aborted) { k_controller.abort(k_item.reason); break; }
+    k_item.addEventListener('abort', () => k_controller.abort(k_item.reason), { once: true, signal: k_controller.signal });
+  }
+  return k_controller.signal;
+}
+
 export function createApi({ getUnit, signal, extraHeaders = () => ({}) }) {
   return async function api(k_path, k_options = {}) {
     const k_id = requestId();
     const k_headers = { Accept: 'application/json', 'X-Portal-Token': portalToken(), 'X-Request-Id': k_id, ...(getUnit() ? { 'X-Vercon-Unit': getUnit() } : {}), ...extraHeaders(), ...(k_options.headers || {}) };
-    const k_signal = signal && k_options.signal ? AbortSignal.any([signal, k_options.signal]) : k_options.signal || signal;
+    const k_signal = signal && k_options.signal ? anySignal([signal, k_options.signal]) : k_options.signal || signal;
     const k_response = await fetch(k_path, { ...k_options, headers: k_headers, signal: k_signal });
     const k_binary = k_options.responseType === 'arrayBuffer';
     const k_result = k_response.ok && k_binary ? null : await k_response.json().catch(() => ({}));
